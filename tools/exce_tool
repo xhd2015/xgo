@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -e
+
+cmd=$1
+shift || true
+
+shdir=$(cd "$(dirname "$0")" && pwd)
+
+function date_log {
+   date +"%Y-%m-%d %H:%M:%S"
+}
+function log {
+    echo "$(date_log) $@"
+}
+function log_exec {
+    echo "$(date_log) $@" >> "$shdir/exec.log"
+}
+function log_compile {
+    echo "$(date_log) $@" >> "$shdir/compile.log"
+}
+function to_vscode_debug_cmd {
+args=(${@:2})
+
+# program could also be $1
+cat <<EOF
+{
+    "name": "Launch xgo_rewrite_internal/tools/compile",
+    "type": "go",
+    "request": "launch",
+    "mode": "exec",
+    "program": "./compile/internal/xgo_rewrite_internal/tools/compile",
+    "cwd": "./",
+    "args": [
+EOF
+for arg in "${args[@]}";do
+    echo "        \"$arg\","
+done
+cat <<EOF
+    ],
+    "env": {
+        "COMPILER_ALLOW_IR_REWRITE":"true",
+        "COMPILER_ALLOW_SYNTAX_REWRITE":"true",
+        "COMPILER_DEBUG_IR_REWRITE_FUNC":"$COMPILER_DEBUG_IR_REWRITE_FUNC",
+        "COMPILER_DEBUG_IR_DUMP_FUNCS":"$COMPILER_DEBUG_IR_DUMP_FUNCS",
+        "GOCACHE":"$GOCACHE",
+        "GOROOT": "../..",
+        "PATH": "../../bin:\${env:PATH}"
+    }
+}
+EOF
+}
+
+log_exec "$@"
+
+# NOTE arg0 is exec_tool
+# echo "arg 0 is $0"
+
+base_name=$(basename "$1")
+if [[ $base_name = compile ]];then
+    pkg=$(echo "$@"|grep -oE -- "-p .*?( |$)"|cut -c 4-|tr -d ' ') # take package
+    log_compile compile $pkg
+
+    if [[ $pkg = runtime ]];then
+       log_compile "runtime output: $@"
+       log_compile "runtime output: $3"
+       # cp "$3" "$shdir"/runtime.a
+       trap 'log_compile "runtime end" ' EXIT
+    fi
+
+    # check debug flag
+    is_debug=false
+    if [[ -n $DEBUG_PKG ]];then
+        if [[ $DEBUG_PKG = all || $pkg = $DEBUG_PKG ]];then
+            is_debug=true
+        fi
+    fi
+    # dlv exec --api-version=2 --listen=localhost:2345 --check-go-version=false --headless -- "$PWD/compile-devel" "${@:2}"
+    if [[ $is_debug = true ]];then
+        log_compile "to debug with dlv: dlv exec --api-version=2 --listen=localhost:2345 --check-go-version=false --headless -- \"$shdir/compile\" ${@:2}"
+        vscode_debug_cmd=$(to_vscode_debug_cmd "$shdir/compile" "${@:2}")
+        log_compile "$vscode_debug_cmd"
+        cat > "$(cd $shdir/../../../.. && pwd)/.vscode/launch.json" <<EOF
+{
+"version": "0.2.0",
+"configurations": [
+    $vscode_debug_cmd
+]
+}
+EOF
+        sleep 6000
+        exit
+    fi
+    # use custom compiler to compile
+    log_compile "replace with compile-devel: $shdir/compile ${@:2}"
+    COMPILER_ALLOW_SYNTAX_REWRITE=${COMPILER_ALLOW_SYNTAX_REWRITE:-true} COMPILER_ALLOW_IR_REWRITE=${COMPILER_ALLOW_IR_REWRITE:-true} "$shdir/compile" ${@:2}
+    exit
+    
+fi
+# $0       compile
+# $1...    -V=full ... flags
+
+
+# env is primarily for evaluate env pairs like A=B
+env -- "$@"
