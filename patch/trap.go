@@ -37,7 +37,9 @@ func forEachFunc(callback func(fn *ir.Func) bool) {
 
 // go 1.20 does not require type
 func NewNilExpr(pos src.XPos, t *types.Type) *ir.NilExpr {
-	return ir.NewNilExpr(pos)
+	nilExpr := ir.NewNilExpr(pos)
+	nilExpr.SetType(t)
+	return nilExpr
 }
 
 func AddFuncs(fn *ir.Func) {
@@ -123,7 +125,7 @@ func getTypeNames(params *types.Type) []ir.Node {
 
 // ====== non-adapter code   =====
 const disableXgoLink bool = false
-const disableTrap bool = true
+const disableTrap bool = false
 
 func Patch() {
 	debugIR()
@@ -131,9 +133,7 @@ func Patch() {
 		return
 	}
 	insertTrapPoints()
-	// if false {
 	initRegFuncs()
-	// }
 }
 
 func debugIR() {
@@ -184,9 +184,9 @@ func insertTrapPoints() {
 		// })
 		// for _, fn := range typecheck.Target.Funcs {
 		fnName := fn.Sym().Name
-		if fnName == "init" {
-			// this init is package level auto generated init, so don't
-			// trap this
+		if fnName == "init" || strings.HasPrefix(fnName, "init.") {
+			// the name `init` is package level auto generated init,
+			// so don't trap this
 			return true
 		}
 		// process link name
@@ -200,12 +200,26 @@ func insertTrapPoints() {
 			// ir.Dump("after:", fn)
 			return true
 		}
-		if skipTrap || strings.HasSuffix(fnName, "_xgo_trap_skip") {
+		if skipTrap || strings.HasPrefix(fnName, "__xgo") || strings.HasSuffix(fnName, "_xgo_trap_skip") {
+			// the __xgo prefix is reserved for xgo
 			return true
 		}
 		if disableTrap {
 			return true
 		}
+		pkgPath := types.LocalPkg.Path
+		if pkgPath == "runtime" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") {
+			return true
+		}
+		if types.LocalPkg.Name != "main" {
+			// TODO: there remains some NPE bugs to be fixed
+			// but the basic scenario works
+			return true
+		}
+		// if types.LocalPkg.Name != "main" {
+		// 	return true
+		// }
+		// ir.Dump("before:", fn)
 		// fn.Body =
 		t := fn.Type()
 
@@ -235,6 +249,9 @@ func insertTrapPoints() {
 
 		fn.Body = []ir.Node{assignStmt, typecheck.Stmt(ifStmt)}
 		typecheck.Stmts(fn.Body)
+		xgo_record.SetRewrittenBody(fn, fn.Body)
+
+		// ir.Dump("after:", fn)
 
 		return true
 	})

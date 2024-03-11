@@ -30,7 +30,8 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 
 	// }
 
-	if pkgPath == "" || pkgPath == "runtime" || strings.HasPrefix(pkgPath, "internal/") || strings.HasPrefix(pkgPath, "github.com/xhd2015/xgo/runtime/") {
+	if pkgPath == "" || pkgPath == "runtime" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") || strings.HasPrefix(pkgPath, "github.com/xhd2015/xgo/runtime/") {
+		// runtime/internal should not be rewritten
 		// internal/api has problem with the function register
 		return
 	}
@@ -52,6 +53,7 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	}
 	autoGen :=
 		"package " + pkgName + "\n" +
+			// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
 			"func __xgo_register_funcs(__xgo_reg_func func(pkgPath string,fn interface{}, recvName string, argNames []string, resNames []string)){\n" +
 			body +
 			"\n}"

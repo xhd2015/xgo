@@ -73,6 +73,8 @@ func Use() {
 				if err != nil {
 					return err
 				}
+
+				// TODO: may add callback for this
 				fmt.Printf("trace: %s\n", string(trace))
 				stackMap.Delete(key)
 			} else {
