@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -104,26 +106,33 @@ func handleBuild(args []string) error {
 		return fmt.Errorf("expect go1.20.x, actual: %s", goVersionStr)
 	}
 
-	mappedGorootName, err := pathsum.PathSum(fmt.Sprintf("go%d.%d.%d_", goVersion.Major, goVersion.Minor, goVersion.Patch), goroot)
+	goVersionName := fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch)
+	mappedGorootName, err := pathsum.PathSum(goVersionName+"_", goroot)
 	if err != nil {
 		return err
 	}
 
 	xgoDir := filepath.Join(homeDir, ".xgo")
-	buildCacheDir := filepath.Join(xgoDir, "build-cache")
 	srcDir := filepath.Join(xgoDir, "src")
 	binDir := filepath.Join(xgoDir, "bin")
 	logDir := filepath.Join(xgoDir, "log")
-	instrumentDir := filepath.Join(xgoDir, "go-instrument")
+	instrumentDir := filepath.Join(xgoDir, "go-instrument", mappedGorootName)
 
-	instrumentCompilerBin := filepath.Join(binDir, "compile")
 	execToolBin := filepath.Join(binDir, "exec_tool")
 	compileLog := filepath.Join(logDir, "compile.log")
-	instrumentGoroot := filepath.Join(instrumentDir, mappedGorootName)
+	compilerBin := filepath.Join(instrumentDir, "compile")
+	compilerBuildID := filepath.Join(instrumentDir, "compile.buildid.txt")
+	instrumentGoroot := filepath.Join(instrumentDir, goVersionName)
+	buildCacheDir := filepath.Join(instrumentDir, "build-cache")
 
-	err = assertDir(srcDir)
-	if err != nil {
-		return fmt.Errorf("checking ~/.xgo/src: %w", err)
+	realXgoSrc := srcDir
+	if optXgoSrc != "" {
+		realXgoSrc = optXgoSrc
+	} else {
+		err = assertDir(srcDir)
+		if err != nil {
+			return fmt.Errorf("checking ~/.xgo/src: %w", err)
+		}
 	}
 
 	err = os.MkdirAll(binDir, 0755)
@@ -134,13 +143,13 @@ func handleBuild(args []string) error {
 	if err != nil {
 		return fmt.Errorf("create ~/.xgo/log: %w", err)
 	}
+	err = os.MkdirAll(instrumentDir, 0755)
+	if err != nil {
+		return fmt.Errorf("create ~/.xgo/log: %w", err)
+	}
 
 	if verbose {
 		go tailLog(compileLog)
-	}
-	realXgoSrc := srcDir
-	if optXgoSrc != "" {
-		realXgoSrc = optXgoSrc
 	}
 
 	err = syncGoroot(goroot, instrumentGoroot)
@@ -155,10 +164,15 @@ func handleBuild(args []string) error {
 	}
 
 	// build the instrumented compiler
-	err = buildCompiler(instrumentGoroot, instrumentCompilerBin)
+	err = buildCompiler(instrumentGoroot, compilerBin)
 	if err != nil {
 		return err
 	}
+	compilerChanged, err := compileAndUpdateCompilerID(compilerBin, compilerBuildID)
+	if err != nil {
+		return err
+	}
+
 	// build exec tool
 	buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
 	buildExecToolCmd.Dir = filepath.Join(realXgoSrc, "cmd")
@@ -177,7 +191,7 @@ func handleBuild(args []string) error {
 
 	// GOCACHE="$shdir/build-cache" PATH=$goroot/bin:$PATH GOROOT=$goroot DEBUG_PKG=$debug go build -toolexec="$shdir/exce_tool $cmd" "${build_flags[@]}" "$@"
 	buildCmdArgs := []string{"build", "-toolexec=" + strings.Join(execToolCmd, " ")}
-	if flagA {
+	if flagA || compilerChanged {
 		buildCmdArgs = append(buildCmdArgs, "-a")
 	}
 	if output != "" {
@@ -199,7 +213,7 @@ func handleBuild(args []string) error {
 	if vscode != "" {
 		buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_VSCODE="+vscode)
 	}
-	buildCmd.Env = append(buildCmd.Env, "XGO_COMPILER_BIN="+instrumentCompilerBin)
+	buildCmd.Env = append(buildCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	if projectDir != "" {
@@ -221,6 +235,37 @@ func buildCompiler(goroot string, output string) error {
 	return cmd.Run()
 }
 
+func compileAndUpdateCompilerID(compilerFile string, compilerIDFile string) (changed bool, err error) {
+	prevData, err := ioutil.ReadFile(compilerIDFile)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return false, err
+		}
+		err = nil
+	}
+	prevID := string(prevData)
+	curID, err := getBuildID(compilerFile)
+	if err != nil {
+		return false, err
+	}
+	if prevID != "" && prevID == curID {
+		return false, nil
+	}
+	err = ioutil.WriteFile(compilerIDFile, []byte(curID), 0755)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func getBuildID(file string) (string, error) {
+	data, err := exec.Command("go", "tool", "buildid", file).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(string(data), "\n"), nil
+}
+
 func patchEnvWithGoroot(env []string, goroot string) []string {
 	return append(env,
 		"GOROOT="+goroot,
@@ -233,7 +278,7 @@ func getGoVersion(goroot string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(out), nil
+	return strings.TrimSuffix(string(out), "\n"), nil
 }
 
 func assertDir(dir string) error {
