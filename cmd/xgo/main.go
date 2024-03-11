@@ -9,6 +9,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/xhd2015/xgo/cmd/xgo/goinfo"
+	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 )
 
 // usage:
@@ -89,13 +92,23 @@ func handleBuild(args []string) error {
 		return fmt.Errorf("get config under home directory: %v", err)
 	}
 	// check if we are using expected go version
-	goVersion, err := getGoVersion(goroot)
+	goVersionStr, err := getGoVersion(goroot)
 	if err != nil {
 		return err
 	}
-	if !strings.HasPrefix(goVersion, "go version go1.20.1") {
-		return fmt.Errorf("expect go1.20.1")
+	goVersion, err := goinfo.ParseGoVersion(goVersionStr)
+	if err != nil {
+		return err
 	}
+	if goVersion.Major != 1 || goVersion.Minor != 20 {
+		return fmt.Errorf("expect go1.20.x, actual: %s", goVersionStr)
+	}
+
+	mappedGorootName, err := pathsum.PathSum(fmt.Sprintf("go%d.%d.%d_", goVersion.Major, goVersion.Minor, goVersion.Patch), goroot)
+	if err != nil {
+		return err
+	}
+
 	xgoDir := filepath.Join(homeDir, ".xgo")
 	buildCacheDir := filepath.Join(xgoDir, "build-cache")
 	srcDir := filepath.Join(xgoDir, "src")
@@ -106,6 +119,7 @@ func handleBuild(args []string) error {
 	instrumentCompilerBin := filepath.Join(binDir, "compile")
 	execToolBin := filepath.Join(binDir, "exec_tool")
 	compileLog := filepath.Join(logDir, "compile.log")
+	instrumentGoroot := filepath.Join(instrumentDir, mappedGorootName)
 
 	err = assertDir(srcDir)
 	if err != nil {
@@ -129,7 +143,11 @@ func handleBuild(args []string) error {
 		realXgoSrc = optXgoSrc
 	}
 
-	instrumentGoroot := filepath.Join(instrumentDir, "go1.20.1")
+	err = syncGoroot(goroot, instrumentGoroot)
+	if err != nil {
+		return err
+	}
+
 	// patch go runtime and compiler
 	err = patchGoSrc(instrumentGoroot, realXgoSrc)
 	if err != nil {

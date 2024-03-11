@@ -287,3 +287,32 @@ func indexSeq(s string, seqs []string) int {
 	}
 	return base
 }
+
+func syncGoroot(goroot string, dstDir string) error {
+	srcGoBin := filepath.Join(goroot, "bin", "go")
+	dstGoBin := filepath.Join(dstDir, "bin", "go")
+
+	srcFile, err := os.Stat(srcGoBin)
+	if err != nil {
+		return nil
+	}
+	if srcFile.IsDir() {
+		return fmt.Errorf("bad goroot: %s", goroot)
+	}
+
+	dstFile, err := os.Stat(dstGoBin)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		err = nil
+	}
+
+	if dstFile != nil && !dstFile.IsDir() && dstFile.Size() == srcFile.Size() {
+		// already copied
+		return nil
+	}
+	// need copy, delete target dst dir first
+	// TODO: use git worktree add if .git exists
+	return copyReplaceDir(goroot, dstDir)
+}
