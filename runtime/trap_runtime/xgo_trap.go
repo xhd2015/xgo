@@ -1,4 +1,5 @@
 // This file should be inserted into runtime to provide hack points
+// the 'go:build ignore' line will be removed when copy to goroot
 
 //go:build ignore
 

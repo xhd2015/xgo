@@ -13,11 +13,11 @@ type options struct {
 	xgoSrc     string
 	debug      string
 	vscode     string
+	withGoroot string
 	remainArgs []string
 }
 
 func parseOptions(args []string) (*options, error) {
-	var remainArgs []string
 	var flagA bool
 	var verbose bool
 	var projectDir string
@@ -26,6 +26,8 @@ func parseOptions(args []string) (*options, error) {
 	var vscode string
 
 	var xgoSrc string
+	var withGoroot string
+	var remainArgs []string
 	nArg := len(args)
 	for i := 0; i < nArg; i++ {
 		arg := args[i]
@@ -85,6 +87,14 @@ func parseOptions(args []string) (*options, error) {
 			continue
 		}
 
+		ok, err = tryParseFlagsValue([]string{"--with-goroot"}, &withGoroot, &i, args)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			continue
+		}
+
 		return nil, fmt.Errorf("unrecognized flag:%s", arg)
 	}
 
@@ -96,6 +106,7 @@ func parseOptions(args []string) (*options, error) {
 		xgoSrc:     xgoSrc,
 		debug:      debug,
 		vscode:     vscode,
+		withGoroot: withGoroot,
 		remainArgs: remainArgs,
 	}, nil
 }

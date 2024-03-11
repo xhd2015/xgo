@@ -10,7 +10,7 @@ const __XGO_SKIP_TRAP = true
 // rewrite at compile time by compiler, the body will be replaced with
 // a call to runtime.__xgo_for_each_func
 func __xgo_link_for_each_func(f func(pkgName string, funcName string, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string)) {
-	panic("xgo failed to link __xgo_link_for_each_func2")
+	panic("xgo failed to link __xgo_link_for_each_func")
 }
 
 type FuncInfo struct {
@@ -61,11 +61,12 @@ var mappingOnce sync.Once
 func ensureMapping() {
 	mappingOnce.Do(func() {
 		funcInfoMapping = map[string]*FuncInfo{}
-		__xgo_link_for_each_func(func(pkgName string, funcName string, pc uintptr, fn interface{}, recvName string, argNames, resNames []string) {
-			name := strings.TrimPrefix(funcName, pkgName+".")
+		__xgo_link_for_each_func(func(pkgPath string, funcName string, pc uintptr, fn interface{}, recvName string, argNames, resNames []string) {
+			name := strings.TrimPrefix(funcName, pkgPath+".")
 			info := &FuncInfo{
 				FullName: funcName,
 				Name:     name,
+				PkgPath:  pkgPath,
 				PC:       pc,
 				Func:     fn,
 				RecvName: recvName,

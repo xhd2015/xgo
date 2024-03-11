@@ -8,6 +8,14 @@ func __xgo_register_func(pkgPath string, fn interface{}, recvName string, argNam
 func __xgo_for_each_func(f func(pkgName string,funcName string, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string))
 `
 
+const RuntimeFuncNamePatch = `// workaround for go1.20, go1.21 will including this by go
+func (md *moduledata) funcName(nameOff int32) string {
+	if nameOff == 0 {
+		return ""
+	}
+	return gostringnocopy(&md.funcnametab[nameOff])
+}`
+
 const NoderFiles = `	// auto gen
 if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 	files := make([]*syntax.File, 0, len(noders))

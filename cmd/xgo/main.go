@@ -38,19 +38,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	goroot := runtime.GOROOT()
-	if goroot == "" {
-		fmt.Fprintf(os.Stderr, "requires GOROOT\n")
-		os.Exit(1)
-	}
-	err := handleBuild(goroot, args)
+	err := handleBuild(args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }
 
-func handleBuild(goroot string, args []string) error {
+func handleBuild(args []string) error {
 	opts, err := parseOptions(args)
 	if err != nil {
 		return err
@@ -63,6 +58,15 @@ func handleBuild(goroot string, args []string) error {
 	optXgoSrc := opts.xgoSrc
 	debug := opts.debug
 	vscode := opts.vscode
+	withGoroot := opts.withGoroot
+
+	goroot := withGoroot
+	if goroot == "" {
+		goroot = runtime.GOROOT()
+	}
+	if goroot == "" {
+		return fmt.Errorf("requires GOROOT or --with-goroot")
+	}
 
 	if vscode == "" {
 		f, err := os.Stat(".vscode")
@@ -85,7 +89,7 @@ func handleBuild(goroot string, args []string) error {
 		return fmt.Errorf("get config under home directory: %v", err)
 	}
 	// check if we are using expected go version
-	goVersion, err := getGoVersion()
+	goVersion, err := getGoVersion(goroot)
 	if err != nil {
 		return err
 	}
@@ -126,14 +130,12 @@ func handleBuild(goroot string, args []string) error {
 	}
 
 	instrumentGoroot := filepath.Join(instrumentDir, "go1.20.1")
-	needPatch := true
-	if needPatch {
-		// patch go runtime and compiler
-		err = patchGoSrc(instrumentGoroot, realXgoSrc)
-		if err != nil {
-			return err
-		}
+	// patch go runtime and compiler
+	err = patchGoSrc(instrumentGoroot, realXgoSrc)
+	if err != nil {
+		return err
 	}
+
 	// build the instrumented compiler
 	err = buildCompiler(instrumentGoroot, instrumentCompilerBin)
 	if err != nil {
@@ -208,8 +210,8 @@ func patchEnvWithGoroot(env []string, goroot string) []string {
 	)
 }
 
-func getGoVersion() (string, error) {
-	out, err := exec.Command("go", "version").Output()
+func getGoVersion(goroot string) (string, error) {
+	out, err := exec.Command(filepath.Join(goroot, "bin", "go"), "version").Output()
 	if err != nil {
 		return "", err
 	}

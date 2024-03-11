@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -127,6 +128,10 @@ func addRuntimeTrap(goroot string, xgoSrc string) error {
 	if err != nil {
 		return err
 	}
+	content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
+
+	// TODO: limit the patch for go1.20
+	content = append(content, []byte(patch.RuntimeFuncNamePatch)...)
 	return ioutil.WriteFile(dstFile, content, 0755)
 }
 
