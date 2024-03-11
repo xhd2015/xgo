@@ -1,0 +1,72 @@
+{
+  "configurations": [
+    {
+      "args": [
+        "build",
+        "-v",
+        "--xgo-src",
+        "./",
+        "--with-goroot",
+        "${env:HOME}/.xgo/go-instrument/go1.20.1",
+        // "--debug",
+        // "main",
+        "--project-dir",
+        "./cmd",
+        "-o",
+        "test.bin",
+        "-a",
+        "./xgo/testdata"
+      ],
+      "cwd": "./",
+      // "env": {
+      //   "GOROOT": "${env:HOME}/.xgo/go-instrument/go1.20.1",
+      //   "PATH": "${env:HOME}/.xgo/go-instrument/go1.20.1/bin:${env:PATH}"
+      // },
+      "mode": "auto",
+      "name": "Launch cmd/xgo test",
+      "program": "./cmd/xgo",
+      "request": "launch",
+      "type": "go"
+    },
+    {
+      "args": [
+        "build",
+        "-v",
+        "--xgo-src",
+        "./",
+        "--with-goroot",
+        "${env:HOME}/.xgo/go-instrument/go1.20.1",
+        // "--debug",
+        // "main",
+        "--project-dir",
+        "./runtime",
+        "-o",
+        "func_list.bin",
+        "-a",
+        "./test/func_list"
+      ],
+      "cwd": "./",
+      // "env": {
+      //   "GOROOT": "${env:HOME}/.xgo/go-instrument/go1.20.1",
+      //   "PATH": "${env:HOME}/.xgo/go-instrument/go1.20.1/bin:${env:PATH}"
+      // },
+      "mode": "auto",
+      "name": "Launch cmd/xgo func_list",
+      "program": "./cmd/xgo",
+      "request": "launch",
+      "type": "go"
+    },
+    {
+      "args": [
+        "echo",
+        "hello"
+      ],
+      "cwd": "./cmd",
+      "mode": "auto",
+      "name": "Launch cmd/exec_tool echo",
+      "program": "./cmd/exec_tool",
+      "request": "launch",
+      "type": "go"
+    }
+  ]
+}
