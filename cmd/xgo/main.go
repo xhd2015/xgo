@@ -51,64 +51,55 @@ func main() {
 }
 
 func handleBuild(goroot string, args []string) error {
-	var buildArgs []string
-	var flagA bool
-	var projectDir string
-	var output string
-	var verbose bool
-	nArg := len(args)
-	for i := 0; i < nArg; i++ {
-		arg := args[i]
-		if !strings.HasPrefix(arg, "-") {
-			buildArgs = append(buildArgs, arg)
-			continue
-		}
-		if arg == "--" {
-			buildArgs = append(buildArgs, args[i+1:]...)
-			break
-		}
-		if arg == "-a" {
-			flagA = true
-			continue
-		}
-		if arg == "-v" {
-			verbose = true
-			continue
-		}
-		if arg == "--project-dir" {
-			if i+1 >= nArg {
-				return fmt.Errorf("--project-dir requires argument")
-			}
-			projectDir = args[i+1]
-			i++
-			continue
-		}
-		if strings.HasPrefix(arg, "--project-dir=") {
-			projectDir = strings.TrimPrefix(arg, "--project-dir=")
-			continue
-		}
-		if arg == "-o" || arg == "--output" {
-			if i+1 >= nArg {
-				return fmt.Errorf("%s requires argument", arg)
-			}
-			output = args[i+1]
-			i++
-			continue
-		}
-		return fmt.Errorf("unrecognized flag:%s", arg)
+	opts, err := parseOptions(args)
+	if err != nil {
+		return err
 	}
+	buildArgs := opts.remainArgs
+	flagA := opts.flagA
+	projectDir := opts.projectDir
+	output := opts.output
+	verbose := opts.verbose
+	optXgoSrc := opts.xgoSrc
+	debug := opts.debug
+	vscode := opts.vscode
+
+	if vscode == "" {
+		f, err := os.Stat(".vscode")
+		if err == nil && f.IsDir() {
+			vscode = ".vscode"
+		}
+	}
+
+	if vscode != "" {
+		var err error
+		vscode, err = filepath.Abs(vscode)
+		if err != nil {
+			return err
+		}
+	}
+
 	// build the exec tool
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("get config under home directory: %v", err)
 	}
-
+	// check if we are using expected go version
+	goVersion, err := getGoVersion()
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(goVersion, "go version go1.20.1") {
+		return fmt.Errorf("expect go1.20.1")
+	}
 	xgoDir := filepath.Join(homeDir, ".xgo")
 	buildCacheDir := filepath.Join(xgoDir, "build-cache")
 	srcDir := filepath.Join(xgoDir, "src")
 	binDir := filepath.Join(xgoDir, "bin")
 	logDir := filepath.Join(xgoDir, "log")
+	instrumentDir := filepath.Join(xgoDir, "go-instrument")
 
+	instrumentCompilerBin := filepath.Join(binDir, "compile")
 	execToolBin := filepath.Join(binDir, "exec_tool")
 	compileLog := filepath.Join(logDir, "compile.log")
 
@@ -126,19 +117,46 @@ func handleBuild(goroot string, args []string) error {
 		return fmt.Errorf("create ~/.xgo/log: %w", err)
 	}
 
+	if verbose {
+		go tailLog(compileLog)
+	}
+	realXgoSrc := srcDir
+	if optXgoSrc != "" {
+		realXgoSrc = optXgoSrc
+	}
+
+	instrumentGoroot := filepath.Join(instrumentDir, "go1.20.1")
+	needPatch := false
+	if needPatch {
+		// patch go runtime and compiler
+		err = patchGoSrc(instrumentGoroot, realXgoSrc)
+		if err != nil {
+			return err
+		}
+	}
+	// build the instrumented compiler
+	err = buildCompiler(instrumentGoroot, instrumentCompilerBin)
+	if err != nil {
+		return err
+	}
+	// build exec tool
 	buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
-	buildExecToolCmd.Dir = filepath.Join(srcDir, "cmd")
+	buildExecToolCmd.Dir = filepath.Join(realXgoSrc, "cmd")
 	buildExecToolCmd.Stdout = os.Stdout
 	buildExecToolCmd.Stderr = os.Stderr
 	err = buildExecToolCmd.Run()
 	if err != nil {
 		return err
 	}
-	if verbose {
-		go tailLog(compileLog)
+	execToolCmd := []string{execToolBin}
+	if debug != "" {
+		execToolCmd = append(execToolCmd, "--debug="+debug)
 	}
+	// always add trailing '--' to mark exec tool flags end
+	execToolCmd = append(execToolCmd, "--")
+
 	// GOCACHE="$shdir/build-cache" PATH=$goroot/bin:$PATH GOROOT=$goroot DEBUG_PKG=$debug go build -toolexec="$shdir/exce_tool $cmd" "${build_flags[@]}" "$@"
-	buildCmdArgs := []string{"build", "-toolexec=" + execToolBin}
+	buildCmdArgs := []string{"build", "-toolexec=" + strings.Join(execToolCmd, " ")}
 	if flagA {
 		buildCmdArgs = append(buildCmdArgs, "-a")
 	}
@@ -155,8 +173,13 @@ func handleBuild(goroot string, args []string) error {
 		buildCmdArgs = append(buildCmdArgs, "-o", realOut)
 	}
 	buildCmdArgs = append(buildCmdArgs, buildArgs...)
-	buildCmd := exec.Command("go", buildCmdArgs...)
+	buildCmd := exec.Command(filepath.Join(instrumentGoroot, "bin", "go"), buildCmdArgs...)
 	buildCmd.Env = append(os.Environ(), "GOCACHE="+buildCacheDir)
+	buildCmd.Env = patchEnvWithGoroot(buildCmd.Env, instrumentGoroot)
+	if vscode != "" {
+		buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_VSCODE="+vscode)
+	}
+	buildCmd.Env = append(buildCmd.Env, "XGO_COMPILER_BIN="+instrumentCompilerBin)
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	if projectDir != "" {
@@ -167,6 +190,30 @@ func handleBuild(goroot string, args []string) error {
 		return err
 	}
 	return nil
+}
+
+func buildCompiler(goroot string, output string) error {
+	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), "build", "-gcflags=all=-N -l", "-o", output, "./")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = patchEnvWithGoroot(os.Environ(), goroot)
+	cmd.Dir = filepath.Join(goroot, "src", "cmd", "compile")
+	return cmd.Run()
+}
+
+func patchEnvWithGoroot(env []string, goroot string) []string {
+	return append(env,
+		"GOROOT="+goroot,
+		fmt.Sprintf("PATH=%s%c%s", filepath.Join(goroot, "bin"), filepath.ListSeparator, os.Getenv("PATH")),
+	)
+}
+
+func getGoVersion() (string, error) {
+	out, err := exec.Command("go", "version").Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 func assertDir(dir string) error {

@@ -1,13 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
+// invoking examples:
+//
+//	go1.21.7/pkg/tool/darwin_amd64/compile -o /var/.../_pkg_.a -trimpath /var/...=> -p fmt -std -complete -buildid b_xx -goversion go1.21.7 -c=4 -nolocalimports -importcfg /var/.../importcfg -pack src/A.go src/B.go
+//	go1.21.7/pkg/tool/darwin_amd64/link -V=full
 func main() {
 	err := initLog()
 	if err != nil {
@@ -19,13 +25,21 @@ func main() {
 	args := os.Args[1:]
 
 	// log compile args
-	logCompile("%s\n", strings.Join(args, " "))
+	logCompile("exec_tool %s\n", strings.Join(args, " "))
+
+	opts, err := parseOptions(args, true)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "exec_tool: %v\n", err)
+		os.Exit(1)
+	}
+
+	toolArgs := opts.remainArgs
 
 	var cmd string
 
-	if len(args) > 0 {
-		cmd = args[0]
-		args = args[1:]
+	if len(toolArgs) > 0 {
+		cmd = toolArgs[0]
+		toolArgs = toolArgs[1:]
 	}
 
 	if cmd == "" {
@@ -36,24 +50,90 @@ func main() {
 	baseName := filepath.Base(cmd)
 	if baseName != "compile" {
 		// invoke the process as is
-		runCommandExit(cmd, args)
+		runCommandExit(cmd, toolArgs)
 		return
 	}
-	err = handleCompile(cmd, args)
+	err = handleCompile(cmd, opts, toolArgs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }
 
-func handleCompile(cmd string, args []string) error {
-	// pkg=$(echo "$@"|grep -oE -- "-p .*?( |$)"|cut -c 4-|tr -d ' ') # take package
-	// log_compile compile $pkg
-	// runCommand(compileCmd, args)
+func handleCompile(cmd string, opts *options, args []string) error {
+	if hasFlag(args, "-V") {
+		runCommandExit(cmd, args)
+		return nil
+	}
+	// pkg path: the argment after the -p
+	pkgPath := findArgAfterFlag(args, "-p")
+	if pkgPath == "" {
+		return fmt.Errorf("compile missing -p package")
+	}
+	debugPkg := opts.debug
+	var isDebug bool
+	if debugPkg != "" {
+		if debugPkg == "all" || debugPkg == pkgPath {
+			isDebug = true
+		}
+	}
 
-	runCommandExit(cmd, args)
+	compilerBin := os.Getenv("XGO_COMPILER_BIN")
+	if compilerBin == "" {
+		compilerBin = cmd
+	}
 
+	var withDebugHint string
+	if isDebug {
+		withDebugHint = " with debug"
+	}
+
+	logCompile("compile %s%s\n", pkgPath, withDebugHint)
+
+	if isDebug {
+		logCompile("to debug with dlv: dlv exec --api-version=2 --listen=localhost:2345 --check-go-version=false --headless -- %s ...\n", compilerBin)
+		debugCmd := getVscodeDebugCmd(compilerBin, args)
+		debugCmdJSON, err := json.MarshalIndent(debugCmd, "", "    ")
+		if err != nil {
+			return err
+		}
+		logCompile("%s\n", string(debugCmdJSON))
+		vscodeDir := os.Getenv("XGO_DEBUG_VSCODE")
+		if vscodeDir != "" {
+			err = addVscodeDebug(filepath.Join(vscodeDir, "launch.json"), debugCmd)
+			if err != nil {
+				return err
+			}
+		}
+		// wait the vscode debugger to finish the command
+		// sleep forever
+		for {
+			time.Sleep(60 * time.Hour)
+		}
+	}
+	runCommandExit(compilerBin, args)
 	return nil
+}
+
+func hasFlag(args []string, flag string) bool {
+	flagEq := flag + "="
+	for _, arg := range args {
+		if arg == flag || strings.HasPrefix(arg, flagEq) {
+			return true
+		}
+	}
+	return false
+}
+
+func findArgAfterFlag(args []string, flag string) string {
+	for i, arg := range args {
+		if arg == flag {
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+		}
+	}
+	return ""
 }
 
 func runCommandExit(name string, args []string) {
