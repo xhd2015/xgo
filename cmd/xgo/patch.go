@@ -1,17 +1,18 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
+
+	"github.com/xhd2015/xgo/cmd/xgo/patch"
 )
 
 // assume go 1.20
+// the patch should be idempotent
 func patchGoSrc(goroot string, xgoSrc string) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
@@ -64,29 +65,17 @@ func patchRuntimeDef(goRoot string) error {
 
 func prepareRuntimeDefs(goRoot string) error {
 	runtimeDefFile := "src/cmd/compile/internal/typecheck/_builtin/runtime.go"
-
-	extraDef := `
-// xgo
-func __xgo_getcurg() unsafe.Pointer
-func __xgo_trap(interface{}, []interface{}, []interface{}) (func(), bool)
-func __xgo_register_func(fn interface{}, recvName string, argNames []string, resNames []string)
-func __xgo_for_each_func(f func(pkgName string,funcName string, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string))`
 	fullFile := filepath.Join(goRoot, runtimeDefFile)
 
-	file, err := os.OpenFile(fullFile, os.O_APPEND|os.O_WRONLY, 0755)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("missing _builtin/runtime.go: %w", err)
-		}
-		return err
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(extraDef)
-	if err != nil {
-		return err
-	}
-	return nil
+	extraDef := patch.RuntimeExtraDef
+	return editFile(fullFile, func(content string) (string, error) {
+		content = addContentAfter(content,
+			`/*<begin extra_runtime_func>*/`, `/*<end extra_runtime_func>*/`,
+			[]string{`var x86HasFMA bool`, `var armHasVFPv4 bool`, `var arm64HasATOMICS bool`},
+			extraDef,
+		)
+		return content, nil
+	})
 }
 
 func copyReplaceDir(srcDir string, targetDir string) error {
@@ -144,25 +133,19 @@ func addRuntimeTrap(goroot string, xgoSrc string) error {
 func patchCompilerNoder(goroot string) error {
 	file := "src/cmd/compile/internal/noder/noder.go"
 	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
-		content = addImport(content, "cmd/compile/internal/xgo_rewrite_internal/patch/syntax", "xgo_syntax")
-		content = addImport(content, "io", "")
-		content = addCodeAfterLine(content, `base.Timer.AddEvent(int64(lines), "lines")`, `	// auto gen
-		files := make([]*syntax.File, 0, len(noders))
-		for _, n := range noders {
-			files = append(files, n.file)
-		}
-		xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) {
-			p := &noder{}
-			fbase := syntax.NewFileBase(name)
-			file, err := syntax.Parse(fbase, r, nil, p.pragma, syntax.CheckBranches) // errors are tracked via p.error
-			if err != nil {
-				e := err.(syntax.Error)
-				base.ErrorfAt(p.makeXPos(e.Pos), "%s", e.Msg)
-				return
-			}
-			p.file = file
-			noders = append(noders, p)
-		})`)
+		content = addCodeAfterImports(content,
+			"/*<begin file_autogen_import>*/", "/*<end file_autogen_import>*/",
+			[]string{
+				`xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"`,
+				`"io"`,
+			},
+		)
+		content = addContentAfter(content, "/*<begin file_autogen>*/", "/*<end file_autogen>*/", []string{
+			`for _, p := range noders {`,
+			`base.Timer.AddEvent(int64(lines), "lines")`,
+			"\n",
+		},
+			patch.NoderFiles)
 		return content, nil
 	})
 }
@@ -170,10 +153,32 @@ func patchCompilerNoder(goroot string) error {
 func patchGcMain(goroot string) error {
 	file := "src/cmd/compile/internal/gc/main.go"
 	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
-		content = addImport(content, "cmd/compile/internal/xgo_rewrite_internal/patch", "xgo_patch")
-		content = addCodeAfterLine(content, `ssagen.InitConfig()`, `	// insert trap points
-		xgo_patch.Patch()
-	`)
+		content = addCodeAfterImports(content,
+			"/*<begin gc_import>*/", "/*<end gc_import>*/",
+			[]string{
+				`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
+				`xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"`,
+			},
+		)
+
+		content = addContentAfter(content,
+			"/*<begin patch>*/", "/*<end patch>*/",
+			[]string{`noder.LoadPackage(flag.Args())`, `ssagen.InitConfig()`, "\n"},
+			`	// insert trap points
+		if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
+		    xgo_patch.Patch()
+		}
+`)
+
+		content = replaceContentAfter(content,
+			"/*<begin prevent_inline>*/", "/*<end prevent_inline>*/",
+			[]string{`base.Timer.Start("fe", "inlining")`, `if base.Flag.LowerL != 0 {`, "\n"},
+			`inline.InlinePackage(profile)`,
+			`	// NOTE: turn off inline for go1.20 if there is any rewrite
+		if !xgo_record.HasRewritten() {
+			inline.InlinePackage(profile)
+		}
+`)
 		return content, nil
 	})
 }
@@ -194,24 +199,75 @@ func editFile(file string, callback func(content string) (string, error)) error 
 	return ioutil.WriteFile(file, []byte(newContent), 0755)
 }
 
-func addImport(code string, pkgPath string, alias string) string {
+func addCodeAfterImports(code string, beginMark string, endMark string, contents []string) string {
 	idx := indexSeq(code, []string{"import", "(", "\n"})
 	if idx < 0 {
 		panic(fmt.Errorf("import not found"))
 	}
-	clause := strconv.Quote(pkgPath)
-	if alias != "" {
-		clause = alias + " " + clause
-	}
-	return code[:idx] + clause + "\n" + code[idx:]
+	return insertConentNoDudplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
 }
 
-func addCodeAfterLine(code string, line string, addCode string) string {
-	idx := indexSeq(code, []string{line, "\n"})
+func addContentAfter(content string, beginMark string, endMark string, seq []string, addContent string) string {
+	idx := indexSeq(content, seq)
 	if idx < 0 {
-		panic(fmt.Errorf("line not found: %s", line))
+		panic(fmt.Errorf("sequence not found: %v", seq))
 	}
-	return code[:idx] + addCode + "\n" + code[idx:]
+	return insertConentNoDudplicate(content, beginMark, endMark, idx, addContent)
+}
+
+func replaceContentAfter(content string, beginMark string, endMark string, seq []string, target string, replaceContent string) string {
+	if replaceContent == "" {
+		return content
+	}
+	closuerContent := beginMark + "\n" + replaceContent + "\n" + endMark + "\n"
+	idx := indexSeq(content, seq)
+	if idx < 0 {
+		panic(fmt.Errorf("sequence not found: %v", seq))
+	}
+	if strings.Contains(content, closuerContent) {
+		return content
+	}
+	content, ok := tryReplaceWithMark(content, beginMark, endMark, closuerContent)
+	if ok {
+		return content
+	}
+	targetIdx := strings.Index(content[idx:], target)
+	if targetIdx < 0 {
+		panic(fmt.Errorf("not found: %s", target))
+	}
+	return content[:idx+targetIdx] + closuerContent + content[idx+targetIdx+len(target):]
+}
+
+// signature example: /*<begin ident>*/ {content} /*<end ident>*/
+func insertConentNoDudplicate(content string, beginMark string, endMark string, idx int, insertContent string) string {
+	if insertContent == "" {
+		return content
+	}
+	closuerContent := beginMark + "\n" + insertContent + "\n" + endMark + "\n"
+	content, ok := tryReplaceWithMark(content, beginMark, endMark, closuerContent)
+	if ok {
+		return content
+	}
+	if strings.Contains(content, closuerContent) {
+		return content
+	}
+	return content[:idx] + closuerContent + content[idx:]
+}
+
+func tryReplaceWithMark(content string, beginMark string, endMark string, closureContent string) (string, bool) {
+	beginIdx := strings.Index(content, beginMark)
+	if beginIdx < 0 {
+		return content, false
+	}
+	endIdx := strings.Index(content, endMark)
+	if endIdx < 0 {
+		return content, false
+	}
+	lastIdx := endIdx + len(endMark)
+	if lastIdx+1 < len(content) && content[lastIdx+1] == '\n' {
+		lastIdx++
+	}
+	return content[:beginIdx] + closureContent + content[lastIdx:], true
 }
 
 func indexSeq(s string, seqs []string) int {

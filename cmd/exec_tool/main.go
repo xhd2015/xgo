@@ -78,6 +78,13 @@ func handleCompile(cmd string, opts *options, args []string) error {
 		}
 	}
 
+	xgoCompilerEnableEnv, ok := os.LookupEnv("XGO_COMPILER_ENABLE")
+	if !ok {
+		if opts.enable {
+			xgoCompilerEnableEnv = "true"
+		}
+	}
+
 	compilerBin := os.Getenv("XGO_COMPILER_BIN")
 	if compilerBin == "" {
 		compilerBin = cmd
@@ -91,8 +98,10 @@ func handleCompile(cmd string, opts *options, args []string) error {
 	logCompile("compile %s%s\n", pkgPath, withDebugHint)
 
 	if isDebug {
-		logCompile("to debug with dlv: dlv exec --api-version=2 --listen=localhost:2345 --check-go-version=false --headless -- %s ...\n", compilerBin)
+		// TODO: add env
+		logCompile("to debug with dlv: dlv exec --api-version=2 --listen=localhost:2345 --check-go-version=false --headless -- %s %s\n", compilerBin, strings.Join(args, " "))
 		debugCmd := getVscodeDebugCmd(compilerBin, args)
+		debugCmd.Env["XGO_COMPILER_ENABLE"] = xgoCompilerEnableEnv
 		debugCmdJSON, err := json.MarshalIndent(debugCmd, "", "    ")
 		if err != nil {
 			return err
@@ -111,7 +120,15 @@ func handleCompile(cmd string, opts *options, args []string) error {
 			time.Sleep(60 * time.Hour)
 		}
 	}
-	runCommandExit(compilerBin, args)
+	// COMPILER_ALLOW_SYNTAX_REWRITE=${COMPILER_ALLOW_SYNTAX_REWRITE:-true} COMPILER_ALLOW_IR_REWRITE=${COMPILER_ALLOW_IR_REWRITE:-true} "$shdir/compile" ${@:2}
+	runCommandExitFilter(compilerBin, args, func(cmd *exec.Cmd) {
+		cmd.Env = append(cmd.Env,
+			"XGO_COMPILER_ENABLE="+xgoCompilerEnableEnv,
+			// "XGO_COMPILER_ENABLE=false",
+			"COMPILER_ALLOW_SYNTAX_REWRITE=true",
+			"COMPILER_ALLOW_IR_REWRITE=true",
+		)
+	})
 	return nil
 }
 
@@ -137,17 +154,25 @@ func findArgAfterFlag(args []string, flag string) string {
 }
 
 func runCommandExit(name string, args []string) {
-	err := runCommand(name, args, true)
+	runCommandExitFilter(name, args, nil)
+}
+func runCommandExitFilter(name string, args []string, f func(cmd *exec.Cmd)) {
+	err := runCommand(name, args, true, f)
 	if err != nil {
 		panic(fmt.Errorf("unexpected err: %w", err))
 	}
 }
-func runCommand(name string, args []string, exit bool) error {
+func runCommand(name string, args []string, exit bool, f func(cmd *exec.Cmd)) error {
 	// invoke the process as is
 	cmd := exec.Command(name, args...)
+	cmd.Env = os.Environ()
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
+
+	if f != nil {
+		f(cmd)
+	}
 
 	err := cmd.Run()
 	if err != nil {

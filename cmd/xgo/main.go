@@ -126,7 +126,7 @@ func handleBuild(goroot string, args []string) error {
 	}
 
 	instrumentGoroot := filepath.Join(instrumentDir, "go1.20.1")
-	needPatch := false
+	needPatch := true
 	if needPatch {
 		// patch go runtime and compiler
 		err = patchGoSrc(instrumentGoroot, realXgoSrc)
@@ -148,7 +148,7 @@ func handleBuild(goroot string, args []string) error {
 	if err != nil {
 		return err
 	}
-	execToolCmd := []string{execToolBin}
+	execToolCmd := []string{execToolBin, "--enable"}
 	if debug != "" {
 		execToolCmd = append(execToolCmd, "--debug="+debug)
 	}

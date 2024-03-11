@@ -6,15 +6,19 @@ import (
 )
 
 type options struct {
+	// by default all compiler's extra function
+	// are disabled, unless explicitly called with enable
+	enable     bool
 	verbose    bool
 	debug      string
 	remainArgs []string
 }
 
 func parseOptions(args []string, stopAfterFirstArg bool) (*options, error) {
-	var remainArgs []string
+	var enable bool
 	var verbose bool
 	var debug string
+	var remainArgs []string
 
 	nArg := len(args)
 	for i := 0; i < nArg; i++ {
@@ -31,6 +35,10 @@ func parseOptions(args []string, stopAfterFirstArg bool) (*options, error) {
 		if arg == "--" {
 			remainArgs = append(remainArgs, args[i+1:]...)
 			break
+		}
+		if arg == "--enable" {
+			enable = true
+			continue
 		}
 
 		if arg == "-v" {
@@ -50,6 +58,7 @@ func parseOptions(args []string, stopAfterFirstArg bool) (*options, error) {
 	}
 
 	return &options{
+		enable:     enable,
 		verbose:    verbose,
 		debug:      debug,
 		remainArgs: remainArgs,
