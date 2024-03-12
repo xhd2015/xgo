@@ -41,6 +41,14 @@ func xgoBuild(args []string, opts *options) (string, error) {
 }
 
 func tmpMergeRuntimeAndTest(testDir string) (rootDir string, subDir string, err error) {
+	return linkRuntimeAndTest(testDir, false)
+}
+
+func tmpRuntimeModeAndTest(testDir string) (rootDir string, subDir string, err error) {
+	return linkRuntimeAndTest(testDir, true)
+}
+
+func linkRuntimeAndTest(testDir string, goModOnly bool) (rootDir string, subDir string, err error) {
 	tmpDir, err := os.MkdirTemp(os.TempDir(), "test")
 	if err != nil {
 		return "", "", err
@@ -48,7 +56,11 @@ func tmpMergeRuntimeAndTest(testDir string) (rootDir string, subDir string, err 
 
 	// copy runtime to a tmp directory, and
 	// test under there
-	err = filecopy.LinkFiles("../runtime", tmpDir)
+	if goModOnly {
+		err = filecopy.LinkFile("../runtime/go.mod", filepath.Join(tmpDir, "go.mod"))
+	} else {
+		err = filecopy.LinkFiles("../runtime", tmpDir)
+	}
 	if err != nil {
 		return "", "", err
 	}

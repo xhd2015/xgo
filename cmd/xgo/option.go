@@ -16,6 +16,8 @@ type options struct {
 	withGoroot string
 	dumpIR     string
 
+	noOut bool
+
 	// TODO: make these options available only at develop
 	syncXgoOnly  bool
 	syncWithLink bool
@@ -37,6 +39,7 @@ func parseOptions(args []string) (*options, error) {
 	var withGoroot string
 	var dumpIR string
 
+	var noOut bool
 	var remainArgs []string
 	nArg := len(args)
 	for i := 0; i < nArg; i++ {
@@ -63,6 +66,10 @@ func parseOptions(args []string) (*options, error) {
 		}
 		if arg == "--sync-with-link" {
 			syncWithLink = true
+			continue
+		}
+		if arg == "--no-out" {
+			noOut = true
 			continue
 		}
 		ok, err := tryParseFlagValue("--project-dir", &projectDir, &i, args)
@@ -134,6 +141,7 @@ func parseOptions(args []string) (*options, error) {
 		vscode:       vscode,
 		withGoroot:   withGoroot,
 		dumpIR:       dumpIR,
+		noOut:        noOut,
 		syncXgoOnly:  syncXgoOnly,
 		syncWithLink: syncWithLink,
 		remainArgs:   remainArgs,

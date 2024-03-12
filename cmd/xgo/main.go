@@ -61,6 +61,7 @@ func handleBuild(args []string) error {
 	output := opts.output
 	verbose := opts.verbose
 	optXgoSrc := opts.xgoSrc
+	noOut := opts.noOut
 	syncXgoOnly := opts.syncXgoOnly
 	syncWithLink := opts.syncWithLink
 	debug := opts.debug
@@ -93,11 +94,12 @@ func handleBuild(args []string) error {
 
 	var tmpIRFile string
 	if dumpIR != "" {
-		tmpFile, err := getTempFile("dump-ir")
+		tmpDir, err := os.MkdirTemp("", "dump-ir")
 		if err != nil {
 			return err
 		}
-		tmpIRFile = tmpFile
+		defer os.RemoveAll(tmpDir)
+		tmpIRFile = filepath.Join(tmpDir, "dump-ir")
 	}
 	// build the exec tool
 	homeDir, err := os.UserHomeDir()
@@ -210,7 +212,15 @@ func handleBuild(args []string) error {
 	if flagA || compilerChanged {
 		buildCmdArgs = append(buildCmdArgs, "-a")
 	}
-	if output != "" {
+	if noOut {
+		discardDir, err := os.MkdirTemp("", "build-discard")
+		if err != nil {
+			return err
+		}
+		discardOut := filepath.Join(discardDir, "out")
+		buildCmdArgs = append(buildCmdArgs, "-o", discardOut)
+		defer os.RemoveAll(discardDir)
+	} else if output != "" {
 		realOut := output
 		if projectDir != "" {
 			// make absolute
@@ -248,9 +258,12 @@ func handleBuild(args []string) error {
 	if dumpIR != "" {
 		err := copyToStdout(tmpIRFile)
 		if err != nil {
+			// ir file not exists
+			if errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("dump ir not effective, use -a to trigger recompile")
+			}
 			return err
 		}
-		os.RemoveAll(tmpIRFile)
 	}
 	return nil
 }
@@ -263,14 +276,6 @@ func copyToStdout(srcFile string) error {
 	defer file.Close()
 	_, err = io.Copy(os.Stdout, file)
 	return err
-}
-func getTempFile(pattern string) (string, error) {
-	tmpDir, err := os.MkdirTemp(os.TempDir(), pattern)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(tmpDir, pattern), nil
 }
 
 func buildCompiler(goroot string, output string) error {

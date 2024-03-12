@@ -28,7 +28,7 @@ func debugIR() {
 	var outFile io.Writer
 
 	if dumpIRFile != "" {
-		file, err := os.OpenFile(dumpIRFile, os.O_WRONLY, 0755)
+		file, err := os.OpenFile(dumpIRFile, os.O_WRONLY|os.O_CREATE, 0755)
 		if err != nil {
 			panic(fmt.Errorf("dump ir: %w", err))
 		}

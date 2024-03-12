@@ -42,6 +42,7 @@ func CopyReplaceDir(srcDir string, targetDir string, useLink bool) error {
 	return exec.Command("cp", "-R", srcDir, targetAbsDir).Run()
 }
 
+// NOTE: sym link must use abs path to ensure the file work correctly
 func LinkFiles(srcDir string, targetDir string) error {
 	absDir, err := filepath.Abs(srcDir)
 	if err != nil {
@@ -70,4 +71,23 @@ func LinkFiles(srcDir string, targetDir string) error {
 		// link file
 		return os.Symlink(path, targetPath)
 	})
+}
+func LinkFile(srcFile string, dstFile string) error {
+	absFile, err := filepath.Abs(srcFile)
+	if err != nil {
+		return err
+	}
+	return os.Symlink(absFile, dstFile)
+}
+
+func LinkDirToTmp(srcDir string, tmpDir string) (dstTmpDir string, err error) {
+	subTmp, err := os.MkdirTemp(tmpDir, filepath.Base(srcDir))
+	if err != nil {
+		return "", err
+	}
+	err = LinkFiles(srcDir, subTmp)
+	if err != nil {
+		return "", err
+	}
+	return subTmp, nil
 }
