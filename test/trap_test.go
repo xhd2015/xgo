@@ -26,6 +26,18 @@ func TestTrap(t *testing.T) {
 		defer os.RemoveAll(rootDir)
 	}
 
+	origOut, err := xgoBuild([]string{"--no-instrument", "--project-dir", tmpDir, "./"}, &options{
+		run:    true,
+		noTrim: true,
+	})
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	origExpect := "A\nB\n"
+
+	if origOut != origExpect {
+		t.Fatalf("expect original output: %q, actual: %q", origExpect, origOut)
+	}
 	_, err = xgoBuild([]string{
 		"-o", tmpFile,
 		"--project-dir", tmpDir,
@@ -36,7 +48,7 @@ func TestTrap(t *testing.T) {
 		".",
 	}, nil)
 	if err != nil {
-		t.Fatalf("%v", err)
+		fatalExecErr(t, err)
 	}
 	out, err := exec.Command(tmpFile).Output()
 	if err != nil {
@@ -49,4 +61,11 @@ func TestTrap(t *testing.T) {
 	if outStr != expectOut {
 		t.Fatalf("expect output: %q, actual: %q", expectOut, outStr)
 	}
+}
+
+func fatalExecErr(t *testing.T, err error) {
+	if err, ok := err.(*exec.ExitError); ok {
+		t.Fatalf("%v", string(err.Stderr))
+	}
+	t.Fatalf("%v", err)
 }

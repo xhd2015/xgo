@@ -20,12 +20,20 @@ func getTempFile(pattern string) (string, error) {
 }
 
 type options struct {
+	run    bool
+	noTrim bool
 }
 
 func xgoBuild(args []string, opts *options) (string, error) {
+	var xgoCmd string = "build"
+	if opts != nil {
+		if opts.run {
+			xgoCmd = "run"
+		}
+	}
 	buildArgs := append([]string{
 		"run", "../cmd/xgo",
-		"build",
+		xgoCmd,
 		"--xgo-src",
 		"../",
 		"--sync-with-link",
@@ -37,7 +45,11 @@ func xgoBuild(args []string, opts *options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSuffix(string(output), "\n"), nil
+	outStr := string(output)
+	if opts == nil || !opts.noTrim {
+		outStr = strings.TrimSuffix(outStr, "\n")
+	}
+	return outStr, nil
 }
 
 func tmpMergeRuntimeAndTest(testDir string) (rootDir string, subDir string, err error) {

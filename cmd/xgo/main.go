@@ -38,19 +38,20 @@ func main() {
 		fmt.Fprintf(os.Stderr, "requires cmd\n")
 		os.Exit(1)
 	}
-	if cmd != "build" {
-		fmt.Fprintf(os.Stderr, "only support build cmd now, given: %s\n", cmd)
+	if cmd != "build" && cmd != "run" {
+		fmt.Fprintf(os.Stderr, "unrecognized command: %s, supported: build,run\n", cmd)
 		os.Exit(1)
 	}
 
-	err := handleBuild(args)
+	err := handleBuild(cmd, args)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }
 
-func handleBuild(args []string) error {
+func handleBuild(cmd string, args []string) error {
+	cmdBuild := cmd == "build"
 	opts, err := parseOptions(args)
 	if err != nil {
 		return err
@@ -62,6 +63,7 @@ func handleBuild(args []string) error {
 	verbose := opts.verbose
 	optXgoSrc := opts.xgoSrc
 	noOut := opts.noOut
+	noInstrument := opts.noInstrument
 	syncXgoOnly := opts.syncXgoOnly
 	syncWithLink := opts.syncWithLink
 	debug := opts.debug
@@ -93,13 +95,15 @@ func handleBuild(args []string) error {
 	}
 
 	var tmpIRFile string
-	if dumpIR != "" {
-		tmpDir, err := os.MkdirTemp("", "dump-ir")
-		if err != nil {
-			return err
+	if !noInstrument {
+		if dumpIR != "" {
+			tmpDir, err := os.MkdirTemp("", "dump-ir")
+			if err != nil {
+				return err
+			}
+			defer os.RemoveAll(tmpDir)
+			tmpIRFile = filepath.Join(tmpDir, "dump-ir")
 		}
-		defer os.RemoveAll(tmpDir)
-		tmpIRFile = filepath.Join(tmpDir, "dump-ir")
 	}
 	// build the exec tool
 	homeDir, err := os.UserHomeDir()
@@ -167,7 +171,7 @@ func handleBuild(args []string) error {
 	}
 
 	// patch go runtime and compiler
-	err = patchGoSrc(instrumentGoroot, realXgoSrc, syncWithLink)
+	err = patchGoSrc(instrumentGoroot, realXgoSrc, noInstrument, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -176,31 +180,37 @@ func handleBuild(args []string) error {
 		return nil
 	}
 
-	// build the instrumented compiler
-	err = buildCompiler(instrumentGoroot, compilerBin)
-	if err != nil {
-		return err
-	}
-	compilerChanged, err := compileAndUpdateCompilerID(compilerBin, compilerBuildID)
-	if err != nil {
-		return err
-	}
+	var compilerChanged bool
+	var toolExecFlag string
+	if !noInstrument {
+		// build the instrumented compiler
+		err = buildCompiler(instrumentGoroot, compilerBin)
+		if err != nil {
+			return err
+		}
+		compilerChanged, err = compileAndUpdateCompilerID(compilerBin, compilerBuildID)
+		if err != nil {
+			return err
+		}
 
-	// build exec tool
-	buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
-	buildExecToolCmd.Dir = filepath.Join(realXgoSrc, "cmd")
-	buildExecToolCmd.Stdout = os.Stdout
-	buildExecToolCmd.Stderr = os.Stderr
-	err = buildExecToolCmd.Run()
-	if err != nil {
-		return err
+		// build exec tool
+		buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
+		buildExecToolCmd.Dir = filepath.Join(realXgoSrc, "cmd")
+		buildExecToolCmd.Stdout = os.Stdout
+		buildExecToolCmd.Stderr = os.Stderr
+		err = buildExecToolCmd.Run()
+		if err != nil {
+			return err
+		}
+		execToolCmd := []string{execToolBin, "--enable"}
+		if debug != "" {
+			execToolCmd = append(execToolCmd, "--debug="+debug)
+		}
+		// always add trailing '--' to mark exec tool flags end
+		execToolCmd = append(execToolCmd, "--")
+
+		toolExecFlag = "-toolexec=" + strings.Join(execToolCmd, " ")
 	}
-	execToolCmd := []string{execToolBin, "--enable"}
-	if debug != "" {
-		execToolCmd = append(execToolCmd, "--debug="+debug)
-	}
-	// always add trailing '--' to mark exec tool flags end
-	execToolCmd = append(execToolCmd, "--")
 
 	// before invoking exec_tool, tail follow its log
 	if verbose {
@@ -208,41 +218,49 @@ func handleBuild(args []string) error {
 	}
 
 	// GOCACHE="$shdir/build-cache" PATH=$goroot/bin:$PATH GOROOT=$goroot DEBUG_PKG=$debug go build -toolexec="$shdir/exce_tool $cmd" "${build_flags[@]}" "$@"
-	buildCmdArgs := []string{"build", "-toolexec=" + strings.Join(execToolCmd, " ")}
+	buildCmdArgs := []string{cmd}
+	if toolExecFlag != "" {
+		buildCmdArgs = append(buildCmdArgs, toolExecFlag)
+	}
 	if flagA || compilerChanged {
 		buildCmdArgs = append(buildCmdArgs, "-a")
 	}
-	if noOut {
-		discardDir, err := os.MkdirTemp("", "build-discard")
-		if err != nil {
-			return err
-		}
-		discardOut := filepath.Join(discardDir, "out")
-		buildCmdArgs = append(buildCmdArgs, "-o", discardOut)
-		defer os.RemoveAll(discardDir)
-	} else if output != "" {
-		realOut := output
-		if projectDir != "" {
-			// make absolute
-			absOutput, err := filepath.Abs(output)
+	if cmdBuild {
+		// output
+		if noOut {
+			discardDir, err := os.MkdirTemp("", "build-discard")
 			if err != nil {
-				return fmt.Errorf("make output absolute: %w", err)
+				return err
 			}
-			realOut = absOutput
+			discardOut := filepath.Join(discardDir, "out")
+			buildCmdArgs = append(buildCmdArgs, "-o", discardOut)
+			defer os.RemoveAll(discardDir)
+		} else if output != "" {
+			realOut := output
+			if projectDir != "" {
+				// make absolute
+				absOutput, err := filepath.Abs(output)
+				if err != nil {
+					return fmt.Errorf("make output absolute: %w", err)
+				}
+				realOut = absOutput
+			}
+			buildCmdArgs = append(buildCmdArgs, "-o", realOut)
 		}
-		buildCmdArgs = append(buildCmdArgs, "-o", realOut)
 	}
 	buildCmdArgs = append(buildCmdArgs, buildArgs...)
 	buildCmd := exec.Command(filepath.Join(instrumentGoroot, "bin", "go"), buildCmdArgs...)
 	buildCmd.Env = append(os.Environ(), "GOCACHE="+buildCacheDir)
 	buildCmd.Env = patchEnvWithGoroot(buildCmd.Env, instrumentGoroot)
-	buildCmd.Env = append(buildCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
-	if dumpIR != "" {
-		buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)
-		buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_DUMP_IR_FILE="+tmpIRFile)
-	}
-	if vscode != "" {
-		buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_VSCODE="+vscode)
+	if !noInstrument {
+		buildCmd.Env = append(buildCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
+		if dumpIR != "" {
+			buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)
+			buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_DUMP_IR_FILE="+tmpIRFile)
+		}
+		if vscode != "" {
+			buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_VSCODE="+vscode)
+		}
 	}
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
@@ -255,7 +273,7 @@ func handleBuild(args []string) error {
 	}
 
 	// if dump IR is not nil, output to stdout
-	if dumpIR != "" {
+	if tmpIRFile != "" {
 		err := copyToStdout(tmpIRFile)
 		if err != nil {
 			// ir file not exists

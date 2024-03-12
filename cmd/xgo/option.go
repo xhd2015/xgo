@@ -16,7 +16,8 @@ type options struct {
 	withGoroot string
 	dumpIR     string
 
-	noOut bool
+	noOut        bool
+	noInstrument bool
 
 	// TODO: make these options available only at develop
 	syncXgoOnly  bool
@@ -32,6 +33,8 @@ func parseOptions(args []string) (*options, error) {
 	var output string
 	var debug string
 	var vscode string
+
+	var noInstrument bool
 
 	var xgoSrc string
 	var syncXgoOnly bool
@@ -70,6 +73,10 @@ func parseOptions(args []string) (*options, error) {
 		}
 		if arg == "--no-out" {
 			noOut = true
+			continue
+		}
+		if arg == "--no-instrument" {
+			noInstrument = true
 			continue
 		}
 		ok, err := tryParseFlagValue("--project-dir", &projectDir, &i, args)
@@ -142,6 +149,8 @@ func parseOptions(args []string) (*options, error) {
 		withGoroot:   withGoroot,
 		dumpIR:       dumpIR,
 		noOut:        noOut,
+		noInstrument: noInstrument,
+
 		syncXgoOnly:  syncXgoOnly,
 		syncWithLink: syncWithLink,
 		remainArgs:   remainArgs,

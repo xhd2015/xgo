@@ -16,14 +16,24 @@ import (
 
 // assume go 1.20
 // the patch should be idempotent
-func patchGoSrc(goroot string, xgoSrc string, syncWithLink bool) error {
+func patchGoSrc(goroot string, xgoSrc string, noInstrument bool, syncWithLink bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
 	if xgoSrc == "" {
 		return fmt.Errorf("requries xgoSrc")
 	}
-	err := patchRuntimeDef(goroot)
+
+	err := addRuntimeTrap(goroot, xgoSrc)
+	if err != nil {
+		return err
+	}
+
+	if noInstrument {
+		return nil
+	}
+
+	err = patchRuntimeDef(goroot)
 	if err != nil {
 		return err
 	}
@@ -35,11 +45,6 @@ func patchGoSrc(goroot string, xgoSrc string, syncWithLink bool) error {
 	}
 
 	err = patchCompiler(goroot)
-	if err != nil {
-		return err
-	}
-
-	err = addRuntimeTrap(goroot, xgoSrc)
 	if err != nil {
 		return err
 	}
