@@ -62,6 +62,7 @@ func handleBuild(args []string) error {
 	verbose := opts.verbose
 	optXgoSrc := opts.xgoSrc
 	syncXgoOnly := opts.syncXgoOnly
+	syncWithLink := opts.syncWithLink
 	debug := opts.debug
 	vscode := opts.vscode
 	withGoroot := opts.withGoroot
@@ -164,7 +165,7 @@ func handleBuild(args []string) error {
 	}
 
 	// patch go runtime and compiler
-	err = patchGoSrc(instrumentGoroot, realXgoSrc)
+	err = patchGoSrc(instrumentGoroot, realXgoSrc, syncWithLink)
 	if err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -15,7 +16,7 @@ import (
 
 // assume go 1.20
 // the patch should be idempotent
-func patchGoSrc(goroot string, xgoSrc string) error {
+func patchGoSrc(goroot string, xgoSrc string, syncWithLink bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
@@ -28,7 +29,7 @@ func patchGoSrc(goroot string, xgoSrc string) error {
 	}
 
 	// copy compiler internal dependencies
-	err = importCompileInternalPatch(goroot, xgoSrc)
+	err = importCompileInternalPatch(goroot, xgoSrc, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -46,10 +47,10 @@ func patchGoSrc(goroot string, xgoSrc string) error {
 	return nil
 }
 
-func importCompileInternalPatch(goroot string, xgoSrc string) error {
+func importCompileInternalPatch(goroot string, xgoSrc string, syncWithLink bool) error {
 	dstDir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
 	// copy compiler internal dependencies
-	err := copyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir)
+	err := copyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -98,7 +99,7 @@ func prepareRuntimeDefs(goRoot string) error {
 	})
 }
 
-func copyReplaceDir(srcDir string, targetDir string) error {
+func copyReplaceDir(srcDir string, targetDir string, useLink bool) error {
 	if srcDir == "" {
 		return fmt.Errorf("requires srcDir")
 	}
@@ -124,7 +125,40 @@ func copyReplaceDir(srcDir string, targetDir string) error {
 	if err != nil {
 		return err
 	}
+	if useLink {
+		return linkFiles(srcDir, targetAbsDir)
+	}
 	return exec.Command("cp", "-R", srcDir, targetAbsDir).Run()
+}
+
+func linkFiles(srcDir string, targetDir string) error {
+	absDir, err := filepath.Abs(srcDir)
+	if err != nil {
+		return err
+	}
+	return filepath.WalkDir(absDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(path, absDir) {
+			return fmt.Errorf("invalid path: %s", path)
+		}
+		relPath := path[len(absDir):]
+		if strings.HasPrefix(relPath, string(os.PathSeparator)) {
+			relPath = relPath[1:]
+		}
+		// if relPath is "", it is root dir
+		targetPath := filepath.Join(targetDir, relPath)
+		if d.IsDir() {
+			err := os.MkdirAll(targetPath, 0755)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		// link file
+		return os.Symlink(path, targetPath)
+	})
 }
 
 func patchCompiler(goroot string) error {
@@ -333,5 +367,5 @@ func syncGoroot(goroot string, dstDir string) error {
 	}
 	// need copy, delete target dst dir first
 	// TODO: use git worktree add if .git exists
-	return copyReplaceDir(goroot, dstDir)
+	return copyReplaceDir(goroot, dstDir, false)
 }

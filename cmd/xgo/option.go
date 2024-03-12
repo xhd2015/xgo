@@ -16,9 +16,11 @@ type options struct {
 	withGoroot string
 	dumpIR     string
 
-	// TODO: make this available only at develop
-	syncXgoOnly bool
-	remainArgs  []string
+	// TODO: make these options available only at develop
+	syncXgoOnly  bool
+	syncWithLink bool
+
+	remainArgs []string
 }
 
 func parseOptions(args []string) (*options, error) {
@@ -31,6 +33,7 @@ func parseOptions(args []string) (*options, error) {
 
 	var xgoSrc string
 	var syncXgoOnly bool
+	var syncWithLink bool
 	var withGoroot string
 	var dumpIR string
 
@@ -56,6 +59,10 @@ func parseOptions(args []string) (*options, error) {
 		}
 		if arg == "--sync-xgo-only" {
 			syncXgoOnly = true
+			continue
+		}
+		if arg == "--sync-with-link" {
+			syncWithLink = true
 			continue
 		}
 		ok, err := tryParseFlagValue("--project-dir", &projectDir, &i, args)
@@ -118,17 +125,18 @@ func parseOptions(args []string) (*options, error) {
 	}
 
 	return &options{
-		flagA:       flagA,
-		verbose:     verbose,
-		projectDir:  projectDir,
-		output:      output,
-		xgoSrc:      xgoSrc,
-		debug:       debug,
-		vscode:      vscode,
-		withGoroot:  withGoroot,
-		dumpIR:      dumpIR,
-		syncXgoOnly: syncXgoOnly,
-		remainArgs:  remainArgs,
+		flagA:        flagA,
+		verbose:      verbose,
+		projectDir:   projectDir,
+		output:       output,
+		xgoSrc:       xgoSrc,
+		debug:        debug,
+		vscode:       vscode,
+		withGoroot:   withGoroot,
+		dumpIR:       dumpIR,
+		syncXgoOnly:  syncXgoOnly,
+		syncWithLink: syncWithLink,
+		remainArgs:   remainArgs,
 	}, nil
 }
 

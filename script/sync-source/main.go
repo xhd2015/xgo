@@ -13,6 +13,7 @@ func main() {
 		"--xgo-src",
 		"./",
 		"--sync-xgo-only",
+		"--sync-with-link",
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
