@@ -78,14 +78,14 @@ func handleCompile(cmd string, opts *options, args []string) error {
 		}
 	}
 
-	xgoCompilerEnableEnv, ok := os.LookupEnv("XGO_COMPILER_ENABLE")
+	xgoCompilerEnableEnv, ok := os.LookupEnv(XGO_COMPILER_ENABLE)
 	if !ok {
 		if opts.enable {
 			xgoCompilerEnableEnv = "true"
 		}
 	}
 
-	compilerBin := os.Getenv("XGO_COMPILER_BIN")
+	compilerBin := os.Getenv(XGO_COMPILER_BIN)
 	if compilerBin == "" {
 		compilerBin = cmd
 	}
@@ -101,13 +101,13 @@ func handleCompile(cmd string, opts *options, args []string) error {
 		// TODO: add env
 		logCompile("to debug with dlv: dlv exec --api-version=2 --listen=localhost:2345 --check-go-version=false --headless -- %s %s\n", compilerBin, strings.Join(args, " "))
 		debugCmd := getVscodeDebugCmd(compilerBin, args)
-		debugCmd.Env["XGO_COMPILER_ENABLE"] = xgoCompilerEnableEnv
+		debugCmd.Env[XGO_COMPILER_ENABLE] = xgoCompilerEnableEnv
 		debugCmdJSON, err := json.MarshalIndent(debugCmd, "", "    ")
 		if err != nil {
 			return err
 		}
 		logCompile("%s\n", string(debugCmdJSON))
-		vscodeDir := os.Getenv("XGO_DEBUG_VSCODE")
+		vscodeDir := os.Getenv(XGO_DEBUG_VSCODE)
 		if vscodeDir != "" {
 			err = addVscodeDebug(filepath.Join(vscodeDir, "launch.json"), debugCmd)
 			if err != nil {

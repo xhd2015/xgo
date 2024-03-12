@@ -61,9 +61,11 @@ func handleBuild(args []string) error {
 	output := opts.output
 	verbose := opts.verbose
 	optXgoSrc := opts.xgoSrc
+	syncXgoOnly := opts.syncXgoOnly
 	debug := opts.debug
 	vscode := opts.vscode
 	withGoroot := opts.withGoroot
+	dumpIR := opts.dumpIR
 
 	goroot := withGoroot
 	if goroot == "" {
@@ -88,6 +90,14 @@ func handleBuild(args []string) error {
 		}
 	}
 
+	var tmpIRFile string
+	if dumpIR != "" {
+		tmpFile, err := getTempFile("dump-ir")
+		if err != nil {
+			return err
+		}
+		tmpIRFile = tmpFile
+	}
 	// build the exec tool
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -148,10 +158,6 @@ func handleBuild(args []string) error {
 		return fmt.Errorf("create ~/.xgo/log: %w", err)
 	}
 
-	if verbose {
-		go tailLog(compileLog)
-	}
-
 	err = syncGoroot(goroot, instrumentGoroot)
 	if err != nil {
 		return err
@@ -161,6 +167,10 @@ func handleBuild(args []string) error {
 	err = patchGoSrc(instrumentGoroot, realXgoSrc)
 	if err != nil {
 		return err
+	}
+
+	if syncXgoOnly {
+		return nil
 	}
 
 	// build the instrumented compiler
@@ -189,6 +199,11 @@ func handleBuild(args []string) error {
 	// always add trailing '--' to mark exec tool flags end
 	execToolCmd = append(execToolCmd, "--")
 
+	// before invoking exec_tool, tail follow its log
+	if verbose {
+		go tailLog(compileLog)
+	}
+
 	// GOCACHE="$shdir/build-cache" PATH=$goroot/bin:$PATH GOROOT=$goroot DEBUG_PKG=$debug go build -toolexec="$shdir/exce_tool $cmd" "${build_flags[@]}" "$@"
 	buildCmdArgs := []string{"build", "-toolexec=" + strings.Join(execToolCmd, " ")}
 	if flagA || compilerChanged {
@@ -210,10 +225,14 @@ func handleBuild(args []string) error {
 	buildCmd := exec.Command(filepath.Join(instrumentGoroot, "bin", "go"), buildCmdArgs...)
 	buildCmd.Env = append(os.Environ(), "GOCACHE="+buildCacheDir)
 	buildCmd.Env = patchEnvWithGoroot(buildCmd.Env, instrumentGoroot)
+	buildCmd.Env = append(buildCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
+	if dumpIR != "" {
+		buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)
+		buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_DUMP_IR_FILE="+tmpIRFile)
+	}
 	if vscode != "" {
 		buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_VSCODE="+vscode)
 	}
-	buildCmd.Env = append(buildCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	if projectDir != "" {
@@ -223,7 +242,38 @@ func handleBuild(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	// if dump IR is not nil, output to stdout
+	if dumpIR != "" {
+		err := copyToStdout(tmpIRFile)
+		if err != nil {
+			return err
+		}
+		os.RemoveAll(tmpIRFile)
+	}
 	return nil
+}
+
+func copyToStdout(srcFile string) error {
+	file, err := os.Open(srcFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	_, err = io.Copy(os.Stdout, file)
+	return err
+}
+func getTempFile(pattern string) (string, error) {
+	irFile, err := os.CreateTemp(os.TempDir(), pattern)
+	if err != nil {
+		return "", err
+	}
+	tmpFile := irFile.Name()
+	err = irFile.Close()
+	if err != nil {
+		return "", err
+	}
+	return tmpFile, nil
 }
 
 func buildCompiler(goroot string, output string) error {

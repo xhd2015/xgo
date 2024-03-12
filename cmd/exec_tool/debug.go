@@ -22,6 +22,8 @@ func getVscodeDebugCmd(cmd string, args []string) *VscodeDebugConfig {
 			"COMPILER_ALLOW_SYNTAX_REWRITE":  "true",
 			"COMPILER_DEBUG_IR_REWRITE_FUNC": os.Getenv("COMPILER_DEBUG_IR_REWRITE_FUNC"),
 			"COMPILER_DEBUG_IR_DUMP_FUNCS":   os.Getenv("COMPILER_DEBUG_IR_DUMP_FUNCS"),
+			XGO_DEBUG_DUMP_IR:                os.Getenv(XGO_DEBUG_DUMP_IR),
+			XGO_DEBUG_DUMP_IR_FILE:           os.Getenv(XGO_DEBUG_DUMP_IR_FILE),
 			"GOCACHE":                        os.Getenv("GOCACHE"),
 			"GOROOT":                         "../..",
 			"PATH":                           "../../bin:${env:PATH}",

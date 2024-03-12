@@ -14,7 +14,11 @@ type options struct {
 	debug      string
 	vscode     string
 	withGoroot string
-	remainArgs []string
+	dumpIR     string
+
+	// TODO: make this available only at develop
+	syncXgoOnly bool
+	remainArgs  []string
 }
 
 func parseOptions(args []string) (*options, error) {
@@ -26,7 +30,10 @@ func parseOptions(args []string) (*options, error) {
 	var vscode string
 
 	var xgoSrc string
+	var syncXgoOnly bool
 	var withGoroot string
+	var dumpIR string
+
 	var remainArgs []string
 	nArg := len(args)
 	for i := 0; i < nArg; i++ {
@@ -45,6 +52,10 @@ func parseOptions(args []string) (*options, error) {
 		}
 		if arg == "-v" {
 			verbose = true
+			continue
+		}
+		if arg == "--sync-xgo-only" {
+			syncXgoOnly = true
 			continue
 		}
 		ok, err := tryParseFlagValue("--project-dir", &projectDir, &i, args)
@@ -95,19 +106,29 @@ func parseOptions(args []string) (*options, error) {
 			continue
 		}
 
+		ok, err = tryParseFlagsValue([]string{"--dump-ir"}, &dumpIR, &i, args)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			continue
+		}
+
 		return nil, fmt.Errorf("unrecognized flag:%s", arg)
 	}
 
 	return &options{
-		flagA:      flagA,
-		verbose:    verbose,
-		projectDir: projectDir,
-		output:     output,
-		xgoSrc:     xgoSrc,
-		debug:      debug,
-		vscode:     vscode,
-		withGoroot: withGoroot,
-		remainArgs: remainArgs,
+		flagA:       flagA,
+		verbose:     verbose,
+		projectDir:  projectDir,
+		output:      output,
+		xgoSrc:      xgoSrc,
+		debug:       debug,
+		vscode:      vscode,
+		withGoroot:  withGoroot,
+		dumpIR:      dumpIR,
+		syncXgoOnly: syncXgoOnly,
+		remainArgs:  remainArgs,
 	}, nil
 }
 
