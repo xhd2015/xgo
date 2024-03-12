@@ -265,16 +265,12 @@ func copyToStdout(srcFile string) error {
 	return err
 }
 func getTempFile(pattern string) (string, error) {
-	irFile, err := os.CreateTemp(os.TempDir(), pattern)
+	tmpDir, err := os.MkdirTemp(os.TempDir(), pattern)
 	if err != nil {
 		return "", err
 	}
-	tmpFile := irFile.Name()
-	err = irFile.Close()
-	if err != nil {
-		return "", err
-	}
-	return tmpFile, nil
+
+	return filepath.Join(tmpDir, pattern), nil
 }
 
 func buildCompiler(goroot string, output string) error {
