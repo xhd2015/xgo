@@ -52,15 +52,45 @@ func insertTrapPoints() {
 		"__xgo_link_getcurg":       "__xgo_getcurg",
 	}
 
+	// var fileNames []string
+	// for _, file := range files {
+	// 	fileNames = append(fileNames, file.Pos().Base().Filename())
+	// }
+
 	intf := types.Types[types.TINTER]
 	intfSlice = types.NewSlice(intf)
 	// printString := typecheck.LookupRuntime("printstring")
 	trap := typecheck.LookupRuntime("__xgo_trap")
 	forEachFunc(func(fn *ir.Func) bool {
+		// TODO: if we find the func appears as one argument of trap.AddInterceptor,
+		// or if its first statement is 'trap.Mark()'
+		if false {
+			// TODO: is it ok to parse comment here?
+			fnPos := base.Ctxt.OutermostPos(fn.Pos())
+			var syntaxFile *syntax.File
+
+			fileName := fnPos.AbsFilename() // symlink may affect filename vs absFilename?
+			for _, file := range files {
+				syntaxFileName := file.Pos().Base().Filename()
+				if syntaxFileName == fileName {
+					syntaxFile = file
+					break
+				}
+			}
+			if syntaxFile != nil {
+				lineNum := fnPos.Line()
+
+				_ = lineNum
+				// find matching comment
+			}
+		}
+
 		// })
 		// for _, fn := range typecheck.Target.Funcs {
 		fnName := fn.Sym().Name
-		if fnName == "init" || strings.HasPrefix(fnName, "init.") {
+		// if this is a closure, skip it
+		// NOTE: 'init.*' can be init function, or closure inside init functions, so they have prefix 'init.'
+		if fnName == "init" || (strings.HasPrefix(fnName, "init.") && fn.OClosure == nil) {
 			// the name `init` is package level auto generated init,
 			// so don't trap this
 			return true
@@ -111,14 +141,18 @@ func insertTrapPoints() {
 			// but the basic scenario works
 			return true
 		}
-		// ir.Dump("before:", fn)
-		// fn.Body =
-		t := fn.Type()
-
 		if fn.Body == nil {
 			// in go, function can have name without body
 			return true
 		}
+
+		// check if function body's first statement is a call to 'trap.Skip()'
+		if isFirstStmtSkipTrap(fn.Body) {
+			return true
+		}
+		// ir.Dump("before:", fn)
+		// fn.Body =
+		t := fn.Type()
 
 		_ = t
 
@@ -185,6 +219,31 @@ func insertTrapPoints() {
 
 		return true
 	})
+}
+
+func isFirstStmtSkipTrap(nodes ir.Nodes) bool {
+	for _, node := range nodes {
+		if isCall(node, "github.com/xhd2015/xgo/runtime/core/trap", "Skip") {
+			return true
+		}
+	}
+	return false
+}
+
+func isCall(node ir.Node, pkgPath string, name string) bool {
+	callNode, ok := node.(*ir.CallExpr)
+	if !ok {
+		return false
+	}
+	nameNode, ok := callNode.X.(*ir.Name)
+	if !ok {
+		return false
+	}
+	sym := nameNode.Sym()
+	if sym == nil {
+		return false
+	}
+	return sym.Pkg != nil && sym.Name == name && sym.Pkg.Path == pkgPath
 }
 
 func initRegFuncs() {

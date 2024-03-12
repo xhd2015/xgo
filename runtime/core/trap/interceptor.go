@@ -10,10 +10,10 @@ const __XGO_SKIP_TRAP = true
 var ErrAbort error = errors.New("abort trap interceptor")
 
 type FuncInfo struct {
-	Pkg       string
-	OwnerType string
-	OwnerPtr  string
-	Name      string
+	Pkg      string
+	RecvName string
+	RecvPtr  bool
+	Name     string
 
 	FullName string
 }

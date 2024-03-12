@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"strings"
 	"unsafe"
 )
 
@@ -22,6 +23,14 @@ func Use() {
 	used = true
 }
 
+func Skip() {
+	// this is intenionally leave empty
+	// as trap.Skip() is a function used
+	// to mark the caller should not be trapped.
+	// one can also use trap.Skip() in
+	// the non-interceptor context
+}
+
 // link to runtime
 // xgo:notrap
 func trapImpl(funcName string, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
@@ -35,19 +44,27 @@ func trapImpl(funcName string, pc uintptr, recv interface{}, args []interface{},
 	if n == 0 {
 		return nil, false
 	}
-	for i := 0; i < n; i++ {
-		if interceptors[i].Pre == nil {
-			continue
-		}
-		ipc := (**uintptr)(unsafe.Pointer(&interceptors[i].Pre))
-		pcName := runtime.FuncForPC(**ipc).Name()
-		_ = pcName
-		if **ipc == pc {
-			return nil, false
+	if false {
+		// don't do manual check
+		for i := 0; i < n; i++ {
+			if interceptors[i].Pre == nil {
+				continue
+			}
+			ipc := (**uintptr)(unsafe.Pointer(&interceptors[i].Pre))
+			pcName := runtime.FuncForPC(**ipc).Name()
+			_ = pcName
+			if **ipc == pc {
+				return nil, false
+			}
 		}
 	}
 
+	pkgPath, recvName, recvPtr, funcShortName := parseFuncName(funcName)
 	f := &FuncInfo{
+		Pkg:      pkgPath,
+		RecvName: recvName,
+		RecvPtr:  recvPtr,
+		Name:     funcShortName,
 		FullName: funcName,
 	}
 	// TODO: what about inlined func?
@@ -143,4 +160,37 @@ func trapImpl(funcName string, pc uintptr, recv interface{}, args []interface{},
 			}
 		}
 	}, false
+}
+
+// a/b/c.A
+// a/b/c.(*C).X
+// a/b/c.C.Y
+// a/b/c.Z
+func parseFuncName(fullName string) (pkgPath string, recvName string, recvPtr bool, funcName string) {
+	s := fullName
+	funcNameDot := strings.LastIndex(s, ".")
+	if funcNameDot < 0 {
+		funcName = s
+		return
+	}
+	funcName = s[funcNameDot+1:]
+	s = s[:funcNameDot]
+
+	recvDot := strings.LastIndex(s, ".")
+	if recvDot < 0 {
+		pkgPath = s
+		return
+	}
+	recvName = s[recvDot+1:]
+	s = s[:recvDot]
+	recvName = strings.TrimPrefix(recvName, "(")
+	recvName = strings.TrimSuffix(recvName, ")")
+	if strings.HasPrefix(recvName, "*") {
+		recvPtr = true
+		recvName = recvName[1:]
+	}
+
+	pkgPath = s
+
+	return
 }
