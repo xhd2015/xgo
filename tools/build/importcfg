@@ -1,0 +1,4 @@
+# import config
+packagefile github.com/xhd2015/xgo/runtime/core/trace=/var/folders/y8/kmfy7f8s5bb5qfsp0z8h7j5m0000gq/T/go-build4010296547/b002/_pkg_.a
+packagefile github.com/xhd2015/xgo/runtime/core/trap=/var/folders/y8/kmfy7f8s5bb5qfsp0z8h7j5m0000gq/T/go-build4010296547/b052/_pkg_.a
+packagefile runtime=/var/folders/y8/kmfy7f8s5bb5qfsp0z8h7j5m0000gq/T/go-build4010296547/b009/_pkg_.a

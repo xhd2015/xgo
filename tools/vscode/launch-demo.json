@@ -43,6 +43,8 @@
         "-o",
         "func_list.bin",
         "-a",
+        "--",
+        "-gcflags=all=-N -l",
         "./test/func_list"
       ],
       "cwd": "./",
@@ -65,6 +67,13 @@
       "mode": "auto",
       "name": "Launch cmd/exec_tool echo",
       "program": "./cmd/exec_tool",
+      "request": "launch",
+      "type": "go"
+    },
+    {
+      "mode": "exec",
+      "name": "Launch file",
+      "program": "./trace.bin",
       "request": "launch",
       "type": "go"
     }

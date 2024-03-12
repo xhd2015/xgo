@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -27,7 +28,7 @@ func patchGoSrc(goroot string, xgoSrc string) error {
 	}
 
 	// copy compiler internal dependencies
-	err = copyReplaceDir(filepath.Join(xgoSrc, "patch"), filepath.Join(goroot, "src/cmd/compile/internal/xgo_rewrite_internal/patch"))
+	err = importCompileInternalPatch(goroot, xgoSrc)
 	if err != nil {
 		return err
 	}
@@ -42,6 +43,24 @@ func patchGoSrc(goroot string, xgoSrc string) error {
 		return err
 	}
 
+	return nil
+}
+
+func importCompileInternalPatch(goroot string, xgoSrc string) error {
+	dstDir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
+	// copy compiler internal dependencies
+	err := copyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir)
+	if err != nil {
+		return err
+	}
+	// remove patch/go.mod
+	err = os.RemoveAll(filepath.Join(dstDir, "go.mod"))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
 	return nil
 }
 
