@@ -15,6 +15,9 @@ func TestFuncList(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpFile)
 
+	// func_list depends on xgo/runtime, but xgo/runtime is
+	// a separate module, so we need to merge them
+	// together first
 	tmpDir, funcListDir, err := tmpMergeRuntimeAndTest("./testdata/func_list")
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -42,6 +45,9 @@ func TestFuncList(t *testing.T) {
 		"func:os MkdirAll",
 		"func:fmt Printf",
 		"func:strings Split",
+		"func:main example",
+		"func:main someInt.value",
+		"func:main (*someInt).inc",
 	}
 	lines := strings.Split(outStr, "\n")
 	for _, expectLine := range expectLines {

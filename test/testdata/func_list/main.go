@@ -30,3 +30,13 @@ func main() {
 func example() {
 
 }
+
+type someInt int
+
+func (c someInt) value() int {
+	return int(c)
+}
+func (c *someInt) inc() int {
+	*c++
+	return int(*c)
+}
