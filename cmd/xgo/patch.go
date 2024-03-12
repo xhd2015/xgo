@@ -285,6 +285,12 @@ func indexSeq(s string, seqs []string) int {
 }
 
 func syncGoroot(goroot string, dstDir string) error {
+	// check if src goroot has src/runtime
+	srcRuntimeDir := filepath.Join(goroot, "src", "runtime")
+	err := assertDir(srcRuntimeDir)
+	if err != nil {
+		return err
+	}
 	srcGoBin := filepath.Join(goroot, "bin", "go")
 	dstGoBin := filepath.Join(dstDir, "bin", "go")
 

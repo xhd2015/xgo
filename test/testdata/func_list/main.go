@@ -13,6 +13,9 @@ func main() {
 	countByPkg := make(map[string]int)
 
 	for _, fn := range funcs {
+		// example:
+		//   main main
+		//   main A.String
 		pkgPath := fn.PkgPath
 		funcName := fn.Name
 		fmt.Printf("func:%s %s\n", pkgPath, funcName)
