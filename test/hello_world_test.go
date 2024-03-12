@@ -3,8 +3,6 @@ package test
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -19,7 +17,8 @@ func TestHelloWorld(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	_, err = xgoBuild([]string{"-o", tmpFile, "./testdata/hello_world"})
+	defer os.RemoveAll(tmpFile)
+	_, err = xgoBuild([]string{"-o", tmpFile, "./testdata/hello_world"}, nil)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -32,31 +31,4 @@ func TestHelloWorld(t *testing.T) {
 	if outStr != expect {
 		t.Fatalf("expect output %q, actual:%q", expect, outStr)
 	}
-}
-
-func getTempFile(pattern string) (string, error) {
-	tmpDir, err := os.MkdirTemp(os.TempDir(), pattern)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(tmpDir, pattern), nil
-}
-
-func xgoBuild(args []string) (string, error) {
-	buildArgs := append([]string{
-		"run", "../cmd/xgo",
-		"build",
-		"--xgo-src",
-		"../",
-		"--sync-with-link",
-	}, args...)
-	cmd := exec.Command("go", buildArgs...)
-	cmd.Stderr = os.Stderr
-
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSuffix(string(output), "\n"), nil
 }

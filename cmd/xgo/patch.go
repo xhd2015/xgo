@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -12,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
+	"github.com/xhd2015/xgo/support/filecopy"
 )
 
 // assume go 1.20
@@ -50,7 +50,7 @@ func patchGoSrc(goroot string, xgoSrc string, syncWithLink bool) error {
 func importCompileInternalPatch(goroot string, xgoSrc string, syncWithLink bool) error {
 	dstDir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
 	// copy compiler internal dependencies
-	err := copyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir, syncWithLink)
+	err := filecopy.CopyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -96,68 +96,6 @@ func prepareRuntimeDefs(goRoot string) error {
 			extraDef,
 		)
 		return content, nil
-	})
-}
-
-func copyReplaceDir(srcDir string, targetDir string, useLink bool) error {
-	if srcDir == "" {
-		return fmt.Errorf("requires srcDir")
-	}
-	targetAbsDir, err := filepath.Abs(targetDir)
-	if err != nil {
-		return err
-	}
-	if targetAbsDir == "/" {
-		return fmt.Errorf("cannot replace /")
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	if !strings.HasPrefix(targetAbsDir, homeDir+"/.xgo") && !strings.HasPrefix(targetAbsDir, "/tmp/") {
-		return fmt.Errorf("replace not permitted:%s", targetDir)
-	}
-	err = os.RemoveAll(targetAbsDir)
-	if err != nil {
-		return err
-	}
-	err = os.MkdirAll(filepath.Dir(targetAbsDir), 0755)
-	if err != nil {
-		return err
-	}
-	if useLink {
-		return linkFiles(srcDir, targetAbsDir)
-	}
-	return exec.Command("cp", "-R", srcDir, targetAbsDir).Run()
-}
-
-func linkFiles(srcDir string, targetDir string) error {
-	absDir, err := filepath.Abs(srcDir)
-	if err != nil {
-		return err
-	}
-	return filepath.WalkDir(absDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !strings.HasPrefix(path, absDir) {
-			return fmt.Errorf("invalid path: %s", path)
-		}
-		relPath := path[len(absDir):]
-		if strings.HasPrefix(relPath, string(os.PathSeparator)) {
-			relPath = relPath[1:]
-		}
-		// if relPath is "", it is root dir
-		targetPath := filepath.Join(targetDir, relPath)
-		if d.IsDir() {
-			err := os.MkdirAll(targetPath, 0755)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-		// link file
-		return os.Symlink(path, targetPath)
 	})
 }
 
@@ -367,5 +305,5 @@ func syncGoroot(goroot string, dstDir string) error {
 	}
 	// need copy, delete target dst dir first
 	// TODO: use git worktree add if .git exists
-	return copyReplaceDir(goroot, dstDir, false)
+	return filecopy.CopyReplaceDir(goroot, dstDir, false)
 }
