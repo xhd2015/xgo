@@ -183,33 +183,10 @@ func handleBuild(cmd string, args []string) error {
 	var compilerChanged bool
 	var toolExecFlag string
 	if !noInstrument {
-		// build the instrumented compiler
-		err = buildCompiler(instrumentGoroot, compilerBin)
+		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug)
 		if err != nil {
 			return err
 		}
-		compilerChanged, err = compileAndUpdateCompilerID(compilerBin, compilerBuildID)
-		if err != nil {
-			return err
-		}
-
-		// build exec tool
-		buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
-		buildExecToolCmd.Dir = filepath.Join(realXgoSrc, "cmd")
-		buildExecToolCmd.Stdout = os.Stdout
-		buildExecToolCmd.Stderr = os.Stderr
-		err = buildExecToolCmd.Run()
-		if err != nil {
-			return err
-		}
-		execToolCmd := []string{execToolBin, "--enable"}
-		if debug != "" {
-			execToolCmd = append(execToolCmd, "--debug="+debug)
-		}
-		// always add trailing '--' to mark exec tool flags end
-		execToolCmd = append(execToolCmd, "--")
-
-		toolExecFlag = "-toolexec=" + strings.Join(execToolCmd, " ")
 	}
 
 	// before invoking exec_tool, tail follow its log
@@ -296,6 +273,37 @@ func copyToStdout(srcFile string) error {
 	return err
 }
 
+func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string) (compilerChanged bool, toolExecFlag string, err error) {
+	// build the instrumented compiler
+	err = buildCompiler(goroot, compilerBin)
+	if err != nil {
+		return false, "", err
+	}
+	compilerChanged, err = compareAndUpdateCompilerID(compilerBin, compilerBuildIDFile)
+	if err != nil {
+		return false, "", err
+	}
+
+	// build exec tool
+	buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
+	buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
+	buildExecToolCmd.Stdout = os.Stdout
+	buildExecToolCmd.Stderr = os.Stderr
+	err = buildExecToolCmd.Run()
+	if err != nil {
+		return false, "", err
+	}
+	execToolCmd := []string{execToolBin, "--enable"}
+	if debugPkg != "" {
+		execToolCmd = append(execToolCmd, "--debug="+debugPkg)
+	}
+	// always add trailing '--' to mark exec tool flags end
+	execToolCmd = append(execToolCmd, "--")
+
+	toolExecFlag = "-toolexec=" + strings.Join(execToolCmd, " ")
+	return compilerChanged, toolExecFlag, nil
+}
+
 func buildCompiler(goroot string, output string) error {
 	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), "build", "-gcflags=all=-N -l", "-o", output, "./")
 	cmd.Stdout = os.Stdout
@@ -305,7 +313,7 @@ func buildCompiler(goroot string, output string) error {
 	return cmd.Run()
 }
 
-func compileAndUpdateCompilerID(compilerFile string, compilerIDFile string) (changed bool, err error) {
+func compareAndUpdateCompilerID(compilerFile string, compilerIDFile string) (changed bool, err error) {
 	prevData, err := ioutil.ReadFile(compilerIDFile)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
