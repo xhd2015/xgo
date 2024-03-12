@@ -9,7 +9,7 @@ import (
 
 func init() {
 	trap.Use()
-	trap.AddInterceptor(trap.Interceptor{
+	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
 			trap.Skip()
 			if f.Name == "A" {

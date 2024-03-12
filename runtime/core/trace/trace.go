@@ -3,15 +3,20 @@ package trace
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
+	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/core/getg"
 	"github.com/xhd2015/xgo/runtime/core/trap"
 )
 
-// TODO: remaining problems to be solved:
 const __XGO_SKIP_TRAP = true
+
+// link by compiler
+func __xgo_link_getcurg() unsafe.Pointer {
+	panic(errors.New("xgo failed to link __xgo_link_getcurg"))
+}
 
 // hold goroutine stacks, keyed by goroutine ptr
 var stackMap sync.Map // uintptr(goroutine) -> *Root
@@ -40,7 +45,7 @@ func Use() {
 				Args:     args.Args,
 				Results:  args.Results,
 			}
-			key := uintptr(getg.Curg())
+			key := uintptr(__xgo_link_getcurg())
 			v, ok := stackMap.Load(key)
 			if !ok {
 				// initial stack
@@ -60,7 +65,7 @@ func Use() {
 			return prevTop, nil
 		},
 		Post: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs, data interface{}) error {
-			key := uintptr(getg.Curg())
+			key := uintptr(__xgo_link_getcurg())
 			v, ok := stackMap.Load(key)
 			if !ok {
 				panic(fmt.Errorf("unbalanced stack"))

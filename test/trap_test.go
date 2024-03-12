@@ -6,9 +6,16 @@ import (
 	"testing"
 )
 
-// go test -run TestTrap -v ./test
+// go test -run TestTrap$ -v ./test
 func TestTrap(t *testing.T) {
+	origExpect := "A\nB\n"
+	expectOut := "trap A\nA\nabort B\n"
+	testTrap(t, "./testdata/trap", origExpect, expectOut)
+}
+
+func testTrap(t *testing.T, testDir string, origExpect string, expectOut string) {
 	debug := false
+	// debug := true
 	tmpFile, err := getTempFile("test")
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -18,7 +25,7 @@ func TestTrap(t *testing.T) {
 	if debug {
 		tmpFile = "../trap.bin"
 	}
-	rootDir, tmpDir, err := tmpMergeRuntimeAndTest("./testdata/trap")
+	rootDir, tmpDir, err := tmpMergeRuntimeAndTest(testDir)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -26,14 +33,19 @@ func TestTrap(t *testing.T) {
 		defer os.RemoveAll(rootDir)
 	}
 
+	// NOTE: the --no-instrument version should not use
+	// the same cache as instrumented version, cache
+	// cannot tell whether --no-instrument is applied
 	origOut, err := xgoBuild([]string{"--no-instrument", "--project-dir", tmpDir, "./"}, &options{
 		run:    true,
 		noTrim: true,
+		env: []string{
+			"XGO_TEST_NO_INSTRUMENT=true",
+		},
 	})
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	origExpect := "A\nB\n"
 
 	if origOut != origExpect {
 		t.Fatalf("expect original output: %q, actual: %q", origExpect, origOut)
@@ -42,7 +54,7 @@ func TestTrap(t *testing.T) {
 		"-o", tmpFile,
 		"--project-dir", tmpDir,
 		// "-a", // debug
-		// "--debug", "main", "--vscode", "../.vscode", // debug
+		// "--debug", "github.com/xhd2015/xgo/runtime/core/trap", "--vscode", "../.vscode", // debug
 		"--",
 		// "-gcflags=all=-N -l", // debug
 		".",
@@ -52,20 +64,15 @@ func TestTrap(t *testing.T) {
 	}
 	out, err := exec.Command(tmpFile).Output()
 	if err != nil {
+		if err, ok := err.(*exec.ExitError); ok {
+			t.Fatalf("%v", string(err.Stderr))
+		}
 		t.Fatalf("%v", err)
 	}
 	outStr := string(out)
 	// t.Logf("%s", outStr)
 
-	expectOut := "trap A\nA\nabort B\n"
 	if outStr != expectOut {
 		t.Fatalf("expect output: %q, actual: %q", expectOut, outStr)
 	}
-}
-
-func fatalExecErr(t *testing.T, err error) {
-	if err, ok := err.(*exec.ExitError); ok {
-		t.Fatalf("%v", string(err.Stderr))
-	}
-	t.Fatalf("%v", err)
 }

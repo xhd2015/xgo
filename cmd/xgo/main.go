@@ -227,9 +227,10 @@ func handleBuild(cmd string, args []string) error {
 	}
 	buildCmdArgs = append(buildCmdArgs, buildArgs...)
 	buildCmd := exec.Command(filepath.Join(instrumentGoroot, "bin", "go"), buildCmdArgs...)
-	buildCmd.Env = append(os.Environ(), "GOCACHE="+buildCacheDir)
+	buildCmd.Env = os.Environ()
 	buildCmd.Env = patchEnvWithGoroot(buildCmd.Env, instrumentGoroot)
 	if !noInstrument {
+		buildCmd.Env = append(buildCmd.Env, "GOCACHE="+buildCacheDir)
 		buildCmd.Env = append(buildCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
 		if dumpIR != "" {
 			buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)

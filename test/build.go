@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"testing"
 
 	"strings"
 
@@ -22,6 +23,7 @@ func getTempFile(pattern string) (string, error) {
 type options struct {
 	run    bool
 	noTrim bool
+	env    []string
 }
 
 func xgoBuild(args []string, opts *options) (string, error) {
@@ -40,6 +42,10 @@ func xgoBuild(args []string, opts *options) (string, error) {
 	}, args...)
 	cmd := exec.Command("go", buildArgs...)
 	cmd.Stderr = os.Stderr
+	if opts != nil && len(opts.env) > 0 {
+		cmd.Env = os.Environ()
+		cmd.Env = append(cmd.Env, opts.env...)
+	}
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -87,4 +93,11 @@ func linkRuntimeAndTest(testDir string, goModOnly bool) (rootDir string, subDir 
 		return "", "", err
 	}
 	return tmpDir, subDir, nil
+}
+
+func fatalExecErr(t *testing.T, err error) {
+	if err, ok := err.(*exec.ExitError); ok {
+		t.Fatalf("%v", string(err.Stderr))
+	}
+	t.Fatalf("%v", err)
 }

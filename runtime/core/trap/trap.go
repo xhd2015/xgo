@@ -38,7 +38,7 @@ func trapImpl(funcName string, pc uintptr, recv interface{}, args []interface{},
 		_  uintptr
 		pc *uintptr
 	}
-	interceptors := GetInterceptors()
+	interceptors := GetAllInterceptors()
 	// check if the calling func is an interceptor, if so, skip
 	n := len(interceptors)
 	if n == 0 {
