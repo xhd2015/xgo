@@ -11,10 +11,10 @@ import (
 // go test -run TestLongFuncNoSplitShouldNotCompileWithDebugFlags -v ./test
 func TestLongFuncNoSplitShouldNotCompileWithDebugFlags(t *testing.T) {
 	var errBuf bytes.Buffer
-	_, buildErr := buildAndRunOutputArgs([]string{"build", "-gcflags=all=-N -l", "./testdata/nosplit/long_func_overflow.go"}, buildAndOutputOptions{
+	_, buildErr := buildAndRunOutputArgs([]string{"-gcflags=all=-N -l", "./testdata/nosplit/long_func_overflow.go"}, buildAndOutputOptions{
 		build: func(args []string) error {
 			// use go build
-			buildCmd := exec.Command("go", args...)
+			buildCmd := exec.Command("go", append([]string{"build"}, args...)...)
 			buildCmd.Stderr = &errBuf
 			buildCmd.Stdout = os.Stdout
 			return buildCmd.Run()
@@ -24,6 +24,8 @@ func TestLongFuncNoSplitShouldNotCompileWithDebugFlags(t *testing.T) {
 		t.Fatalf("expect build fail")
 	}
 	errOutput := errBuf.String()
+
+	// t.Logf("output: %s", errOutput)
 
 	expect := "main.longFunc: nosplit stack over 792 byte limit"
 	if !strings.Contains(errOutput, expect) {
