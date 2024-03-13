@@ -62,7 +62,7 @@ func handleBuild(cmd string, args []string) error {
 	output := opts.output
 	verbose := opts.verbose
 	optXgoSrc := opts.xgoSrc
-	noOut := opts.noOut
+	noBuildOutput := opts.noBuildOutput
 	noInstrument := opts.noInstrument
 	syncXgoOnly := opts.syncXgoOnly
 	syncWithLink := opts.syncWithLink
@@ -79,16 +79,18 @@ func handleBuild(cmd string, args []string) error {
 		return fmt.Errorf("requires GOROOT or --with-goroot")
 	}
 
-	if vscode == "" {
-		f, err := os.Stat(".vscode")
-		if err == nil && f.IsDir() {
-			vscode = ".vscode"
-		}
+	// create a tmp dir for communication with exec_tool
+	tmpDir, err := os.MkdirTemp("", "xgo-"+cmd)
+	if err != nil {
+		return err
 	}
+	defer os.RemoveAll(tmpDir)
 
-	if vscode != "" {
+	var vscodeDebugFile string
+	var vscodeDebugFileSuffix string
+	if !noInstrument && debug != "" {
 		var err error
-		vscode, err = filepath.Abs(vscode)
+		vscodeDebugFile, vscodeDebugFileSuffix, err = getVscodeDebugFile(tmpDir, vscode)
 		if err != nil {
 			return err
 		}
@@ -97,30 +99,18 @@ func handleBuild(cmd string, args []string) error {
 	var tmpIRFile string
 	if !noInstrument {
 		if dumpIR != "" {
-			tmpDir, err := os.MkdirTemp("", "dump-ir")
-			if err != nil {
-				return err
-			}
-			defer os.RemoveAll(tmpDir)
 			tmpIRFile = filepath.Join(tmpDir, "dump-ir")
 		}
 	}
+
 	// build the exec tool
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("get config under home directory: %v", err)
 	}
-	// check if we are using expected go version
-	goVersionStr, err := getGoVersion(goroot)
+	goVersion, err := checkGoVersion(goroot)
 	if err != nil {
 		return err
-	}
-	goVersion, err := goinfo.ParseGoVersion(goVersionStr)
-	if err != nil {
-		return err
-	}
-	if goVersion.Major != 1 || goVersion.Minor != 20 {
-		return fmt.Errorf("expect go1.20.x, actual: %s", goVersionStr)
 	}
 
 	goVersionName := fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch)
@@ -148,23 +138,14 @@ func handleBuild(cmd string, args []string) error {
 	} else {
 		err = assertDir(srcDir)
 		if err != nil {
-			return fmt.Errorf("checking ~/.xgo/src: %w", err)
+			return fmt.Errorf("check ~/.xgo/src: %w", err)
 		}
 	}
 
-	err = os.MkdirAll(binDir, 0755)
+	err = ensureDirs(binDir, logDir, instrumentDir)
 	if err != nil {
-		return fmt.Errorf("create ~/.xgo/bin: %w", err)
+		return err
 	}
-	err = os.MkdirAll(logDir, 0755)
-	if err != nil {
-		return fmt.Errorf("create ~/.xgo/log: %w", err)
-	}
-	err = os.MkdirAll(instrumentDir, 0755)
-	if err != nil {
-		return fmt.Errorf("create ~/.xgo/log: %w", err)
-	}
-
 	err = syncGoroot(goroot, instrumentGoroot)
 	if err != nil {
 		return err
@@ -204,14 +185,9 @@ func handleBuild(cmd string, args []string) error {
 	}
 	if cmdBuild {
 		// output
-		if noOut {
-			discardDir, err := os.MkdirTemp("", "build-discard")
-			if err != nil {
-				return err
-			}
-			discardOut := filepath.Join(discardDir, "out")
+		if noBuildOutput {
+			discardOut := filepath.Join(tmpDir, "discard.out")
 			buildCmdArgs = append(buildCmdArgs, "-o", discardOut)
-			defer os.RemoveAll(discardDir)
 		} else if output != "" {
 			realOut := output
 			if projectDir != "" {
@@ -236,8 +212,8 @@ func handleBuild(cmd string, args []string) error {
 			buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)
 			buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_DUMP_IR_FILE="+tmpIRFile)
 		}
-		if vscode != "" {
-			buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_VSCODE="+vscode)
+		if vscodeDebugFile != "" {
+			buildCmd.Env = append(buildCmd.Env, "XGO_DEBUG_VSCODE="+vscodeDebugFile+vscodeDebugFileSuffix)
 		}
 	}
 	buildCmd.Stdout = os.Stdout
@@ -261,6 +237,15 @@ func handleBuild(cmd string, args []string) error {
 			return err
 		}
 	}
+	if (vscode == "stdout" || strings.HasPrefix(vscode, "stdout?")) && vscodeDebugFile != "" {
+		err := copyToStdout(vscodeDebugFile)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("vscode debug not effective, use -a to trigger recompile")
+			}
+			return err
+		}
+	}
 	return nil
 }
 
@@ -272,6 +257,38 @@ func copyToStdout(srcFile string) error {
 	defer file.Close()
 	_, err = io.Copy(os.Stdout, file)
 	return err
+}
+
+func checkGoVersion(goroot string) (*goinfo.GoVersion, error) {
+	// check if we are using expected go version
+	goVersionStr, err := getGoVersion(goroot)
+	if err != nil {
+		return nil, err
+	}
+	goVersion, err := goinfo.ParseGoVersion(goVersionStr)
+	if err != nil {
+		return nil, err
+	}
+	if goVersion.Major != 1 || goVersion.Minor != 20 {
+		return nil, fmt.Errorf("expect go1.20.x, actual: %s", goVersionStr)
+	}
+	return goVersion, nil
+}
+
+func ensureDirs(binDir string, logDir string, instrumentDir string) error {
+	err := os.MkdirAll(binDir, 0755)
+	if err != nil {
+		return fmt.Errorf("create ~/.xgo/bin: %w", err)
+	}
+	err = os.MkdirAll(logDir, 0755)
+	if err != nil {
+		return fmt.Errorf("create ~/.xgo/log: %w", err)
+	}
+	err = os.MkdirAll(instrumentDir, 0755)
+	if err != nil {
+		return fmt.Errorf("create ~/.xgo/log: %w", err)
+	}
+	return nil
 }
 
 func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string) (compilerChanged bool, toolExecFlag string, err error) {

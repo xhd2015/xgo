@@ -101,3 +101,13 @@ func fatalExecErr(t *testing.T, err error) {
 	}
 	t.Fatalf("%v", err)
 }
+
+func expectSequence(t *testing.T, output string, sequence []string) {
+	for _, s := range sequence {
+		idx := strings.Index(output, s)
+		if idx < 0 {
+			t.Fatalf("expect output contains %q, actually not found", s)
+		}
+		output = output[idx+len(s):]
+	}
+}

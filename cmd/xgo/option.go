@@ -16,8 +16,8 @@ type options struct {
 	withGoroot string
 	dumpIR     string
 
-	noOut        bool
-	noInstrument bool
+	noBuildOutput bool
+	noInstrument  bool
 
 	// TODO: make these options available only at develop
 	syncXgoOnly  bool
@@ -42,7 +42,7 @@ func parseOptions(args []string) (*options, error) {
 	var withGoroot string
 	var dumpIR string
 
-	var noOut bool
+	var noBuildOutput bool
 	var remainArgs []string
 	nArg := len(args)
 	for i := 0; i < nArg; i++ {
@@ -71,8 +71,8 @@ func parseOptions(args []string) (*options, error) {
 			syncWithLink = true
 			continue
 		}
-		if arg == "--no-out" {
-			noOut = true
+		if arg == "--no-build-output" {
+			noBuildOutput = true
 			continue
 		}
 		if arg == "--no-instrument" {
@@ -139,17 +139,17 @@ func parseOptions(args []string) (*options, error) {
 	}
 
 	return &options{
-		flagA:        flagA,
-		verbose:      verbose,
-		projectDir:   projectDir,
-		output:       output,
-		xgoSrc:       xgoSrc,
-		debug:        debug,
-		vscode:       vscode,
-		withGoroot:   withGoroot,
-		dumpIR:       dumpIR,
-		noOut:        noOut,
-		noInstrument: noInstrument,
+		flagA:         flagA,
+		verbose:       verbose,
+		projectDir:    projectDir,
+		output:        output,
+		xgoSrc:        xgoSrc,
+		debug:         debug,
+		vscode:        vscode,
+		withGoroot:    withGoroot,
+		dumpIR:        dumpIR,
+		noBuildOutput: noBuildOutput,
+		noInstrument:  noInstrument,
 
 		syncXgoOnly:  syncXgoOnly,
 		syncWithLink: syncWithLink,

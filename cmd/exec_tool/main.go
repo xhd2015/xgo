@@ -107,17 +107,29 @@ func handleCompile(cmd string, opts *options, args []string) error {
 			return err
 		}
 		logCompile("%s\n", string(debugCmdJSON))
-		vscodeDir := os.Getenv(XGO_DEBUG_VSCODE)
-		if vscodeDir != "" {
-			err = addVscodeDebug(filepath.Join(vscodeDir, "launch.json"), debugCmd)
+		vscodeFile := os.Getenv(XGO_DEBUG_VSCODE)
+
+		var nowait bool
+		qIdx := strings.LastIndex(vscodeFile, "?")
+		if qIdx >= 0 {
+			flags := vscodeFile[qIdx+1:]
+			vscodeFile = vscodeFile[:qIdx]
+			if flags == "nowait" {
+				nowait = true
+			}
+		}
+		if vscodeFile != "" {
+			err = addVscodeDebug(vscodeFile, debugCmd)
 			if err != nil {
 				return err
 			}
 		}
-		// wait the vscode debugger to finish the command
-		// sleep forever
-		for {
-			time.Sleep(60 * time.Hour)
+		if !nowait {
+			// wait the vscode debugger to finish the command
+			// sleep forever
+			for {
+				time.Sleep(60 * time.Hour)
+			}
 		}
 	}
 	// COMPILER_ALLOW_SYNTAX_REWRITE=${COMPILER_ALLOW_SYNTAX_REWRITE:-true} COMPILER_ALLOW_IR_REWRITE=${COMPILER_ALLOW_IR_REWRITE:-true} "$shdir/compile" ${@:2}

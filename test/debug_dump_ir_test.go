@@ -2,7 +2,6 @@ package test
 
 import (
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -17,12 +16,12 @@ func TestDumpIR(t *testing.T) {
 	}
 	defer os.RemoveAll(rootDir)
 
-	output, err := xgoBuild([]string{"--dump-ir", "main.Print", "--no-out", "--project-dir", tmpDir, "./"}, nil)
+	output, err := xgoBuild([]string{"--dump-ir", "main.Print", "--no-build-output", "--project-dir", tmpDir, "./"}, nil)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 	// t.Logf("output:%s", output)
-	expectContains := []string{
+	seqs := []string{
 		"DCLFUNC main.Print", // func decl
 		"NAME-main.a",        // variable
 		"CALLFUNC",           // call fmt.Printf
@@ -30,9 +29,6 @@ func TestDumpIR(t *testing.T) {
 		`LITERAL-"a:%s\n"`, // literal
 		"CONVIFACE",        // convert a to interface{}
 	}
-	for _, expectContain := range expectContains {
-		if !strings.Contains(output, expectContain) {
-			t.Fatalf("expect IR contains %q, actually not found", expectContain)
-		}
-	}
+
+	expectSequence(t, output, seqs)
 }
