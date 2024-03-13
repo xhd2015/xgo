@@ -107,20 +107,26 @@ func getRegFuncsBody(files []*syntax.File) string {
 				if fn.Recv.Name != nil {
 					recvName = fn.Recv.Name.Value
 				}
+
+				recvTypeExpr := fn.Recv.Type
+
 				// *A
 				if starExpr, ok := fn.Recv.Type.(*syntax.Operation); ok && starExpr.Op == syntax.Mul {
-					if indexExpr, ok := starExpr.X.(*syntax.IndexExpr); ok {
-						// the generic receiver
-						// currently not handled
-						// TODO: handle generic function
-						_ = indexExpr
-						continue
-					}
-					recvTypeName = starExpr.X.(*syntax.Name).Value
+					// *A
+					recvTypeExpr = starExpr.X
 					recvPtr = true
-				} else {
-					recvTypeName = fn.Recv.Type.(*syntax.Name).Value
 				}
+				// check if generic
+				if indexExpr, ok := recvTypeExpr.(*syntax.IndexExpr); ok {
+					// *A[T] or A[T]
+					// the generic receiver
+					// currently not handled
+					// TODO: handle generic function
+					_ = indexExpr
+					continue
+				}
+
+				recvTypeName = recvTypeExpr.(*syntax.Name).Value
 			}
 
 			declFuncNames = append(declFuncNames, &declName{
