@@ -6,7 +6,7 @@ import (
 
 // go test -run TestGeneric -v ./test
 func TestGeneric(t *testing.T) {
-	output, err := buildAndRunOutputArgs([]string{"--project-dir", "./testdata/generic_param", "./"})
+	output, err := buildAndRunOutputArgs([]string{"--project-dir", "./testdata/generic_param", "./"}, buildAndOutputOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -102,12 +102,33 @@ func fatalExecErr(t *testing.T, err error) {
 	t.Fatalf("%v", err)
 }
 
-func expectSequence(t *testing.T, output string, sequence []string) {
-	for _, s := range sequence {
-		idx := strings.Index(output, s)
-		if idx < 0 {
-			t.Fatalf("expect output contains %q, actually not found", s)
-		}
-		output = output[idx+len(s):]
+func buildAndRunOutput(program string) (output string, err error) {
+	return buildAndRunOutputArgs([]string{program}, buildAndOutputOptions{})
+}
+
+type buildAndOutputOptions struct {
+	build func(args []string) error
+}
+
+func buildAndRunOutputArgs(args []string, opts buildAndOutputOptions) (output string, err error) {
+	testBin, err := getTempFile("test")
+	if err != nil {
+		return "", err
 	}
+	defer os.RemoveAll(testBin)
+	buildArgs := []string{"-o", testBin}
+	buildArgs = append(buildArgs, args...)
+	if opts.build != nil {
+		err = opts.build(buildArgs)
+	} else {
+		_, err = xgoBuild(buildArgs, nil)
+	}
+	if err != nil {
+		return "", err
+	}
+	out, err := exec.Command(testBin).Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }

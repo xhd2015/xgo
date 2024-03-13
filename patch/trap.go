@@ -151,6 +151,13 @@ func insertTrapPoints() {
 			return true
 		}
 
+		// func marked nosplit will skip trap because
+		// inserting traps when -gcflags=-N -l enabled
+		// would cause stack overflow 792 bytes
+		if fn.Pragma&ir.Nosplit != 0 {
+			return true
+		}
+
 		// ir.Dump("before:", fn)
 		// fn.Body =
 		t := fn.Type()

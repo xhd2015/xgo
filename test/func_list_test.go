@@ -56,12 +56,3 @@ func TestFuncList(t *testing.T) {
 		}
 	}
 }
-
-func containsLine(lines []string, line string) bool {
-	for _, t := range lines {
-		if t == line {
-			return true
-		}
-	}
-	return false
-}
