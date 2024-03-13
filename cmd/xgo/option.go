@@ -38,7 +38,7 @@ func parseOptions(args []string) (*options, error) {
 
 	var xgoSrc string
 	var syncXgoOnly bool
-	var syncWithLink bool
+	var syncWithLink *bool
 	var withGoroot string
 	var dumpIR string
 
@@ -68,7 +68,8 @@ func parseOptions(args []string) (*options, error) {
 			continue
 		}
 		if arg == "--sync-with-link" {
-			syncWithLink = true
+			v := true
+			syncWithLink = &v
 			continue
 		}
 		if arg == "--no-build-output" {
@@ -151,8 +152,9 @@ func parseOptions(args []string) (*options, error) {
 		noBuildOutput: noBuildOutput,
 		noInstrument:  noInstrument,
 
-		syncXgoOnly:  syncXgoOnly,
-		syncWithLink: syncWithLink,
+		syncXgoOnly: syncXgoOnly,
+		// default true
+		syncWithLink: syncWithLink == nil || *syncWithLink,
 		remainArgs:   remainArgs,
 	}, nil
 }

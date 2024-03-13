@@ -134,16 +134,18 @@ func getRegFuncsBody(files []*syntax.File) string {
 		}
 	}
 
-	if len(declFuncNames) == 0 {
-		return ""
-	}
-
 	stmts := make([]string, 0, len(declFuncNames))
-	stmts = append(stmts, fmt.Sprintf(" __xgo_regPkgPath := %q", types.LocalPkg.Path))
 	for _, declName := range declFuncNames {
+		if declName.name == "_" {
+			// there are function with name "_"
+			continue
+		}
 		stmts = append(stmts, fmt.Sprintf("__xgo_reg_func(__xgo_regPkgPath,%s,%s,%s,%s)", declName.RefName(), strconv.Quote(declName.recvName), quoteNamesExpr(declName.argNames), quoteNamesExpr(declName.resNames)))
 	}
-	return strings.Join(stmts, "\n")
+	if len(stmts) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" __xgo_regPkgPath := %q\n", types.LocalPkg.Path) + strings.Join(stmts, "\n")
 }
 
 func getFieldNames(x []*syntax.Field) []string {

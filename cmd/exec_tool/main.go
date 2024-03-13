@@ -110,15 +110,18 @@ func handleCompile(cmd string, opts *options, args []string) error {
 		vscodeFile := os.Getenv(XGO_DEBUG_VSCODE)
 
 		var nowait bool
+		var nowrite bool
 		qIdx := strings.LastIndex(vscodeFile, "?")
 		if qIdx >= 0 {
 			flags := vscodeFile[qIdx+1:]
 			vscodeFile = vscodeFile[:qIdx]
 			if flags == "nowait" {
 				nowait = true
+			} else if flags == "nowrite" {
+				nowrite = true
 			}
 		}
-		if vscodeFile != "" {
+		if !nowrite && vscodeFile != "" {
 			err = addVscodeDebug(vscodeFile, debugCmd)
 			if err != nil {
 				return err
