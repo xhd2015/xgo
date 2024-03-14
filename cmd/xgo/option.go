@@ -20,7 +20,9 @@ type options struct {
 	noInstrument  bool
 
 	// TODO: make these options available only at develop
+	// deprecated
 	syncXgoOnly  bool
+	setupDev     bool
 	syncWithLink bool
 
 	remainArgs []string
@@ -38,6 +40,8 @@ func parseOptions(args []string) (*options, error) {
 
 	var xgoSrc string
 	var syncXgoOnly bool
+	var setupDev bool
+
 	var syncWithLink *bool
 	var withGoroot string
 	var dumpIR string
@@ -65,6 +69,10 @@ func parseOptions(args []string) (*options, error) {
 		}
 		if arg == "--sync-xgo-only" {
 			syncXgoOnly = true
+			continue
+		}
+		if arg == "--setup-dev" {
+			setupDev = true
 			continue
 		}
 		if arg == "--sync-with-link" {
@@ -153,6 +161,7 @@ func parseOptions(args []string) (*options, error) {
 		noInstrument:  noInstrument,
 
 		syncXgoOnly: syncXgoOnly,
+		setupDev:    setupDev,
 		// default true
 		syncWithLink: syncWithLink == nil || *syncWithLink,
 		remainArgs:   remainArgs,

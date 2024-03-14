@@ -12,8 +12,7 @@ func main() {
 		"build",
 		"--xgo-src",
 		"./",
-		"--sync-xgo-only",
-		"--sync-with-link",
+		"--setup-dev",
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

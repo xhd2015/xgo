@@ -65,6 +65,7 @@ func handleBuild(cmd string, args []string) error {
 	noBuildOutput := opts.noBuildOutput
 	noInstrument := opts.noInstrument
 	syncXgoOnly := opts.syncXgoOnly
+	setupDev := opts.setupDev
 	syncWithLink := opts.syncWithLink
 	debug := opts.debug
 	vscode := opts.vscode
@@ -152,11 +153,18 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	// patch go runtime and compiler
-	err = patchGoSrc(instrumentGoroot, realXgoSrc, noInstrument, syncWithLink)
+	err = patchGoSrc(instrumentGoroot, realXgoSrc, noInstrument, syncWithLink || setupDev)
 	if err != nil {
 		return err
 	}
 
+	if setupDev {
+		err := setupDevDir(instrumentGoroot)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 	if syncXgoOnly {
 		return nil
 	}

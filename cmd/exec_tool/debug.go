@@ -2,11 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/xhd2015/xgo/support/fileutil"
 )
 
 func getVscodeDebugCmd(cmd string, args []string) *VscodeDebugConfig {
@@ -59,42 +59,26 @@ func addVscodeDebug(vscodeLaunchFile string, config *VscodeDebugConfig) error {
 	if err != nil {
 		return err
 	}
-
-	data, err := ioutil.ReadFile(vscodeLaunchFile)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-	}
-	var launchConfig VscodeLaunchConfigMap
-	if len(data) > 0 {
-		err := json.Unmarshal(data, &launchConfig)
-		if err != nil {
-			return fmt.Errorf("bad launch config: %s: %w", vscodeLaunchFile, err)
-		}
-	}
 	m, err := config.ToMap()
 	if err != nil {
 		return err
 	}
 
-	var found bool
-	for i, exConf := range launchConfig.Configurations {
-		if fmt.Sprint(exConf["name"]) == config.Name {
-			launchConfig.Configurations[i] = m
-			found = true
-			break
+	return fileutil.PatchJSONPretty(vscodeLaunchFile, func(launchConfig *VscodeLaunchConfigMap) error {
+		var foundIdx int = -1
+		for i, exConf := range launchConfig.Configurations {
+			if fmt.Sprint(exConf["name"]) == config.Name {
+				foundIdx = i
+				break
+			}
 		}
-	}
-	if !found {
-		launchConfig.Configurations = append(launchConfig.Configurations, m)
-	}
-
-	newConf, err := json.MarshalIndent(launchConfig, "", "    ")
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(vscodeLaunchFile, newConf, 0755)
+		if foundIdx >= 0 {
+			launchConfig.Configurations[foundIdx] = m
+		} else {
+			launchConfig.Configurations = append(launchConfig.Configurations, m)
+		}
+		return nil
+	})
 }
 
 func (c *VscodeDebugConfig) ToMap() (map[string]interface{}, error) {
