@@ -15,7 +15,7 @@ const __XGO_SKIP_TRAP = true
 
 // link by compiler
 func __xgo_link_getcurg() unsafe.Pointer {
-	panic(errors.New("xgo failed to link __xgo_link_getcurg"))
+	panic(errors.New("failed to link __xgo_link_getcurg"))
 }
 
 // hold goroutine stacks, keyed by goroutine ptr

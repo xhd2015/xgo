@@ -47,8 +47,10 @@ func insertTrapPoints() {
 			break
 		}
 	}
+
 	setTrap := "__xgo_set_trap"
 	setTrapAllowPkg := "github.com/xhd2015/xgo/runtime/core/trap"
+	allowedLinkPkgPrefix := "github.com/xhd2015/xgo/runtime/"
 	linkMap := map[string]string{
 		"__xgo_link_for_each_func": "__xgo_for_each_func",
 		"__xgo_link_getcurg":       "__xgo_getcurg",
@@ -102,6 +104,9 @@ func insertTrapPoints() {
 		// TODO: what about unnamed closure?
 		linkName := linkMap[fnName]
 		if linkName != "" {
+			if !strings.HasPrefix(types.LocalPkg.Path, allowedLinkPkgPrefix) {
+				return true
+			}
 			// ir.Dump("before:", fn)
 			if !disableXgoLink {
 				if linkName == setTrap && types.LocalPkg.Path != setTrapAllowPkg {
