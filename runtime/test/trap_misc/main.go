@@ -7,14 +7,12 @@ import (
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core/functab"
-	"github.com/xhd2015/xgo/runtime/core/trap"
 
 	"github.com/xhd2015/xgo/runtime/core/trace"
 	"github.com/xhd2015/xgo/runtime/pkg"
 )
 
 func init() {
-	trap.Use()
 	trace.Use()
 }
 

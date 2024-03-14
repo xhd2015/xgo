@@ -35,6 +35,7 @@ var interceptors []*Interceptor
 var localInterceptors sync.Map // goroutine ptr -> *interceptorList
 
 func AddInterceptor(interceptor *Interceptor) {
+	ensureSetupTrap()
 	interceptors = append(interceptors, interceptor)
 }
 
@@ -72,6 +73,7 @@ func GetAllInterceptors() []*Interceptor {
 // returns a function to dispose the key
 // NOTE: if not called correctly,there might be memory leak
 func AddLocalInterceptor(interceptor *Interceptor) func() {
+	ensureSetupTrap()
 	key := __xgo_link_getcurg()
 	list := &interceptorList{}
 	val, loaded := localInterceptors.LoadOrStore(key, list)

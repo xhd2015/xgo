@@ -2,25 +2,22 @@ package trap
 
 import (
 	"context"
-	"errors"
 	"runtime"
 	"strings"
+	"sync"
 	"unsafe"
 )
 
-var used bool
+var setupOnce sync.Once
 
-func Use() {
-	if used {
-		return
-	}
-	if runtime.TrapImpl_Requires_Xgo != nil {
-		panic(errors.New("trap already set by other packages"))
-	}
-	// ensure this init is called before main
-	// we do not care init here, we try our best
-	runtime.TrapImpl_Requires_Xgo = trapImpl
-	used = true
+func ensureSetupTrap() {
+	setupOnce.Do(func() {
+		__xgo_link_set_trap(trapImpl)
+	})
+}
+
+func __xgo_link_set_trap(trapImpl func(funcName string, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
+	panic("failed to link __xgo_link_set_trap")
 }
 
 func Skip() {

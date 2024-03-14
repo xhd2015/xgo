@@ -47,9 +47,12 @@ func insertTrapPoints() {
 			break
 		}
 	}
+	setTrap := "__xgo_set_trap"
+	setTrapAllowPkg := "github.com/xhd2015/xgo/runtime/core/trap"
 	linkMap := map[string]string{
 		"__xgo_link_for_each_func": "__xgo_for_each_func",
 		"__xgo_link_getcurg":       "__xgo_getcurg",
+		"__xgo_link_set_trap":      setTrap,
 	}
 
 	// var fileNames []string
@@ -101,6 +104,9 @@ func insertTrapPoints() {
 		if linkName != "" {
 			// ir.Dump("before:", fn)
 			if !disableXgoLink {
+				if linkName == setTrap && types.LocalPkg.Path != setTrapAllowPkg {
+					return true
+				}
 				replaceWithRuntimeCall(fn, linkName)
 			}
 			// ir.Dump("after:", fn)

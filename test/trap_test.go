@@ -3,6 +3,7 @@ package test
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -13,7 +14,31 @@ func TestTrap(t *testing.T) {
 	testTrap(t, "./testdata/trap", origExpect, expectOut)
 }
 
+// go test -run TestTrapNormalBuildShouldFail -v ./test
+func TestTrapNormalBuildShouldFail(t *testing.T) {
+	expectOut := "panic: failed to link __xgo_link_set_trap"
+	testTrapWithOpts(t, "./testdata/trap", "", expectOut, testTrapOpts{
+		expectOrigErr:       true,
+		withNoInstrumentEnv: false,
+		runInstrument:       false,
+	})
+}
+
 func testTrap(t *testing.T, testDir string, origExpect string, expectOut string) {
+	testTrapWithOpts(t, testDir, origExpect, expectOut, testTrapOpts{
+		expectOrigErr:       false,
+		withNoInstrumentEnv: true,
+		runInstrument:       true,
+	})
+}
+
+type testTrapOpts struct {
+	expectOrigErr       bool
+	withNoInstrumentEnv bool
+	runInstrument       bool
+}
+
+func testTrapWithOpts(t *testing.T, testDir string, origExpect string, expectOut string, opts testTrapOpts) {
 	debug := false
 	// debug := true
 	tmpFile, err := getTempFile("test")
@@ -36,19 +61,40 @@ func testTrap(t *testing.T, testDir string, origExpect string, expectOut string)
 	// NOTE: the --no-instrument version should not use
 	// the same cache as instrumented version, cache
 	// cannot tell whether --no-instrument is applied
+	var env []string
+	if opts.withNoInstrumentEnv {
+		env = append(env, "XGO_TEST_NO_INSTRUMENT=true")
+	}
 	origOut, err := xgoBuild([]string{"--no-instrument", "--project-dir", tmpDir, "./"}, &options{
-		run:    true,
-		noTrim: true,
-		env: []string{
-			"XGO_TEST_NO_INSTRUMENT=true",
-		},
+		run:          true,
+		noTrim:       true,
+		env:          env,
+		noPipeStderr: opts.expectOrigErr,
 	})
+	if opts.expectOrigErr {
+		if err == nil {
+			t.Fatalf("expect build no instrument err, actual no err")
+		}
+		// errOut
+		exitErr, ok := err.(*exec.ExitError)
+		if !ok {
+			t.Fatalf("expect build err be *exec.ExitError, actual: %T %v", err, err)
+		}
+		extStdErr := string(exitErr.Stderr)
+		if expectOut == "" || !strings.Contains(extStdErr, expectOut) {
+			t.Fatalf("expect build err contains: %q, actual: %s", expectOut, extStdErr)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 
 	if origOut != origExpect {
 		t.Fatalf("expect original output: %q, actual: %q", origExpect, origOut)
+	}
+	if !opts.runInstrument {
+		return
 	}
 	_, err = xgoBuild([]string{
 		"-o", tmpFile,

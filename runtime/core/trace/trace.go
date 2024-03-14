@@ -37,7 +37,7 @@ type Stack struct {
 
 func Use() {
 	// collect trace
-	trap.AddInterceptor(trap.Interceptor{
+	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
 			stack := &Stack{
 				FuncInfo: f,

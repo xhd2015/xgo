@@ -3,7 +3,7 @@
     {
       "args": [
         "build",
-        "-v",
+        "--log-compile",
         "--xgo-src",
         "./",
         "--sync-with-link",
@@ -32,7 +32,7 @@
     {
       "args": [
         "build",
-        "-v",
+        "--log-compile",
         "--xgo-src",
         "./",
         "--sync-with-link",

@@ -24,6 +24,8 @@ type options struct {
 	run    bool
 	noTrim bool
 	env    []string
+
+	noPipeStderr bool
 }
 
 func xgoBuild(args []string, opts *options) (string, error) {
@@ -41,7 +43,9 @@ func xgoBuild(args []string, opts *options) (string, error) {
 		"--sync-with-link",
 	}, args...)
 	cmd := exec.Command("go", buildArgs...)
-	cmd.Stderr = os.Stderr
+	if opts == nil || !opts.noPipeStderr {
+		cmd.Stderr = os.Stderr
+	}
 	if opts != nil && len(opts.env) > 0 {
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, opts.env...)

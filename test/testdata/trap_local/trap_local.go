@@ -9,14 +9,15 @@ import (
 )
 
 func init() {
-	trap.Use()
-	trap.AddInterceptor(&trap.Interceptor{
-		Pre: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
-			trap.Skip()
-			fmt.Printf("global trap: %s\n", f.Name)
-			return nil, nil
-		},
-	})
+	if os.Getenv("XGO_TEST_NO_INSTRUMENT") != "true" {
+		trap.AddInterceptor(&trap.Interceptor{
+			Pre: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
+				trap.Skip()
+				fmt.Printf("global trap: %s\n", f.Name)
+				return nil, nil
+			},
+		})
+	}
 }
 
 func main() {

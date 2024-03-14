@@ -30,18 +30,27 @@ import (
 func __xgo_getcurg() unsafe.Pointer { return unsafe.Pointer(getg().m.curg) }
 
 // exported so other func can call it
-var TrapImpl_Requires_Xgo func(funcName string, funcPC uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
+var __xgo_trap_impl func(funcName string, funcPC uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
 
 // this is so elegant that you cannot ignore it
 func __xgo_trap(recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	if TrapImpl_Requires_Xgo == nil {
+	if __xgo_trap_impl == nil {
 		return nil, false
 	}
 	pc := getcallerpc()
 	fn := findfunc(pc)
 	// TODO: what about inlined func?
 	funcName := fn.datap.funcName(fn.nameOff)
-	return TrapImpl_Requires_Xgo(funcName, fn.entry(), recv, args, results)
+	return __xgo_trap_impl(funcName, fn.entry(), recv, args, results)
+}
+
+func __xgo_set_trap(trap func(funcName string, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
+	if __xgo_trap_impl != nil {
+		panic("trap already set by other packages")
+	}
+	// ensure this init is called before main
+	// we do not care init here, we try our best
+	__xgo_trap_impl = trap
 }
 
 type __xgo_func_info struct {

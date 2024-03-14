@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xhd2015/xgo/cmd/xgo/goinfo"
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
+	"github.com/xhd2015/xgo/support/goinfo"
 )
 
 // usage:

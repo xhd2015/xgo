@@ -11,7 +11,7 @@ import (
 // for functions that have trap.AddInterceptor called, trap will skip
 // the function and its called function
 func Use() {
-	trap.AddInterceptor(trap.Interceptor{
+	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
 			if strings.Contains(f.FullName, "testArgs") {
 				fmt.Printf("Mock: %s\n", f.FullName)
