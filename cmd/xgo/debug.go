@@ -50,7 +50,7 @@ func getVscodeDebugFile(tmpDir string, vscode string) (vscodeDebugFile string, s
 }
 
 func setupDevDir(goroot string) error {
-	cmdCompile := filepath.Join(goroot, "src", "cmd" /* "compile" */)
+	cmdCompile := filepath.Join(goroot, "src", "cmd", "compile")
 	vscodeDir := filepath.Join(cmdCompile, ".vscode")
 
 	err := assertDir(cmdCompile)
@@ -64,11 +64,11 @@ func setupDevDir(goroot string) error {
 	fmt.Printf("%s\n", cmdCompile)
 
 	// {
-	// 	"go.goroot": "../../..",
+	// 	"go.goroot": "$GOROOT",
 	// 	"gopls": {
 	// 		"build.env": {
-	// 			"GOROOT": "../../..",
-	// 			"PATH": "../../../bin:${env:PATH}"
+	// 			"GOROOT": "$GOROOT",
+	// 			"PATH": "$GOROOT/bin:${env:PATH}"
 	// 		}
 	// 	}
 	// }
