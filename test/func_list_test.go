@@ -3,7 +3,6 @@ package test
 import (
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 )
 
@@ -36,8 +35,8 @@ func TestFuncList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	outStr := string(out)
-	// t.Logf("%s", outStr)
+	output := string(out)
+	// t.Logf("%s", output)
 
 	expectLines := []string{
 		"func:strconv FormatBool",
@@ -49,10 +48,5 @@ func TestFuncList(t *testing.T) {
 		"func:main someInt.value",
 		"func:main (*someInt).inc",
 	}
-	lines := strings.Split(outStr, "\n")
-	for _, expectLine := range expectLines {
-		if !containsLine(lines, expectLine) {
-			t.Fatalf("expect %s not found", expectLine)
-		}
-	}
+	expectSequence(t, output, expectLines)
 }
