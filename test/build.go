@@ -62,6 +62,48 @@ func xgoBuild(args []string, opts *options) (string, error) {
 	return outStr, nil
 }
 
+// return clean up func
+type buildRuntimeOpts struct {
+	xgoBuildEnv []string
+	runEnv      []string
+}
+
+func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error) {
+	tmpFile, err := getTempFile("test")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmpFile)
+
+	// func_list depends on xgo/runtime, but xgo/runtime is
+	// a separate module, so we need to merge them
+	// together first
+	tmpDir, funcListDir, err := tmpMergeRuntimeAndTest(dir)
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	_, err = xgoBuild([]string{
+		"-o", tmpFile,
+		"--project-dir", funcListDir,
+		".",
+	}, &options{
+		env: opts.xgoBuildEnv,
+	})
+	if err != nil {
+		return "", err
+	}
+	runCmd := exec.Command(tmpFile)
+	runCmd.Env = os.Environ()
+	runCmd.Env = append(runCmd.Env, opts.runEnv...)
+	output, err := runCmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
+}
+
 func tmpMergeRuntimeAndTest(testDir string) (rootDir string, subDir string, err error) {
 	return linkRuntimeAndTest(testDir, false)
 }

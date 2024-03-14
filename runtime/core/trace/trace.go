@@ -5,7 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core/trap"
@@ -39,6 +44,7 @@ func Use() {
 	// collect trace
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
+			trap.Skip()
 			stack := &Stack{
 				FuncInfo: f,
 				Recv:     args.Recv,
@@ -65,6 +71,7 @@ func Use() {
 			return prevTop, nil
 		},
 		Post: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs, data interface{}) error {
+			trap.Skip()
 			key := uintptr(__xgo_link_getcurg())
 			v, ok := stackMap.Load(key)
 			if !ok {
@@ -72,16 +79,14 @@ func Use() {
 			}
 			root := v.(*Root)
 			if data == nil {
-				trace, err := json.Marshal(&Stack{
+				// stack finished
+				stackMap.Delete(key)
+				err := emitTrace(&Stack{
 					Children: root.Children,
 				})
 				if err != nil {
 					return err
 				}
-
-				// TODO: may add callback for this
-				fmt.Printf("trace: %s\n", string(trace))
-				stackMap.Delete(key)
 			} else {
 				// pop stack
 				root.Top = data.(*Stack)
@@ -89,4 +94,37 @@ func Use() {
 			return nil
 		},
 	})
+}
+
+// this should also be marked as trap.Skip()
+func emitTrace(stack *Stack) error {
+	// write to file
+	trace, err := json.Marshal(stack)
+	if err != nil {
+		return err
+	}
+
+	traceIDNum := int64(1)
+	ghex := fmt.Sprintf("g_%x", __xgo_link_getcurg())
+	traceID := "t_" + strconv.FormatInt(traceIDNum, 10)
+
+	xgoTraceDir := os.Getenv("XGO_TRACE_DIR")
+	if xgoTraceDir == "" {
+		xgoTraceDir = time.Now().Format("trace_20060102_150405")
+	}
+	if xgoTraceDir == "stdout" {
+		// TODO: may add callback for this
+		fmt.Printf("%s/%s: ", ghex, traceID)
+		fmt.Println(string(trace))
+		return nil
+	}
+
+	dir := filepath.Join(xgoTraceDir, ghex)
+	err = os.MkdirAll(dir, 0755)
+	if err != nil {
+		return err
+	}
+	file := filepath.Join(dir, traceID+".json")
+
+	return ioutil.WriteFile(file, trace, 0755)
 }
