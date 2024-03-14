@@ -15,22 +15,30 @@ import (
 //	go1.21.7/pkg/tool/darwin_amd64/compile -o /var/.../_pkg_.a -trimpath /var/...=> -p fmt -std -complete -buildid b_xx -goversion go1.21.7 -c=4 -nolocalimports -importcfg /var/.../importcfg -pack src/A.go src/B.go
 //	go1.21.7/pkg/tool/darwin_amd64/link -V=full
 func main() {
-	err := initLog()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
 	// os.Arg[0] = exec_tool
 	// os.Arg[1] = compile or others...
 	args := os.Args[1:]
-
-	// log compile args
-	logCompile("exec_tool %s\n", strings.Join(args, " "))
 
 	opts, err := parseOptions(args, true)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "exec_tool: %v\n", err)
 		os.Exit(1)
+	}
+
+	logCompileEnable := opts.logCompile
+	if logCompileEnable {
+		err = initLog()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		// close the file at exit
+		defer compileLogFile.Close()
+	}
+
+	// log compile args
+	if logCompileEnable {
+		logCompile("exec_tool %s\n", strings.Join(args, " "))
 	}
 
 	toolArgs := opts.remainArgs
@@ -95,18 +103,24 @@ func handleCompile(cmd string, opts *options, args []string) error {
 		withDebugHint = " with debug"
 	}
 
-	logCompile("compile %s%s\n", pkgPath, withDebugHint)
-
+	logCompileEnable := opts.logCompile
+	if logCompileEnable {
+		logCompile("compile %s%s\n", pkgPath, withDebugHint)
+	}
 	if isDebug {
 		// TODO: add env
-		logCompile("to debug with dlv: dlv exec --api-version=2 --listen=localhost:2345 --check-go-version=false --headless -- %s %s\n", compilerBin, strings.Join(args, " "))
+		if logCompileEnable {
+			logCompile("to debug with dlv: dlv exec --api-version=2 --listen=localhost:2345 --check-go-version=false --headless -- %s %s\n", compilerBin, strings.Join(args, " "))
+		}
 		debugCmd := getVscodeDebugCmd(compilerBin, args)
 		debugCmd.Env[XGO_COMPILER_ENABLE] = xgoCompilerEnableEnv
 		debugCmdJSON, err := json.MarshalIndent(debugCmd, "", "    ")
 		if err != nil {
 			return err
 		}
-		logCompile("%s\n", string(debugCmdJSON))
+		if logCompileEnable {
+			logCompile("%s\n", string(debugCmdJSON))
+		}
 		vscodeFile := os.Getenv(XGO_DEBUG_VSCODE)
 
 		var nowait bool

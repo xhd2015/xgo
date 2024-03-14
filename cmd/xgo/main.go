@@ -60,7 +60,9 @@ func handleBuild(cmd string, args []string) error {
 	flagA := opts.flagA
 	projectDir := opts.projectDir
 	output := opts.output
-	verbose := opts.verbose
+	flagV := opts.flagV
+	flagX := opts.flagX
+	logCompile := opts.logCompile
 	optXgoSrc := opts.xgoSrc
 	noBuildOutput := opts.noBuildOutput
 	noInstrument := opts.noInstrument
@@ -69,6 +71,7 @@ func handleBuild(cmd string, args []string) error {
 	syncWithLink := opts.syncWithLink
 	debug := opts.debug
 	vscode := opts.vscode
+	gcflags := opts.gcflags
 	withGoroot := opts.withGoroot
 	dumpIR := opts.dumpIR
 
@@ -172,14 +175,14 @@ func handleBuild(cmd string, args []string) error {
 	var compilerChanged bool
 	var toolExecFlag string
 	if !noInstrument {
-		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug)
+		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug, logCompile)
 		if err != nil {
 			return err
 		}
 	}
 
 	// before invoking exec_tool, tail follow its log
-	if verbose {
+	if logCompile {
 		go tailLog(compileLog)
 	}
 
@@ -190,6 +193,15 @@ func handleBuild(cmd string, args []string) error {
 	}
 	if flagA || compilerChanged {
 		buildCmdArgs = append(buildCmdArgs, "-a")
+	}
+	if flagV {
+		buildCmdArgs = append(buildCmdArgs, "-v")
+	}
+	if flagX {
+		buildCmdArgs = append(buildCmdArgs, "-x")
+	}
+	if gcflags != "" {
+		buildCmdArgs = append(buildCmdArgs, "-gcflags="+gcflags)
 	}
 	if cmdBuild {
 		// output
@@ -299,7 +311,7 @@ func ensureDirs(binDir string, logDir string, instrumentDir string) error {
 	return nil
 }
 
-func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string) (compilerChanged bool, toolExecFlag string, err error) {
+func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool) (compilerChanged bool, toolExecFlag string, err error) {
 	// build the instrumented compiler
 	err = buildCompiler(goroot, compilerBin)
 	if err != nil {
@@ -320,6 +332,9 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 		return false, "", err
 	}
 	execToolCmd := []string{execToolBin, "--enable"}
+	if logCompile {
+		execToolCmd = append(execToolCmd, "--log-compile")
+	}
 	if debugPkg != "" {
 		execToolCmd = append(execToolCmd, "--debug="+debugPkg)
 	}

@@ -9,12 +9,15 @@ type options struct {
 	flagA      bool
 	projectDir string
 	output     string
-	verbose    bool
+	flagV      bool
+	flagX      bool
 	xgoSrc     string
 	debug      string
 	vscode     string
 	withGoroot string
 	dumpIR     string
+
+	logCompile bool
 
 	noBuildOutput bool
 	noInstrument  bool
@@ -25,12 +28,17 @@ type options struct {
 	setupDev     bool
 	syncWithLink bool
 
+	// recognize go flags as is
+	// -gcflags
+	gcflags string
+
 	remainArgs []string
 }
 
 func parseOptions(args []string) (*options, error) {
 	var flagA bool
-	var verbose bool
+	var flagV bool
+	var flagX bool
 	var projectDir string
 	var output string
 	var debug string
@@ -46,9 +54,54 @@ func parseOptions(args []string) (*options, error) {
 	var withGoroot string
 	var dumpIR string
 
+	var logCompile bool
+
 	var noBuildOutput bool
+
+	var gcflags string
+
 	var remainArgs []string
 	nArg := len(args)
+
+	type FlagValue struct {
+		Flags []string
+		Value *string
+	}
+
+	var flagValues []FlagValue = []FlagValue{
+		{
+			Flags: []string{"--project-dir"},
+			Value: &projectDir,
+		},
+		{
+			Flags: []string{"-o"},
+			Value: &output,
+		},
+		{
+			Flags: []string{"--debug"},
+			Value: &debug,
+		},
+		{
+			Flags: []string{"--vscode"},
+			Value: &vscode,
+		},
+		{
+			Flags: []string{"--xgo-src"},
+			Value: &xgoSrc,
+		},
+		{
+			Flags: []string{"--with-goroot"},
+			Value: &withGoroot,
+		},
+		{
+			Flags: []string{"--dump-ir"},
+			Value: &dumpIR,
+		},
+		{
+			Flags: []string{"-gcflags"},
+			Value: &gcflags,
+		},
+	}
 	for i := 0; i < nArg; i++ {
 		arg := args[i]
 		if !strings.HasPrefix(arg, "-") {
@@ -63,8 +116,16 @@ func parseOptions(args []string) (*options, error) {
 			flagA = true
 			continue
 		}
+		if arg == "-x" {
+			flagX = true
+			continue
+		}
 		if arg == "-v" {
-			verbose = true
+			flagV = true
+			continue
+		}
+		if arg == "--log-compile" {
+			logCompile = true
 			continue
 		}
 		if arg == "--sync-xgo-only" {
@@ -88,59 +149,18 @@ func parseOptions(args []string) (*options, error) {
 			noInstrument = true
 			continue
 		}
-		ok, err := tryParseFlagValue("--project-dir", &projectDir, &i, args)
-		if err != nil {
-			return nil, err
+		var found bool
+		for _, flagVal := range flagValues {
+			ok, err := tryParseFlagsValue(flagVal.Flags, flagVal.Value, &i, args)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				found = true
+				break
+			}
 		}
-		if ok {
-			continue
-		}
-
-		ok, err = tryParseFlagsValue([]string{"-o", "--output"}, &output, &i, args)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			continue
-		}
-
-		ok, err = tryParseFlagsValue([]string{"--debug"}, &debug, &i, args)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			continue
-		}
-
-		ok, err = tryParseFlagsValue([]string{"--vscode"}, &vscode, &i, args)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			continue
-		}
-
-		ok, err = tryParseFlagsValue([]string{"--xgo-src"}, &xgoSrc, &i, args)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			continue
-		}
-
-		ok, err = tryParseFlagsValue([]string{"--with-goroot"}, &withGoroot, &i, args)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			continue
-		}
-
-		ok, err = tryParseFlagsValue([]string{"--dump-ir"}, &dumpIR, &i, args)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
+		if found {
 			continue
 		}
 
@@ -148,15 +168,19 @@ func parseOptions(args []string) (*options, error) {
 	}
 
 	return &options{
-		flagA:         flagA,
-		verbose:       verbose,
-		projectDir:    projectDir,
-		output:        output,
-		xgoSrc:        xgoSrc,
-		debug:         debug,
-		vscode:        vscode,
-		withGoroot:    withGoroot,
-		dumpIR:        dumpIR,
+		flagA:      flagA,
+		flagV:      flagV,
+		flagX:      flagX,
+		projectDir: projectDir,
+		output:     output,
+		xgoSrc:     xgoSrc,
+		debug:      debug,
+		vscode:     vscode,
+		withGoroot: withGoroot,
+		dumpIR:     dumpIR,
+
+		logCompile: logCompile,
+
 		noBuildOutput: noBuildOutput,
 		noInstrument:  noInstrument,
 
@@ -164,7 +188,10 @@ func parseOptions(args []string) (*options, error) {
 		setupDev:    setupDev,
 		// default true
 		syncWithLink: syncWithLink == nil || *syncWithLink,
-		remainArgs:   remainArgs,
+
+		gcflags: gcflags,
+
+		remainArgs: remainArgs,
 	}, nil
 }
 

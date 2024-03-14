@@ -9,8 +9,9 @@ type options struct {
 	// by default all compiler's extra function
 	// are disabled, unless explicitly called with enable
 	enable     bool
-	verbose    bool
+	logCompile bool
 	debug      string
+
 	remainArgs []string
 }
 
@@ -41,7 +42,7 @@ func parseOptions(args []string, stopAfterFirstArg bool) (*options, error) {
 			continue
 		}
 
-		if arg == "-v" {
+		if arg == "--log-compile" {
 			verbose = true
 			continue
 		}
@@ -59,7 +60,7 @@ func parseOptions(args []string, stopAfterFirstArg bool) (*options, error) {
 
 	return &options{
 		enable:     enable,
-		verbose:    verbose,
+		logCompile: verbose,
 		debug:      debug,
 		remainArgs: remainArgs,
 	}, nil
