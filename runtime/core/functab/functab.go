@@ -1,6 +1,8 @@
 package functab
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 )
@@ -16,19 +18,27 @@ func __xgo_link_for_each_func(f func(pkgName string, funcName string, pc uintptr
 type FuncInfo struct {
 	FullName string
 	Name     string
-	PkgPath  string
+	Pkg      string
 	RecvType string
-	RecvPtr  string
+	RecvPtr  bool
 
-	PC       uintptr
-	Func     interface{}
+	PC       uintptr     `json:"-"`
+	Func     interface{} `json:"-"`
 	RecvName string
 	ArgNames []string
 	ResNames []string
 }
 
+func (c *FuncInfo) DisplayName() string {
+	if c.RecvType != "" {
+		return c.RecvType + "." + c.Name
+	}
+	return c.Name
+}
+
 var funcInfos []*FuncInfo
 var funcInfoMapping map[string]*FuncInfo
+var funcPCMapping map[uintptr]*FuncInfo // pc->FuncInfo
 
 func GetFuncs() []*FuncInfo {
 	ensureMapping()
@@ -38,6 +48,22 @@ func GetFuncs() []*FuncInfo {
 func GetFunc(fullName string) *FuncInfo {
 	ensureMapping()
 	return funcInfoMapping[fullName]
+}
+
+func Info(fn interface{}) *FuncInfo {
+	ensureMapping()
+	v := reflect.ValueOf(fn)
+	if v.Kind() != reflect.Func {
+		panic(fmt.Errorf("given type is not a func: %T", fn))
+	}
+	// deref to pc
+	pc := v.Pointer()
+	return funcPCMapping[pc]
+}
+
+func InfoPC(pc uintptr) *FuncInfo {
+	ensureMapping()
+	return funcPCMapping[pc]
 }
 
 func GetFuncByPkg(pkgPath string, name string) *FuncInfo {
@@ -61,12 +87,18 @@ var mappingOnce sync.Once
 func ensureMapping() {
 	mappingOnce.Do(func() {
 		funcInfoMapping = map[string]*FuncInfo{}
+		funcPCMapping = make(map[uintptr]*FuncInfo)
 		__xgo_link_for_each_func(func(pkgPath string, funcName string, pc uintptr, fn interface{}, recvName string, argNames, resNames []string) {
-			name := strings.TrimPrefix(funcName, pkgPath+".")
+			// prefix := pkgPath + "."
+			_, recvTypeName, recvPtr, name := ParseFuncName(funcName[len(pkgPath)+1:], false)
 			info := &FuncInfo{
 				FullName: funcName,
 				Name:     name,
-				PkgPath:  pkgPath,
+				Pkg:      pkgPath,
+				RecvType: recvTypeName,
+				RecvPtr:  recvPtr,
+
+				//
 				PC:       pc,
 				Func:     fn,
 				RecvName: recvName,
@@ -75,6 +107,43 @@ func ensureMapping() {
 			}
 			funcInfos = append(funcInfos, info)
 			funcInfoMapping[info.FullName] = info
+			funcPCMapping[info.PC] = info
 		})
 	})
+}
+
+// a/b/c.A
+// a/b/c.(*C).X
+// a/b/c.C.Y
+// a/b/c.Z
+func ParseFuncName(fullName string, hasPkg bool) (pkgPath string, recvName string, recvPtr bool, funcName string) {
+	s := fullName
+	funcNameDot := strings.LastIndex(s, ".")
+	if funcNameDot < 0 {
+		funcName = s
+		return
+	}
+	funcName = s[funcNameDot+1:]
+	s = s[:funcNameDot]
+
+	recvName = s
+	if hasPkg {
+		recvDot := strings.LastIndex(s, ".")
+		if recvDot < 0 {
+			pkgPath = s
+			return
+		}
+		recvName = s[recvDot+1:]
+		s = s[:recvDot]
+	}
+
+	recvName = strings.TrimPrefix(recvName, "(")
+	recvName = strings.TrimSuffix(recvName, ")")
+	if strings.HasPrefix(recvName, "*") {
+		recvPtr = true
+		recvName = recvName[1:]
+	}
+	pkgPath = s
+
+	return
 }

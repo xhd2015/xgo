@@ -86,6 +86,7 @@ func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error
 
 	_, err = xgoBuild([]string{
 		"-o", tmpFile,
+		"-a",
 		"--project-dir", funcListDir,
 		".",
 	}, &options{

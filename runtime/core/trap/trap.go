@@ -3,9 +3,10 @@ package trap
 import (
 	"context"
 	"runtime"
-	"strings"
 	"sync"
 	"unsafe"
+
+	"github.com/xhd2015/xgo/runtime/core/functab"
 )
 
 var setupOnce sync.Once
@@ -36,13 +37,13 @@ func trapImpl(funcName string, pc uintptr, recv interface{}, args []interface{},
 		pc *uintptr
 	}
 	interceptors := GetAllInterceptors()
-	// check if the calling func is an interceptor, if so, skip
 	n := len(interceptors)
 	if n == 0 {
 		return nil, false
 	}
 	if false {
-		// don't do manual check
+		// check if the calling func is an interceptor, if so, skip
+		// UPDATE: don't do manual check
 		for i := 0; i < n; i++ {
 			if interceptors[i].Pre == nil {
 				continue
@@ -55,14 +56,17 @@ func trapImpl(funcName string, pc uintptr, recv interface{}, args []interface{},
 			}
 		}
 	}
-
-	pkgPath, recvName, recvPtr, funcShortName := parseFuncName(funcName)
-	f := &FuncInfo{
-		Pkg:      pkgPath,
-		RecvName: recvName,
-		RecvPtr:  recvPtr,
-		Name:     funcShortName,
-		FullName: funcName,
+	f := functab.InfoPC(pc)
+	if f == nil {
+		// fallback to default
+		pkgPath, recvName, recvPtr, funcShortName := functab.ParseFuncName(funcName, true)
+		f = &functab.FuncInfo{
+			Pkg:      pkgPath,
+			RecvName: recvName,
+			RecvPtr:  recvPtr,
+			Name:     funcShortName,
+			FullName: funcName,
+		}
 	}
 	// TODO: what about inlined func?
 	funcArgs := &FuncArgs{
@@ -157,37 +161,4 @@ func trapImpl(funcName string, pc uintptr, recv interface{}, args []interface{},
 			}
 		}
 	}, false
-}
-
-// a/b/c.A
-// a/b/c.(*C).X
-// a/b/c.C.Y
-// a/b/c.Z
-func parseFuncName(fullName string) (pkgPath string, recvName string, recvPtr bool, funcName string) {
-	s := fullName
-	funcNameDot := strings.LastIndex(s, ".")
-	if funcNameDot < 0 {
-		funcName = s
-		return
-	}
-	funcName = s[funcNameDot+1:]
-	s = s[:funcNameDot]
-
-	recvDot := strings.LastIndex(s, ".")
-	if recvDot < 0 {
-		pkgPath = s
-		return
-	}
-	recvName = s[recvDot+1:]
-	s = s[:recvDot]
-	recvName = strings.TrimPrefix(recvName, "(")
-	recvName = strings.TrimSuffix(recvName, ")")
-	if strings.HasPrefix(recvName, "*") {
-		recvPtr = true
-		recvName = recvName[1:]
-	}
-
-	pkgPath = s
-
-	return
 }

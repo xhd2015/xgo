@@ -21,7 +21,8 @@ func TestFuncList(t *testing.T) {
 		"func:strings Split",
 		"func:main example",
 		"func:main someInt.value",
-		"func:main (*someInt).inc",
+		// "func:main (*someInt).inc", // this output is replaced with a simplier display name
+		"func:main someInt.inc",
 	}
 	expectSequence(t, output, expectLines)
 }

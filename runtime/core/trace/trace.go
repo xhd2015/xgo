@@ -13,6 +13,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/xhd2015/xgo/runtime/core/functab"
 	"github.com/xhd2015/xgo/runtime/core/trap"
 )
 
@@ -33,7 +34,7 @@ type Root struct {
 }
 
 type Stack struct {
-	FuncInfo *trap.FuncInfo
+	FuncInfo *functab.FuncInfo
 	Recv     interface{}
 	Args     []interface{}
 	Results  []interface{}
@@ -43,7 +44,7 @@ type Stack struct {
 func Use() {
 	// collect trace
 	trap.AddInterceptor(&trap.Interceptor{
-		Pre: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
+		Pre: func(ctx context.Context, f *functab.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
 			trap.Skip()
 			stack := &Stack{
 				FuncInfo: f,
@@ -70,7 +71,7 @@ func Use() {
 			root.Top = stack
 			return prevTop, nil
 		},
-		Post: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs, data interface{}) error {
+		Post: func(ctx context.Context, f *functab.FuncInfo, args *trap.FuncArgs, data interface{}) error {
 			trap.Skip()
 			key := uintptr(__xgo_link_getcurg())
 			v, ok := stackMap.Load(key)

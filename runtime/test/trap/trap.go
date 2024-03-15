@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/xhd2015/xgo/runtime/core/functab"
 	"github.com/xhd2015/xgo/runtime/core/trap"
 )
 
 func init() {
 	trap.AddInterceptor(&trap.Interceptor{
-		Pre: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
+		Pre: func(ctx context.Context, f *functab.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
 			trap.Skip()
 			if f.Name == "A" {
 				fmt.Printf("trap A\n")

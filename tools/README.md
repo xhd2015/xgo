@@ -46,7 +46,7 @@ Just use the `trap.AddInterceptor({Pre:..., Post:...})` to define pre to detect 
 See [./test/test_trap/mock/mock.go](./test/test_trap/mock/mock.go):
 ```go
 trap.AddInterceptor(trap.Interceptor{
-    Pre: func(ctx context.Context, f *trap.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
+    Pre: func(ctx context.Context, f *functab.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
         if strings.Contains(f.FullName, "testArgs") {
             fmt.Printf("Mock: %s\n", f.FullName)
             p := args.Results[0].(*int)

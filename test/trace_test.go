@@ -1,6 +1,7 @@
 package test
 
 import (
+	"os/exec"
 	"testing"
 )
 
@@ -12,6 +13,9 @@ func TestTrace(t *testing.T) {
 		},
 	})
 	if err != nil {
+		if err, ok := err.(*exec.ExitError); ok {
+			t.Logf("stderr: %s", string(err.Stderr))
+		}
 		t.Fatal(err)
 	}
 

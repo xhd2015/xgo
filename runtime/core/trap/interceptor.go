@@ -6,20 +6,14 @@ import (
 	"fmt"
 	"sync"
 	"unsafe"
+
+	"github.com/xhd2015/xgo/runtime/core/functab"
 )
 
 const __XGO_SKIP_TRAP = true
 
 var ErrAbort error = errors.New("abort trap interceptor")
 
-type FuncInfo struct {
-	Pkg      string
-	RecvName string
-	RecvPtr  bool
-	Name     string
-
-	FullName string
-}
 type FuncArgs struct {
 	Recv    interface{}
 	Args    []interface{}
@@ -27,8 +21,8 @@ type FuncArgs struct {
 }
 
 type Interceptor struct {
-	Pre  func(ctx context.Context, f *FuncInfo, args *FuncArgs) (data interface{}, err error)
-	Post func(ctx context.Context, f *FuncInfo, args *FuncArgs, data interface{}) error
+	Pre  func(ctx context.Context, f *functab.FuncInfo, args *FuncArgs) (data interface{}, err error)
+	Post func(ctx context.Context, f *functab.FuncInfo, args *FuncArgs, data interface{}) error
 }
 
 var interceptors []*Interceptor

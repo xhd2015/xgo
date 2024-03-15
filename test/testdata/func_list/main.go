@@ -16,11 +16,11 @@ func main() {
 		// example:
 		//   main main
 		//   main A.String
-		pkgPath := fn.PkgPath
-		funcName := fn.Name
-		fmt.Printf("func:%s %s\n", pkgPath, funcName)
+		pkg := fn.Pkg
+		displayName := fn.DisplayName()
+		fmt.Printf("func:%s %s\n", pkg, displayName)
 		total++
-		countByPkg[pkgPath]++
+		countByPkg[pkg]++
 	}
 
 	for pkgName, count := range countByPkg {
