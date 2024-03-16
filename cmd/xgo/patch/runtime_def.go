@@ -3,10 +3,10 @@ package patch
 const RuntimeExtraDef = `
 // xgo
 func __xgo_getcurg() unsafe.Pointer
-func __xgo_trap(genericName string, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
-func __xgo_register_func(pkgPath string, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)
-func __xgo_for_each_func(f func(pkgPath string, funcName string, pc uintptr, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool))
-func __xgo_set_trap(trap func(funcName string,genericName string,pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool))
+func __xgo_trap(pkgPath string,identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
+func __xgo_register_func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string,identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)
+func __xgo_set_trap(trap func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool))
+func __xgo_for_each_func(f func(pkgPath string, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool))
 `
 
 const RuntimeFuncNamePatch = `// workaround for go1.20, go1.21 will including this by go

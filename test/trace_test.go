@@ -26,15 +26,20 @@ func TestTrace(t *testing.T) {
 
 		// trace
 		"FuncInfo",
-		"main.main",
+		`"Pkg":"main"`,
+		`"IdentityName":"main"`,
 		"FuncInfo",
-		"main.A",
+		`"Pkg":"main"`,
+		`"IdentityName":"A"`,
 		"FuncInfo",
-		"main.B",
+		`"Pkg":"main"`,
+		`"IdentityName":"B"`,
 		"FuncInfo",
-		"main.C",
+		`"Pkg":"main"`,
+		`"IdentityName":"C"`,
 		"FuncInfo",
-		"main.C",
+		`"Pkg":"main"`,
+		`"IdentityName":"C"`,
 	}
 	expectSequence(t, output, expectLines)
 }

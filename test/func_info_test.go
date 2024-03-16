@@ -19,7 +19,7 @@ func TestFuncInfo(t *testing.T) {
 	}
 	// t.Logf("%s", output)
 
-	expectNonGeneric := "example fullName: main.example\nexample args: [a]\n"
+	expectNonGeneric := "example identityName: example\nexample args: [a]\n"
 	if !strings.HasPrefix(output, expectNonGeneric) {
 		t.Fatalf("expect output prefix %q, actual: %q", expectNonGeneric, output)
 	}
@@ -28,7 +28,7 @@ func TestFuncInfo(t *testing.T) {
 
 	// go1.18, with generic
 	if goVersion.Major >= 1 && goVersion.Minor >= 18 {
-		expectGeneric := "generic func info\n(*List).Size fullName: \n(*List).Size args: []\nHello fullName: \nHello args: [v]\n"
+		expectGeneric := "generic func info\n(*List).Size identityName: (*List).Size\n(*List).Size args: []\nHello identityName: Hello\nHello args: [v]\n"
 		if output != expectGeneric {
 			t.Fatalf("expect output generic %q, actual: %q", expectGeneric, output)
 		}

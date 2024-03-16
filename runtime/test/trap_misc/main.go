@@ -6,10 +6,10 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/core/functab"
+	"github.com/xhd2015/xgo/runtime/functab"
 
-	"github.com/xhd2015/xgo/runtime/core/trace"
 	"github.com/xhd2015/xgo/runtime/pkg"
+	"github.com/xhd2015/xgo/runtime/trace"
 )
 
 func init() {

@@ -17,19 +17,19 @@ func runGeneric() {
 
 	Hello(list)
 
-	funcInfo := functab.InfoGeneric("(*List).Size")
+	funcInfo := functab.Info("main", "(*List).Size")
 	if funcInfo == nil {
 		panic(fmt.Errorf("func (*List).Size not found"))
 	}
 
-	fmt.Printf("(*List).Size fullName: %s\n", funcInfo.FullName)
+	fmt.Printf("(*List).Size identityName: %s\n", funcInfo.IdentityName)
 	fmt.Printf("(*List).Size args: %v\n", funcInfo.ArgNames)
 
-	funcInfoHello := functab.InfoGeneric("Hello")
+	funcInfoHello := functab.Info("main", "Hello")
 	if funcInfoHello == nil {
 		panic(fmt.Errorf("func Hello not found"))
 	}
-	fmt.Printf("Hello fullName: %s\n", funcInfoHello.FullName)
+	fmt.Printf("Hello identityName: %s\n", funcInfoHello.IdentityName)
 	fmt.Printf("Hello args: %v\n", funcInfoHello.ArgNames)
 }
 

@@ -67,7 +67,7 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	autoGen :=
 		"package " + pkgName + "\n" +
 			// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
-			"func __xgo_register_funcs(__xgo_reg_func func(pkgPath string, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)){\n" +
+			"func __xgo_register_funcs(__xgo_reg_func func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string,identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)){\n" +
 			body +
 			"\n}"
 	// ioutil.WriteFile("test.log", []byte(autoGen), 0755)
@@ -106,6 +106,10 @@ func (c *DeclInfo) GenericName() string {
 		return ""
 	}
 	return c.RefName()
+}
+
+func (c *DeclInfo) IdentityName() string {
+	return xgo_func_name.FormatFuncRefName(c.RecvTypeName, c.RecvPtr, c.Name)
 }
 
 // collect funcs from files, register each of them by
@@ -187,12 +191,13 @@ func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 			// there are function with name "_"
 			continue
 		}
-		refName, genericName := declFunc.RefAndGeneric()
-		// pkgPath string, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool
+		refName, _ := declFunc.RefAndGeneric()
+		// pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string,identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool
 		stmts = append(stmts, fmt.Sprintf("__xgo_reg_func(__xgo_regPkgPath,%s)",
 			strings.Join([]string{
 				refName,
-				strconv.FormatBool(declFunc.Generic), strconv.Quote(genericName), // generic
+				strconv.Quote(declFunc.RecvTypeName), strconv.FormatBool(declFunc.RecvPtr), strconv.Quote(declFunc.Name),
+				strconv.Quote(declFunc.IdentityName()), strconv.FormatBool(declFunc.Generic), // generic
 				strconv.Quote(declFunc.RecvName), quoteNamesExpr(declFunc.ArgNames), quoteNamesExpr(declFunc.ResNames),
 				strconv.FormatBool(declFunc.FirstArgCtx), strconv.FormatBool(declFunc.LastResError)}, ","),
 		))

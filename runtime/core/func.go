@@ -2,17 +2,17 @@ package core
 
 import (
 	"reflect"
-	"strings"
 )
 
 const __XGO_SKIP_TRAP = true
 
 type FuncInfo struct {
-	FullName string
-	Pkg      string
-	RecvType string
-	RecvPtr  bool
-	Name     string
+	// FullName string
+	Pkg          string
+	IdentityName string
+	Name         string
+	RecvType     string
+	RecvPtr      bool
 
 	Generic bool
 
@@ -44,40 +44,4 @@ func (c *FuncInfo) IsFunc(fn interface{}) bool {
 		return false
 	}
 	return c.PC == v.Pointer()
-}
-
-// a/b/c.A
-// a/b/c.(*C).X
-// a/b/c.C.Y
-// a/b/c.Z
-func ParseFuncName(fullName string, hasPkg bool) (pkgPath string, recvName string, recvPtr bool, funcName string) {
-	s := fullName
-	funcNameDot := strings.LastIndex(s, ".")
-	if funcNameDot < 0 {
-		funcName = s
-		return
-	}
-	funcName = s[funcNameDot+1:]
-	s = s[:funcNameDot]
-
-	recvName = s
-	if hasPkg {
-		recvDot := strings.LastIndex(s, ".")
-		if recvDot < 0 {
-			pkgPath = s
-			return
-		}
-		recvName = s[recvDot+1:]
-		s = s[:recvDot]
-	}
-
-	recvName = strings.TrimPrefix(recvName, "(")
-	recvName = strings.TrimSuffix(recvName, ")")
-	if strings.HasPrefix(recvName, "*") {
-		recvPtr = true
-		recvName = recvName[1:]
-	}
-	pkgPath = s
-
-	return
 }

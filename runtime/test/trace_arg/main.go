@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/xhd2015/xgo/runtime/core/trace"
+	"github.com/xhd2015/xgo/runtime/trace"
 )
 
 func init() {
