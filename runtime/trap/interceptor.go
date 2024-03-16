@@ -7,29 +7,29 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/core/functab"
+	"github.com/xhd2015/xgo/runtime/core"
 )
 
 const __XGO_SKIP_TRAP = true
 
 var ErrAbort error = errors.New("abort trap interceptor")
 
-type FuncArgs struct {
-	Recv    interface{}
-	Args    []interface{}
-	Results []interface{}
-}
+// type FuncArgs struct {
+// 	Recv    interface{}
+// 	Args    []interface{}
+// 	Results []interface{}
+// }
 
 type Interceptor struct {
-	Pre  func(ctx context.Context, f *functab.FuncInfo, args *FuncArgs) (data interface{}, err error)
-	Post func(ctx context.Context, f *functab.FuncInfo, args *FuncArgs, data interface{}) error
+	Pre  func(ctx context.Context, f *core.FuncInfo, arg core.Object, result core.Object) (data interface{}, err error)
+	Post func(ctx context.Context, f *core.FuncInfo, arg core.Object, result core.Object, data interface{}) error
 }
 
 var interceptors []*Interceptor
 var localInterceptors sync.Map // goroutine ptr -> *interceptorList
 
 func AddInterceptor(interceptor *Interceptor) {
-	ensureSetupTrap()
+	ensureInit()
 	interceptors = append(interceptors, interceptor)
 }
 
@@ -67,7 +67,7 @@ func GetAllInterceptors() []*Interceptor {
 // returns a function to dispose the key
 // NOTE: if not called correctly,there might be memory leak
 func AddLocalInterceptor(interceptor *Interceptor) func() {
-	ensureSetupTrap()
+	ensureInit()
 	key := __xgo_link_getcurg()
 	list := &interceptorList{}
 	val, loaded := localInterceptors.LoadOrStore(key, list)

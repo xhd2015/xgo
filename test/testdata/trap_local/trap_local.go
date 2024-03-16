@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/xhd2015/xgo/runtime/core/functab"
-	"github.com/xhd2015/xgo/runtime/core/trap"
+	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/trap"
 )
 
 func init() {
 	if os.Getenv("XGO_TEST_NO_INSTRUMENT") != "true" {
 		trap.AddInterceptor(&trap.Interceptor{
-			Pre: func(ctx context.Context, f *functab.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
+			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()
 				fmt.Printf("global trap: %s\n", f.Name)
 				return nil, nil
@@ -30,7 +30,7 @@ func A() {
 	// non instrument mode cannot get curg
 	if os.Getenv("XGO_TEST_NO_INSTRUMENT") != "true" {
 		cancel := trap.AddLocalInterceptor(&trap.Interceptor{
-			Pre: func(ctx context.Context, f *functab.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
+			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()
 				fmt.Printf("local trap from A: %s\n", f.Name)
 				return nil, nil
@@ -44,7 +44,7 @@ func A() {
 func B() {
 	if os.Getenv("XGO_TEST_NO_INSTRUMENT") != "true" {
 		cancel := trap.AddLocalInterceptor(&trap.Interceptor{
-			Pre: func(ctx context.Context, f *functab.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
+			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()
 				fmt.Printf("local trap from B: %s\n", f.Name)
 				return nil, nil

@@ -1,3 +1,3 @@
 module github.com/xhd2015/xgo/runtime
 
-go 1.17
+go 1.18

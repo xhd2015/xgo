@@ -64,8 +64,9 @@ func xgoBuild(args []string, opts *options) (string, error) {
 
 // return clean up func
 type buildRuntimeOpts struct {
-	xgoBuildEnv []string
-	runEnv      []string
+	xgoBuildArgs []string
+	xgoBuildEnv  []string
+	runEnv       []string
 }
 
 func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error) {
@@ -84,12 +85,14 @@ func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error
 	}
 	defer os.RemoveAll(tmpDir)
 
-	_, err = xgoBuild([]string{
+	xgoBuildArgs := []string{
 		"-o", tmpFile,
-		"-a",
+		// "-a",
 		"--project-dir", funcListDir,
-		".",
-	}, &options{
+	}
+	xgoBuildArgs = append(xgoBuildArgs, opts.xgoBuildArgs...)
+	xgoBuildArgs = append(xgoBuildArgs, ".")
+	_, err = xgoBuild(xgoBuildArgs, &options{
 		env: opts.xgoBuildEnv,
 	})
 	if err != nil {

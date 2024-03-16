@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/xhd2015/xgo/runtime/core/functab"
+	"github.com/xhd2015/xgo/runtime/functab"
 )
 
 // go run ./cmd/xgo run --project-dir ./runtime ./test/func_info

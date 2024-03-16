@@ -30,6 +30,9 @@ func Patch() {
 	initRegFuncs()
 }
 
+const xgoRuntimePkgPrefix = "github.com/xhd2015/xgo/runtime/"
+const xgoRuntimeTrapPkg = xgoRuntimePkgPrefix + "trap"
+
 func insertTrapPoints() {
 	files := xgo_syntax.GetFiles()
 	xgo_syntax.SetFiles(nil) // help GC
@@ -49,8 +52,6 @@ func insertTrapPoints() {
 	}
 
 	setTrap := "__xgo_set_trap"
-	setTrapAllowPkg := "github.com/xhd2015/xgo/runtime/core/trap"
-	allowedLinkPkgPrefix := "github.com/xhd2015/xgo/runtime/"
 	linkMap := map[string]string{
 		"__xgo_link_for_each_func": "__xgo_for_each_func",
 		"__xgo_link_getcurg":       "__xgo_getcurg",
@@ -104,12 +105,12 @@ func insertTrapPoints() {
 		// TODO: what about unnamed closure?
 		linkName := linkMap[fnName]
 		if linkName != "" {
-			if !strings.HasPrefix(types.LocalPkg.Path, allowedLinkPkgPrefix) {
+			if !strings.HasPrefix(types.LocalPkg.Path, xgoRuntimePkgPrefix) {
 				return true
 			}
 			// ir.Dump("before:", fn)
 			if !disableXgoLink {
-				if linkName == setTrap && types.LocalPkg.Path != setTrapAllowPkg {
+				if linkName == setTrap && types.LocalPkg.Path != xgoRuntimeTrapPkg {
 					return true
 				}
 				replaceWithRuntimeCall(fn, linkName)
@@ -144,6 +145,11 @@ func insertTrapPoints() {
 		}
 		if fn.Body == nil {
 			// in go, function can have name without body
+			return true
+		}
+
+		if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) && !strings.HasPrefix(pkgPath[len(xgoRuntimePkgPrefix):], "test/") {
+			// skip all packages for xgo,except test
 			return true
 		}
 
@@ -232,7 +238,7 @@ func insertTrapPoints() {
 
 func isFirstStmtSkipTrap(nodes ir.Nodes) bool {
 	for _, node := range nodes {
-		if isCallTo(node, "github.com/xhd2015/xgo/runtime/core/trap", "Skip") {
+		if isCallTo(node, xgoRuntimeTrapPkg, "Skip") {
 			return true
 		}
 	}

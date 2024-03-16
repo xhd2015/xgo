@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/xhd2015/xgo/runtime/core"
 )
 
 const __XGO_SKIP_TRAP = true
@@ -15,42 +17,21 @@ func __xgo_link_for_each_func(f func(pkgName string, funcName string, pc uintptr
 	panic("failed to link __xgo_link_for_each_func")
 }
 
-type FuncInfo struct {
-	FullName string
-	Name     string
-	Pkg      string
-	RecvType string
-	RecvPtr  bool
+var funcInfos []*core.FuncInfo
+var funcInfoMapping map[string]*core.FuncInfo
+var funcPCMapping map[uintptr]*core.FuncInfo // pc->FuncInfo
 
-	PC       uintptr     `json:"-"`
-	Func     interface{} `json:"-"`
-	RecvName string
-	ArgNames []string
-	ResNames []string
-}
-
-func (c *FuncInfo) DisplayName() string {
-	if c.RecvType != "" {
-		return c.RecvType + "." + c.Name
-	}
-	return c.Name
-}
-
-var funcInfos []*FuncInfo
-var funcInfoMapping map[string]*FuncInfo
-var funcPCMapping map[uintptr]*FuncInfo // pc->FuncInfo
-
-func GetFuncs() []*FuncInfo {
+func GetFuncs() []*core.FuncInfo {
 	ensureMapping()
 	return funcInfos
 }
 
-func GetFunc(fullName string) *FuncInfo {
+func GetFunc(fullName string) *core.FuncInfo {
 	ensureMapping()
 	return funcInfoMapping[fullName]
 }
 
-func Info(fn interface{}) *FuncInfo {
+func Info(fn interface{}) *core.FuncInfo {
 	ensureMapping()
 	v := reflect.ValueOf(fn)
 	if v.Kind() != reflect.Func {
@@ -61,12 +42,12 @@ func Info(fn interface{}) *FuncInfo {
 	return funcPCMapping[pc]
 }
 
-func InfoPC(pc uintptr) *FuncInfo {
+func InfoPC(pc uintptr) *core.FuncInfo {
 	ensureMapping()
 	return funcPCMapping[pc]
 }
 
-func GetFuncByPkg(pkgPath string, name string) *FuncInfo {
+func GetFuncByPkg(pkgPath string, name string) *core.FuncInfo {
 	ensureMapping()
 	fn := funcInfoMapping[pkgPath+"."+name]
 	if fn != nil {
@@ -86,12 +67,12 @@ var mappingOnce sync.Once
 
 func ensureMapping() {
 	mappingOnce.Do(func() {
-		funcInfoMapping = map[string]*FuncInfo{}
-		funcPCMapping = make(map[uintptr]*FuncInfo)
+		funcInfoMapping = map[string]*core.FuncInfo{}
+		funcPCMapping = make(map[uintptr]*core.FuncInfo)
 		__xgo_link_for_each_func(func(pkgPath string, funcName string, pc uintptr, fn interface{}, recvName string, argNames, resNames []string) {
 			// prefix := pkgPath + "."
-			_, recvTypeName, recvPtr, name := ParseFuncName(funcName[len(pkgPath)+1:], false)
-			info := &FuncInfo{
+			_, recvTypeName, recvPtr, name := core.ParseFuncName(funcName[len(pkgPath)+1:], false)
+			info := &core.FuncInfo{
 				FullName: funcName,
 				Name:     name,
 				Pkg:      pkgPath,
@@ -110,40 +91,4 @@ func ensureMapping() {
 			funcPCMapping[info.PC] = info
 		})
 	})
-}
-
-// a/b/c.A
-// a/b/c.(*C).X
-// a/b/c.C.Y
-// a/b/c.Z
-func ParseFuncName(fullName string, hasPkg bool) (pkgPath string, recvName string, recvPtr bool, funcName string) {
-	s := fullName
-	funcNameDot := strings.LastIndex(s, ".")
-	if funcNameDot < 0 {
-		funcName = s
-		return
-	}
-	funcName = s[funcNameDot+1:]
-	s = s[:funcNameDot]
-
-	recvName = s
-	if hasPkg {
-		recvDot := strings.LastIndex(s, ".")
-		if recvDot < 0 {
-			pkgPath = s
-			return
-		}
-		recvName = s[recvDot+1:]
-		s = s[:recvDot]
-	}
-
-	recvName = strings.TrimPrefix(recvName, "(")
-	recvName = strings.TrimSuffix(recvName, ")")
-	if strings.HasPrefix(recvName, "*") {
-		recvPtr = true
-		recvName = recvName[1:]
-	}
-	pkgPath = s
-
-	return
 }

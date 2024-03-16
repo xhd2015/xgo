@@ -40,3 +40,5 @@ type intf struct {
 ```
 
 (TO BE FINISHED)
+
+# What is a pointer to a closure?

@@ -13,8 +13,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/core/functab"
-	"github.com/xhd2015/xgo/runtime/core/trap"
+	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/trap"
 )
 
 const __XGO_SKIP_TRAP = true
@@ -34,23 +34,28 @@ type Root struct {
 }
 
 type Stack struct {
-	FuncInfo *functab.FuncInfo
-	Recv     interface{}
-	Args     []interface{}
-	Results  []interface{}
+	FuncInfo *core.FuncInfo
+
+	Args    core.Object
+	Results core.Object
+	// Recv     interface{}
+	// Args     []interface{}
+	// Results  []interface{}
 	Children []*Stack
 }
 
 func Use() {
 	// collect trace
 	trap.AddInterceptor(&trap.Interceptor{
-		Pre: func(ctx context.Context, f *functab.FuncInfo, args *trap.FuncArgs) (interface{}, error) {
+		Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 			trap.Skip()
 			stack := &Stack{
 				FuncInfo: f,
-				Recv:     args.Recv,
-				Args:     args.Args,
-				Results:  args.Results,
+				Args:     args,
+				Results:  results,
+				// Recv:     args.Recv,
+				// Args:     args.Args,
+				// Results:  args.Results,
 			}
 			key := uintptr(__xgo_link_getcurg())
 			v, ok := stackMap.Load(key)
@@ -71,7 +76,7 @@ func Use() {
 			root.Top = stack
 			return prevTop, nil
 		},
-		Post: func(ctx context.Context, f *functab.FuncInfo, args *trap.FuncArgs, data interface{}) error {
+		Post: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object, data interface{}) error {
 			trap.Skip()
 			key := uintptr(__xgo_link_getcurg())
 			v, ok := stackMap.Load(key)
