@@ -18,7 +18,7 @@ func ensureInit() {
 	})
 }
 
-func __xgo_link_set_trap(trapImpl func(funcName string, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
+func __xgo_link_set_trap(trapImpl func(funcName string, genericName string, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	panic("failed to link __xgo_link_set_trap")
 }
 
@@ -32,7 +32,7 @@ func Skip() {
 
 // link to runtime
 // xgo:notrap
-func trapImpl(funcName string, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
+func trapImpl(funcName string, genericName string, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
 	type intf struct {
 		_  uintptr
 		pc *uintptr
@@ -59,7 +59,11 @@ func trapImpl(funcName string, pc uintptr, recv interface{}, args []interface{},
 	}
 	// NOTE: this may return nil for generic template
 	f := functab.InfoPC(pc)
+	if f == nil && genericName != "" {
+		f = functab.InfoGeneric(genericName)
+	}
 	if f == nil {
+		// may be generic
 		// fallback to default
 		pkgPath, recvType, recvPtr, funcShortName := core.ParseFuncName(funcName, true)
 		f = &core.FuncInfo{

@@ -9,42 +9,27 @@ import (
 	"unsafe"
 )
 
-// important thing here:
-//
-//		get arg types and argNames
-//	 get names
-//
-// two ways to
-//
-//	by function name
-//
-// it needs defer
-//
-//	if something{
-//	    next()
-//	    myAction()
-//	}
-
 // use getg().m.curg instead of getg()
 // see: https://github.com/golang/go/blob/master/src/runtime/HACKING.md
 func __xgo_getcurg() unsafe.Pointer { return unsafe.Pointer(getg().m.curg) }
 
 // exported so other func can call it
-var __xgo_trap_impl func(funcName string, funcPC uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
+var __xgo_trap_impl func(funcName string, genericName string, funcPC uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
 
 // this is so elegant that you cannot ignore it
-func __xgo_trap(recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
+func __xgo_trap(genericName string, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
 	if __xgo_trap_impl == nil {
 		return nil, false
 	}
 	pc := getcallerpc()
 	fn := findfunc(pc)
 	// TODO: what about inlined func?
+	// generic name: with concrete type info
 	funcName := fn.datap.funcName(fn.nameOff)
-	return __xgo_trap_impl(funcName, fn.entry(), recv, args, results)
+	return __xgo_trap_impl(funcName, genericName, fn.entry(), recv, args, results)
 }
 
-func __xgo_set_trap(trap func(funcName string, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
+func __xgo_set_trap(trap func(funcName string, genericName string, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	if __xgo_trap_impl != nil {
 		panic("trap already set by other packages")
 	}
@@ -54,16 +39,20 @@ func __xgo_set_trap(trap func(funcName string, pc uintptr, recv interface{}, arg
 }
 
 type __xgo_func_info struct {
-	pkgPath  string
-	fn       interface{}
-	recvName string
-	argNames []string
-	resNames []string
+	pkgPath     string
+	fn          interface{}
+	generic     bool
+	genericName string
+	recvName    string
+	argNames    []string
+	resNames    []string
+	firstArgCtx bool // first argument is context.Context or sub type?
+	lastResErr  bool // last res is error or sub type?
 }
 
 var funcs []*__xgo_func_info
 
-func __xgo_register_func(pkgPath string, fn interface{}, recvName string, argNames []string, resNames []string) {
+func __xgo_register_func(pkgPath string, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool) {
 	// type intf struct {
 	// 	_  uintptr
 	// 	pc *uintptr
@@ -73,29 +62,34 @@ func __xgo_register_func(pkgPath string, fn interface{}, recvName string, argNam
 	// funcName := fnVal.datap.funcName(fnVal.nameOff)
 	// println("register func:", funcName)
 	funcs = append(funcs, &__xgo_func_info{
-		pkgPath:  pkgPath,
-		fn:       fn,
-		recvName: recvName,
-		argNames: argNames,
-		resNames: resNames,
+		pkgPath:     pkgPath,
+		fn:          fn,
+		generic:     generic,
+		genericName: genericName,
+		recvName:    recvName,
+		argNames:    argNames,
+		resNames:    resNames,
+		firstArgCtx: firstArgCtx,
+		lastResErr:  lastResErr,
 	})
 }
 
-// func RegisterFunc_Requires_Xgo(fn interface{}, recvName string, argNames []string, resNames []string) {
-// 	__xgo_register_func(fn, recvName, argNames, resNames)
-// }
-
-func __xgo_for_each_func(f func(pkgPath string, funcName string, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string)) {
+func __xgo_for_each_func(f func(pkgPath string, funcName string, pc uintptr, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)) {
 	for _, fn := range funcs {
-		type intf struct {
-			_  uintptr
-			pc *uintptr
+		var pc uintptr
+		var funcName string
+
+		if !fn.generic {
+			type intf struct {
+				_  uintptr
+				pc *uintptr
+			}
+			v := (*intf)(unsafe.Pointer(&fn.fn))
+			pc = *v.pc
+			fnVal := findfunc(pc)
+			funcName = fnVal.datap.funcName(fnVal.nameOff)
 		}
-		v := (*intf)(unsafe.Pointer(&fn.fn))
-		pc := *v.pc
-		fnVal := findfunc(pc)
-		funcName := fnVal.datap.funcName(fnVal.nameOff)
-		f(fn.pkgPath, funcName, pc, fn.fn, fn.recvName, fn.argNames, fn.resNames)
+		f(fn.pkgPath, funcName, pc, fn.fn, fn.generic, fn.genericName, fn.recvName, fn.argNames, fn.resNames, fn.firstArgCtx, fn.lastResErr)
 	}
 }
 
@@ -106,11 +100,11 @@ func __xgo_for_each_func(f func(pkgPath string, funcName string, pc uintptr, fn 
 // 	return methods
 // }
 
-func Getcallerpc() uintptr {
-	return getcallerpc()
-}
-func GetcallerFuncPC() uintptr {
-	pc := getcallerpc()
-	fn := findfunc(pc)
-	return fn.entry()
-}
+// func Getcallerpc() uintptr {
+// 	return getcallerpc()
+// }
+// func GetcallerFuncPC() uintptr {
+// 	pc := getcallerpc()
+// 	fn := findfunc(pc)
+// 	return fn.entry()
+// }

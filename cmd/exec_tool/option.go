@@ -14,6 +14,8 @@ type options struct {
 	logCompile bool
 	debug      string
 
+	testCompile bool // --test-compile
+
 	remainArgs []string
 }
 
@@ -21,6 +23,9 @@ func parseOptions(args []string, stopAfterFirstArg bool) (*options, error) {
 	var enable bool
 	var verbose bool
 	var debug string
+
+	var testCompile bool
+
 	var remainArgs []string
 
 	nArg := len(args)
@@ -48,6 +53,10 @@ func parseOptions(args []string, stopAfterFirstArg bool) (*options, error) {
 			verbose = true
 			continue
 		}
+		if arg == "--test-compile" {
+			testCompile = true
+			continue
+		}
 
 		ok, err := flag.TryParseFlagsValue([]string{"--debug"}, &debug, &i, args)
 		if err != nil {
@@ -64,6 +73,9 @@ func parseOptions(args []string, stopAfterFirstArg bool) (*options, error) {
 		enable:     enable,
 		logCompile: verbose,
 		debug:      debug,
+
+		testCompile: testCompile,
+
 		remainArgs: remainArgs,
 	}, nil
 }

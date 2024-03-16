@@ -26,9 +26,10 @@ type options struct {
 
 	// TODO: make these options available only at develop
 	// deprecated
-	syncXgoOnly  bool
-	setupDev     bool
-	syncWithLink bool
+	syncXgoOnly   bool
+	setupDev      bool
+	buildCompiler bool
+	syncWithLink  bool
 
 	// recognize go flags as is
 	// -gcflags
@@ -51,6 +52,7 @@ func parseOptions(args []string) (*options, error) {
 	var xgoSrc string
 	var syncXgoOnly bool
 	var setupDev bool
+	var buildCompiler bool
 
 	var syncWithLink *bool
 	var withGoroot string
@@ -138,6 +140,10 @@ func parseOptions(args []string) (*options, error) {
 			setupDev = true
 			continue
 		}
+		if arg == "--build-compiler" {
+			buildCompiler = true
+			continue
+		}
 		if arg == "--sync-with-link" {
 			v := true
 			syncWithLink = &v
@@ -186,8 +192,9 @@ func parseOptions(args []string) (*options, error) {
 		noBuildOutput: noBuildOutput,
 		noInstrument:  noInstrument,
 
-		syncXgoOnly: syncXgoOnly,
-		setupDev:    setupDev,
+		syncXgoOnly:   syncXgoOnly,
+		setupDev:      setupDev,
+		buildCompiler: buildCompiler,
 		// default true
 		syncWithLink: syncWithLink == nil || *syncWithLink,
 

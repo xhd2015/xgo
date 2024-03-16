@@ -68,6 +68,7 @@ func handleBuild(cmd string, args []string) error {
 	noInstrument := opts.noInstrument
 	syncXgoOnly := opts.syncXgoOnly
 	setupDev := opts.setupDev
+	buildCompiler := opts.buildCompiler
 	syncWithLink := opts.syncWithLink
 	debug := opts.debug
 	vscode := opts.vscode
@@ -156,17 +157,19 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	// patch go runtime and compiler
-	err = patchGoSrc(instrumentGoroot, realXgoSrc, noInstrument, syncWithLink || setupDev)
+	err = patchGoSrc(instrumentGoroot, realXgoSrc, noInstrument, syncWithLink || setupDev || buildCompiler)
 	if err != nil {
 		return err
 	}
 
-	if setupDev {
-		err := setupDevDir(instrumentGoroot)
+	if setupDev || buildCompiler {
+		err := setupDevDir(instrumentGoroot, setupDev)
 		if err != nil {
 			return err
 		}
-		return nil
+		if setupDev {
+			return nil
+		}
 	}
 	if syncXgoOnly {
 		return nil
@@ -179,6 +182,9 @@ func handleBuild(cmd string, args []string) error {
 		if err != nil {
 			return err
 		}
+	}
+	if buildCompiler {
+		return nil
 	}
 
 	// before invoking exec_tool, tail follow its log
@@ -281,7 +287,7 @@ func copyToStdout(srcFile string) error {
 
 func checkGoVersion(goroot string) (*goinfo.GoVersion, error) {
 	// check if we are using expected go version
-	goVersionStr, err := getGoVersion(goroot)
+	goVersionStr, err := goinfo.GetGoVersionOutput(filepath.Join(goroot, "bin", "go"))
 	if err != nil {
 		return nil, err
 	}
@@ -390,14 +396,6 @@ func patchEnvWithGoroot(env []string, goroot string) []string {
 		"GOROOT="+goroot,
 		fmt.Sprintf("PATH=%s%c%s", filepath.Join(goroot, "bin"), filepath.ListSeparator, os.Getenv("PATH")),
 	)
-}
-
-func getGoVersion(goroot string) (string, error) {
-	out, err := exec.Command(filepath.Join(goroot, "bin", "go"), "version").Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSuffix(string(out), "\n"), nil
 }
 
 func assertDir(dir string) error {

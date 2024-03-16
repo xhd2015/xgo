@@ -14,6 +14,8 @@ type FuncInfo struct {
 	RecvPtr  bool
 	Name     string
 
+	Generic bool
+
 	PC       uintptr     `json:"-"`
 	Func     interface{} `json:"-"`
 	RecvName string

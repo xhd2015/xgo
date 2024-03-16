@@ -13,13 +13,14 @@ const __XGO_SKIP_TRAP = true
 
 // rewrite at compile time by compiler, the body will be replaced with
 // a call to runtime.__xgo_for_each_func
-func __xgo_link_for_each_func(f func(pkgName string, funcName string, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string)) {
+func __xgo_link_for_each_func(f func(pkgPath string, funcName string, pc uintptr, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)) {
 	panic("failed to link __xgo_link_for_each_func")
 }
 
 var funcInfos []*core.FuncInfo
 var funcInfoMapping map[string]*core.FuncInfo
-var funcPCMapping map[uintptr]*core.FuncInfo // pc->FuncInfo
+var funcPCMapping map[uintptr]*core.FuncInfo         // pc->FuncInfo
+var funcInfoGenericMapping map[string]*core.FuncInfo // generic name -> FuncInfo
 
 func GetFuncs() []*core.FuncInfo {
 	ensureMapping()
@@ -47,6 +48,11 @@ func InfoPC(pc uintptr) *core.FuncInfo {
 	return funcPCMapping[pc]
 }
 
+func InfoGeneric(genericName string) *core.FuncInfo {
+	ensureMapping()
+	return funcInfoGenericMapping[genericName]
+}
+
 func GetFuncByPkg(pkgPath string, name string) *core.FuncInfo {
 	ensureMapping()
 	fn := funcInfoMapping[pkgPath+"."+name]
@@ -69,26 +75,51 @@ func ensureMapping() {
 	mappingOnce.Do(func() {
 		funcInfoMapping = map[string]*core.FuncInfo{}
 		funcPCMapping = make(map[uintptr]*core.FuncInfo)
-		__xgo_link_for_each_func(func(pkgPath string, funcName string, pc uintptr, fn interface{}, recvName string, argNames, resNames []string) {
-			// prefix := pkgPath + "."
-			_, recvTypeName, recvPtr, name := core.ParseFuncName(funcName[len(pkgPath)+1:], false)
+		funcInfoGenericMapping = make(map[string]*core.FuncInfo)
+		__xgo_link_for_each_func(func(pkgPath string, funcName string, pc uintptr, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool) {
+			// if pkgPath == "main" {
+			// 	fmt.Fprintf(os.Stderr, "reg: funcName=%s,pc=%x,generic=%v,genericname=%s\n", funcName, pc, generic, genericName)
+			// }
+			var parseName string
+			if !generic {
+				// the funcName is in the readonly area
+				// we copy it
+				bytes := make([]byte, len(funcName))
+				for i, b := range []byte(funcName) {
+					bytes[i] = b
+				}
+				funcName = string(bytes)
+				// prefix := pkgPath + "."
+				parseName = funcName[len(pkgPath)+1:]
+			} else {
+				// if genericName == "" {
+				// 	fmt.Fprintf(os.Stderr, "found empty generic: funcName=%s,generic=%v,genericname=%s\n", funcName, generic, genericName)
+				// }
+				parseName = genericName
+			}
+			_, recvTypeName, recvPtr, name := core.ParseFuncName(parseName, false)
 			info := &core.FuncInfo{
 				FullName: funcName,
 				Name:     name,
 				Pkg:      pkgPath,
 				RecvType: recvTypeName,
 				RecvPtr:  recvPtr,
+				Generic:  generic,
 
-				//
-				PC:       pc,
-				Func:     fn,
+				// runtime info
+				PC:       pc, // nil for generic
+				Func:     fn, // nil for geneirc
 				RecvName: recvName,
 				ArgNames: argNames,
 				ResNames: resNames,
 			}
 			funcInfos = append(funcInfos, info)
-			funcInfoMapping[info.FullName] = info
-			funcPCMapping[info.PC] = info
+			if !generic {
+				funcInfoMapping[info.FullName] = info
+				funcPCMapping[info.PC] = info
+			} else if genericName != "" {
+				funcInfoGenericMapping[genericName] = info
+			}
 		})
 	})
 }

@@ -49,7 +49,7 @@ func getVscodeDebugFile(tmpDir string, vscode string) (vscodeDebugFile string, s
 	return vscodeDebugFile, suffix, nil
 }
 
-func setupDevDir(goroot string) error {
+func setupDevDir(goroot string, printDir bool) error {
 	cmdCompile := filepath.Join(goroot, "src", "cmd", "compile")
 	vscodeDir := filepath.Join(cmdCompile, ".vscode")
 
@@ -61,8 +61,9 @@ func setupDevDir(goroot string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s\n", cmdCompile)
-
+	if printDir {
+		fmt.Printf("%s\n", cmdCompile)
+	}
 	// {
 	// 	"go.goroot": "$GOROOT",
 	// 	"gopls": {

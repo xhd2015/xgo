@@ -7,23 +7,34 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	xgo_func_name "cmd/compile/internal/xgo_rewrite_internal/patch/func_name"
 )
 
-var files []*syntax.File
+var allFiles []*syntax.File
+var allDecls []*DeclInfo
 
-func SetFiles(f []*syntax.File) {
-	files = f
+func ClearFiles() {
+	allFiles = nil
 }
 
 func GetFiles() []*syntax.File {
-	return files
+	return allFiles
+}
+
+func GetDecls() []*DeclInfo {
+	return allDecls
+}
+
+func ClearDecls() {
+	allDecls = nil
 }
 
 func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
 	if len(fileList) == 0 {
 		return
 	}
-	files = fileList
+	allFiles = fileList
 	pkgPath := types.LocalPkg.Path
 
 	// if pkgPath == "github.com/xhd2015/xgo/runtime/core/functab_debug" {
@@ -47,45 +58,60 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	// I feel the second is more proper as importcfg is an extra layer of
 	// complexity, and runtime can be compiled or cached, we cannot locate
 	// where its _pkg_.a is.
-	body := getRegFuncsBody(fileList)
+	decls, body := getRegFuncsBody(fileList)
+	allDecls = decls
 	if body == "" {
 		return
 	}
+
 	autoGen :=
 		"package " + pkgName + "\n" +
 			// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
-			"func __xgo_register_funcs(__xgo_reg_func func(pkgPath string,fn interface{}, recvName string, argNames []string, resNames []string)){\n" +
+			"func __xgo_register_funcs(__xgo_reg_func func(pkgPath string, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)){\n" +
 			body +
 			"\n}"
 	// ioutil.WriteFile("test.log", []byte(autoGen), 0755)
 	addFile("__xgo_autogen.go", strings.NewReader(autoGen))
 }
 
-type declName struct {
-	name         string
-	recvTypeName string
-	recvPtr      bool
+type DeclInfo struct {
+	FuncDecl     *syntax.FuncDecl
+	Name         string
+	RecvTypeName string
+	RecvPtr      bool
+	Generic      bool
 
 	// arg names
-	recvName string
-	argNames []string
-	resNames []string
+	RecvName     string
+	ArgNames     []string
+	ResNames     []string
+	FirstArgCtx  bool
+	LastResError bool
 }
 
-func (c *declName) RefName() string {
-	if c.recvTypeName == "" {
-		return c.name
+func (c *DeclInfo) RefName() string {
+	return xgo_func_name.FormatFuncRefName(c.RecvTypeName, c.RecvPtr, c.Name)
+}
+
+func (c *DeclInfo) RefAndGeneric() (refName string, genericName string) {
+	refName = c.RefName()
+	if !c.Generic {
+		return refName, ""
 	}
-	if c.recvPtr {
-		return fmt.Sprintf("(*%s).%s", c.recvTypeName, c.name)
+	return "nil", refName
+}
+
+func (c *DeclInfo) GenericName() string {
+	if !c.Generic {
+		return ""
 	}
-	return c.recvTypeName + "." + c.name
+	return c.RefName()
 }
 
 // collect funcs from files, register each of them by
 // calling to __xgo_reg_func with names and func pointer
-func getRegFuncsBody(files []*syntax.File) string {
-	var declFuncNames []*declName
+func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
+	var declFuncs []*DeclInfo
 	for _, f := range files {
 		for _, decl := range f.DeclList {
 			fn, ok := decl.(*syntax.FuncDecl)
@@ -95,13 +121,15 @@ func getRegFuncsBody(files []*syntax.File) string {
 			if fn.Name.Value == "init" {
 				continue
 			}
+			var genericFunc bool
 			if len(fn.TParamList) > 0 {
+				genericFunc = true
 				// cannot handle generic
-				continue
 			}
 			var recvTypeName string
 			var recvPtr bool
 			var recvName string
+			var genericRecv bool
 			if fn.Recv != nil {
 				recvName = "_"
 				if fn.Recv.Name != nil {
@@ -121,37 +149,58 @@ func getRegFuncsBody(files []*syntax.File) string {
 					// *A[T] or A[T]
 					// the generic receiver
 					// currently not handled
-					// TODO: handle generic function
-					_ = indexExpr
-					continue
+					genericRecv = true
+					recvTypeExpr = indexExpr.X
 				}
 
 				recvTypeName = recvTypeExpr.(*syntax.Name).Value
 			}
+			var firstArgCtx bool
+			var lastResErr bool
+			if len(fn.Type.ParamList) > 0 && hasQualifiedName(fn.Type.ParamList[0].Type, "context", "Context") {
+				firstArgCtx = true
+			}
+			if len(fn.Type.ResultList) > 0 && isName(fn.Type.ResultList[len(fn.Type.ResultList)-1].Type, "error") {
+				lastResErr = true
+			}
 
-			declFuncNames = append(declFuncNames, &declName{
-				name:         fn.Name.Value,
-				recvTypeName: recvTypeName,
-				recvPtr:      recvPtr,
-				recvName:     recvName,
-				argNames:     getFieldNames(fn.Type.ParamList),
-				resNames:     getFieldNames(fn.Type.ResultList),
+			declFuncs = append(declFuncs, &DeclInfo{
+				FuncDecl:     fn,
+				Name:         fn.Name.Value,
+				RecvTypeName: recvTypeName,
+				RecvPtr:      recvPtr,
+				Generic:      genericFunc || genericRecv,
+
+				RecvName: recvName,
+				ArgNames: getFieldNames(fn.Type.ParamList),
+				ResNames: getFieldNames(fn.Type.ResultList),
+
+				FirstArgCtx:  firstArgCtx,
+				LastResError: lastResErr,
 			})
 		}
 	}
 
-	stmts := make([]string, 0, len(declFuncNames))
-	for _, declName := range declFuncNames {
-		if declName.name == "_" {
+	stmts := make([]string, 0, len(declFuncs))
+	for _, declFunc := range declFuncs {
+		if declFunc.Name == "_" {
 			// there are function with name "_"
 			continue
 		}
-		stmts = append(stmts, fmt.Sprintf("__xgo_reg_func(__xgo_regPkgPath,%s,%s,%s,%s)", declName.RefName(), strconv.Quote(declName.recvName), quoteNamesExpr(declName.argNames), quoteNamesExpr(declName.resNames)))
+		refName, genericName := declFunc.RefAndGeneric()
+		// pkgPath string, fn interface{}, generic bool, genericName string, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool
+		stmts = append(stmts, fmt.Sprintf("__xgo_reg_func(__xgo_regPkgPath,%s)",
+			strings.Join([]string{
+				refName,
+				strconv.FormatBool(declFunc.Generic), strconv.Quote(genericName), // generic
+				strconv.Quote(declFunc.RecvName), quoteNamesExpr(declFunc.ArgNames), quoteNamesExpr(declFunc.ResNames),
+				strconv.FormatBool(declFunc.FirstArgCtx), strconv.FormatBool(declFunc.LastResError)}, ","),
+		))
 	}
 	if len(stmts) == 0 {
-		return ""
+		return nil, ""
 	}
-	return fmt.Sprintf(" __xgo_regPkgPath := %q\n", types.LocalPkg.Path) + strings.Join(stmts, "\n")
+	return declFuncs, fmt.Sprintf(" __xgo_regPkgPath := %q\n", types.LocalPkg.Path) + strings.Join(stmts, "\n")
 }
 
 func getFieldNames(x []*syntax.Field) []string {
@@ -175,4 +224,22 @@ func quoteNamesExpr(names []string) string {
 		qNames = append(qNames, strconv.Quote(name))
 	}
 	return "[]string{" + strings.Join(qNames, ",") + "}"
+}
+
+func isName(expr syntax.Expr, name string) bool {
+	nameExp, ok := expr.(*syntax.Name)
+	if !ok {
+		return false
+	}
+	return nameExp.Value == name
+}
+func hasQualifiedName(expr syntax.Expr, pkg string, name string) bool {
+	sel, ok := expr.(*syntax.SelectorExpr)
+	if !ok {
+		return false
+	}
+	if sel.Sel.Value != name {
+		return false
+	}
+	return isName(sel.X, pkg)
 }

@@ -2,6 +2,7 @@ package goinfo
 
 import (
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -16,6 +17,14 @@ type GoVersion struct {
 }
 
 const goVersionPrefix = "go version "
+
+func GetGoVersionOutput(goBinary string) (string, error) {
+	out, err := exec.Command(goBinary, "version").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(string(out), "\n"), nil
+}
 
 func ParseGoVersion(s string) (*GoVersion, error) {
 	if !strings.HasPrefix(s, goVersionPrefix) {

@@ -1,14 +1,17 @@
 package test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"strings"
 
 	"github.com/xhd2015/xgo/support/filecopy"
+	"github.com/xhd2015/xgo/support/goinfo"
 )
 
 func getTempFile(pattern string) (string, error) {
@@ -67,6 +70,8 @@ type buildRuntimeOpts struct {
 	xgoBuildArgs []string
 	xgoBuildEnv  []string
 	runEnv       []string
+
+	debug bool
 }
 
 func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error) {
@@ -90,6 +95,9 @@ func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error
 		// "-a",
 		"--project-dir", funcListDir,
 	}
+	if opts.debug {
+		xgoBuildArgs = append(xgoBuildArgs, "-gcflags=all=-N -l")
+	}
 	xgoBuildArgs = append(xgoBuildArgs, opts.xgoBuildArgs...)
 	xgoBuildArgs = append(xgoBuildArgs, ".")
 	_, err = xgoBuild(xgoBuildArgs, &options{
@@ -97,6 +105,10 @@ func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error
 	})
 	if err != nil {
 		return "", err
+	}
+	if opts.debug {
+		fmt.Println(tmpFile)
+		time.Sleep(10 * time.Minute)
 	}
 	runCmd := exec.Command(tmpFile)
 	runCmd.Env = os.Environ()
@@ -152,6 +164,13 @@ func fatalExecErr(t *testing.T, err error) {
 	t.Fatalf("%v", err)
 }
 
+func getErrMsg(err error) string {
+	if err, ok := err.(*exec.ExitError); ok {
+		return string(err.Stderr)
+	}
+	return err.Error()
+}
+
 func buildAndRunOutput(program string) (output string, err error) {
 	return buildAndRunOutputArgs([]string{program}, buildAndOutputOptions{})
 }
@@ -181,4 +200,12 @@ func buildAndRunOutputArgs(args []string, opts buildAndOutputOptions) (output st
 		return "", err
 	}
 	return string(out), nil
+}
+
+func getGoVersion() (*goinfo.GoVersion, error) {
+	goVersionStr, err := goinfo.GetGoVersionOutput("go")
+	if err != nil {
+		return nil, err
+	}
+	return goinfo.ParseGoVersion(goVersionStr)
 }
