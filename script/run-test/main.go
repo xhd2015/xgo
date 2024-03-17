@@ -35,7 +35,7 @@ func main() {
 	if len(includes) > 0 {
 		i := 0
 		for _, goroot := range goroots {
-			if listHas(includes, goroot) {
+			if listContains(includes, goroot) {
 				goroots[i] = goroot
 				i++
 			}
@@ -44,7 +44,7 @@ func main() {
 	} else if len(excludes) > 0 {
 		i := 0
 		for _, goroot := range goroots {
-			if !listHas(excludes, goroot) {
+			if !listContains(excludes, goroot) {
 				goroots[i] = goroot
 				i++
 			}
@@ -68,7 +68,8 @@ func main() {
 	}
 }
 
-func listHas(list []string, s string) bool {
+// TODO: use slices.Contains()
+func listContains(list []string, s string) bool {
 	for _, e := range list {
 		if s == e {
 			return true

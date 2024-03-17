@@ -120,7 +120,7 @@ func downloadGo(cmd string, version string) error {
 			return fmt.Errorf("go%s not found", nakedVersion)
 		}
 
-		fmt.Fprintf(os.Stdout, "trying to download from %s\n", downloadLink)
+		fmt.Fprintf(os.Stdout, "download from %s\n", downloadLink)
 		downloadFile := filepath.Join(goReleaseDir, baseName)
 		err = cmd_exec.Run("curl", "-L", "-o", downloadFile, downloadLink)
 		if err != nil {

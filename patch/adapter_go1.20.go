@@ -7,5 +7,5 @@ import "cmd/compile/internal/types"
 
 // different with go1.20
 func NewSignature(pkg *types.Pkg, recv *types.Field, tparams, params, results []*types.Field) *types.Type {
-	return types.NewSignature(recv, params, results)
+	return types.NewSignature(pkg, recv, tparams, params, results)
 }
