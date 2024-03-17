@@ -16,7 +16,7 @@ func TestDumpIR(t *testing.T) {
 	}
 	defer os.RemoveAll(rootDir)
 
-	output, err := xgoBuild([]string{"--dump-ir", "main.Print", "--no-build-output", "--project-dir", tmpDir, "./"}, nil)
+	output, err := runXgo([]string{"--dump-ir", "main.Print", "--no-build-output", "--project-dir", tmpDir, "./"}, nil)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}

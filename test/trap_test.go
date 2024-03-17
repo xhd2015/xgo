@@ -65,7 +65,7 @@ func testTrapWithOpts(t *testing.T, testDir string, origExpect string, expectOut
 	if opts.withNoInstrumentEnv {
 		env = append(env, "XGO_TEST_NO_INSTRUMENT=true")
 	}
-	origOut, err := xgoBuild([]string{"--no-instrument", "--project-dir", tmpDir, "./"}, &options{
+	origOut, err := runXgo([]string{"--no-instrument", "--project-dir", tmpDir, "./"}, &options{
 		run:          true,
 		noTrim:       true,
 		env:          env,
@@ -96,7 +96,7 @@ func testTrapWithOpts(t *testing.T, testDir string, origExpect string, expectOut
 	if !opts.runInstrument {
 		return
 	}
-	_, err = xgoBuild([]string{
+	_, err = runXgo([]string{
 		"-o", tmpFile,
 		"--project-dir", tmpDir,
 		// "-a", // debug

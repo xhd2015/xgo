@@ -7,10 +7,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	cmd_exec "github.com/xhd2015/xgo/support/cmd"
 )
 
 // usage: list, download go1.20.0
@@ -121,7 +122,7 @@ func downloadGo(cmd string, version string) error {
 
 		fmt.Fprintf(os.Stdout, "trying to download from %s\n", downloadLink)
 		downloadFile := filepath.Join(goReleaseDir, baseName)
-		err = cmdRun("curl", "-L", "-o", downloadFile, downloadLink)
+		err = cmd_exec.Run("curl", "-L", "-o", downloadFile, downloadLink)
 		if err != nil {
 			return err
 		}
@@ -131,7 +132,7 @@ func downloadGo(cmd string, version string) error {
 			return err
 		}
 		defer os.RemoveAll(goTmpDir)
-		err = cmdRun("tar", "-C", goTmpDir, "-xzf", downloadFile)
+		err = cmd_exec.Run("tar", "-C", goTmpDir, "-xzf", downloadFile)
 		if err != nil {
 			return err
 		}
@@ -198,25 +199,4 @@ func parseDownloadVersions(htmlContent string) []string {
 		goVersions = append(goVersions, goVersion)
 	}
 	return goVersions
-}
-
-func cmdOutput(cmd string, args ...string) (string, error) {
-	return cmdExec(cmd, args, false)
-}
-func cmdRun(cmd string, args ...string) error {
-	_, err := cmdExec(cmd, args, true)
-	return err
-}
-func cmdExec(cmd string, args []string, pipeStdout bool) (string, error) {
-	execCmd := exec.Command(cmd, args...)
-	execCmd.Stderr = os.Stderr
-	if pipeStdout {
-		execCmd.Stdout = os.Stdout
-		return "", execCmd.Run()
-	}
-	out, err := execCmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSuffix(string(out), "\n"), nil
 }
