@@ -2,12 +2,12 @@ package syntax
 
 import (
 	"cmd/compile/internal/syntax"
-	"cmd/compile/internal/types"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
+	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
 	xgo_func_name "cmd/compile/internal/xgo_rewrite_internal/patch/func_name"
 )
 
@@ -100,7 +100,7 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 		return
 	}
 	allFiles = fileList
-	pkgPath := types.LocalPkg.Path
+	pkgPath := xgo_ctxt.GetPkgPath()
 
 	// if pkgPath == "github.com/xhd2015/xgo/runtime/core/functab_debug" {
 
@@ -270,7 +270,7 @@ func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 	if len(stmts) == 0 {
 		return nil, ""
 	}
-	return declFuncs, fmt.Sprintf(" __xgo_regPkgPath := %q\n", types.LocalPkg.Path) + strings.Join(stmts, "\n")
+	return declFuncs, fmt.Sprintf(" __xgo_regPkgPath := %q\n", xgo_ctxt.GetPkgPath()) + strings.Join(stmts, "\n")
 }
 
 func getFieldNames(x []*syntax.Field) []string {

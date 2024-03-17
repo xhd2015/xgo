@@ -1,15 +1,18 @@
 package patch
 
 import (
-	"cmd/compile/internal/base"
-	"cmd/compile/internal/ir"
-	"cmd/compile/internal/typecheck"
-	"cmd/compile/internal/types"
 	"fmt"
 	"go/constant"
 	"io"
 	"os"
 	"strings"
+
+	"cmd/compile/internal/base"
+	"cmd/compile/internal/ir"
+	"cmd/compile/internal/typecheck"
+	"cmd/compile/internal/types"
+
+	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
 )
 
 func debugIR() {
@@ -40,7 +43,7 @@ func debugIR() {
 	forEachFunc(func(fn *ir.Func) bool {
 		// fn.Sym().Name evaluates to plain func name, if with receiver, the receiver name
 		// e.g.  A.B, (*A).C
-		if !matchAnyPattern(types.LocalPkg.Path, types.LocalPkg.Name, fn.Sym().Name, namePatterns) {
+		if !matchAnyPattern(xgo_ctxt.GetPkgPath(), types.LocalPkg.Name, fn.Sym().Name, namePatterns) {
 			return true
 		}
 		if outFile == nil {

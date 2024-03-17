@@ -23,7 +23,7 @@ func tmpMergeRuntimeAndTest(testDir string) (rootDir string, subDir string, err 
 	return linkRuntimeAndTest(testDir, false)
 }
 
-func tmpRuntimeModeAndTest(testDir string) (rootDir string, subDir string, err error) {
+func tmpWithRuntimeGoModeAndTest(testDir string) (rootDir string, subDir string, err error) {
 	return linkRuntimeAndTest(testDir, true)
 }
 

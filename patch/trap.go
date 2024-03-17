@@ -13,6 +13,7 @@ import (
 	"cmd/compile/internal/types"
 	"cmd/internal/src"
 
+	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
 	xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"
 	xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"
 )
@@ -63,35 +64,18 @@ func ensureInit() {
 
 func insertTrapPoints() {
 	ensureInit()
-	defer xgo_syntax.ClearSyntaxDeclMapping()
-	files := xgo_syntax.GetFiles()
-	xgo_syntax.ClearFiles() // help GC
-	xgo_syntax.ClearDecls()
+
+	// cleanup upon exit
+	defer func() {
+		xgo_syntax.ClearSyntaxDeclMapping()
+
+		// TODO: check if symlink may affect filename compared to absFilename?
+		xgo_syntax.ClearFiles() // help GC
+		xgo_syntax.ClearDecls()
+	}()
 
 	// printString := typecheck.LookupRuntime("printstring")
 	forEachFunc(func(fn *ir.Func) bool {
-		// TODO: if we find the func appears as one argument of trap.AddInterceptor,
-		// or if its first statement is 'trap.Mark()'
-		if false {
-			// TODO: is it ok to parse comment here?
-			fnPos := base.Ctxt.OutermostPos(fn.Pos())
-			var syntaxFile *syntax.File
-
-			fileName := fnPos.AbsFilename() // symlink may affect filename vs absFilename?
-			for _, file := range files {
-				syntaxFileName := file.Pos().Base().Filename()
-				if syntaxFileName == fileName {
-					syntaxFile = file
-					break
-				}
-			}
-			if syntaxFile != nil {
-				lineNum := fnPos.Line()
-
-				_ = lineNum
-				// find matching comment
-			}
-		}
 		linkName, insertTrap := CanInsertTrapOrLink(fn)
 		if linkName != "" {
 			replaceWithRuntimeCall(fn, linkName)
@@ -114,6 +98,7 @@ func insertTrapPoints() {
 }
 
 func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
+	pkgPath := xgo_ctxt.GetPkgPath()
 	// for _, fn := range typecheck.Target.Funcs {
 	// NOTE: fnName is main, not main.main
 	fnName := fn.Sym().Name
@@ -128,12 +113,12 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 	// TODO: what about unnamed closure?
 	linkName := linkMap[fnName]
 	if linkName != "" {
-		if !strings.HasPrefix(types.LocalPkg.Path, xgoRuntimePkgPrefix) {
+		if !strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) {
 			return "", false
 		}
 		// ir.Dump("before:", fn)
 		if !disableXgoLink {
-			if linkName == setTrap && types.LocalPkg.Path != xgoRuntimeTrapPkg {
+			if linkName == setTrap && pkgPath != xgoRuntimeTrapPkg {
 				return "", false
 			}
 			return linkName, false
@@ -159,7 +144,6 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 		//     errors, math, math/bits, unicode, unicode/utf8, unicode/utf16, strconv, path, sort, time, encoding/json
 		return "", false
 	}
-	pkgPath := types.LocalPkg.Path
 	if false {
 		// skip non-main package paths?
 		if pkgPath != "main" {
@@ -234,7 +218,7 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 		return false
 	}
 
-	pkgPath := types.LocalPkg.Path
+	pkgPath := xgo_ctxt.GetPkgPath()
 	trap := typecheck.LookupRuntime("__xgo_trap")
 	fnPos := fn.Pos()
 	fnType := fn.Type()

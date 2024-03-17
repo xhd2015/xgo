@@ -10,7 +10,7 @@ func TestDumpIR(t *testing.T) {
 	// must use "-a" or create a temp dir to ensure recompile
 	// -a: cost 7~8s
 	// give go.mod as a placeholder for go to build
-	rootDir, tmpDir, err := tmpRuntimeModeAndTest("./testdata/dump_ir")
+	rootDir, tmpDir, err := tmpWithRuntimeGoModeAndTest("./testdata/dump_ir")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -20,7 +20,7 @@ func TestDumpIR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	// t.Logf("output:%s", output)
+	t.Logf("output:%s", output)
 	seqs := []string{
 		"DCLFUNC main.Print", // func decl
 		"NAME-main.a",        // variable

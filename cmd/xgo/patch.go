@@ -122,7 +122,7 @@ func patchCompiler(goroot string, goVersion *goinfo.GoVersion) error {
 		return fmt.Errorf("patching noder: %w", err)
 	}
 	if goVersion.Major == 1 && (goVersion.Minor == 18 || goVersion.Minor == 19) {
-		err := poatchIRGen(goroot)
+		err := poatchIRGenericGen(goroot, goVersion)
 		if err != nil {
 			return fmt.Errorf("patching generic trap: %w", err)
 		}
@@ -155,7 +155,9 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	var noderFiles string
 	if goVersion.Major == 1 {
 		minor := goVersion.Minor
-		if minor == 19 {
+		if minor == 18 {
+			noderFiles = patch.NoderFiles_1_19
+		} else if minor == 19 {
 			noderFiles = patch.NoderFiles_1_19
 		} else if minor == 20 {
 			noderFiles = patch.NoderFiles_1_20
@@ -187,15 +189,18 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	})
 }
 
-func poatchIRGen(goroot string) error {
+func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
 	file := "src/cmd/compile/internal/noder/irgen.go"
 	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
+		imports := []string{
+			`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
+		}
+		if goVersion.Major == 1 && goVersion.Minor >= 19 {
+			imports = append(imports, `"os"`)
+		}
 		content = addCodeAfterImports(content,
 			"/*<begin irgen_autogen_import>*/", "/*<end irgen_autogen_import>*/",
-			[]string{
-				`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
-				`"os"`,
-			},
+			imports,
 		)
 		content = addContentAfter(content, "/*<begin irgen_generic_trap_autogen>*/", "/*<end irgen_generic_trap_autogen>*/", []string{
 			`func (g *irgen) generate(noders []*noder) {`,

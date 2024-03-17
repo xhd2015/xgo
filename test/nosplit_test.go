@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 )
 
 // go test -run TestLongFuncNoSplitShouldNotCompileWithDebugFlags -v ./test
 func TestLongFuncNoSplitShouldNotCompileWithDebugFlags(t *testing.T) {
+	goVersion, err := getGoVersion()
+	if err != nil {
+		t.Fatal(getErrMsg(err))
+	}
 	var errBuf bytes.Buffer
 	_, buildErr := buildAndRunOutputArgs([]string{"-gcflags=all=-N -l", "./testdata/nosplit/long_func_overflow.go"}, buildAndOutputOptions{
 		build: func(args []string) error {
@@ -26,11 +29,16 @@ func TestLongFuncNoSplitShouldNotCompileWithDebugFlags(t *testing.T) {
 	errOutput := errBuf.String()
 
 	// t.Logf("output: %s", errOutput)
-
-	expect := "main.longFunc: nosplit stack over 792 byte limit"
-	if !strings.Contains(errOutput, expect) {
-		t.Fatalf("expect err output contains: %q, actual not found", expect)
+	expects := []string{"main.longFunc: nosplit stack over 792 byte limit"}
+	if goVersion.Major == 1 && goVersion.Minor <= 18 {
+		expects = []string{
+			"main.longFunc: nosplit stack overflow",
+			"assumed on entry to main.longFunc<1> (nosplit)",
+			"after main.longFunc<1> (nosplit) uses",
+		}
 	}
+
+	expectSequence(t, errOutput, expects)
 }
 
 // go test -run TestSmallFuncNoSplitShouldCompileWithDebugFlagsWithGo -v ./test

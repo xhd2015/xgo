@@ -7,7 +7,7 @@ import (
 
 // go test -run TestDumpVscode -v ./test
 func TestDumpVscode(t *testing.T) {
-	rootDir, tmpDir, err := tmpRuntimeModeAndTest("./testdata/dump_ir")
+	rootDir, tmpDir, err := tmpWithRuntimeGoModeAndTest("./testdata/dump_ir")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
