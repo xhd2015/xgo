@@ -127,8 +127,8 @@ func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) e
 	}
 	content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
 
-	// TODO: limit the patch for go1.20
-	if goVersion.Minor == 1 && goVersion.Minor == 20 {
+	// TODO: remove the patch
+	if goVersion.Major == 1 && goVersion.Minor == 20 {
 		content = append(content, []byte(patch.RuntimeFuncNamePatch)...)
 	}
 	return ioutil.WriteFile(dstFile, content, 0755)
@@ -138,9 +138,12 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	file := "src/cmd/compile/internal/noder/noder.go"
 	var noderFiles string
 	if goVersion.Major == 1 {
-		if goVersion.Minor == 20 {
+		minor := goVersion.Minor
+		if minor == 20 {
 			noderFiles = patch.NoderFiles_1_20
-		} else if goVersion.Minor == 22 {
+		} else if minor == 21 {
+			noderFiles = patch.NoderFiles_1_22
+		} else if minor == 22 {
 			noderFiles = patch.NoderFiles_1_22
 		}
 	}
@@ -168,7 +171,9 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	file := "src/cmd/compile/internal/gc/main.go"
-	inlineGo122 := goVersion.Major == 1 && goVersion.Minor == 22
+	go120 := goVersion.Major == 1 && goVersion.Minor == 20
+	go121 := goVersion.Major == 1 && goVersion.Minor == 21
+	go122 := goVersion.Major == 1 && goVersion.Minor == 22
 
 	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
 		imports := []string{
@@ -189,7 +194,11 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		}
 `)
 
-		if !inlineGo122 {
+		// there are two ways to turn off inline
+		// - 1. by not calling to inline.InlinePackage
+		// - 2. by override base.Flag.LowerL to 0
+		// prefer 1 because it is more focused
+		if go120 || go121 {
 			// go1.20 does not respect rewritten content when inlined
 			content = replaceContentAfter(content,
 				"/*<begin prevent_inline>*/", "/*<end prevent_inline>*/",
@@ -200,7 +209,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 			inline.InlinePackage(profile)
 		}
 `)
-		} else {
+		} else if go122 {
 			// go1.22 also does not respect rewritten content when inlined
 			// NOTE: the override of LowerL is inserted after xgo_patch.Patch()
 			content = addContentAfter(content,
@@ -211,6 +220,8 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 							base.Flag.LowerL = 0
 						}
 				`)
+		} else {
+			return "", fmt.Errorf("inline for %v not defined", goVersion)
 		}
 		return content, nil
 	})

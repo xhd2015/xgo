@@ -303,8 +303,8 @@ func checkGoVersion(goroot string) (*goinfo.GoVersion, error) {
 		return nil, err
 	}
 	minor := goVersion.Minor
-	if goVersion.Major != 1 || (minor != 20 && minor != 22) {
-		return nil, fmt.Errorf("expect go1.20.x, go1.22.x, actual: %s", goVersionStr)
+	if goVersion.Major != 1 || (minor != 20 && minor != 21 && minor != 22) {
+		return nil, fmt.Errorf("expect go1.20.x ~ go1.22.x, actual: %s", goVersionStr)
 	}
 	return goVersion, nil
 }
