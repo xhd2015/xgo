@@ -1,5 +1,5 @@
-//go:build go1.18 && !go1.22
-// +build go1.18,!go1.22
+//go:build go1.17 && !go1.22
+// +build go1.17,!go1.22
 
 package patch
 

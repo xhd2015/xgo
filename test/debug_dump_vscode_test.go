@@ -7,6 +7,10 @@ import (
 
 // go test -run TestDumpVscode -v ./test
 func TestDumpVscode(t *testing.T) {
+	goVersion, err := getGoVersion()
+	if err != nil {
+		t.Fatal(getErrMsg(err))
+	}
 	rootDir, tmpDir, err := tmpWithRuntimeGoModeAndTest("./testdata/dump_ir")
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -19,7 +23,7 @@ func TestDumpVscode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	// t.Logf("output:%s", output)
+	t.Logf("output:%s", output)
 	seqs := []string{
 		`"configurations": [`,
 
@@ -27,7 +31,11 @@ func TestDumpVscode(t *testing.T) {
 		`"args": [`,
 		`"-trimpath",`,
 		` "-buildid",`,
-		`"-nolocalimports",`,
+	}
+	if goVersion.Major == 1 && goVersion.Minor >= 18 {
+		seqs = append(seqs, `"-nolocalimports",`) // not appear at go1.17
+	}
+	seqs = append(seqs,
 		`"-importcfg",`,
 		`"-pack",`,
 
@@ -38,6 +46,6 @@ func TestDumpVscode(t *testing.T) {
 		`"mode": "exec",`,
 		`"request": "launch",`,
 		`"type": "go"`,
-	}
+	)
 	expectSequence(t, output, seqs)
 }

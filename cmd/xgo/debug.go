@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/xhd2015/xgo/support/fileutil"
 )
 
 func getVscodeDebugFile(tmpDir string, vscode string) (vscodeDebugFile string, suffix string, err error) {
@@ -74,7 +72,7 @@ func setupDevDir(goroot string, printDir bool) error {
 	// 	}
 	// }
 	settingsFile := filepath.Join(vscodeDir, "settings.json")
-	err = fileutil.PatchJSONPretty(settingsFile, func(settings *map[string]interface{}) error {
+	err = patchJSONPretty(settingsFile, func(settings *map[string]interface{}) error {
 		if *settings == nil {
 			*settings = make(map[string]interface{})
 		}

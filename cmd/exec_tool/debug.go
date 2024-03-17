@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/xhd2015/xgo/support/fileutil"
 )
 
 func getVscodeDebugCmd(cmd string, args []string) *VscodeDebugConfig {
@@ -64,7 +62,7 @@ func addVscodeDebug(vscodeLaunchFile string, config *VscodeDebugConfig) error {
 		return err
 	}
 
-	return fileutil.PatchJSONPretty(vscodeLaunchFile, func(launchConfig *VscodeLaunchConfigMap) error {
+	return patchJSONPretty(vscodeLaunchFile, func(launchConfig *VscodeLaunchConfigMap) error {
 		var foundIdx int = -1
 		for i, exConf := range launchConfig.Configurations {
 			if fmt.Sprint(exConf["name"]) == config.Name {

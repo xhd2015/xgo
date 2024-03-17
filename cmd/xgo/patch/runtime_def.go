@@ -11,7 +11,7 @@ func (md *moduledata) funcName(nameOff int32) string {
 	return gostringnocopy(&md.funcnametab[nameOff])
 }`
 
-const NoderFiles_1_19 = `	// auto gen
+const NoderFiles_1_18 = `	// auto gen
 if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 	files := make([]*syntax.File, 0, len(noders))
 	for _, n := range noders {

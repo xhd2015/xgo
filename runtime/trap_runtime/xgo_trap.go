@@ -25,7 +25,7 @@ func __xgo_trap(pkgPath string, identityName string, generic bool, recv interfac
 	fn := findfunc(pc)
 	// TODO: what about inlined func?
 	// funcName := fn.datap.funcName(fn.nameOff) // not necessary,because it is unsafe
-	return __xgo_trap_impl(pkgPath, identityName, generic, fn.entry(), recv, args, results)
+	return __xgo_trap_impl(pkgPath, identityName, generic, fn.entry() /*>=go1.18*/, recv, args, results)
 }
 
 func __xgo_set_trap(trap func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {

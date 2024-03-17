@@ -20,15 +20,26 @@ func TestDumpIR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	t.Logf("output:%s", output)
-	seqs := []string{
-		"DCLFUNC main.Print", // func decl
-		"NAME-main.a",        // variable
-		"CALLFUNC",           // call fmt.Printf
+	// t.Logf("output:%s", output)
+
+	goVersion, err := getGoVersion()
+	if err != nil {
+		t.Fatal(getErrMsg(err))
+	}
+	var seqs []string
+	if goVersion.Major == 1 && goVersion.Minor <= 17 {
+		seqs = append(seqs, "DCLFUNC", "FUNC-func(string)") // func decl
+	} else {
+		seqs = append(seqs, "DCLFUNC main.Print") // func decl
+	}
+
+	seqs = append(seqs,
+		"NAME-main.a", // variable
+		"CALLFUNC",    // call fmt.Printf
 		"NAME-fmt.Printf",
 		`LITERAL-"a:%s\n"`, // literal
 		"CONVIFACE",        // convert a to interface{}
-	}
+	)
 
 	expectSequence(t, output, seqs)
 }

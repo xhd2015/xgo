@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/xhd2015/xgo/support/filecopy"
@@ -70,10 +71,18 @@ func getErrMsg(err error) string {
 	return err.Error()
 }
 
+var goVersionCached *goinfo.GoVersion
+var goVersionErr error
+var goVersionOnce sync.Once
+
 func getGoVersion() (*goinfo.GoVersion, error) {
-	goVersionStr, err := goinfo.GetGoVersionOutput("go")
-	if err != nil {
-		return nil, err
-	}
-	return goinfo.ParseGoVersion(goVersionStr)
+	goVersionOnce.Do(func() {
+		goVersionStr, err := goinfo.GetGoVersionOutput("go")
+		if err != nil {
+			goVersionErr = err
+			return
+		}
+		goVersionCached, goVersionErr = goinfo.ParseGoVersion(goVersionStr)
+	})
+	return goVersionCached, goVersionErr
 }

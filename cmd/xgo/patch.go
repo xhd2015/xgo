@@ -143,6 +143,19 @@ func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) e
 	}
 	content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
 
+	// the func.entry is a field, not a function
+	if goVersion.Major == 1 && goVersion.Minor <= 17 {
+		entryPatch := "fn.entry() /*>=go1.18*/"
+		entryPatchBytes := []byte(entryPatch)
+		idx := bytes.Index(content, entryPatchBytes)
+		if idx < 0 {
+			return fmt.Errorf("expect %q in xgo_trap.go, actually not found", entryPatch)
+		}
+		oldContent := content
+		content = append(content[:idx], []byte("fn.entry")...)
+		content = append(content, oldContent[idx+len(entryPatchBytes):]...)
+	}
+
 	// TODO: remove the patch
 	if goVersion.Major == 1 && goVersion.Minor == 20 {
 		content = append(content, []byte(patch.RuntimeFuncNamePatch)...)
@@ -155,10 +168,12 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	var noderFiles string
 	if goVersion.Major == 1 {
 		minor := goVersion.Minor
-		if minor == 18 {
-			noderFiles = patch.NoderFiles_1_19
+		if minor == 17 {
+			noderFiles = patch.NoderFiles_1_18
+		} else if minor == 18 {
+			noderFiles = patch.NoderFiles_1_18
 		} else if minor == 19 {
-			noderFiles = patch.NoderFiles_1_19
+			noderFiles = patch.NoderFiles_1_18
 		} else if minor == 20 {
 			noderFiles = patch.NoderFiles_1_20
 		} else if minor == 21 {
@@ -216,6 +231,7 @@ func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
 
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	file := "src/cmd/compile/internal/gc/main.go"
+	go117AndUnder := goVersion.Major == 1 && goVersion.Minor <= 17
 	go119AndUnder := goVersion.Major == 1 && goVersion.Minor <= 19
 	go120 := goVersion.Major == 1 && goVersion.Minor == 20
 	go121 := goVersion.Major == 1 && goVersion.Minor == 21
@@ -230,15 +246,37 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 			"/*<begin gc_import>*/", "/*<end gc_import>*/",
 			imports,
 		)
+		initRuntimeTypeCheckGo117 := `typecheck.InitRuntime()`
 
+		var beforePatchContent string
+		patchAnchors := []string{`noder.LoadPackage(flag.Args())`, `dwarfgen.RecordPackageName()`}
+		if !go117AndUnder {
+			patchAnchors = append(patchAnchors, `ssagen.InitConfig()`)
+		} else {
+			// go 1.17 needs to call typecheck.InitRuntime() before patch
+			beforePatchContent = initRuntimeTypeCheckGo117 + "\n"
+		}
+		patchAnchors = append(patchAnchors, "\n")
 		content = addContentAfter(content,
 			"/*<begin patch>*/", "/*<end patch>*/",
-			[]string{`noder.LoadPackage(flag.Args())`, `dwarfgen.RecordPackageName()`, `ssagen.InitConfig()`, "\n"},
+			patchAnchors,
 			`	// insert trap points
 		if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
-		    xgo_patch.Patch()
+		    `+beforePatchContent+`xgo_patch.Patch()
 		}
 `)
+
+		if go117AndUnder {
+			// go1.17 needs to adjust typecheck.InitRuntime before patch
+			content = replaceContentAfter(content,
+				"/*<begin patch_init_runtime_type>*/", "/*<end patch_init_runtime_type>*/",
+				[]string{`escape.Funcs(typecheck.Target.Decls)`, `if base.Flag.CompilingRuntime {`, "}", "\n"},
+				initRuntimeTypeCheckGo117,
+				`if os.Getenv("XGO_COMPILER_ENABLE")!="true" {
+					`+initRuntimeTypeCheckGo117+`
+				}`,
+			)
+		}
 
 		// there are two ways to turn off inline
 		// - 1. by not calling to inline.InlinePackage
