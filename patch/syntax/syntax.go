@@ -11,6 +11,14 @@ import (
 	xgo_func_name "cmd/compile/internal/xgo_rewrite_internal/patch/func_name"
 )
 
+const sig_expected__xgo_register_func = "func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)"
+
+func init() {
+	if sig_gen__xgo_register_func != sig_expected__xgo_register_func {
+		panic(fmt.Errorf("__xgo_register_func signature changed, run go generate and update sig_expected__xgo_register_func correspondly"))
+	}
+}
+
 var allFiles []*syntax.File
 var allDecls []*DeclInfo
 
@@ -67,7 +75,7 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	autoGen :=
 		"package " + pkgName + "\n" +
 			// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
-			"func __xgo_register_funcs(__xgo_reg_func func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string,identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)){\n" +
+			"func __xgo_register_funcs(__xgo_reg_func " + sig_gen__xgo_register_func + "){\n" +
 			body +
 			"\n}"
 	// ioutil.WriteFile("test.log", []byte(autoGen), 0755)

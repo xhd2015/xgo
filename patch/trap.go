@@ -19,6 +19,14 @@ import (
 	xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"
 )
 
+const sig_expected__xgo_trap = `func(pkgPath string, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool)`
+
+func init() {
+	if sig_gen__xgo_trap != sig_expected__xgo_trap {
+		panic(fmt.Errorf("__xgo_trap signature changed, run go generate and update sig_expected__xgo_trap correspondly"))
+	}
+}
+
 const disableXgoLink bool = false
 const disableTrap bool = false
 
