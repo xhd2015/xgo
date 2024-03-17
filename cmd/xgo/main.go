@@ -309,8 +309,8 @@ func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error)
 	}
 	if !noInstrument {
 		minor := goVersion.Minor
-		if goVersion.Major != 1 || (minor < 17 || minor > 22) {
-			return nil, fmt.Errorf("only supports go1.17.0 ~ go1.22.1, current: %s", goVersionStr)
+		if goVersion.Major != 1 || (minor < 16 || minor > 22) {
+			return nil, fmt.Errorf("only supports go1.16.0 ~ go1.22.1, current: %s", goVersionStr)
 		}
 	}
 	return goVersion, nil

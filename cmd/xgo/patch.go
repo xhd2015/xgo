@@ -77,7 +77,12 @@ func patchRuntimeDef(goRoot string, goVersion *goinfo.GoVersion) error {
 	cmd := exec.Command(filepath.Join(goRoot, "bin", "go"), "run", "mkbuiltin.go")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
-	cmd.Dir = filepath.Join(goRoot, "src/cmd/compile/internal/typecheck")
+
+	dir := "src/cmd/compile/internal/typecheck"
+	if goVersion.Major == 1 && goVersion.Minor <= 16 {
+		dir = "src/cmd/compile/internal/gc"
+	}
+	cmd.Dir = filepath.Join(goRoot, dir)
 
 	cmd.Env = os.Environ()
 	cmd.Env, err = patchEnvWithGoroot(cmd.Env, goRoot)
@@ -96,8 +101,12 @@ func patchRuntimeDef(goRoot string, goVersion *goinfo.GoVersion) error {
 func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
 	runtimeDefFile := "src/cmd/compile/internal/typecheck/_builtin/runtime.go"
 	if goVersion.Major == 1 && goVersion.Minor <= 19 {
-		// in go1.19 and below, builtin has no _ prefix
-		runtimeDefFile = "src/cmd/compile/internal/typecheck/builtin/runtime.go"
+		if goVersion.Minor > 16 {
+			// in go1.19 and below, builtin has no _ prefix
+			runtimeDefFile = "src/cmd/compile/internal/typecheck/builtin/runtime.go"
+		} else {
+			runtimeDefFile = "src/cmd/compile/internal/gc/builtin/runtime.go"
+		}
 	}
 	fullFile := filepath.Join(goRoot, runtimeDefFile)
 
@@ -165,12 +174,15 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	var noderFiles string
 	if goVersion.Major == 1 {
 		minor := goVersion.Minor
-		if minor == 17 {
-			noderFiles = patch.NoderFiles_1_18
+		if minor == 16 {
+			file = "src/cmd/compile/internal/gc/noder.go"
+			noderFiles = patch.NoderFiles_1_17
+		} else if minor == 17 {
+			noderFiles = patch.NoderFiles_1_17
 		} else if minor == 18 {
-			noderFiles = patch.NoderFiles_1_18
+			noderFiles = patch.NoderFiles_1_17
 		} else if minor == 19 {
-			noderFiles = patch.NoderFiles_1_18
+			noderFiles = patch.NoderFiles_1_17
 		} else if minor == 20 {
 			noderFiles = patch.NoderFiles_1_20
 		} else if minor == 21 {
@@ -190,12 +202,23 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 				`"io"`,
 			},
 		)
-		content = addContentAfter(content, "/*<begin file_autogen>*/", "/*<end file_autogen>*/", []string{
-			`func LoadPackage`,
-			`for _, p := range noders {`,
-			`base.Timer.AddEvent(int64(lines), "lines")`,
-			"\n",
-		},
+		var anchors []string
+		if goVersion.Major == 1 && goVersion.Minor <= 16 {
+			anchors = []string{
+				"func parseFiles(filenames []string)",
+				"for _, p := range noders {",
+				"localpkg.Height = myheight",
+				"\n",
+			}
+		} else {
+			anchors = []string{
+				`func LoadPackage`,
+				`for _, p := range noders {`,
+				`base.Timer.AddEvent(int64(lines), "lines")`,
+				"\n",
+			}
+		}
+		content = addContentAfter(content, "/*<begin file_autogen>*/", "/*<end file_autogen>*/", anchors,
 			noderFiles)
 		return content, nil
 	})
@@ -228,7 +251,10 @@ func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
 
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	file := "src/cmd/compile/internal/gc/main.go"
-	go117AndUnder := goVersion.Major == 1 && goVersion.Minor <= 17
+	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= 16
+	go117 := goVersion.Major == 1 && goVersion.Minor == 17
+	go118 := goVersion.Major == 1 && goVersion.Minor == 18
+	go119 := goVersion.Major == 1 && goVersion.Minor == 19
 	go119AndUnder := goVersion.Major == 1 && goVersion.Minor <= 19
 	go120 := goVersion.Major == 1 && goVersion.Minor == 20
 	go121 := goVersion.Major == 1 && goVersion.Minor == 21
@@ -246,12 +272,24 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		initRuntimeTypeCheckGo117 := `typecheck.InitRuntime()`
 
 		var beforePatchContent string
-		patchAnchors := []string{`noder.LoadPackage(flag.Args())`, `dwarfgen.RecordPackageName()`}
-		if !go117AndUnder {
-			patchAnchors = append(patchAnchors, `ssagen.InitConfig()`)
+		var patchAnchors []string
+
+		if go116AndUnder {
+			// go1.16 is pretty old
+			patchAnchors = []string{
+				"loadsys()",
+				"parseFiles(flag.Args())",
+				"finishUniverse()",
+				"recordPackageName()",
+			}
 		} else {
-			// go 1.17 needs to call typecheck.InitRuntime() before patch
-			beforePatchContent = initRuntimeTypeCheckGo117 + "\n"
+			patchAnchors = []string{`noder.LoadPackage(flag.Args())`, `dwarfgen.RecordPackageName()`}
+			if !go117 {
+				patchAnchors = append(patchAnchors, `ssagen.InitConfig()`)
+			} else {
+				// go 1.17 needs to call typecheck.InitRuntime() before patch
+				beforePatchContent = initRuntimeTypeCheckGo117 + "\n"
+			}
 		}
 		patchAnchors = append(patchAnchors, "\n")
 		content = addContentAfter(content,
@@ -263,7 +301,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		}
 `)
 
-		if go117AndUnder {
+		if go117 {
 			// go1.17 needs to adjust typecheck.InitRuntime before patch
 			content = replaceContentAfter(content,
 				"/*<begin patch_init_runtime_type>*/", "/*<end patch_init_runtime_type>*/",
@@ -279,7 +317,22 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		// - 1. by not calling to inline.InlinePackage
 		// - 2. by override base.Flag.LowerL to 0
 		// prefer 1 because it is more focused
-		if go119AndUnder || go120 || go121 {
+		if go116AndUnder {
+			inlineGuard := `if Debug.l != 0 {`
+			inlineAnchors := []string{
+				`fninit(xtop)`,
+				`Curfn = nil`,
+				`// Phase 5: Inlining`,
+				`if Debug_typecheckinl != 0 {`,
+				"\n",
+			}
+			content = replaceContentAfter(content,
+				"/*<begin prevent_inline>*/", "/*<end prevent_inline>*/",
+				inlineAnchors,
+				inlineGuard,
+				`	// NOTE: turn off inline if there is any rewrite
+		`+strings.TrimSuffix(inlineGuard, " {")+` && !xgo_record.HasRewritten() {`)
+		} else if go117 || go118 || go119 || go120 || go121 {
 			inlineCall := `inline.InlinePackage(profile)`
 			if go119AndUnder {
 				// go1.19 and under does not hae PGO
