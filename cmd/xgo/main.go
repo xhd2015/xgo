@@ -76,14 +76,10 @@ func handleBuild(cmd string, args []string) error {
 	withGoroot := opts.withGoroot
 	dumpIR := opts.dumpIR
 
-	goroot := withGoroot
-	if goroot == "" {
-		goroot = runtime.GOROOT()
+	goroot, err := checkGoroot(withGoroot)
+	if err != nil {
+		return err
 	}
-	if goroot == "" {
-		return fmt.Errorf("requires GOROOT or --with-goroot")
-	}
-
 	// create a tmp dir for communication with exec_tool
 	tmpDir, err := os.MkdirTemp("", "xgo-"+cmd)
 	if err != nil {
@@ -408,6 +404,36 @@ func assertDir(dir string) error {
 		return fmt.Errorf("not a dir")
 	}
 	return nil
+}
+
+func checkGoroot(goroot string) (string, error) {
+	if goroot == "" {
+		goroot = runtime.GOROOT()
+		if goroot == "" {
+			return "", fmt.Errorf("requires GOROOT or --with-goroot")
+		}
+		return goroot, nil
+	}
+	_, err := os.Stat(goroot)
+	if err == nil {
+		return goroot, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	if filepath.Base(goroot) != goroot {
+		return "", err
+	}
+	// check if inside go-release
+	releaseGo := filepath.Join("go-release", goroot)
+	releaseStat, statErr := os.Stat(releaseGo)
+	if statErr == nil && releaseStat.IsDir() {
+		return releaseGo, nil
+	}
+	if strings.HasPrefix(goroot, "go") {
+		fmt.Fprintf(os.Stderr, "WARNING %s does not exist, download it with:\n          go run ./script/download-go/ %s\n", goroot, goroot)
+	}
+	return "", err
 }
 
 // if [[ $verbose = true ]];then

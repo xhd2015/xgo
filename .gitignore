@@ -11,3 +11,5 @@
 /tools/compile-devel
 /tools/compile
 /tools/build-cache
+
+/go-release
