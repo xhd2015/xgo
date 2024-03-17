@@ -14,6 +14,13 @@ func containsLine(lines []string, line string) bool {
 	return false
 }
 
+func expectContains(t *testing.T, output string, expectLines []string) {
+	for _, expectLine := range expectLines {
+		if !strings.Contains(output, expectLine) {
+			t.Fatalf("expect output contains %q, actually not found", expectLine)
+		}
+	}
+}
 func expectSequence(t *testing.T, output string, sequence []string) {
 	for i, s := range sequence {
 		idx := strings.Index(output, s)

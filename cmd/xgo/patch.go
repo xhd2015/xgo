@@ -12,11 +12,12 @@ import (
 
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
+	"github.com/xhd2015/xgo/support/goinfo"
 )
 
 // assume go 1.20
 // the patch should be idempotent
-func patchGoSrc(goroot string, xgoSrc string, noInstrument bool, syncWithLink bool) error {
+func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, noInstrument bool, syncWithLink bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
@@ -24,7 +25,7 @@ func patchGoSrc(goroot string, xgoSrc string, noInstrument bool, syncWithLink bo
 		return fmt.Errorf("requries xgoSrc")
 	}
 
-	err := addRuntimeTrap(goroot, xgoSrc)
+	err := addRuntimeTrap(goroot, goVersion, xgoSrc)
 	if err != nil {
 		return err
 	}
@@ -44,7 +45,7 @@ func patchGoSrc(goroot string, xgoSrc string, noInstrument bool, syncWithLink bo
 		return err
 	}
 
-	err = patchCompiler(goroot)
+	err = patchCompiler(goroot, goVersion)
 	if err != nil {
 		return err
 	}
@@ -104,20 +105,20 @@ func prepareRuntimeDefs(goRoot string) error {
 	})
 }
 
-func patchCompiler(goroot string) error {
+func patchCompiler(goroot string, goVersion *goinfo.GoVersion) error {
 	// src/cmd/compile/internal/noder/noder.go
-	err := patchCompilerNoder(goroot)
+	err := patchCompilerNoder(goroot, goVersion)
 	if err != nil {
-		return err
+		return fmt.Errorf("patching noder: %w", err)
 	}
-	err = patchGcMain(goroot)
+	err = patchGcMain(goroot, goVersion)
 	if err != nil {
-		return err
+		return fmt.Errorf("patching gc main:%w", err)
 	}
 	return nil
 }
 
-func addRuntimeTrap(goroot string, xgoSrc string) error {
+func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) error {
 	srcFile := filepath.Join(xgoSrc, "runtime", "trap_runtime", "xgo_trap.go")
 	dstFile := filepath.Join(goroot, "src", "runtime", "xgo_trap.go")
 	content, err := ioutil.ReadFile(srcFile)
@@ -127,12 +128,25 @@ func addRuntimeTrap(goroot string, xgoSrc string) error {
 	content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
 
 	// TODO: limit the patch for go1.20
-	content = append(content, []byte(patch.RuntimeFuncNamePatch)...)
+	if goVersion.Minor == 1 && goVersion.Minor == 20 {
+		content = append(content, []byte(patch.RuntimeFuncNamePatch)...)
+	}
 	return ioutil.WriteFile(dstFile, content, 0755)
 }
 
-func patchCompilerNoder(goroot string) error {
+func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	file := "src/cmd/compile/internal/noder/noder.go"
+	var noderFiles string
+	if goVersion.Major == 1 {
+		if goVersion.Minor == 20 {
+			noderFiles = patch.NoderFiles_1_20
+		} else if goVersion.Minor == 22 {
+			noderFiles = patch.NoderFiles_1_22
+		}
+	}
+	if noderFiles == "" {
+		return fmt.Errorf("unsupported: %v", goVersion)
+	}
 	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
 		content = addCodeAfterImports(content,
 			"/*<begin file_autogen_import>*/", "/*<end file_autogen_import>*/",
@@ -142,44 +156,61 @@ func patchCompilerNoder(goroot string) error {
 			},
 		)
 		content = addContentAfter(content, "/*<begin file_autogen>*/", "/*<end file_autogen>*/", []string{
+			`func LoadPackage`,
 			`for _, p := range noders {`,
 			`base.Timer.AddEvent(int64(lines), "lines")`,
 			"\n",
 		},
-			patch.NoderFiles)
+			noderFiles)
 		return content, nil
 	})
 }
 
-func patchGcMain(goroot string) error {
+func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	file := "src/cmd/compile/internal/gc/main.go"
+	inlineGo122 := goVersion.Major == 1 && goVersion.Minor == 22
+
 	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
+		imports := []string{
+			`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
+			`xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"`,
+		}
 		content = addCodeAfterImports(content,
 			"/*<begin gc_import>*/", "/*<end gc_import>*/",
-			[]string{
-				`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
-				`xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"`,
-			},
+			imports,
 		)
 
 		content = addContentAfter(content,
 			"/*<begin patch>*/", "/*<end patch>*/",
-			[]string{`noder.LoadPackage(flag.Args())`, `ssagen.InitConfig()`, "\n"},
+			[]string{`noder.LoadPackage(flag.Args())`, `dwarfgen.RecordPackageName()`, `ssagen.InitConfig()`, "\n"},
 			`	// insert trap points
 		if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 		    xgo_patch.Patch()
 		}
 `)
 
-		content = replaceContentAfter(content,
-			"/*<begin prevent_inline>*/", "/*<end prevent_inline>*/",
-			[]string{`base.Timer.Start("fe", "inlining")`, `if base.Flag.LowerL != 0 {`, "\n"},
-			`inline.InlinePackage(profile)`,
-			`	// NOTE: turn off inline for go1.20 if there is any rewrite
+		if !inlineGo122 {
+			// go1.20 does not respect rewritten content when inlined
+			content = replaceContentAfter(content,
+				"/*<begin prevent_inline>*/", "/*<end prevent_inline>*/",
+				[]string{`base.Timer.Start("fe", "inlining")`, `if base.Flag.LowerL != 0 {`, "\n"},
+				`inline.InlinePackage(profile)`,
+				`	// NOTE: turn off inline if there is any rewrite
 		if !xgo_record.HasRewritten() {
 			inline.InlinePackage(profile)
 		}
 `)
+		} else {
+			// go1.22 also does not respect rewritten content when inlined
+			content = addContentAfter(content,
+				"/*<begin prevent_inline_by_override_flag>*/", "/*<end prevent_inline_by_override_flag>*/",
+				[]string{`if base.Flag.LowerL <= 1 {`, `base.Flag.LowerL = 1 - base.Flag.LowerL`, "}", "\n"},
+				`	// NOTE: turn off inline if there is any rewrite
+		if !xgo_record.HasRewritten() {
+			base.Flag.LowerL = 0
+		}
+`)
+		}
 		return content, nil
 	})
 }

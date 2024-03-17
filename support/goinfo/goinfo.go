@@ -16,6 +16,10 @@ type GoVersion struct {
 	Arch string
 }
 
+func (c *GoVersion) String() string {
+	return fmt.Sprintf("go version go%d.%d.%d %s/%s", c.Major, c.Minor, c.Patch, c.OS, c.Arch)
+}
+
 const goVersionPrefix = "go version "
 
 func GetGoVersionOutput(goBinary string) (string, error) {

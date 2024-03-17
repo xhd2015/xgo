@@ -159,7 +159,7 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	// patch go runtime and compiler
-	err = patchGoSrc(instrumentGoroot, realXgoSrc, noInstrument, syncWithLink || setupDev || buildCompiler)
+	err = patchGoSrc(instrumentGoroot, realXgoSrc, goVersion, noInstrument, syncWithLink || setupDev || buildCompiler)
 	if err != nil {
 		return err
 	}
@@ -302,8 +302,9 @@ func checkGoVersion(goroot string) (*goinfo.GoVersion, error) {
 	if err != nil {
 		return nil, err
 	}
-	if goVersion.Major != 1 || goVersion.Minor != 20 {
-		return nil, fmt.Errorf("expect go1.20.x, actual: %s", goVersionStr)
+	minor := goVersion.Minor
+	if goVersion.Major != 1 || (minor != 20 && minor != 22) {
+		return nil, fmt.Errorf("expect go1.20.x, go1.22.x, actual: %s", goVersionStr)
 	}
 	return goVersion, nil
 }
