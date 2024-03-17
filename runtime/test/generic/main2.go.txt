@@ -1,0 +1,35 @@
+package main
+
+func main() {
+	var list List[int]
+	list.Size()
+
+	Hello(list)
+	Hello2[int]()
+	Hello3[int]()
+}
+
+type List[T any] struct {
+}
+
+func (c *List[T]) Size() {
+
+}
+
+// funcName1: Hello[go.shape.struct {}]
+// funcName2: Hello[main.List[int]]
+func Hello[T any](v T) interface{} {
+	trapD(&v)
+	return v
+}
+
+func Hello2[T any]() {
+}
+
+func Hello3[T any]() int {
+	return 0
+}
+
+func trapD(x interface{}) {
+
+}

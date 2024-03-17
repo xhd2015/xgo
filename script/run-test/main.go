@@ -8,11 +8,16 @@ import (
 	"strings"
 )
 
+// usage:
+//
+//	go run ./script/run-test/ --include go1.19.13
+//	go run ./script/run-test/ --include go1.19.13 -run TestHelloWorld -v
 func main() {
 	args := os.Args[1:]
 	var excludes []string
 	var includes []string
 	n := len(args)
+	var remainArgs []string
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--exclude" {
@@ -24,6 +29,21 @@ func main() {
 			includes = append(includes, args[i+1])
 			i++
 			continue
+		}
+		if arg == "-run" {
+			remainArgs = append(remainArgs, arg, args[i+1])
+			i++
+			continue
+		}
+		if arg == "-v" || strings.HasPrefix(arg, "-count=") {
+			remainArgs = append(remainArgs, arg)
+			continue
+		}
+		if arg == "--" {
+			if i+1 < n {
+				remainArgs = append(remainArgs, args[i+1:]...)
+			}
+			break
 		}
 	}
 	goRelease := "go-release"
@@ -59,7 +79,7 @@ func main() {
 
 	for _, goroot := range goroots {
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
-		err := runTest(filepath.Join(goRelease, goroot))
+		err := runTest(filepath.Join(goRelease, goroot), remainArgs)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "FAIL %s: %v\n", goroot, err)
 			os.Exit(1)
@@ -95,13 +115,20 @@ func listGoroots(dir string) ([]string, error) {
 	return dirs, nil
 }
 
-func runTest(goroot string) error {
+func runTest(goroot string, args []string) error {
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
 		return err
 	}
 
-	execCmd := exec.Command(filepath.Join(goroot, "bin", "go"), "test", "./test")
+	var testArgs []string
+	testArgs = append(testArgs, "test")
+	if len(args) > 0 {
+		testArgs = append(testArgs, args...)
+	}
+	testArgs = append(testArgs, "./test")
+
+	execCmd := exec.Command(filepath.Join(goroot, "bin", "go"), testArgs...)
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
 

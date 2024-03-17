@@ -237,7 +237,10 @@ func handleBuild(cmd string, args []string) error {
 		execCmd = exec.Command(remainArgs[0], remainArgs[1:]...)
 	}
 	execCmd.Env = os.Environ()
-	execCmd.Env = patchEnvWithGoroot(execCmd.Env, instrumentGoroot)
+	execCmd.Env, err = patchEnvWithGoroot(execCmd.Env, instrumentGoroot)
+	if err != nil {
+		return err
+	}
 	if !noInstrument {
 		execCmd.Env = append(execCmd.Env, "GOCACHE="+buildCacheDir)
 		execCmd.Env = append(execCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
@@ -303,8 +306,8 @@ func checkGoVersion(goroot string) (*goinfo.GoVersion, error) {
 		return nil, err
 	}
 	minor := goVersion.Minor
-	if goVersion.Major != 1 || (minor != 20 && minor != 21 && minor != 22) {
-		return nil, fmt.Errorf("expect go1.20.x ~ go1.22.x, actual: %s", goVersionStr)
+	if goVersion.Major != 1 || (minor != 19 && minor != 20 && minor != 21 && minor != 22) {
+		return nil, fmt.Errorf("only supports go1.19.0 ~ go1.22.1, current: %s", goVersionStr)
 	}
 	return goVersion, nil
 }
@@ -363,7 +366,11 @@ func buildCompiler(goroot string, output string) error {
 	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), "build", "-gcflags=all=-N -l", "-o", output, "./")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = patchEnvWithGoroot(os.Environ(), goroot)
+	env, err := patchEnvWithGoroot(os.Environ(), goroot)
+	if err != nil {
+		return err
+	}
+	cmd.Env = env
 	cmd.Dir = filepath.Join(goroot, "src", "cmd", "compile")
 	return cmd.Run()
 }
@@ -399,11 +406,15 @@ func getBuildID(file string) (string, error) {
 	return strings.TrimSuffix(string(data), "\n"), nil
 }
 
-func patchEnvWithGoroot(env []string, goroot string) []string {
+func patchEnvWithGoroot(env []string, goroot string) ([]string, error) {
+	goroot, err := filepath.Abs(goroot)
+	if err != nil {
+		return nil, err
+	}
 	return append(env,
 		"GOROOT="+goroot,
 		fmt.Sprintf("PATH=%s%c%s", filepath.Join(goroot, "bin"), filepath.ListSeparator, os.Getenv("PATH")),
-	)
+	), nil
 }
 
 func assertDir(dir string) error {

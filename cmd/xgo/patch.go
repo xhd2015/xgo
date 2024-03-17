@@ -33,8 +33,7 @@ func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, noIns
 	if noInstrument {
 		return nil
 	}
-
-	err = patchRuntimeDef(goroot)
+	err = patchRuntimeDef(goroot, goVersion)
 	if err != nil {
 		return err
 	}
@@ -71,17 +70,24 @@ func importCompileInternalPatch(goroot string, xgoSrc string, syncWithLink bool)
 	return nil
 }
 
-func patchRuntimeDef(goRoot string) error {
-	err := prepareRuntimeDefs(goRoot)
+func patchRuntimeDef(goRoot string, goVersion *goinfo.GoVersion) error {
+	err := prepareRuntimeDefs(goRoot, goVersion)
 	if err != nil {
 		return err
 	}
 
 	// run mkbuiltin
-	cmd := exec.Command("go", "run", "mkbuiltin.go")
+	cmd := exec.Command(filepath.Join(goRoot, "bin", "go"), "run", "mkbuiltin.go")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	cmd.Dir = filepath.Join(goRoot, "src/cmd/compile/internal/typecheck")
+
+	cmd.Env = os.Environ()
+	cmd.Env, err = patchEnvWithGoroot(cmd.Env, goRoot)
+	if err != nil {
+		return err
+	}
+
 	err = cmd.Run()
 	if err != nil {
 		return err
@@ -90,8 +96,12 @@ func patchRuntimeDef(goRoot string) error {
 	return nil
 }
 
-func prepareRuntimeDefs(goRoot string) error {
+func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
 	runtimeDefFile := "src/cmd/compile/internal/typecheck/_builtin/runtime.go"
+	if goVersion.Major == 1 && goVersion.Minor <= 19 {
+		// in go1.19 and below, builtin has no _ prefix
+		runtimeDefFile = "src/cmd/compile/internal/typecheck/builtin/runtime.go"
+	}
 	fullFile := filepath.Join(goRoot, runtimeDefFile)
 
 	extraDef := patch.RuntimeExtraDef
@@ -110,6 +120,12 @@ func patchCompiler(goroot string, goVersion *goinfo.GoVersion) error {
 	err := patchCompilerNoder(goroot, goVersion)
 	if err != nil {
 		return fmt.Errorf("patching noder: %w", err)
+	}
+	if goVersion.Major == 1 && (goVersion.Minor == 18 || goVersion.Minor == 19) {
+		err := poatchIRGen(goroot)
+		if err != nil {
+			return fmt.Errorf("patching generic trap: %w", err)
+		}
 	}
 	err = patchGcMain(goroot, goVersion)
 	if err != nil {
@@ -139,12 +155,14 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	var noderFiles string
 	if goVersion.Major == 1 {
 		minor := goVersion.Minor
-		if minor == 20 {
+		if minor == 19 {
+			noderFiles = patch.NoderFiles_1_19
+		} else if minor == 20 {
 			noderFiles = patch.NoderFiles_1_20
 		} else if minor == 21 {
-			noderFiles = patch.NoderFiles_1_22
+			noderFiles = patch.NoderFiles_1_21
 		} else if minor == 22 {
-			noderFiles = patch.NoderFiles_1_22
+			noderFiles = patch.NoderFiles_1_21
 		}
 	}
 	if noderFiles == "" {
@@ -169,8 +187,31 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	})
 }
 
+func poatchIRGen(goroot string) error {
+	file := "src/cmd/compile/internal/noder/irgen.go"
+	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
+		content = addCodeAfterImports(content,
+			"/*<begin irgen_autogen_import>*/", "/*<end irgen_autogen_import>*/",
+			[]string{
+				`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
+				`"os"`,
+			},
+		)
+		content = addContentAfter(content, "/*<begin irgen_generic_trap_autogen>*/", "/*<end irgen_generic_trap_autogen>*/", []string{
+			`func (g *irgen) generate(noders []*noder) {`,
+			`types.DeferCheckSize()`,
+			`base.ExitIfErrors()`,
+			`typecheck.DeclareUniverse()`,
+			"\n",
+		},
+			patch.GenericTrapForGo118And119)
+		return content, nil
+	})
+}
+
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	file := "src/cmd/compile/internal/gc/main.go"
+	go119AndUnder := goVersion.Major == 1 && goVersion.Minor <= 19
 	go120 := goVersion.Major == 1 && goVersion.Minor == 20
 	go121 := goVersion.Major == 1 && goVersion.Minor == 21
 	go122 := goVersion.Major == 1 && goVersion.Minor == 22
@@ -198,15 +239,20 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		// - 1. by not calling to inline.InlinePackage
 		// - 2. by override base.Flag.LowerL to 0
 		// prefer 1 because it is more focused
-		if go120 || go121 {
+		if go119AndUnder || go120 || go121 {
+			inlineCall := `inline.InlinePackage(profile)`
+			if go119AndUnder {
+				// go1.19 and under does not hae PGO
+				inlineCall = `inline.InlinePackage()`
+			}
 			// go1.20 does not respect rewritten content when inlined
 			content = replaceContentAfter(content,
 				"/*<begin prevent_inline>*/", "/*<end prevent_inline>*/",
 				[]string{`base.Timer.Start("fe", "inlining")`, `if base.Flag.LowerL != 0 {`, "\n"},
-				`inline.InlinePackage(profile)`,
+				inlineCall,
 				`	// NOTE: turn off inline if there is any rewrite
 		if !xgo_record.HasRewritten() {
-			inline.InlinePackage(profile)
+			`+inlineCall+`
 		}
 `)
 		} else if go122 {

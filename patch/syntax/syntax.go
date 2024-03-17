@@ -38,6 +38,63 @@ func ClearDecls() {
 	allDecls = nil
 }
 
+type LineCol struct {
+	Line uint
+	Col  uint
+}
+
+var syntaxDeclMapping map[string]map[LineCol]*DeclInfo
+
+func GetSyntaxDeclMapping() map[string]map[LineCol]*DeclInfo {
+	if syntaxDeclMapping != nil {
+		return syntaxDeclMapping
+	}
+	// build pos -> syntax mapping
+	syntaxDeclMapping = make(map[string]map[LineCol]*DeclInfo)
+	for _, syntaxDecl := range allDecls {
+		pos := syntaxDecl.FuncDecl.Pos()
+		file := pos.RelFilename()
+		fileMapping := syntaxDeclMapping[file]
+		if fileMapping == nil {
+			fileMapping = make(map[LineCol]*DeclInfo)
+			syntaxDeclMapping[file] = fileMapping
+		}
+		fileMapping[LineCol{
+			Line: pos.Line(),
+			Col:  pos.Col(),
+		}] = syntaxDecl
+	}
+	return syntaxDeclMapping
+}
+
+var computedSkipTrap bool
+var skipTrap bool
+
+func HasSkipTrap() bool {
+	if computedSkipTrap {
+		return skipTrap
+	}
+	computedSkipTrap = true
+	skipTrap = computeSkipTrap(allFiles)
+	return skipTrap
+}
+
+func computeSkipTrap(files []*syntax.File) bool {
+	// check if any file has __XGO_SKIP_TRAP
+	for _, f := range files {
+		for _, d := range f.DeclList {
+			if d, ok := d.(*syntax.ConstDecl); ok && len(d.NameList) > 0 && d.NameList[0].Value == "__XGO_SKIP_TRAP" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func ClearSyntaxDeclMapping() {
+	syntaxDeclMapping = nil
+}
+
 func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
 	if len(fileList) == 0 {
 		return

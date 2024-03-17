@@ -7,13 +7,18 @@ import (
 )
 
 func main() {
-	cmd := exec.Command("go", "run",
+	args := os.Args[1:]
+	execArgs := []string{
+		"run",
 		"./cmd/xgo",
 		"build",
 		"--xgo-src",
 		"./",
 		"--build-compiler",
-	)
+	}
+	execArgs = append(execArgs, args...)
+
+	cmd := exec.Command("go", execArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
