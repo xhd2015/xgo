@@ -202,14 +202,15 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 `)
 		} else {
 			// go1.22 also does not respect rewritten content when inlined
+			// NOTE: the override of LowerL is inserted after xgo_patch.Patch()
 			content = addContentAfter(content,
 				"/*<begin prevent_inline_by_override_flag>*/", "/*<end prevent_inline_by_override_flag>*/",
-				[]string{`if base.Flag.LowerL <= 1 {`, `base.Flag.LowerL = 1 - base.Flag.LowerL`, "}", "\n"},
+				[]string{`if base.Flag.LowerL <= 1 {`, `base.Flag.LowerL = 1 - base.Flag.LowerL`, "}", "xgo_patch.Patch()", "}", "\n"},
 				`	// NOTE: turn off inline if there is any rewrite
-		if !xgo_record.HasRewritten() {
-			base.Flag.LowerL = 0
-		}
-`)
+						if xgo_record.HasRewritten() {
+							base.Flag.LowerL = 0
+						}
+				`)
 		}
 		return content, nil
 	})
