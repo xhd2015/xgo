@@ -8,6 +8,7 @@ import (
 
 // go test -run TestMockInfo -v ./test
 func TestMockInfo(t *testing.T) {
+	t.Parallel()
 	expectOrig := "hello world\n"
 	expectInstrument := "hello mock:world\n"
 	err := testNoInstrumentAndInstrumentOutput("./testdata/mock", expectOrig, expectInstrument)

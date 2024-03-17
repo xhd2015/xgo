@@ -7,6 +7,7 @@ import (
 
 // go test -run TestDumpVscode -v ./test
 func TestDumpVscode(t *testing.T) {
+	t.Parallel()
 	goVersion, err := getGoVersion()
 	if err != nil {
 		t.Fatal(getErrMsg(err))
@@ -23,7 +24,7 @@ func TestDumpVscode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	t.Logf("output:%s", output)
+	// t.Logf("output:%s", output)
 	seqs := []string{
 		`"configurations": [`,
 

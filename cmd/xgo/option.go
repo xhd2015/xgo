@@ -23,6 +23,7 @@ type options struct {
 
 	noBuildOutput bool
 	noInstrument  bool
+	noSetup       bool
 
 	// TODO: make these options available only at develop
 	// deprecated
@@ -48,6 +49,7 @@ func parseOptions(args []string) (*options, error) {
 	var vscode string
 
 	var noInstrument bool
+	var noSetup bool
 
 	var xgoSrc string
 	var syncXgoOnly bool
@@ -157,6 +159,10 @@ func parseOptions(args []string) (*options, error) {
 			noInstrument = true
 			continue
 		}
+		if arg == "--no-setup" {
+			noSetup = true
+			continue
+		}
 		var found bool
 		for _, flagVal := range flagValues {
 			ok, err := flag.TryParseFlagsValue(flagVal.Flags, flagVal.Value, &i, args)
@@ -191,6 +197,7 @@ func parseOptions(args []string) (*options, error) {
 
 		noBuildOutput: noBuildOutput,
 		noInstrument:  noInstrument,
+		noSetup:       noSetup,
 
 		syncXgoOnly:   syncXgoOnly,
 		setupDev:      setupDev,

@@ -9,7 +9,7 @@ go install github.com/xhd2015/xgo/cmd/xgo
 ```
 
 # Usage
-NOTE: current `xgo` requires `go1.20` to compile
+NOTE: current `xgo` requires at least `go1.16` to compile.
 ```sh
 xgo run ./test/testdata/hello_world
 # output:

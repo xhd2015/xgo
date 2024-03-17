@@ -7,6 +7,7 @@ import (
 
 // go test -run TestFuncInfo -v ./test
 func TestFuncInfo(t *testing.T) {
+	t.Parallel()
 	goVersion, err := getGoVersion()
 	if err != nil {
 		t.Fatal(getErrMsg(err))

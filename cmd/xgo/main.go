@@ -68,6 +68,7 @@ func handleBuild(cmd string, args []string) error {
 	optXgoSrc := opts.xgoSrc
 	noBuildOutput := opts.noBuildOutput
 	noInstrument := opts.noInstrument
+	noSetup := opts.noSetup
 	syncXgoOnly := opts.syncXgoOnly
 	setupDev := opts.setupDev
 	buildCompiler := opts.buildCompiler
@@ -115,7 +116,7 @@ func handleBuild(cmd string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("get config under home directory: %v", err)
 	}
-	goVersion, err := checkGoVersion(goroot)
+	goVersion, err := checkGoVersion(goroot, noInstrument)
 	if err != nil {
 		return err
 	}
@@ -149,19 +150,20 @@ func handleBuild(cmd string, args []string) error {
 		}
 	}
 
-	err = ensureDirs(binDir, logDir, instrumentDir)
-	if err != nil {
-		return err
-	}
-	err = syncGoroot(goroot, instrumentGoroot)
-	if err != nil {
-		return err
-	}
-
-	// patch go runtime and compiler
-	err = patchGoSrc(instrumentGoroot, realXgoSrc, goVersion, noInstrument, syncWithLink || setupDev || buildCompiler)
-	if err != nil {
-		return err
+	if !noInstrument && !noSetup {
+		err = ensureDirs(binDir, logDir, instrumentDir)
+		if err != nil {
+			return err
+		}
+		err = syncGoroot(goroot, instrumentGoroot)
+		if err != nil {
+			return err
+		}
+		// patch go runtime and compiler
+		err = patchGoSrc(instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler)
+		if err != nil {
+			return err
+		}
 	}
 
 	if setupDev || buildCompiler {
@@ -180,7 +182,7 @@ func handleBuild(cmd string, args []string) error {
 	var compilerChanged bool
 	var toolExecFlag string
 	if !noInstrument {
-		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug, logCompile)
+		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug, logCompile, noSetup)
 		if err != nil {
 			return err
 		}
@@ -295,7 +297,7 @@ func copyToStdout(srcFile string) error {
 	return err
 }
 
-func checkGoVersion(goroot string) (*goinfo.GoVersion, error) {
+func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error) {
 	// check if we are using expected go version
 	goVersionStr, err := goinfo.GetGoVersionOutput(filepath.Join(goroot, "bin", "go"))
 	if err != nil {
@@ -305,9 +307,11 @@ func checkGoVersion(goroot string) (*goinfo.GoVersion, error) {
 	if err != nil {
 		return nil, err
 	}
-	minor := goVersion.Minor
-	if goVersion.Major != 1 || (minor < 17 || minor > 22) {
-		return nil, fmt.Errorf("only supports go1.17.0 ~ go1.22.1, current: %s", goVersionStr)
+	if !noInstrument {
+		minor := goVersion.Minor
+		if goVersion.Major != 1 || (minor < 17 || minor > 22) {
+			return nil, fmt.Errorf("only supports go1.17.0 ~ go1.22.1, current: %s", goVersionStr)
+		}
 	}
 	return goVersion, nil
 }
@@ -328,25 +332,27 @@ func ensureDirs(binDir string, logDir string, instrumentDir string) error {
 	return nil
 }
 
-func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool) (compilerChanged bool, toolExecFlag string, err error) {
-	// build the instrumented compiler
-	err = buildCompiler(goroot, compilerBin)
-	if err != nil {
-		return false, "", err
-	}
-	compilerChanged, err = compareAndUpdateCompilerID(compilerBin, compilerBuildIDFile)
-	if err != nil {
-		return false, "", err
-	}
+func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool, noSetup bool) (compilerChanged bool, toolExecFlag string, err error) {
+	if !noSetup {
+		// build the instrumented compiler
+		err = buildCompiler(goroot, compilerBin)
+		if err != nil {
+			return false, "", err
+		}
+		compilerChanged, err = compareAndUpdateCompilerID(compilerBin, compilerBuildIDFile)
+		if err != nil {
+			return false, "", err
+		}
 
-	// build exec tool
-	buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
-	buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
-	buildExecToolCmd.Stdout = os.Stdout
-	buildExecToolCmd.Stderr = os.Stderr
-	err = buildExecToolCmd.Run()
-	if err != nil {
-		return false, "", err
+		// build exec tool
+		buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
+		buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
+		buildExecToolCmd.Stdout = os.Stdout
+		buildExecToolCmd.Stderr = os.Stderr
+		err = buildExecToolCmd.Run()
+		if err != nil {
+			return false, "", err
+		}
 	}
 	execToolCmd := []string{execToolBin, "--enable"}
 	if logCompile {
@@ -363,6 +369,7 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 }
 
 func buildCompiler(goroot string, output string) error {
+	// TODO: remove gcflags
 	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), "build", "-gcflags=all=-N -l", "-o", output, "./")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -454,7 +461,7 @@ func checkGoroot(goroot string) (string, error) {
 		return releaseGo, nil
 	}
 	if strings.HasPrefix(goroot, "go") {
-		fmt.Fprintf(os.Stderr, "WARNING %s does not exist, download it with:\n          go run ./script/download-go/ %s\n", goroot, goroot)
+		fmt.Fprintf(os.Stderr, "WARNING %s does not exist, download it with:\n          go run ./script/download-go %s\n", goroot, goroot)
 	}
 	return "", err
 }

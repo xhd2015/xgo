@@ -86,3 +86,15 @@ func getGoVersion() (*goinfo.GoVersion, error) {
 	})
 	return goVersionCached, goVersionErr
 }
+
+var xgoInitErr error
+var xgoInitOnce sync.Once
+
+func ensureXgoInit() error {
+	xgoInitOnce.Do(func() {
+		_, xgoInitErr = runXgo([]string{"--build-compiler"}, &options{
+			init: true,
+		})
+	})
+	return xgoInitErr
+}

@@ -8,6 +8,7 @@ import (
 
 // go test -run TestExec -v ./test
 func TestExec(t *testing.T) {
+	t.Parallel()
 	goVersion, err := cmd.Output("go", "version")
 	if err != nil {
 		t.Fatal(err)

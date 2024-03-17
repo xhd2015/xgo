@@ -15,9 +15,17 @@ type options struct {
 	env    []string
 
 	noPipeStderr bool
+
+	init bool
 }
 
 func runXgo(args []string, opts *options) (string, error) {
+	if opts == nil || !opts.init {
+		err := ensureXgoInit()
+		if err != nil {
+			return "", err
+		}
+	}
 	var xgoCmd string = "build"
 	if opts != nil {
 		if opts.run {
@@ -26,13 +34,18 @@ func runXgo(args []string, opts *options) (string, error) {
 			xgoCmd = "exec"
 		}
 	}
-	xgoArgs := append([]string{
+	xgoArgs := []string{
 		"run", "../cmd/xgo",
 		xgoCmd,
 		"--xgo-src",
 		"../",
 		"--sync-with-link",
-	}, args...)
+	}
+	// accerlate
+	if opts == nil || !opts.init {
+		xgoArgs = append(xgoArgs, "--no-setup")
+	}
+	xgoArgs = append(xgoArgs, args...)
 	cmd := exec.Command("go", xgoArgs...)
 	if opts == nil || !opts.noPipeStderr {
 		cmd.Stderr = os.Stderr

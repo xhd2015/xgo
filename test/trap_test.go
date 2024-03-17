@@ -9,6 +9,7 @@ import (
 
 // go test -run TestTrap$ -v ./test
 func TestTrap(t *testing.T) {
+	t.Parallel()
 	origExpect := "A\nB\n"
 	expectOut := "trap A\nA\nabort B\n"
 	testTrap(t, "./testdata/trap", origExpect, expectOut)
@@ -16,6 +17,7 @@ func TestTrap(t *testing.T) {
 
 // go test -run TestTrapNormalBuildShouldFail -v ./test
 func TestTrapNormalBuildShouldFail(t *testing.T) {
+	t.Parallel()
 	expectOut := "panic: failed to link __xgo_link_set_trap"
 	testTrapWithOpts(t, "./testdata/trap", "", expectOut, testTrapOpts{
 		expectOrigErr:       true,

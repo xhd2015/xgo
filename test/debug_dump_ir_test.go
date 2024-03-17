@@ -7,6 +7,7 @@ import (
 
 // go test -run TestDumpIR -v ./test
 func TestDumpIR(t *testing.T) {
+	t.Parallel()
 	// must use "-a" or create a temp dir to ensure recompile
 	// -a: cost 7~8s
 	// give go.mod as a placeholder for go to build

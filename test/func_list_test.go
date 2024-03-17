@@ -6,6 +6,7 @@ import (
 
 // go test -run TestFuncList -v ./test
 func TestFuncList(t *testing.T) {
+	t.Parallel()
 	goVersion, err := getGoVersion()
 	if err != nil {
 		t.Fatal(getErrMsg(err))
@@ -15,7 +16,7 @@ func TestFuncList(t *testing.T) {
 		t.Fatal(getErrMsg(err))
 	}
 
-	// t.Logf("%s", output)
+	t.Logf("%s", output)
 
 	expectStdLines := []string{
 		"func:strconv FormatBool",

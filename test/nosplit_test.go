@@ -9,6 +9,7 @@ import (
 
 // go test -run TestLongFuncNoSplitShouldNotCompileWithDebugFlags -v ./test
 func TestLongFuncNoSplitShouldNotCompileWithDebugFlags(t *testing.T) {
+	t.Parallel()
 	goVersion, err := getGoVersion()
 	if err != nil {
 		t.Fatal(getErrMsg(err))

@@ -17,6 +17,7 @@ import (
 
 // go test -run TestHelloWorld -v ./test
 func TestHelloWorld(t *testing.T) {
+	t.Parallel()
 	output, err := buildAndRunOutput("./testdata/hello_world")
 	if err != nil {
 		t.Fatal(err)

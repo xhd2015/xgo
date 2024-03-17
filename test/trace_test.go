@@ -7,6 +7,7 @@ import (
 
 // go test -run TestTrace -v ./test
 func TestTrace(t *testing.T) {
+	t.Parallel()
 	output, err := buildWithRuntimeAndOutput("./testdata/trace", buildRuntimeOpts{
 		runEnv: []string{
 			"XGO_TRACE_DIR=stdout",

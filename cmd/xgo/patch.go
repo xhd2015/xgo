@@ -17,7 +17,7 @@ import (
 
 // assume go 1.20
 // the patch should be idempotent
-func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, noInstrument bool, syncWithLink bool) error {
+func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
@@ -30,9 +30,6 @@ func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, noIns
 		return err
 	}
 
-	if noInstrument {
-		return nil
-	}
 	err = patchRuntimeDef(goroot, goVersion)
 	if err != nil {
 		return err
