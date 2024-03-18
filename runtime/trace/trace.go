@@ -45,6 +45,9 @@ type Stack struct {
 }
 
 func Use() {
+	if getTraceOutput() == "off" {
+		return
+	}
 	// collect trace
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
@@ -102,6 +105,10 @@ func Use() {
 	})
 }
 
+func getTraceOutput() string {
+	return os.Getenv("XGO_TRACE_OUTPUT")
+}
+
 // this should also be marked as trap.Skip()
 func emitTrace(stack *Stack) error {
 	// write to file
@@ -114,7 +121,7 @@ func emitTrace(stack *Stack) error {
 	ghex := fmt.Sprintf("g_%x", __xgo_link_getcurg())
 	traceID := "t_" + strconv.FormatInt(traceIDNum, 10)
 
-	xgoTraceOutput := os.Getenv("XGO_TRACE_OUTPUT")
+	xgoTraceOutput := getTraceOutput()
 	if xgoTraceOutput == "" {
 		xgoTraceOutput = time.Now().Format("trace_20060102_150405")
 	}
