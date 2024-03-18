@@ -13,6 +13,7 @@ type options struct {
 	output     string
 	flagV      bool
 	flagX      bool
+	flagC      bool
 	xgoSrc     string
 	debug      string
 	vscode     string
@@ -44,6 +45,7 @@ func parseOptions(args []string) (*options, error) {
 	var flagA bool
 	var flagV bool
 	var flagX bool
+	var flagC bool // -c: used by go test
 	var projectDir string
 	var output string
 	var debug string
@@ -131,6 +133,10 @@ func parseOptions(args []string) (*options, error) {
 			flagX = true
 			continue
 		}
+		if arg == "-c" {
+			flagC = true
+			continue
+		}
 		if arg == "-v" {
 			flagV = true
 			continue
@@ -214,6 +220,7 @@ func parseOptions(args []string) (*options, error) {
 		flagA:      flagA,
 		flagV:      flagV,
 		flagX:      flagX,
+		flagC:      flagC,
 		projectDir: projectDir,
 		output:     output,
 		xgoSrc:     xgoSrc,

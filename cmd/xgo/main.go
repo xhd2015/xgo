@@ -73,6 +73,7 @@ func main() {
 
 func handleBuild(cmd string, args []string) error {
 	cmdBuild := cmd == "build"
+	cmdTest := cmd == "test"
 	cmdExec := cmd == "exec"
 	opts, err := parseOptions(args)
 	if err != nil {
@@ -84,6 +85,7 @@ func handleBuild(cmd string, args []string) error {
 	output := opts.output
 	flagV := opts.flagV
 	flagX := opts.flagX
+	flagC := opts.flagC
 	logCompile := opts.logCompile
 	optXgoSrc := opts.xgoSrc
 	noBuildOutput := opts.noBuildOutput
@@ -230,10 +232,13 @@ func handleBuild(cmd string, args []string) error {
 		if flagX {
 			buildCmdArgs = append(buildCmdArgs, "-x")
 		}
+		if flagC {
+			buildCmdArgs = append(buildCmdArgs, "-c")
+		}
 		if gcflags != "" {
 			buildCmdArgs = append(buildCmdArgs, "-gcflags="+gcflags)
 		}
-		if cmdBuild {
+		if cmdBuild || (cmdTest && flagC) {
 			// output
 			if noBuildOutput {
 				discardOut := filepath.Join(tmpDir, "discard.out")

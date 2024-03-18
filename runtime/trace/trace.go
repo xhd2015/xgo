@@ -109,10 +109,22 @@ func getTraceOutput() string {
 	return os.Getenv("XGO_TRACE_OUTPUT")
 }
 
+var marshalStack func(stack *Stack) ([]byte, error)
+
+func SetMarshalStack(fn func(stack *Stack) ([]byte, error)) {
+	marshalStack = fn
+}
+
 // this should also be marked as trap.Skip()
 func emitTrace(stack *Stack) error {
 	// write to file
-	trace, err := json.Marshal(stack)
+	var trace []byte
+	var err error
+	if marshalStack != nil {
+		trace, err = marshalStack(stack)
+	} else {
+		trace, err = json.Marshal(stack)
+	}
 	if err != nil {
 		return err
 	}

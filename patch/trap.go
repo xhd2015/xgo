@@ -206,6 +206,22 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 
 func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 	ensureInit()
+
+	curPkgPath := xgo_ctxt.GetPkgPath()
+
+	var fnPkg string
+	fnSym := fn.Sym()
+	if fnSym != nil {
+		fnPkg = fnSym.Pkg.Path
+	}
+	// when package are not the same,
+	// do not insert trap points
+	// TODO: solve the generic package issues by
+	// using generic metadata
+	if fnPkg == "" || fnPkg != curPkgPath {
+		return false
+	}
+
 	pos := base.Ctxt.PosTable.Pos(fn.Pos())
 	posFile := pos.AbsFilename()
 	posLine := pos.Line()
@@ -218,11 +234,20 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 		Col:  posCol,
 	}]
 
+	// no identity name
+	if decl == nil {
+		return false
+	}
+
 	var identityName string
 	var generic bool
 	if decl != nil {
 		identityName = decl.IdentityName()
 		generic = decl.Generic
+	}
+
+	if identityName == "" {
+		return false
 	}
 	if genericTrapNeedsWorkaround && generic != forGeneric {
 		return false

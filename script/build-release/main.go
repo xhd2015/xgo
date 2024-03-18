@@ -4,24 +4,54 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/xhd2015/xgo/script/build-release/revision"
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
+// usage:
+//  go run ./script/build-release
+//  go run ./script/build-release --local --local-name xgo_exp
+
 // TODO: apply build tag for development and release mode
 func main() {
-	err := buildRelease("xgo-release", []*osArch{
-		{"darwin", "amd64"},
-		{"darwin", "arm64"},
-		// {"darwin", "arm"}, // not supported, both arm and arm32
-		{"linux", "amd64"},
-		{"linux", "arm64"},
-		{"linux", "arm"}, // NOTE: not arm32
-		{"windows", "amd64"},
-		{"windows", "arm64"},
-	})
+	args := os.Args[1:]
+	n := len(args)
+	var installLocal bool
+	var localName string
+	for i := 0; i < n; i++ {
+		arg := args[i]
+		if arg == "--local" {
+			installLocal = true
+			continue
+		}
+		if arg == "--local-name" {
+			localName = args[i+1]
+			i++
+			continue
+		}
+	}
+	var archs []*osArch
+	if !installLocal {
+		archs = []*osArch{
+			{"darwin", "amd64"},
+			{"darwin", "arm64"},
+			// {"darwin", "arm"}, // not supported, both arm and arm32
+			{"linux", "amd64"},
+			{"linux", "arm64"},
+			{"linux", "arm"}, // NOTE: not arm32
+			{"windows", "amd64"},
+			{"windows", "arm64"},
+		}
+	} else {
+		archs = []*osArch{
+			{runtime.GOOS, runtime.GOARCH},
+		}
+	}
+
+	err := buildRelease("xgo-release", installLocal, localName, archs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -33,7 +63,10 @@ type osArch struct {
 	goarch string
 }
 
-func buildRelease(releaseDir string, osArches []*osArch) error {
+func buildRelease(releaseDir string, installLocal bool, localName string, osArches []*osArch) error {
+	if installLocal && len(osArches) != 1 {
+		return fmt.Errorf("--install-local requires only one target")
+	}
 	version, err := cmd.Output("go", "run", "./cmd/xgo", "version")
 	if err != nil {
 		return err
@@ -72,7 +105,7 @@ func buildRelease(releaseDir string, osArches []*osArch) error {
 	}
 
 	for _, osArch := range osArches {
-		err := buildBinaryRelease(dir, tmpSrcDir, version, osArch.goos, osArch.goarch)
+		err := buildBinaryRelease(dir, tmpSrcDir, version, osArch.goos, osArch.goarch, installLocal, localName)
 		if err != nil {
 			return fmt.Errorf("GOOS=%s GOARCH=%s:%w", osArch.goos, osArch.goarch, err)
 		}
@@ -135,7 +168,7 @@ func generateSums(dir string, sumFile string) error {
 // c2876990b545be8396b7d13f0f9c3e23b38236de8f0c9e79afe04bcf1d03742e  xgo1.0.0-darwin-arm64.tar.gz
 // 6ae476cb4c3ab2c81a94d1661070e34833e4a8bda3d95211570391fb5e6a3cc0  xgo1.0.0-darwin-amd64.tar.gz
 
-func buildBinaryRelease(dir string, srcDir string, version string, goos string, goarch string) error {
+func buildBinaryRelease(dir string, srcDir string, version string, goos string, goarch string, installLocal bool, localName string) error {
 	if version == "" {
 		return fmt.Errorf("requires version")
 	}
@@ -172,6 +205,26 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 		if err != nil {
 			return err
 		}
+	}
+
+	if installLocal {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		binDir := filepath.Join(homeDir, ".xgo", "bin")
+		for _, file := range archiveFiles {
+			baseName := filepath.Base(file)
+			toBaseName := baseName
+			if toBaseName == "xgo" && localName != "" {
+				toBaseName = localName
+			}
+			err := os.Rename(filepath.Join(tmpDir, baseName), filepath.Join(binDir, toBaseName))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	// package it as a tar.gz
