@@ -10,32 +10,32 @@ Thses abilities include [Mock](#mock), [Trap](#trap) and [Trace](#trace).
 See [Usage](#usage) and [Documentation](#xgo) for more details. 
 
 
-# Install
+# Installation
 ```sh
 # macOS and Linux
 curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | bash
 ```
 
 # Usage
-The following code shows how to setup mock on a given function:
+The following code demonstrates how to setup mock on a given function:
 - The function `add(a,b)` normally adds `a` and `b` up, resulting in `a+b`,
-- However, after `mock.AddFuncInterceptor`, the logic is changed to `a-b`
+- However, after `mock.AddFuncInterceptor`, the logic is changed to `a-b`.
 
 (check [test/testdata/mock_res/main.go](test/testdata/mock_res/main.go) for more details.)
 ```go
 package main
 
 import (
-	"context"
-	"fmt"
+    "context"
+    "fmt"
 
-	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/mock"
+    "github.com/xhd2015/xgo/runtime/core"
+    "github.com/xhd2015/xgo/runtime/mock"
 )
 
 func main() {
-	before := add(5, 2)
-	fmt.Printf("before mock: add(5,2)=%d\n", before)
+    before := add(5, 2)
+    fmt.Printf("before mock: add(5,2)=%d\n", before)
     mock.AddFuncInterceptor(add, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
         a := args.GetField("a").Value().(int)
         b := args.GetField("b").Value().(int)
@@ -43,12 +43,12 @@ func main() {
         results.GetFieldIndex(0).Set(res)
         return nil
     })
-	after := add(5, 2)
-	fmt.Printf("after mock: add(5,2)=%d\n", after)
+    after := add(5, 2)
+    fmt.Printf("after mock: add(5,2)=%d\n", after)
 }
 
 func add(a int, b int) int {
-	return a + b
+    return a + b
 }
 
 ```
@@ -83,11 +83,11 @@ The following example logs function execution trace by adding a Trap interceptor
 package main
 
 import (
-	"context"
-	"fmt"
+    "context"
+    "fmt"
 
-	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/trap"
+    "github.com/xhd2015/xgo/runtime/core"
+    "github.com/xhd2015/xgo/runtime/trap"
 )
 
 func init() {
@@ -108,16 +108,16 @@ func init() {
 }
 
 func main() {
-	A()
-	B()
+    A()
+    B()
 }
 
 func A() {
-	fmt.Printf("A\n")
+    fmt.Printf("A\n")
 }
 
 func B() {
-	fmt.Printf("B\n")
+    fmt.Printf("B\n")
 }
 ```
 
@@ -164,19 +164,19 @@ Needless to say, with Trace, debug becomes less usual:
 package main
 
 import (
-	"fmt"
+    "fmt"
 
-	"github.com/xhd2015/xgo/runtime/trace"
+    "github.com/xhd2015/xgo/runtime/trace"
 )
 
 func init() {
-	trace.Use()
+    trace.Use()
 }
 
 func main() {
-	A()
-	B()
-	C()
+    A()
+    B()
+    C()
 }
 func A() { fmt.Printf("A\n") }
 func B() { fmt.Printf("B\n");C(); }
@@ -217,7 +217,7 @@ XGO_TRACE_OUTPUT=stdout xgo run ./
 # NOTE: other fields are ommited for displaying key information.
 ```
 
-By default, Trace write traces to a temp directory under current working directory.This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
+By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
 - `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purepose,
 - `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
 - `XGO_TRACE_OUTPUT=off`: turn off trace.
@@ -225,7 +225,7 @@ By default, Trace write traces to a temp directory under current working directo
 # Evolution of `xgo`
 `xgo` is the successor of the original [go-mock](https://github.com/xhd2015/go-mock), which works by rewriting go code before compile.
 
-That strategy works well but causes much longer build time for larger projects due to source code explosion.
+The strategy employed by `go-mock` works well but causes much longer build time for larger projects due to source code explosion.
 
 However, `go-mock` is remarkable for it's discovery of Trap, Trace besides Mock, and additional abilities like trapping variable and disabling map randomness.
 

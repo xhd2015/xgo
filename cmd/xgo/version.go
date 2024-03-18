@@ -1,4 +1,4 @@
 package main
 
 const VERSION = "1.0.0"
-const REVISION = "c4f1de96442999b894284517aa52794ec9dd8ae1+1"
+const REVISION = "92dafc88b745666b3c9f1e91bd40000630694025+1"
