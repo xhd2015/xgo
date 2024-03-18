@@ -19,6 +19,8 @@ type options struct {
 	noPipeStderr bool
 
 	init bool
+
+	projectDir string
 }
 
 func runXgo(args []string, opts *options) (string, error) {
@@ -51,6 +53,9 @@ func runXgo(args []string, opts *options) (string, error) {
 	// accerlate
 	if opts == nil || !opts.init {
 		xgoArgs = append(xgoArgs, "--no-setup")
+	}
+	if opts != nil && opts.projectDir != "" {
+		xgoArgs = append(xgoArgs, "--project-dir", opts.projectDir)
 	}
 	xgoArgs = append(xgoArgs, args...)
 	cmd := exec.Command(xgoBinary, xgoArgs...)
@@ -139,7 +144,8 @@ func buildAndRunOutput(program string) (output string, err error) {
 }
 
 type buildAndOutputOptions struct {
-	build func(args []string) error
+	build      func(args []string) error
+	projectDir string
 }
 
 func buildAndRunOutputArgs(args []string, opts buildAndOutputOptions) (output string, err error) {
@@ -153,7 +159,9 @@ func buildAndRunOutputArgs(args []string, opts buildAndOutputOptions) (output st
 	if opts.build != nil {
 		err = opts.build(buildArgs)
 	} else {
-		_, err = runXgo(buildArgs, nil)
+		_, err = runXgo(buildArgs, &options{
+			projectDir: opts.projectDir,
+		})
 	}
 	if err != nil {
 		return "", err

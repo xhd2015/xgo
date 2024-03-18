@@ -21,9 +21,10 @@ type options struct {
 
 	logCompile bool
 
-	noBuildOutput bool
-	noInstrument  bool
-	noSetup       bool
+	noBuildOutput   bool
+	noInstrument    bool
+	resetInstrument bool
+	noSetup         bool
 
 	// TODO: make these options available only at develop
 	// deprecated
@@ -49,6 +50,7 @@ func parseOptions(args []string) (*options, error) {
 	var vscode string
 
 	var noInstrument bool
+	var resetInstrument bool
 	var noSetup bool
 
 	var xgoSrc string
@@ -159,6 +161,10 @@ func parseOptions(args []string) (*options, error) {
 			noInstrument = true
 			continue
 		}
+		if arg == "--reset-instrument" {
+			resetInstrument = true
+			continue
+		}
 		if arg == "--no-setup" {
 			noSetup = true
 			continue
@@ -195,9 +201,10 @@ func parseOptions(args []string) (*options, error) {
 
 		logCompile: logCompile,
 
-		noBuildOutput: noBuildOutput,
-		noInstrument:  noInstrument,
-		noSetup:       noSetup,
+		noBuildOutput:   noBuildOutput,
+		noInstrument:    noInstrument,
+		resetInstrument: resetInstrument,
+		noSetup:         noSetup,
 
 		syncXgoOnly:   syncXgoOnly,
 		setupDev:      setupDev,

@@ -518,14 +518,14 @@ func indexSeq(s string, sequence []string) int {
 	return strutil.IndexSequence(s, sequence)
 }
 
-func syncGoroot(goroot string, dstDir string, flagA bool) error {
+func syncGoroot(goroot string, dstDir string, resetInstrument bool, flagA bool) error {
 	// check if src goroot has src/runtime
 	srcRuntimeDir := filepath.Join(goroot, "src", "runtime")
 	err := assertDir(srcRuntimeDir)
 	if err != nil {
 		return err
 	}
-	if !isDevelopment && flagA {
+	if resetInstrument || (!isDevelopment && flagA) {
 		// remove dst
 		err := os.RemoveAll(dstDir)
 		if err != nil {

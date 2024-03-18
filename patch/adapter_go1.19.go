@@ -26,12 +26,15 @@ func getFuncResultsType(funcType *types.Type) *types.Type {
 func canInsertTrap(fn *ir.Func) bool {
 	curPkgPath := xgo_ctxt.GetPkgPath()
 	fnPkgPath := fn.Sym().Pkg.Path
-	if curPkgPath == fnPkgPath {
-		return true
+	if curPkgPath != fnPkgPath {
+		return false
+	}
+	if isSkippableSpecialPkg() {
+		return false
 	}
 	// fnName := fn.Sym().Name
 	// if strings.Contains(fnName, "[") && strings.Contains(fnName, "]") {
 	// 	return false
 	// }
-	return false
+	return true
 }

@@ -80,6 +80,7 @@ func handleBuild(cmd string, args []string) error {
 	optXgoSrc := opts.xgoSrc
 	noBuildOutput := opts.noBuildOutput
 	noInstrument := opts.noInstrument
+	resetInstrument := opts.resetInstrument
 	noSetup := opts.noSetup
 	syncXgoOnly := opts.syncXgoOnly
 	setupDev := opts.setupDev
@@ -164,7 +165,7 @@ func handleBuild(cmd string, args []string) error {
 		if err != nil {
 			return err
 		}
-		err = syncGoroot(goroot, instrumentGoroot, flagA)
+		err = syncGoroot(goroot, instrumentGoroot, resetInstrument, flagA)
 		if err != nil {
 			return err
 		}

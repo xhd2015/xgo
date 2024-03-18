@@ -5,13 +5,16 @@ package test
 
 import "testing"
 
+// this test is specifically for go1.19, it has problems with generic
+// function trap when instantiated from other packages
+
 // go test -run TestAtomicGenericPtr -v ./test
 func TestAtomicGenericPtr(t *testing.T) {
+	t.Parallel()
 	goVersion, err := getGoVersion()
 	if err != nil {
 		t.Fatal(getErrMsg(err))
 	}
-	t.Parallel()
 	output, err := buildAndRunOutput("./testdata/atomic_generic")
 	if err != nil {
 		t.Fatal(err)
