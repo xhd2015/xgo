@@ -4,7 +4,7 @@ package main
 const help = `
 Xgo is a tool for instrumenting Go source code.
 
-Xgo works as a drop-in replacement for go these commands: 'go build','go run' and 'go test'. 
+Xgo works as a drop-in replacement for these go commands: 'go build','go run' and 'go test'. 
 So flags accepted by these commands are also accepted by xgo.
 
 Usage:
