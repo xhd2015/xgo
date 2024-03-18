@@ -11,10 +11,29 @@ import (
 
 const __XGO_SKIP_TRAP = true
 
+func init() {
+	func() {
+		defer func() {
+			if e := recover(); e != nil {
+				if s, ok := e.(string); ok && s == "failed to link __xgo_link_on_init_finished" {
+					// silent as this is not always needed to run eagerly
+					return
+				}
+				panic(e)
+			}
+		}()
+		__xgo_link_on_init_finished(ensureMapping)
+	}()
+}
+
 // rewrite at compile time by compiler, the body will be replaced with
 // a call to runtime.__xgo_for_each_func
 func __xgo_link_for_each_func(f func(pkgPath string, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)) {
 	panic("failed to link __xgo_link_for_each_func")
+}
+
+func __xgo_link_on_init_finished(f func()) {
+	panic("failed to link __xgo_link_on_init_finished")
 }
 
 var funcInfos []*core.FuncInfo

@@ -14,28 +14,66 @@ const __XGO_SKIP_TRAP = true
 
 var ErrAbort error = errors.New("abort trap interceptor")
 
-// type FuncArgs struct {
-// 	Recv    interface{}
-// 	Args    []interface{}
-// 	Results []interface{}
-// }
+// link by compiler
+func __xgo_link_getcurg() unsafe.Pointer {
+	panic("xgo failed to link __xgo_link_getcurg")
+}
+
+func __xgo_link_init_finished() bool {
+	panic("xgo failed to link __xgo_link_init_finished")
+}
+
+func __xgo_link_on_goexit(fn func()) {
+	panic("failed to link __xgo_link_on_goexit")
+}
+
+func init() {
+	func() {
+		defer func() {
+			if e := recover(); e != nil {
+				if s, ok := e.(string); ok && s == "failed to link __xgo_link_on_goexit" {
+					// silent
+					return
+				}
+				panic(e)
+			}
+		}()
+		__xgo_link_on_goexit(clearLocalInterceptors)
+	}()
+}
 
 type Interceptor struct {
-	Pre  func(ctx context.Context, f *core.FuncInfo, arg core.Object, result core.Object) (data interface{}, err error)
-	Post func(ctx context.Context, f *core.FuncInfo, arg core.Object, result core.Object, data interface{}) error
+	Pre  func(ctx context.Context, f *core.FuncInfo, args core.Object, result core.Object) (data interface{}, err error)
+	Post func(ctx context.Context, f *core.FuncInfo, args core.Object, result core.Object, data interface{}) error
 }
 
 var interceptors []*Interceptor
 var localInterceptors sync.Map // goroutine ptr -> *interceptorList
 
-func AddInterceptor(interceptor *Interceptor) {
+func AddInterceptor(interceptor *Interceptor) func() {
 	ensureInit()
+	if __xgo_link_init_finished() {
+		return addLocalInterceptor(interceptor)
+	}
 	interceptors = append(interceptors, interceptor)
+	return func() {
+		panic("global interceptor cannot be cancelled")
+	}
+}
+
+func WithInterceptor(interceptor *Interceptor, f func()) {
+	initFinished := __xgo_link_init_finished()
+	dispose := addLocalInterceptor(interceptor)
+	if initFinished {
+		defer dispose()
+	}
+	f()
 }
 
 func GetInterceptors() []*Interceptor {
 	return interceptors
 }
+
 func GetLocalInterceptors() []*Interceptor {
 	key := __xgo_link_getcurg()
 	val, ok := localInterceptors.Load(key)
@@ -45,10 +83,8 @@ func GetLocalInterceptors() []*Interceptor {
 	return val.(*interceptorList).interceptors
 }
 
-func WithLocalInterceptor(interceptor *Interceptor, f func()) {
-	dispose := AddLocalInterceptor(interceptor)
-	defer dispose()
-	f()
+func ClearLocalInterceptors() {
+	clearLocalInterceptors()
 }
 
 func GetAllInterceptors() []*Interceptor {
@@ -66,7 +102,7 @@ func GetAllInterceptors() []*Interceptor {
 
 // returns a function to dispose the key
 // NOTE: if not called correctly,there might be memory leak
-func AddLocalInterceptor(interceptor *Interceptor) func() {
+func addLocalInterceptor(interceptor *Interceptor) func() {
 	ensureInit()
 	key := __xgo_link_getcurg()
 	list := &interceptorList{}
@@ -109,7 +145,7 @@ type interceptorList struct {
 	interceptors []*Interceptor
 }
 
-// link by compiler
-func __xgo_link_getcurg() unsafe.Pointer {
-	panic(errors.New("xgo failed to link __xgo_link_getcurg"))
+func clearLocalInterceptors() {
+	key := __xgo_link_getcurg()
+	localInterceptors.Delete(key)
 }

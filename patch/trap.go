@@ -44,9 +44,12 @@ const xgoRuntimeTrapPkg = xgoRuntimePkgPrefix + "trap"
 const setTrap = "__xgo_set_trap"
 
 var linkMap = map[string]string{
-	"__xgo_link_for_each_func": "__xgo_for_each_func",
-	"__xgo_link_getcurg":       "__xgo_getcurg",
-	"__xgo_link_set_trap":      setTrap,
+	"__xgo_link_for_each_func":    "__xgo_for_each_func",
+	"__xgo_link_getcurg":          "__xgo_getcurg",
+	"__xgo_link_set_trap":         setTrap,
+	"__xgo_link_init_finished":    "__xgo_init_finished",
+	"__xgo_link_on_init_finished": "__xgo_on_init_finished",
+	"__xgo_link_on_goexit":        "__xgo_on_goexit",
 }
 
 var inited bool

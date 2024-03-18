@@ -97,6 +97,24 @@ func __xgo_for_each_func(f func(pkgPath string, recvTypeName string, recvPtr boo
 	}
 }
 
+var __xgo_is_init_finished bool
+
+func __xgo_init_finished() bool {
+	return __xgo_is_init_finished
+}
+
+var __xgo_on_init_finished_callbacks []func()
+
+func __xgo_on_init_finished(fn func()) {
+	__xgo_on_init_finished_callbacks = append(__xgo_on_init_finished_callbacks, fn)
+}
+
+var __xgo_on_goexits []func()
+
+func __xgo_on_goexit(fn func()) {
+	__xgo_on_goexits = append(__xgo_on_goexits, fn)
+}
+
 // func GetFuncs_Requires_Xgo() []interface{} {
 // 	return funcs
 // }

@@ -29,7 +29,7 @@ func main() {
 func A() {
 	// non instrument mode cannot get curg
 	if os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false" {
-		cancel := trap.AddLocalInterceptor(&trap.Interceptor{
+		cancel := trap.AddInterceptor(&trap.Interceptor{
 			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()
 				fmt.Printf("local trap from A: %s\n", f.Name)
@@ -43,7 +43,7 @@ func A() {
 
 func B() {
 	if os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false" {
-		cancel := trap.AddLocalInterceptor(&trap.Interceptor{
+		cancel := trap.AddInterceptor(&trap.Interceptor{
 			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()
 				fmt.Printf("local trap from B: %s\n", f.Name)

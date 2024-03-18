@@ -27,16 +27,20 @@ func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, flagA
 		return fmt.Errorf("requries xgoSrc")
 	}
 
-	updated, err := addRuntimeTrap(goroot, goVersion, xgoSrc, flagA)
+	runtimeTrapUpdated, err := addRuntimeTrap(goroot, goVersion, xgoSrc, flagA)
 	if err != nil {
 		return err
 	}
 
-	if updated {
+	if runtimeTrapUpdated {
 		err = patchRuntimeDef(goroot, goVersion)
 		if err != nil {
 			return err
 		}
+	}
+	err = patchRuntime(goroot)
+	if err != nil {
+		return err
 	}
 
 	// copy compiler internal dependencies
@@ -50,6 +54,32 @@ func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, flagA
 		return err
 	}
 
+	return nil
+}
+
+func patchRuntime(goroot string) error {
+	anchors := []string{
+		"func main() {",
+		"doInit(", "runtime_inittask", ")", // first doInit for runtime
+		"doInit(", // second init for main
+		"close(main_init_done)",
+		"\n",
+	}
+	procGo := filepath.Join(goroot, "src", "runtime", "proc.go")
+	err := editFile(procGo, func(content string) (string, error) {
+		content = addContentAfter(content, "/*<begin set_init_finished_mark>*/", "/*<end set_init_finished_mark>*/", anchors, patch.RuntimeProcPatch)
+
+		// goexit1() is called for every exited goroutine
+		content = addContentAfter(content,
+			"/*<begin add_go_exit_callback>*/", "/*<end add_go_exit_callback>*/",
+			[]string{"func goexit1() {", "\n"},
+			patch.RuntimeProcGoroutineExitPatch,
+		)
+		return content, nil
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

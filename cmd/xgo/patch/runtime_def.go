@@ -1,5 +1,17 @@
 package patch
 
+const RuntimeProcPatch = `__xgo_is_init_finished = true
+for _, fn := range __xgo_on_init_finished_callbacks {
+	fn()
+}
+__xgo_on_init_finished_callbacks = nil
+`
+
+// added after goroutine exit1
+const RuntimeProcGoroutineExitPatch = `for _, fn := range __xgo_on_goexits {
+	fn()
+}`
+
 const RuntimeFuncNamePatch = ""
 
 // Not used because now we pass pkg name, func name as standalone strings

@@ -140,9 +140,21 @@ xgo run ./
 #   abort B
 ```
 
-Trap has two APIs to add function interceptor:
-- `AddInterceptor()`:  effective globally for all goroutines,
-- `AddLocalInterceptor()`: effective only for current goroutine.
+`AddInterceptor()` add given interceptor to either global or local, depending on whether it is called from `init` or after `init`:
+- Before `init`: effective globally for all goroutines,
+- After `init`: effective only for current goroutine, and will be cleared after current goroutine exits.
+
+When `AddInterceptor()` is called after `init`, it will return a dispose function to clear the interceptor earlier before current goroutine exits.
+
+Example:
+
+```go
+func main(){
+    clear := trap.AddInterceptor(...)
+    defer clear()
+    ...
+}
+```
 
 # Mock
 Mock simplifies the process of setting up Trap interceptors.
