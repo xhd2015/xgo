@@ -5,11 +5,11 @@ Enable function trap for `go`, and provide tools like trace, mock to help go dev
 
 # Install
 ```sh
-go install github.com/xhd2015/xgo/cmd/xgo
+# macOS and Linux
+curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | bash
 ```
 
 # Usage
-NOTE: current `xgo` requires at least `go1.17` to compile.
 ```sh
 xgo run ./test/testdata/hello_world
 # output:
@@ -17,3 +17,5 @@ xgo run ./test/testdata/hello_world
 ```
 
 `xgo` works as a drop-in replacement for `go run`,`go build`, and `go test`.
+
+NOTE: current `xgo` requires at least `go1.17` to compile.
