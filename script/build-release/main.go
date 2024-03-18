@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xhd2015/xgo/script/build-release/revision"
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
+// TODO: apply build tag for development and release mode
 func main() {
 	err := buildRelease("xgo-release", []*osArch{
 		{"darwin", "amd64"},
@@ -39,8 +41,35 @@ func buildRelease(releaseDir string, osArches []*osArch) error {
 	if err != nil {
 		return err
 	}
+
+	tmpDir, err := os.MkdirTemp("", "xgo")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tmpSrcDir := filepath.Join(tmpDir, "src")
+
+	// use git worktree to prepare the directory for building
+	err = cmd.Run("git", "worktree", "add", tmpSrcDir)
+	if err != nil {
+		return err
+	}
+	defer cmd.Run("git", "worktree", "remove", "--force", tmpSrcDir)
+
+	// update the version
+	rev, err := revision.GetCommitHash("", "HEAD")
+	if err != nil {
+		return err
+	}
+
+	err = updateRevisions(tmpSrcDir, false, rev)
+	if err != nil {
+		return err
+	}
+
 	for _, osArch := range osArches {
-		err := buildBinaryRelease(dir, version, osArch.goos, osArch.goarch)
+		err := buildBinaryRelease(dir, tmpSrcDir, version, osArch.goos, osArch.goarch)
 		if err != nil {
 			return fmt.Errorf("GOOS=%s GOARCH=%s:%w", osArch.goos, osArch.goarch, err)
 		}
@@ -50,6 +79,39 @@ func buildRelease(releaseDir string, osArches []*osArch) error {
 		return fmt.Errorf("sum sha256: %w", err)
 	}
 	return nil
+}
+
+func updateRevisions(targetDir string, unlink bool, rev string) error {
+	// unlink files because all files are symlink
+	files := revision.GetVersionFiles(targetDir)
+	if unlink {
+		for _, file := range files {
+			err := unlinkFile(file)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, file := range files {
+		err := revision.PatchVersionFile(file, rev)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func unlinkFile(file string) error {
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll(file)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(file, content, 0755)
 }
 
 func generateSums(dir string, sumFile string) error {
@@ -91,7 +153,7 @@ func generateSums(dir string, sumFile string) error {
 // c2876990b545be8396b7d13f0f9c3e23b38236de8f0c9e79afe04bcf1d03742e  xgo1.0.0-darwin-arm64.tar.gz
 // 6ae476cb4c3ab2c81a94d1661070e34833e4a8bda3d95211570391fb5e6a3cc0  xgo1.0.0-darwin-amd64.tar.gz
 
-func buildBinaryRelease(dir string, version string, goos string, goarch string) error {
+func buildBinaryRelease(dir string, srcDir string, version string, goos string, goarch string) error {
 	if version == "" {
 		return fmt.Errorf("requires version")
 	}
@@ -116,6 +178,7 @@ func buildBinaryRelease(dir string, version string, goos string, goarch string) 
 
 	// build xgo
 	err = cmd.Env([]string{"GOOS=" + goos, "GOARCH=" + goarch}).
+		Dir(srcDir).
 		Run("go", "build", "-o", bin, "./cmd/xgo")
 	if err != nil {
 		return err

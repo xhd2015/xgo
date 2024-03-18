@@ -30,6 +30,15 @@ func Dir(dir string) *CmdBuilder {
 	}
 }
 
+func (c *CmdBuilder) Env(env []string) *CmdBuilder {
+	c.env = env
+	return c
+}
+func (c *CmdBuilder) Dir(dir string) *CmdBuilder {
+	c.dir = dir
+	return c
+}
+
 func (c *CmdBuilder) Output(cmd string, args ...string) (string, error) {
 	return cmdExecEnv(cmd, args, c.env, c.dir, false)
 }
