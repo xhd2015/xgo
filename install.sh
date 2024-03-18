@@ -65,7 +65,7 @@ fi
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 
-curl --fail --location --progress-bar --output "${tmp_dir}/${file}" "$uri" || error "failed to download bun from \"$uri\""
+curl --fail --location --progress-bar --output "${tmp_dir}/${file}" "$uri" || error "failed to download xgo from \"$uri\""
 
 (
     cd "$bin_dir"

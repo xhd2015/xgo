@@ -15,8 +15,10 @@ func main() {
 	err := buildRelease("xgo-release", []*osArch{
 		{"darwin", "amd64"},
 		{"darwin", "arm64"},
+		// {"darwin", "arm"}, // not supported, both arm and arm32
 		{"linux", "amd64"},
 		{"linux", "arm64"},
+		{"linux", "arm"}, // NOTE: not arm32
 		{"windows", "amd64"},
 		{"windows", "arm64"},
 	})
