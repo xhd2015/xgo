@@ -404,8 +404,12 @@ func findBuiltExecTool() (string, error) {
 	return "", fmt.Errorf("exec_tool not found in %s and ~/.xgo/bin", dirName)
 }
 func buildCompiler(goroot string, output string) error {
-	// TODO: remove gcflags
-	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), "build", "-gcflags=all=-N -l", "-o", output, "./")
+	args := []string{"build"}
+	if isDevelopment {
+		args = append(args, "-gcflags=all=-N -l")
+	}
+	args = append(args, "-o", output, "./")
+	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	env, err := patchEnvWithGoroot(os.Environ(), goroot)
