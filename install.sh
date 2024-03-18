@@ -42,11 +42,13 @@ locationURL=${location/#"location: "}
 locationURL=${locationURL/%$'\n'}
 locationURL=${locationURL/%$'\r'}
 
-if [[ "$locationURL" != *'/xgo-v'* ]];then
-   error "expect tag format: xgo-v1.x.x, actual: $locationURL"
+versionName=""
+if [[ "$locationURL" = *'/xgo-v'* ]];then
+    versionName=${locationURL/#*'/xgo-v'}
+elif [[ "$locationURL" = *'/tag/v'* ]];then
+    versionName=${locationURL/#*'/tag/v'}
 fi
 
-versionName=${locationURL/#*'/xgo-v'}
 if [[ -z $versionName ]];then
    error "expect tag format: xgo-v1.x.x, actual: $locationURL"
 fi
@@ -62,7 +64,6 @@ fi
 
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
-
 
 curl --fail --location --progress-bar --output "${tmp_dir}/${file}" "$uri" || error "failed to download bun from \"$uri\""
 
