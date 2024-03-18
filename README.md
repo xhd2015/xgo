@@ -1,5 +1,5 @@
 # xgo
-Enable function Trap for `go`, and provide tools like Trace and Mock to help go developers write unit test and debug both easier and faster.
+Enable function Trap for `go`, and provide tools like Mock and Trace to help go developers write unit test and debug both easier and faster.
 
 `xgo` works as a drop-in replacement for `go run`,`go build`, and `go test`.
 
