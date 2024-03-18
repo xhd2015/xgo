@@ -17,6 +17,7 @@ The commands are:
     exec        execute a command verbatim
     version     print xgo version
     revision    print xgo revision
+	upgrade     upgrade to latest version of xgo
 
 Examples:
     xgo buil -o main ./                          build current module
