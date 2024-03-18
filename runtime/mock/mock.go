@@ -10,6 +10,7 @@ import (
 )
 
 var ErrCallOld = errors.New("mock: call old")
+var errContinue = ErrCallOld
 
 type Interceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error
 
@@ -41,11 +42,13 @@ func runMockInterceptors(ctx context.Context, f *core.FuncInfo, arg, result core
 	for _, interceptor := range interceptors {
 		// TODO: add panic check
 		err := interceptor(ctx, f, arg, result)
-		if err == ErrCallOld {
-			// it means abort
-			return nil, trap.ErrAbort
-			// break
+		if err == errContinue {
+			// call old: let the control flow
+			// goes to next interceptor until old function
+			continue
 		}
+		// interrupt mocks and following trap interceptors
+		return nil, trap.ErrAbort
 	}
 	return
 }
@@ -54,15 +57,10 @@ func AddFuncInterceptor(fn interface{}, interceptor Interceptor) {
 	ensureTrap()
 	interceptors = append(interceptors, func(ctx context.Context, funcInfo *core.FuncInfo, args, results core.Object) error {
 		if !funcInfo.IsFunc(fn) {
-			return nil
+			return errContinue
 		}
 		// when match func, default to use mock
-		err := interceptor(ctx, funcInfo, args, results)
-		if err == ErrCallOld {
-			return nil
-		}
-		// use mock result
-		return trap.ErrAbort
+		return interceptor(ctx, funcInfo, args, results)
 	})
 	// AddInterceptor(func(ctx context.Context, funcInfo *core.FuncInfo, args core.Object, results core.Object) error {
 	// 	if !funcInfo.IsFunc(fn) {

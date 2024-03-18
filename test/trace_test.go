@@ -10,7 +10,7 @@ func TestTrace(t *testing.T) {
 	t.Parallel()
 	output, err := buildWithRuntimeAndOutput("./testdata/trace", buildRuntimeOpts{
 		runEnv: []string{
-			"XGO_TRACE_DIR=stdout",
+			"XGO_TRACE_OUTPUT=stdout",
 		},
 	})
 	if err != nil {

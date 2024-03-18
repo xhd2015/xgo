@@ -114,18 +114,18 @@ func emitTrace(stack *Stack) error {
 	ghex := fmt.Sprintf("g_%x", __xgo_link_getcurg())
 	traceID := "t_" + strconv.FormatInt(traceIDNum, 10)
 
-	xgoTraceDir := os.Getenv("XGO_TRACE_DIR")
-	if xgoTraceDir == "" {
-		xgoTraceDir = time.Now().Format("trace_20060102_150405")
+	xgoTraceOutput := os.Getenv("XGO_TRACE_OUTPUT")
+	if xgoTraceOutput == "" {
+		xgoTraceOutput = time.Now().Format("trace_20060102_150405")
 	}
-	if xgoTraceDir == "stdout" {
+	if xgoTraceOutput == "stdout" {
 		// TODO: may add callback for this
 		fmt.Printf("%s/%s: ", ghex, traceID)
 		fmt.Println(string(trace))
 		return nil
 	}
 
-	dir := filepath.Join(xgoTraceDir, ghex)
+	dir := filepath.Join(xgoTraceOutput, ghex)
 	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		return err
