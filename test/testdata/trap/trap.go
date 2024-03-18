@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	if os.Getenv("XGO_TEST_NO_INSTRUMENT") != "true" {
+	if os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false" {
 		trap.AddInterceptor(&trap.Interceptor{
 			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()

@@ -12,7 +12,7 @@ import (
 func main() {
 	before := add(5, 2)
 	fmt.Printf("before mock: add(5,2)=%d\n", before)
-	if os.Getenv("XGO_TEST_NO_INSTRUMENT") != "true" {
+	if os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false" {
 		mock.AddFuncInterceptor(add, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
 			a := args.GetField("a").Value().(int)
 			b := args.GetField("b").Value().(int)

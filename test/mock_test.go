@@ -38,7 +38,7 @@ func testNoInstrumentAndInstrumentOutput(dir string, expectOrig string, expectIn
 	origOutput, err := buildWithRuntimeAndOutput(dir, buildRuntimeOpts{
 		xgoBuildArgs: []string{"--no-instrument"},
 		runEnv: []string{
-			"XGO_TEST_NO_INSTRUMENT=true",
+			"XGO_TEST_HAS_INSTRUMENT=false",
 		},
 	})
 	if err != nil {
