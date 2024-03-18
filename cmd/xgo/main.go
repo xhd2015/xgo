@@ -140,7 +140,6 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	xgoDir := filepath.Join(homeDir, ".xgo")
-	srcDir := filepath.Join(xgoDir, "src")
 	binDir := filepath.Join(xgoDir, "bin")
 	logDir := filepath.Join(xgoDir, "log")
 	instrumentDir := filepath.Join(xgoDir, "go-instrument", mappedGorootName)
@@ -152,13 +151,11 @@ func handleBuild(cmd string, args []string) error {
 	instrumentGoroot := filepath.Join(instrumentDir, goVersionName)
 	buildCacheDir := filepath.Join(instrumentDir, "build-cache")
 
-	realXgoSrc := srcDir
-	if optXgoSrc != "" {
+	var realXgoSrc string
+	if isDevelopment {
 		realXgoSrc = optXgoSrc
-	} else {
-		err = assertDir(srcDir)
-		if err != nil {
-			return fmt.Errorf("check ~/.xgo/src: %w", err)
+		if realXgoSrc == "" {
+			return fmt.Errorf("requires --xgo-src")
 		}
 	}
 
@@ -167,18 +164,18 @@ func handleBuild(cmd string, args []string) error {
 		if err != nil {
 			return err
 		}
-		err = syncGoroot(goroot, instrumentGoroot)
+		err = syncGoroot(goroot, instrumentGoroot, flagA)
 		if err != nil {
 			return err
 		}
 		// patch go runtime and compiler
-		err = patchGoSrc(instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler)
+		err = patchGoSrc(instrumentGoroot, realXgoSrc, goVersion, flagA, syncWithLink || setupDev || buildCompiler)
 		if err != nil {
 			return err
 		}
 	}
 
-	if setupDev || buildCompiler {
+	if isDevelopment && (setupDev || buildCompiler) {
 		err := setupDevDir(instrumentGoroot, setupDev)
 		if err != nil {
 			return err
@@ -299,16 +296,6 @@ func handleBuild(cmd string, args []string) error {
 	return nil
 }
 
-func copyToStdout(srcFile string) error {
-	file, err := os.Open(srcFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	_, err = io.Copy(os.Stdout, file)
-	return err
-}
-
 func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error) {
 	// check if we are using expected go version
 	goVersionStr, err := goinfo.GetGoVersionOutput(filepath.Join(goroot, "bin", "go"))
@@ -345,6 +332,7 @@ func ensureDirs(binDir string, logDir string, instrumentDir string) error {
 }
 
 func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool, noSetup bool) (compilerChanged bool, toolExecFlag string, err error) {
+	actualExecToolBin := execToolBin
 	if !noSetup {
 		// build the instrumented compiler
 		err = buildCompiler(goroot, compilerBin)
@@ -356,17 +344,25 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 			return false, "", err
 		}
 
-		// build exec tool
-		buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
-		buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
-		buildExecToolCmd.Stdout = os.Stdout
-		buildExecToolCmd.Stderr = os.Stderr
-		err = buildExecToolCmd.Run()
-		if err != nil {
-			return false, "", err
+		if isDevelopment {
+			// build exec tool
+			buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
+			buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
+			buildExecToolCmd.Stdout = os.Stdout
+			buildExecToolCmd.Stderr = os.Stderr
+			err = buildExecToolCmd.Run()
+			if err != nil {
+				return false, "", err
+			}
+		} else {
+			actualExecToolBin, err = findBuiltExecTool()
+			if err != nil {
+				return false, "", err
+			}
 		}
+
 	}
-	execToolCmd := []string{execToolBin, "--enable"}
+	execToolCmd := []string{actualExecToolBin, "--enable"}
 	if logCompile {
 		execToolCmd = append(execToolCmd, "--log-compile")
 	}
@@ -380,6 +376,33 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 	return compilerChanged, toolExecFlag, nil
 }
 
+// find exec_tool, first try the same dir with xgo,
+// but if that is not found, we can fallback to ~/.xgo/bin/exec_tool
+// because exec_tool changes rarely, so it is safe to use
+// an older version.
+// we may add version to check if exec_tool is compitable
+func findBuiltExecTool() (string, error) {
+	dirName := filepath.Dir(os.Args[0])
+	absDirName, err := filepath.Abs(dirName)
+	if err != nil {
+		return "", err
+	}
+	execToolBin := filepath.Join(absDirName, "exec_tool")
+	_, statErr := os.Stat(execToolBin)
+	if statErr == nil {
+		return execToolBin, nil
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("exec_tool not found in %s", dirName)
+	}
+	execToolBin = filepath.Join(homeDir, ".xgo", "bin", "exec_tool")
+	_, statErr = os.Stat(execToolBin)
+	if statErr == nil {
+		return execToolBin, nil
+	}
+	return "", fmt.Errorf("exec_tool not found in %s and ~/.xgo/bin", dirName)
+}
 func buildCompiler(goroot string, output string) error {
 	// TODO: remove gcflags
 	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), "build", "-gcflags=all=-N -l", "-o", output, "./")

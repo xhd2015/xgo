@@ -51,19 +51,20 @@ func buildRelease(releaseDir string, osArches []*osArch) error {
 	tmpSrcDir := filepath.Join(tmpDir, "src")
 
 	// use git worktree to prepare the directory for building
-	err = cmd.Run("git", "worktree", "add", tmpSrcDir)
+	// add a worktree detached at HEAD
+	err = cmd.Run("git", "worktree", "add", "--detach", tmpSrcDir, "HEAD")
 	if err != nil {
 		return err
 	}
+	// --force: delete files even there is untracked content
 	defer cmd.Run("git", "worktree", "remove", "--force", tmpSrcDir)
-
 	// update the version
 	rev, err := revision.GetCommitHash("", "HEAD")
 	if err != nil {
 		return err
 	}
 
-	err = updateRevisions(tmpSrcDir, false, rev)
+	err = fixupSrcDir(tmpSrcDir, rev)
 	if err != nil {
 		return err
 	}
@@ -77,27 +78,6 @@ func buildRelease(releaseDir string, osArches []*osArch) error {
 	err = generateSums(dir, filepath.Join(dir, "SHASUMS256.txt"))
 	if err != nil {
 		return fmt.Errorf("sum sha256: %w", err)
-	}
-	return nil
-}
-
-func updateRevisions(targetDir string, unlink bool, rev string) error {
-	// unlink files because all files are symlink
-	files := revision.GetVersionFiles(targetDir)
-	if unlink {
-		for _, file := range files {
-			err := unlinkFile(file)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	for _, file := range files {
-		err := revision.PatchVersionFile(file, rev)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -173,19 +153,27 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 	}
 	defer os.RemoveAll(tmpDir)
 
-	bin := filepath.Join(tmpDir, "xgo")
 	archive := filepath.Join(tmpDir, "archive")
 
-	// build xgo
-	err = cmd.Env([]string{"GOOS=" + goos, "GOARCH=" + goarch}).
-		Dir(srcDir).
-		Run("go", "build", "-o", bin, "./cmd/xgo")
-	if err != nil {
-		return err
+	bins := [][2]string{
+		{"xgo", "./cmd/xgo"},
+		{"exec_tool", "./cmd/exec_tool"},
+	}
+	var archiveFiles []string
+	// build xgo and exec_tool
+	for _, bin := range bins {
+		binName, binSrc := bin[0], bin[1]
+		archiveFiles = append(archiveFiles, "./"+binName)
+		err = cmd.Env([]string{"GOOS=" + goos, "GOARCH=" + goarch}).
+			Dir(srcDir).
+			Run("go", "build", "-o", filepath.Join(tmpDir, binName), binSrc)
+		if err != nil {
+			return err
+		}
 	}
 
 	// package it as a tar.gz
-	err = cmd.Dir(tmpDir).Run("tar", "-czf", archive, "./xgo")
+	err = cmd.Dir(tmpDir).Run("tar", append([]string{"-czf", archive}, archiveFiles...)...)
 	if err != nil {
 		return err
 	}

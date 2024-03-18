@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,4 +100,14 @@ func setupDevDir(goroot string, printDir bool) error {
 		return fmt.Errorf("updating %s: %w", settingsFile, err)
 	}
 	return nil
+}
+
+func copyToStdout(srcFile string) error {
+	file, err := os.Open(srcFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	_, err = io.Copy(os.Stdout, file)
+	return err
 }

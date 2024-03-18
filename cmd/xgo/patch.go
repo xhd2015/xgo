@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -18,26 +19,28 @@ import (
 
 // assume go 1.20
 // the patch should be idempotent
-func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool) error {
+func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, flagA bool, syncWithLink bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
-	if xgoSrc == "" {
+	if isDevelopment && xgoSrc == "" {
 		return fmt.Errorf("requries xgoSrc")
 	}
 
-	err := addRuntimeTrap(goroot, goVersion, xgoSrc)
+	updated, err := addRuntimeTrap(goroot, goVersion, xgoSrc, flagA)
 	if err != nil {
 		return err
 	}
 
-	err = patchRuntimeDef(goroot, goVersion)
-	if err != nil {
-		return err
+	if updated {
+		err = patchRuntimeDef(goroot, goVersion)
+		if err != nil {
+			return err
+		}
 	}
 
 	// copy compiler internal dependencies
-	err = importCompileInternalPatch(goroot, xgoSrc, syncWithLink)
+	err = importCompileInternalPatch(goroot, xgoSrc, flagA, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -50,21 +53,65 @@ func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncW
 	return nil
 }
 
-func importCompileInternalPatch(goroot string, xgoSrc string, syncWithLink bool) error {
+func importCompileInternalPatch(goroot string, xgoSrc string, flagA bool, syncWithLink bool) error {
 	dstDir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
-	// copy compiler internal dependencies
-	err := filecopy.CopyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir, syncWithLink)
-	if err != nil {
-		return err
+	if isDevelopment {
+		// copy compiler internal dependencies
+		err := filecopy.CopyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir, syncWithLink)
+		if err != nil {
+			return err
+		}
+
+		// remove patch/go.mod
+		err = os.RemoveAll(filepath.Join(dstDir, "go.mod"))
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		return nil
 	}
-	// remove patch/go.mod
-	err = os.RemoveAll(filepath.Join(dstDir, "go.mod"))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+
+	if flagA {
+		// -a causes repatch
+		err := os.RemoveAll(dstDir)
+		if err != nil {
+			return err
+		}
+	} else {
+		// check if already copied
+		_, statErr := os.Stat(dstDir)
+		if statErr == nil {
+			// skip copy if already exists
 			return nil
 		}
+	}
+
+	// read from embed
+	err := fs.WalkDir(patchEmbed, "patch_compiler", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == "patch_compiler" {
+			return os.MkdirAll(dstDir, 0755)
+		}
+		// TODO: test on windows if "/" works
+		dstPath := filepath.Join(dstDir, strings.TrimPrefix(path, "patch_compiler/"))
+		if d.IsDir() {
+			return os.MkdirAll(dstPath, 0755)
+		}
+
+		content, err := patchEmbed.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dstPath, content, 0755)
+	})
+	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -141,13 +188,26 @@ func patchCompiler(goroot string, goVersion *goinfo.GoVersion) error {
 	return nil
 }
 
-func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) error {
-	srcFile := filepath.Join(xgoSrc, "runtime", "trap_runtime", "xgo_trap.go")
+func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string, flagA bool) (updated bool, err error) {
 	dstFile := filepath.Join(goroot, "src", "runtime", "xgo_trap.go")
-	content, err := ioutil.ReadFile(srcFile)
-	if err != nil {
-		return err
+	if !isDevelopment && !flagA {
+		// check if already exists
+		_, statErr := os.Stat(dstFile)
+		if statErr == nil {
+			return false, nil
+		}
 	}
+	var content []byte
+	if isDevelopment {
+		srcFile := filepath.Join(xgoSrc, "runtime", "trap_runtime", "xgo_trap.go")
+		content, err = ioutil.ReadFile(srcFile)
+	} else {
+		content, err = patchEmbed.ReadFile("patch_compiler/trap_runtime/xgo_trap.go")
+	}
+	if err != nil {
+		return false, err
+	}
+
 	content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
 
 	// the func.entry is a field, not a function
@@ -156,7 +216,7 @@ func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) e
 		entryPatchBytes := []byte(entryPatch)
 		idx := bytes.Index(content, entryPatchBytes)
 		if idx < 0 {
-			return fmt.Errorf("expect %q in xgo_trap.go, actually not found", entryPatch)
+			return false, fmt.Errorf("expect %q in xgo_trap.go, actually not found", entryPatch)
 		}
 		oldContent := content
 		content = append(content[:idx], []byte("fn.entry")...)
@@ -167,7 +227,7 @@ func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) e
 	if goVersion.Major == 1 && goVersion.Minor == 20 {
 		content = append(content, []byte(patch.RuntimeFuncNamePatch)...)
 	}
-	return ioutil.WriteFile(dstFile, content, 0755)
+	return true, ioutil.WriteFile(dstFile, content, 0755)
 }
 
 func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
@@ -458,35 +518,43 @@ func indexSeq(s string, sequence []string) int {
 	return strutil.IndexSequence(s, sequence)
 }
 
-func syncGoroot(goroot string, dstDir string) error {
+func syncGoroot(goroot string, dstDir string, flagA bool) error {
 	// check if src goroot has src/runtime
 	srcRuntimeDir := filepath.Join(goroot, "src", "runtime")
 	err := assertDir(srcRuntimeDir)
 	if err != nil {
 		return err
 	}
-	srcGoBin := filepath.Join(goroot, "bin", "go")
-	dstGoBin := filepath.Join(dstDir, "bin", "go")
-
-	srcFile, err := os.Stat(srcGoBin)
-	if err != nil {
-		return nil
-	}
-	if srcFile.IsDir() {
-		return fmt.Errorf("bad goroot: %s", goroot)
-	}
-
-	dstFile, err := os.Stat(dstGoBin)
-	if err != nil {
-		if !os.IsNotExist(err) {
+	if !isDevelopment && flagA {
+		// remove dst
+		err := os.RemoveAll(dstDir)
+		if err != nil {
 			return err
 		}
-		err = nil
-	}
+	} else {
+		srcGoBin := filepath.Join(goroot, "bin", "go")
+		dstGoBin := filepath.Join(dstDir, "bin", "go")
 
-	if dstFile != nil && !dstFile.IsDir() && dstFile.Size() == srcFile.Size() {
-		// already copied
-		return nil
+		srcFile, err := os.Stat(srcGoBin)
+		if err != nil {
+			return nil
+		}
+		if srcFile.IsDir() {
+			return fmt.Errorf("bad goroot: %s", goroot)
+		}
+
+		dstFile, err := os.Stat(dstGoBin)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			err = nil
+		}
+
+		if dstFile != nil && !dstFile.IsDir() && dstFile.Size() == srcFile.Size() {
+			// already copied
+			return nil
+		}
 	}
 	// need copy, delete target dst dir first
 	// TODO: use git worktree add if .git exists

@@ -2,9 +2,9 @@ package filecopy
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -38,8 +38,41 @@ func CopyReplaceDir(srcDir string, targetDir string, useLink bool) error {
 	if useLink {
 		return LinkFiles(srcDir, targetAbsDir)
 	}
-	// TODO: use native go
-	return exec.Command("cp", "-R", srcDir, targetAbsDir).Run()
+	// use native go
+	return copyDir(srcDir, targetAbsDir)
+	// return exec.Command("cp", "-R", srcDir, targetAbsDir).Run()
+}
+
+func copyDir(srcDir string, targetAbsDir string) error {
+	n := len(srcDir)
+	prefixLen := n + len(string(filepath.Separator))
+	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// root
+		if path == srcDir {
+			return os.MkdirAll(targetAbsDir, 0755)
+		}
+		subPath := path[prefixLen:]
+		dstPath := filepath.Join(targetAbsDir, subPath)
+		if d.IsDir() {
+			return os.MkdirAll(dstPath, 0755)
+		}
+		reader, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+
+		writer, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+		if err != nil {
+			return err
+		}
+		defer writer.Close()
+		_, err = io.Copy(writer, reader)
+		return err
+	})
 }
 
 // NOTE: sym link must use abs path to ensure the file work correctly
