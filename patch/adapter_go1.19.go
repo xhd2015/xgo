@@ -6,6 +6,7 @@ package patch
 import (
 	"cmd/compile/internal/ir"
 	"cmd/compile/internal/types"
+	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
 )
 
 const genericTrapNeedsWorkaround = true
@@ -20,4 +21,17 @@ func SetConvTypeWordPtr(conv *ir.ConvExpr, t *types.Type) {
 
 func getFuncResultsType(funcType *types.Type) *types.Type {
 	return funcType.FuncType().Results
+}
+
+func canInsertTrap(fn *ir.Func) bool {
+	curPkgPath := xgo_ctxt.GetPkgPath()
+	fnPkgPath := fn.Sym().Pkg.Path
+	if curPkgPath == fnPkgPath {
+		return true
+	}
+	// fnName := fn.Sym().Name
+	// if strings.Contains(fnName, "[") && strings.Contains(fnName, "]") {
+	// 	return false
+	// }
+	return false
 }

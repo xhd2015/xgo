@@ -11,9 +11,9 @@ Usage:
     xgo <command> [arguments]
 
 The commands are:
-    build       build instrumented code, extra arguments are passed go build verbatim
-    run         run instrumented code, extra arguments are passed go run verbatim
-    test        test instrumented code, extra arguments are passed go test verbatim
+    build       build instrumented code, extra arguments are passed 'go build' verbatim
+    run         run instrumented code, extra arguments are passed 'go run' verbatim
+    test        test instrumented code, extra arguments are passed 'go test' verbatim
     exec        execute a command verbatim
     version     print xgo version
     revision    print xgo revision

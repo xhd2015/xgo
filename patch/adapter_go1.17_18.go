@@ -31,3 +31,7 @@ func wrapListType(expr *ir.CompLitExpr) *ir.CompLitExpr {
 	expr.SetType(intfSlice)
 	return expr
 }
+
+func canInsertTrap(fn *ir.Func) bool {
+	return true
+}

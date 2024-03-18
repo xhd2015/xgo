@@ -142,6 +142,13 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 		// trap, for example, db connection
 		// for example:
 		//     errors, math, math/bits, unicode, unicode/utf8, unicode/utf16, strconv, path, sort, time, encoding/json
+
+		// NOTE: base.Flag.Std in does not always reflect func's package path,
+		// because generic instantiation happens in other package, so this
+		// func may be a foreigner.
+		return "", false
+	}
+	if !canInsertTrap(fn) {
 		return "", false
 	}
 	if false {

@@ -24,3 +24,7 @@ func SetConvTypeWordPtr(conv *ir.ConvExpr, t *types.Type) {
 func getFuncResultsType(funcType *types.Type) *types.Type {
 	panic("getFuncResultsType should not be called above go1.19")
 }
+
+func canInsertTrap(fn *ir.Func) bool {
+	return true
+}
