@@ -120,6 +120,9 @@ func parseOptions(args []string) (*options, error) {
 			remainArgs = append(remainArgs, args[i+1:]...)
 			break
 		}
+		if arg == "-" {
+			return nil, fmt.Errorf("unrecognized flag:%s", arg)
+		}
 		if arg == "-a" {
 			flagA = true
 			continue
@@ -181,6 +184,26 @@ func parseOptions(args []string) (*options, error) {
 			}
 		}
 		if found {
+			continue
+		}
+
+		// check if single dash flags, this is usually go flags, such as -ldflags...
+		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") {
+			eqIdx := strings.Index(arg, "=")
+			if eqIdx >= 0 {
+				// things like -count=0
+				remainArgs = append(remainArgs, arg)
+				continue
+			}
+			if i+1 < nArg && !strings.HasPrefix(args[i+1], "-") {
+				// -count 0
+				// check if next arg starts with "-" (i.e. an option)
+				remainArgs = append(remainArgs, arg, args[i+1])
+				i++
+				continue
+			}
+			// -count
+			remainArgs = append(remainArgs, arg)
 			continue
 		}
 

@@ -51,7 +51,7 @@ func main() {
 		fmt.Printf("%s %s\n", VERSION, REVISION)
 		return
 	}
-	if cmd != "build" && cmd != "run" && cmd != "exec" {
+	if cmd != "build" && cmd != "run" && cmd != "test" && cmd != "exec" {
 		fmt.Fprintf(os.Stderr, "xgo %s: unknown command\nRun 'xgo help' for usage.\n", cmd)
 		os.Exit(1)
 	}
