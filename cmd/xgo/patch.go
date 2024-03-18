@@ -13,6 +13,7 @@ import (
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/strutil"
 )
 
 // assume go 1.20
@@ -453,17 +454,8 @@ func tryReplaceWithMark(content string, beginMark string, endMark string, closur
 	return content[:beginIdx] + closureContent + content[lastIdx:], true
 }
 
-func indexSeq(s string, seqs []string) int {
-	base := 0
-	for _, seq := range seqs {
-		idx := strings.Index(s, seq)
-		if idx < 0 {
-			return -1
-		}
-		s = s[idx+len(seq):]
-		base += idx + len(seq)
-	}
-	return base
+func indexSeq(s string, sequence []string) int {
+	return strutil.IndexSequence(s, sequence)
 }
 
 func syncGoroot(goroot string, dstDir string) error {

@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/xhd2015/xgo/support/cmd"
 )
 
 type options struct {
@@ -25,6 +27,12 @@ func runXgo(args []string, opts *options) (string, error) {
 		if err != nil {
 			return "", err
 		}
+	} else {
+		// build the xgo binary
+		err := cmd.Run("go", "build", "-o", xgoBinary, "../cmd/xgo")
+		if err != nil {
+			return "", err
+		}
 	}
 	var xgoCmd string = "build"
 	if opts != nil {
@@ -35,7 +43,6 @@ func runXgo(args []string, opts *options) (string, error) {
 		}
 	}
 	xgoArgs := []string{
-		"run", "../cmd/xgo",
 		xgoCmd,
 		"--xgo-src",
 		"../",
@@ -46,7 +53,7 @@ func runXgo(args []string, opts *options) (string, error) {
 		xgoArgs = append(xgoArgs, "--no-setup")
 	}
 	xgoArgs = append(xgoArgs, args...)
-	cmd := exec.Command("go", xgoArgs...)
+	cmd := exec.Command(xgoBinary, xgoArgs...)
 	if opts == nil || !opts.noPipeStderr {
 		cmd.Stderr = os.Stderr
 	}

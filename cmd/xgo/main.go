@@ -36,11 +36,23 @@ func main() {
 	}
 
 	if cmd == "" {
-		fmt.Fprintf(os.Stderr, "requires cmd\n")
+		fmt.Fprintf(os.Stderr, "xgo: requires command\nRun 'xgo help' for usage.\n")
 		os.Exit(1)
 	}
+	if cmd == "help" {
+		fmt.Print(strings.TrimPrefix(help, "\n"))
+		return
+	}
+	if cmd == "version" {
+		fmt.Println(VERSION)
+		return
+	}
+	if cmd == "revision" {
+		fmt.Printf("%s %s\n", VERSION, REVISION)
+		return
+	}
 	if cmd != "build" && cmd != "run" && cmd != "exec" {
-		fmt.Fprintf(os.Stderr, "unrecognized command: %s, supported: build,run,exec\n", cmd)
+		fmt.Fprintf(os.Stderr, "xgo %s: unknown command\nRun 'xgo help' for usage.\n", cmd)
 		os.Exit(1)
 	}
 

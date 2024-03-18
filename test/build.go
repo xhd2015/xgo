@@ -88,6 +88,9 @@ func getGoVersion() (*goinfo.GoVersion, error) {
 }
 
 var xgoInitErr error
+
+const xgoBinary string = "./xgo"
+
 var xgoInitOnce sync.Once
 
 func ensureXgoInit() error {
