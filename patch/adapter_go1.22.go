@@ -14,6 +14,9 @@ import (
 	"cmd/internal/src"
 )
 
+const goMajor = 1
+const goMinor = 22
+
 const genericTrapNeedsWorkaround = true
 
 func forEachFunc(callback func(fn *ir.Func) bool) {

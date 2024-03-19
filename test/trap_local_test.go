@@ -19,3 +19,11 @@ func TestTrapGoroutineLocal(t *testing.T) {
 	expectOut := "call: goroutineStr\nprintHello: goroutine\nmain: goroutine\n"
 	testTrap(t, "./testdata/goroutine_trap", origExpect, expectOut)
 }
+
+// go test -run TestTrapNestedShouldAvoidRecursive -v ./test
+func TestTrapNestedShouldAvoidRecursive(t *testing.T) {
+	t.Parallel()
+	origExpect := "hello world\n"
+	expectOut := "trap pre: hello\ncall from trap\nhello world\n"
+	testTrap(t, "./testdata/trap_nested", origExpect, expectOut)
+}

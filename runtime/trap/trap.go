@@ -22,17 +22,24 @@ func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, gene
 	panic("failed to link __xgo_link_set_trap")
 }
 
-func Skip() {
-	// this is intenionally leave empty
-	// as trap.Skip() is a function used
-	// to mark the caller should not be trapped.
-	// one can also use trap.Skip() in
-	// the non-interceptor context
-}
+// Skip serves as mark to tell xgo not insert
+// trap instructions for the function that
+// calls Skip()
+// NOTE: the function body is intenionally leave empty
+// as trap.Skip() is just a mark that makes
+// sense at compile time.
+func Skip() {}
+
+var trappingMark sync.Map // <goroutine key> -> struct{}{}
 
 // link to runtime
 // xgo:notrap
 func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
+	dispose := setTrappingMark()
+	if dispose == nil {
+		return nil, false
+	}
+	defer dispose()
 	type intf struct {
 		_  uintptr
 		pc *uintptr
@@ -174,6 +181,11 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 	}
 
 	return func() {
+		dispose := setTrappingMark()
+		if dispose == nil {
+			return
+		}
+		defer dispose()
 		for i := 0; i < n; i++ {
 			interceptor := interceptors[i]
 			if interceptor.Post == nil {
@@ -193,4 +205,20 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 			}
 		}
 	}, false
+}
+
+func setTrappingMark() func() {
+	key := uintptr(__xgo_link_getcurg())
+	_, trapping := trappingMark.LoadOrStore(key, struct{}{})
+	if trapping {
+		return nil
+	}
+	return func() {
+		trappingMark.Delete(key)
+	}
+}
+
+func clearTrappingMark() {
+	key := uintptr(__xgo_link_getcurg())
+	trappingMark.Delete(key)
 }

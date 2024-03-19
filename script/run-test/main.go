@@ -12,7 +12,7 @@ import (
 //
 //	go run ./script/run-test/ --include go1.19.13
 //	go run ./script/run-test/ --include go1.19.13 -run TestHelloWorld -v
-//	go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1 --reset-instrument
+//	go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
 func main() {
 	args := os.Args[1:]
 	var excludes []string

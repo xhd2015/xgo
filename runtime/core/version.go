@@ -1,5 +1,5 @@
 package core
 
-const VERSION = "1.0.0"
-const REVISION = "37d37c71b68249a79d6cb3347d41945295ecde57+1"
-const NUMBER = 79
+const VERSION = "1.0.1"
+const REVISION = "4a87957ab7175717205880ca95086e259f342c25+1"
+const NUMBER = 80

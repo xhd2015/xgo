@@ -9,6 +9,9 @@ import (
 	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
 )
 
+const goMajor = 1
+const goMinor = 19
+
 const genericTrapNeedsWorkaround = true
 
 func NewSignature(pkg *types.Pkg, recv *types.Field, tparams, params, results []*types.Field) *types.Type {

@@ -38,7 +38,7 @@ func init() {
 				panic(e)
 			}
 		}()
-		__xgo_link_on_goexit(clearLocalInterceptors)
+		__xgo_link_on_goexit(clearLocalInterceptorsAndMark)
 	}()
 }
 
@@ -84,7 +84,7 @@ func GetLocalInterceptors() []*Interceptor {
 }
 
 func ClearLocalInterceptors() {
-	clearLocalInterceptors()
+	clearLocalInterceptorsAndMark()
 }
 
 func GetAllInterceptors() []*Interceptor {
@@ -145,7 +145,9 @@ type interceptorList struct {
 	interceptors []*Interceptor
 }
 
-func clearLocalInterceptors() {
+func clearLocalInterceptorsAndMark() {
 	key := __xgo_link_getcurg()
 	localInterceptors.Delete(key)
+
+	clearTrappingMark()
 }

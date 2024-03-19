@@ -24,6 +24,13 @@ func init() {
 	if sig_gen__xgo_trap != sig_expected__xgo_trap {
 		panic(fmt.Errorf("__xgo_trap signature changed, run go generate and update sig_expected__xgo_trap correspondly"))
 	}
+	if goMajor != 1 {
+		panic(fmt.Errorf("expect goMajor to be 1, actual:%d", goMajor))
+	}
+
+	if goMinor < 17 || goMinor > 22 {
+		panic(fmt.Errorf("expect goMinor 17~22, actual:%d", goMinor))
+	}
 }
 
 const disableXgoLink bool = false
@@ -204,22 +211,30 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 	}
 */
 
+// for go1.17,go1.18
+//
+//	fn.Sym().Pkg.Path
+//
+// returns empty
+const hasFuncPkgPath = goMajor > 1 || (goMajor == 1 && goMinor >= 19)
+
 func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 	ensureInit()
 
-	curPkgPath := xgo_ctxt.GetPkgPath()
-
-	var fnPkg string
-	fnSym := fn.Sym()
-	if fnSym != nil {
-		fnPkg = fnSym.Pkg.Path
-	}
-	// when package are not the same,
-	// do not insert trap points
-	// TODO: solve the generic package issues by
-	// using generic metadata
-	if fnPkg == "" || fnPkg != curPkgPath {
-		return false
+	if hasFuncPkgPath {
+		curPkgPath := xgo_ctxt.GetPkgPath()
+		var fnPkg string
+		fnSym := fn.Sym()
+		if fnSym != nil {
+			fnPkg = fnSym.Pkg.Path
+		}
+		// when package are not the same,
+		// do not insert trap points
+		// TODO: solve the generic package issues by
+		// using generic metadata
+		if fnPkg == "" || fnPkg != curPkgPath {
+			return false
+		}
 	}
 
 	pos := base.Ctxt.PosTable.Pos(fn.Pos())

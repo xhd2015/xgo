@@ -10,6 +10,9 @@ import (
 	"cmd/compile/internal/types"
 )
 
+const goMajor = 1
+const goMinor = 21
+
 const genericTrapNeedsWorkaround = false
 
 // different with go1.20
