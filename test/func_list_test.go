@@ -16,7 +16,7 @@ func TestFuncList(t *testing.T) {
 		t.Fatal(getErrMsg(err))
 	}
 
-	t.Logf("%s", output)
+	// t.Logf("%s", output)
 
 	expectStdLines := []string{
 		"func:strconv FormatBool",

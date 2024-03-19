@@ -19,7 +19,7 @@ func TestTrap(t *testing.T) {
 func TestTrapNormalBuildShouldFail(t *testing.T) {
 	t.Parallel()
 	expectOut := "panic: failed to link __xgo_link_set_trap"
-	testTrapWithOpts(t, "./testdata/trap", "", expectOut, testTrapOpts{
+	runAndCompareInstrumentOutput(t, "./testdata/trap", "", expectOut, testTrapOpts{
 		expectOrigErr:       true,
 		withNoInstrumentEnv: false,
 		runInstrument:       false,
@@ -27,7 +27,16 @@ func TestTrapNormalBuildShouldFail(t *testing.T) {
 }
 
 func testTrap(t *testing.T, testDir string, origExpect string, expectOut string) {
-	testTrapWithOpts(t, testDir, origExpect, expectOut, testTrapOpts{
+	runAndCompareInstrumentOutput(t, testDir, origExpect, expectOut, testTrapOpts{
+		expectOrigErr:       false,
+		withNoInstrumentEnv: true,
+		runInstrument:       true,
+	})
+}
+
+func testTrapWithTest(t *testing.T, testDir string, orig func(output string) error, instr func(output string) error) {
+	runAndCheckInstrumentOutput(t, testDir, orig, instr, testTrapOpts{
+		test:                true,
 		expectOrigErr:       false,
 		withNoInstrumentEnv: true,
 		runInstrument:       true,
@@ -35,12 +44,33 @@ func testTrap(t *testing.T, testDir string, origExpect string, expectOut string)
 }
 
 type testTrapOpts struct {
+	test                bool
 	expectOrigErr       bool
 	withNoInstrumentEnv bool
 	runInstrument       bool
 }
 
-func testTrapWithOpts(t *testing.T, testDir string, origExpect string, expectOut string, opts testTrapOpts) {
+func runAndCompareInstrumentOutput(t *testing.T, testDir string, origExpect string, expectOut string, opts testTrapOpts) {
+	runAndCheckInstrumentOutput(t, testDir, func(output string) error {
+		if opts.expectOrigErr {
+			if expectOut == "" || !strings.Contains(output, expectOut) {
+				t.Fatalf("expect build err contains: %q, actual: %s", expectOut, output)
+			}
+			return nil
+		}
+
+		if output != origExpect {
+			t.Fatalf("expect original output: %q, actual: %q", origExpect, output)
+		}
+		return nil
+	}, func(output string) error {
+		if output != expectOut {
+			t.Fatalf("expect output: %q, actual: %q", expectOut, output)
+		}
+		return nil
+	}, opts)
+}
+func runAndCheckInstrumentOutput(t *testing.T, testDir string, orig func(output string) error, instr func(output string) error, opts testTrapOpts) {
 	debug := false
 	// debug := true
 	tmpFile, err := getTempFile("test")
@@ -67,8 +97,14 @@ func testTrapWithOpts(t *testing.T, testDir string, origExpect string, expectOut
 	if opts.withNoInstrumentEnv {
 		env = append(env, "XGO_TEST_HAS_INSTRUMENT=false")
 	}
-	origOut, err := runXgo([]string{"--no-instrument", "--project-dir", tmpDir, "./"}, &options{
-		run:          true,
+	var testArgs []string
+	origCmd := xgoCmd_run
+	if opts.test {
+		origCmd = xgoCmd_test
+		testArgs = append(testArgs, "-v")
+	}
+	origOut, err := runXgo(append([]string{"--no-instrument", "--project-dir", tmpDir, "./"}, testArgs...), &options{
+		xgoCmd:       origCmd,
 		noTrim:       true,
 		env:          env,
 		noPipeStderr: opts.expectOrigErr,
@@ -83,8 +119,9 @@ func testTrapWithOpts(t *testing.T, testDir string, origExpect string, expectOut
 			t.Fatalf("expect build err be *exec.ExitError, actual: %T %v", err, err)
 		}
 		extStdErr := string(exitErr.Stderr)
-		if expectOut == "" || !strings.Contains(extStdErr, expectOut) {
-			t.Fatalf("expect build err contains: %q, actual: %s", expectOut, extStdErr)
+
+		if err := orig(extStdErr); err != nil {
+			t.Fatal(err)
 		}
 		return
 	}
@@ -92,11 +129,19 @@ func testTrapWithOpts(t *testing.T, testDir string, origExpect string, expectOut
 		t.Fatalf("%v", err)
 	}
 
-	if origOut != origExpect {
-		t.Fatalf("expect original output: %q, actual: %q", origExpect, origOut)
+	if err := orig(origOut); err != nil {
+		t.Fatal(err)
 	}
+
 	if !opts.runInstrument {
 		return
+	}
+
+	instrCmd := xgoCmd_build
+	var instrArgs []string
+	if opts.test {
+		instrCmd = xgoCmd_testBuild
+		instrArgs = append(instrArgs, "-test.v")
 	}
 	_, err = runXgo([]string{
 		"-o", tmpFile,
@@ -106,11 +151,13 @@ func testTrapWithOpts(t *testing.T, testDir string, origExpect string, expectOut
 		"--",
 		// "-gcflags=all=-N -l", // debug
 		".",
-	}, nil)
+	}, &options{
+		xgoCmd: instrCmd,
+	})
 	if err != nil {
 		fatalExecErr(t, err)
 	}
-	out, err := exec.Command(tmpFile).Output()
+	out, err := exec.Command(tmpFile, instrArgs...).Output()
 	if err != nil {
 		if err, ok := err.(*exec.ExitError); ok {
 			t.Fatalf("%v", string(err.Stderr))
@@ -120,7 +167,7 @@ func testTrapWithOpts(t *testing.T, testDir string, origExpect string, expectOut
 	outStr := string(out)
 	// t.Logf("%s", outStr)
 
-	if outStr != expectOut {
-		t.Fatalf("expect output: %q, actual: %q", expectOut, outStr)
+	if err := instr(outStr); err != nil {
+		t.Fatal(err)
 	}
 }

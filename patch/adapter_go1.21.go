@@ -24,6 +24,10 @@ func SetConvTypeWordPtr(conv *ir.ConvExpr, t *types.Type) {
 	conv.TypeWord = reflectdata.TypePtrAt(base.Pos, types.NewPtr(t))
 }
 
+func SetConvTypeWord(conv *ir.ConvExpr, t *types.Type) {
+	conv.TypeWord = reflectdata.TypePtrAt(base.Pos, t)
+}
+
 func getFuncResultsType(funcType *types.Type) *types.Type {
 	panic("getFuncResultsType should not be called above go1.19")
 }

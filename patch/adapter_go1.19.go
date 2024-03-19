@@ -21,6 +21,8 @@ func NewSignature(pkg *types.Pkg, recv *types.Field, tparams, params, results []
 func SetConvTypeWordPtr(conv *ir.ConvExpr, t *types.Type) {
 
 }
+func SetConvTypeWord(conv *ir.ConvExpr, t *types.Type) {
+}
 
 func getFuncResultsType(funcType *types.Type) *types.Type {
 	return funcType.FuncType().Results

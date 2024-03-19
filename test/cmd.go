@@ -10,8 +10,17 @@ import (
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
+type xgoCmd string
+
+const (
+	xgoCmd_build     xgoCmd = "build"
+	xgoCmd_run       xgoCmd = "run"
+	xgoCmd_test      xgoCmd = "test"
+	xgoCmd_testBuild xgoCmd = "test_build"
+)
+
 type options struct {
-	run    bool
+	xgoCmd xgoCmd // the command is run
 	exec   bool
 	noTrim bool
 	env    []string
@@ -37,9 +46,17 @@ func runXgo(args []string, opts *options) (string, error) {
 		}
 	}
 	var xgoCmd string = "build"
+	var extraArgs []string
 	if opts != nil {
-		if opts.run {
+		if opts.xgoCmd == xgoCmd_build {
+			xgoCmd = "build"
+		} else if opts.xgoCmd == xgoCmd_run {
 			xgoCmd = "run"
+		} else if opts.xgoCmd == xgoCmd_test {
+			xgoCmd = "test"
+		} else if opts.xgoCmd == xgoCmd_testBuild {
+			xgoCmd = "test"
+			extraArgs = append(extraArgs, "-c")
 		} else if opts.exec {
 			xgoCmd = "exec"
 		}
@@ -50,6 +67,7 @@ func runXgo(args []string, opts *options) (string, error) {
 		"../",
 		"--sync-with-link",
 	}
+	xgoArgs = append(xgoArgs, extraArgs...)
 	// accerlate
 	if opts == nil || !opts.init {
 		xgoArgs = append(xgoArgs, "--no-setup")

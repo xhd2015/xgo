@@ -12,4 +12,6 @@ func __xgo_register_func(pkgPath string, fn interface{}, recvTypeName string, re
 func __xgo_for_each_func(f func(pkgPath string, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool))
 func __xgo_init_finished() bool
 func __xgo_on_init_finished(fn func())
-func __xgo_on_goexit(fn func())`
+func __xgo_on_goexit(fn func())
+func __xgo_on_test_start(fn interface{})
+func __xgo_get_test_starts() []interface{}`

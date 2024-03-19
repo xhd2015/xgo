@@ -189,7 +189,7 @@ func handleBuild(cmd string, args []string) error {
 			return err
 		}
 		// patch go runtime and compiler
-		err = patchGoSrc(instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, revisionChanged)
+		err = patchRuntimeAndCompiler(instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, revisionChanged)
 		if err != nil {
 			return err
 		}

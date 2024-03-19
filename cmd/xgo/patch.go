@@ -19,7 +19,7 @@ import (
 
 // assume go 1.20
 // the patch should be idempotent
-func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, revisionChanged bool) error {
+func patchRuntimeAndCompiler(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, revisionChanged bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
@@ -30,29 +30,14 @@ func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncW
 		return nil
 	}
 
-	runtimeTrapUpdated, err := addRuntimeTrap(goroot, goVersion, xgoSrc)
+	// runtime
+	err := patchRuntimeAndTesting(goroot)
 	if err != nil {
 		return err
 	}
 
-	if runtimeTrapUpdated {
-		err = patchRuntimeDef(goroot, goVersion)
-		if err != nil {
-			return err
-		}
-	}
-	err = patchRuntime(goroot)
-	if err != nil {
-		return err
-	}
-
-	// copy compiler internal dependencies
-	err = importCompileInternalPatch(goroot, xgoSrc, revisionChanged, syncWithLink)
-	if err != nil {
-		return err
-	}
-
-	err = patchCompiler(goroot, goVersion)
+	// compiler
+	err = patchCompiler(goroot, goVersion, xgoSrc, revisionChanged, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -60,7 +45,19 @@ func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncW
 	return nil
 }
 
-func patchRuntime(goroot string) error {
+func patchRuntimeAndTesting(goroot string) error {
+	err := patchRuntimeProc(goroot)
+	if err != nil {
+		return err
+	}
+	err = patchRuntimeTesting(goroot)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func patchRuntimeProc(goroot string) error {
 	anchors := []string{
 		"func main() {",
 		"doInit(", "runtime_inittask", ")", // first doInit for runtime
@@ -86,6 +83,24 @@ func patchRuntime(goroot string) error {
 	return nil
 }
 
+func patchRuntimeTesting(goroot string) error {
+	testingFile := filepath.Join(goroot, "src", "testing", "testing.go")
+	return editFile(testingFile, func(content string) (string, error) {
+		// func tRunner(t *T, fn func(t *T)) {
+		anchor := []string{"func tRunner(t *T", "{", "\n"}
+		content = addContentBefore(content,
+			"/*<begin declare_testing_callback>*/", "/*<end declare_testing_callback>*/",
+			anchor,
+			patch.TestingCallbackDeclarations,
+		)
+		content = addContentAfter(content,
+			"/*<begin call_testing_callback>*/", "/*<end call_testing_callback>*/",
+			anchor,
+			patch.TestingStart,
+		)
+		return content, nil
+	})
+}
 func importCompileInternalPatch(goroot string, xgoSrc string, revisionChanged bool, syncWithLink bool) error {
 	dstDir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
 	if isDevelopment {
@@ -202,7 +217,32 @@ func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
 	})
 }
 
-func patchCompiler(goroot string, goVersion *goinfo.GoVersion) error {
+func patchCompiler(goroot string, goVersion *goinfo.GoVersion, xgoSrc string, revisionChanged bool, syncWithLink bool) error {
+	// copy compiler internal dependencies
+	err := importCompileInternalPatch(goroot, xgoSrc, revisionChanged, syncWithLink)
+	if err != nil {
+		return err
+	}
+	runtimeDefUpdated, err := addRuntimeFunctions(goroot, goVersion, xgoSrc)
+	if err != nil {
+		return err
+	}
+
+	if runtimeDefUpdated {
+		err = patchRuntimeDef(goroot, goVersion)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = patchCompilerInternal(goroot, goVersion)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 	// src/cmd/compile/internal/noder/noder.go
 	err := patchCompilerNoder(goroot, goVersion)
 	if err != nil {
@@ -221,8 +261,8 @@ func patchCompiler(goroot string, goVersion *goinfo.GoVersion) error {
 	return nil
 }
 
-// addRuntimeTrap always copy file
-func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) (updated bool, err error) {
+// addRuntimeFunctions always copy file
+func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) (updated bool, err error) {
 	dstFile := filepath.Join(goroot, "src", "runtime", "xgo_trap.go")
 	var content []byte
 	if isDevelopment {
@@ -471,15 +511,23 @@ func editFile(file string, callback func(content string) (string, error)) error 
 }
 
 func addCodeAfterImports(code string, beginMark string, endMark string, contents []string) string {
-	idx := indexSeq(code, []string{"import", "(", "\n"})
+	idx := indexSeq(code, []string{"import", "(", "\n"}, false)
 	if idx < 0 {
 		panic(fmt.Errorf("import not found"))
 	}
 	return insertConentNoDudplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
 }
 
+func addContentBefore(content string, beginMark string, endMark string, seq []string, addContent string) string {
+	return addContentAt(content, beginMark, endMark, seq, addContent, true)
+}
+
 func addContentAfter(content string, beginMark string, endMark string, seq []string, addContent string) string {
-	idx := indexSeq(content, seq)
+	return addContentAt(content, beginMark, endMark, seq, addContent, false)
+}
+
+func addContentAt(content string, beginMark string, endMark string, seq []string, addContent string, begin bool) string {
+	idx := indexSeq(content, seq, begin)
 	if idx < 0 {
 		panic(fmt.Errorf("sequence not found: %v", seq))
 	}
@@ -491,7 +539,7 @@ func replaceContentAfter(content string, beginMark string, endMark string, seq [
 		return content
 	}
 	closuerContent := beginMark + "\n" + replaceContent + "\n" + endMark + "\n"
-	idx := indexSeq(content, seq)
+	idx := indexSeq(content, seq, false)
 	if idx < 0 {
 		panic(fmt.Errorf("sequence not found: %v", seq))
 	}
@@ -541,8 +589,8 @@ func tryReplaceWithMark(content string, beginMark string, endMark string, closur
 	return content[:beginIdx] + closureContent + content[lastIdx:], true
 }
 
-func indexSeq(s string, sequence []string) int {
-	return strutil.IndexSequence(s, sequence)
+func indexSeq(s string, sequence []string, begin bool) int {
+	return strutil.IndexSequenceAt(s, sequence, begin)
 }
 
 func checkRevisionChanged(revisionFile string, currentRevision string) (bool, error) {

@@ -129,12 +129,11 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 		return
 	}
 
-	autoGen :=
-		"package " + pkgName + "\n" +
-			// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
-			"func __xgo_register_funcs(__xgo_reg_func " + sig_gen__xgo_register_func + "){\n" +
-			body +
-			"\n}"
+	autoGen := "package " + pkgName + "\n" +
+		// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
+		"func __xgo_register_funcs(__xgo_reg_func " + sig_gen__xgo_register_func + "){\n" +
+		body +
+		"\n}"
 	// ioutil.WriteFile("test.log", []byte(autoGen), 0755)
 	addFile("__xgo_autogen.go", strings.NewReader(autoGen))
 }

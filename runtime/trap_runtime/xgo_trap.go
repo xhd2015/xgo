@@ -115,6 +115,16 @@ func __xgo_on_goexit(fn func()) {
 	__xgo_on_goexits = append(__xgo_on_goexits, fn)
 }
 
+var __xgo_on_test_starts []interface{} // func(t *testing.T,fn func(t *testing.T))
+
+func __xgo_on_test_start(fn interface{}) {
+	__xgo_on_test_starts = append(__xgo_on_test_starts, fn)
+}
+
+func __xgo_get_test_starts() []interface{} {
+	return __xgo_on_test_starts
+}
+
 // func GetFuncs_Requires_Xgo() []interface{} {
 // 	return funcs
 // }

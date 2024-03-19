@@ -12,6 +12,17 @@ const RuntimeProcGoroutineExitPatch = `for _, fn := range __xgo_on_goexits {
 	fn()
 }`
 
+const TestingCallbackDeclarations = `func __xgo_link_get_test_starts() []interface{}{
+	// link by compiler
+	return nil
+}
+`
+
+const TestingStart = `for _,__xgo_on_test_start:=range __xgo_link_get_test_starts(){
+	(__xgo_on_test_start.(func(*T,func(*T))))(t,fn)
+}
+`
+
 const RuntimeFuncNamePatch = ""
 
 // Not used because now we pass pkg name, func name as standalone strings

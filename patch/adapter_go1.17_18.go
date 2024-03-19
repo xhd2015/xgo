@@ -14,8 +14,11 @@ func NewSignature(pkg *types.Pkg, recv *types.Field, tparams, params, results []
 	return types.NewSignature(pkg, recv, tparams, params, results)
 }
 
+// intentionally leave empty
 func SetConvTypeWordPtr(conv *ir.ConvExpr, t *types.Type) {
 
+}
+func SetConvTypeWord(conv *ir.ConvExpr, t *types.Type) {
 }
 
 func getFuncResultsType(funcType *types.Type) *types.Type {
