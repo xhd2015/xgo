@@ -84,7 +84,7 @@ func updateRevisions(targetDir string, unlink bool, rev string) error {
 	}
 
 	for _, file := range files {
-		err := revision.PatchVersionFile(file, rev)
+		err := revision.PatchVersionFile(file, rev, false)
 		if err != nil {
 			return err
 		}

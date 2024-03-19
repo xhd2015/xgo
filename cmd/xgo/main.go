@@ -48,7 +48,7 @@ func main() {
 		return
 	}
 	if cmd == "revision" {
-		fmt.Printf("%s %s\n", VERSION, REVISION)
+		fmt.Printf("%s %s BUILD_%d\n", VERSION, REVISION, NUMBER)
 		return
 	}
 	if cmd == "upgrade" {

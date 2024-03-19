@@ -90,7 +90,7 @@ func preCommitCheck(noCommit bool) error {
 
 	files := revision.GetVersionFiles(rootDir)
 	for _, file := range files {
-		err = revision.PatchVersionFile(file, rev)
+		err = revision.PatchVersionFile(file, rev, true)
 		if err != nil {
 			return err
 		}
