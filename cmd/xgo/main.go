@@ -48,7 +48,7 @@ func main() {
 		return
 	}
 	if cmd == "revision" {
-		fmt.Printf("%s %s BUILD_%d\n", VERSION, REVISION, NUMBER)
+		fmt.Println(getRevision())
 		return
 	}
 	if cmd == "upgrade" {
@@ -161,6 +161,7 @@ func handleBuild(cmd string, args []string) error {
 	compilerBuildID := filepath.Join(instrumentDir, "compile.buildid.txt")
 	instrumentGoroot := filepath.Join(instrumentDir, goVersionName)
 	buildCacheDir := filepath.Join(instrumentDir, "build-cache")
+	revisionFile := filepath.Join(instrumentDir, "xgo-revision.txt")
 
 	var realXgoSrc string
 	if isDevelopment {
@@ -175,14 +176,28 @@ func handleBuild(cmd string, args []string) error {
 		if err != nil {
 			return err
 		}
-		err = syncGoroot(goroot, instrumentGoroot, resetInstrument, flagA)
+		revision := getRevision()
+		if isDevelopment {
+			revision = revision + " DEV"
+		}
+		revisionChanged, err := checkRevisionChanged(revisionFile, revision)
+		if err != nil {
+			return err
+		}
+		err = syncGoroot(goroot, instrumentGoroot, resetInstrument, revisionChanged)
 		if err != nil {
 			return err
 		}
 		// patch go runtime and compiler
-		err = patchGoSrc(instrumentGoroot, realXgoSrc, goVersion, flagA, syncWithLink || setupDev || buildCompiler)
+		err = patchGoSrc(instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, revisionChanged)
 		if err != nil {
 			return err
+		}
+		if revisionChanged {
+			err := os.WriteFile(revisionFile, []byte(revision), 0755)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

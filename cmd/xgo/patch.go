@@ -19,15 +19,18 @@ import (
 
 // assume go 1.20
 // the patch should be idempotent
-func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, flagA bool, syncWithLink bool) error {
+func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, revisionChanged bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
 	if isDevelopment && xgoSrc == "" {
 		return fmt.Errorf("requries xgoSrc")
 	}
+	if !isDevelopment && !revisionChanged {
+		return nil
+	}
 
-	runtimeTrapUpdated, err := addRuntimeTrap(goroot, goVersion, xgoSrc, flagA)
+	runtimeTrapUpdated, err := addRuntimeTrap(goroot, goVersion, xgoSrc)
 	if err != nil {
 		return err
 	}
@@ -44,7 +47,7 @@ func patchGoSrc(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, flagA
 	}
 
 	// copy compiler internal dependencies
-	err = importCompileInternalPatch(goroot, xgoSrc, flagA, syncWithLink)
+	err = importCompileInternalPatch(goroot, xgoSrc, revisionChanged, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -83,7 +86,7 @@ func patchRuntime(goroot string) error {
 	return nil
 }
 
-func importCompileInternalPatch(goroot string, xgoSrc string, flagA bool, syncWithLink bool) error {
+func importCompileInternalPatch(goroot string, xgoSrc string, revisionChanged bool, syncWithLink bool) error {
 	dstDir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
 	if isDevelopment {
 		// copy compiler internal dependencies
@@ -103,7 +106,7 @@ func importCompileInternalPatch(goroot string, xgoSrc string, flagA bool, syncWi
 		return nil
 	}
 
-	if flagA {
+	if revisionChanged {
 		// -a causes repatch
 		err := os.RemoveAll(dstDir)
 		if err != nil {
@@ -218,15 +221,9 @@ func patchCompiler(goroot string, goVersion *goinfo.GoVersion) error {
 	return nil
 }
 
-func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string, flagA bool) (updated bool, err error) {
+// addRuntimeTrap always copy file
+func addRuntimeTrap(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) (updated bool, err error) {
 	dstFile := filepath.Join(goroot, "src", "runtime", "xgo_trap.go")
-	if !isDevelopment && !flagA {
-		// check if already exists
-		_, statErr := os.Stat(dstFile)
-		if statErr == nil {
-			return false, nil
-		}
-	}
 	var content []byte
 	if isDevelopment {
 		srcFile := filepath.Join(xgoSrc, "runtime", "trap_runtime", "xgo_trap.go")
@@ -548,14 +545,43 @@ func indexSeq(s string, sequence []string) int {
 	return strutil.IndexSequence(s, sequence)
 }
 
-func syncGoroot(goroot string, dstDir string, resetInstrument bool, flagA bool) error {
+func checkRevisionChanged(revisionFile string, currentRevision string) (bool, error) {
+	savedRevision, err := readOrEmpty(revisionFile)
+	if err != nil {
+		return false, err
+	}
+	if savedRevision == "" || savedRevision != currentRevision {
+		return true, nil
+	}
+	return false, nil
+}
+
+func readOrEmpty(file string) (string, error) {
+	version, err := os.ReadFile(file)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	s := string(version)
+	s = strings.TrimSuffix(s, "\n")
+	s = strings.TrimSuffix(s, "\r")
+	return s, nil
+}
+
+// NOTE: flagA never cause goroot to reset
+func syncGoroot(goroot string, dstDir string, resetInstrument bool, revisionChanged bool) error {
 	// check if src goroot has src/runtime
 	srcRuntimeDir := filepath.Join(goroot, "src", "runtime")
 	err := assertDir(srcRuntimeDir)
 	if err != nil {
 		return err
 	}
-	if resetInstrument || (!isDevelopment && flagA) {
+	if !isDevelopment && !revisionChanged {
+		return nil
+	}
+	if revisionChanged || resetInstrument {
 		// remove dst
 		err := os.RemoveAll(dstDir)
 		if err != nil {
