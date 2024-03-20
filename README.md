@@ -3,9 +3,9 @@ Enable function Trap for `go`, and provide tools like Mock and Trace to help go 
 
 `xgo` works as a drop-in replacement for `go run`,`go build`, and `go test`.
 
-It adds missing abilities to go program by cooperating with(or hacking) the go compiler.
+It adds missing abilities to go program by cooperating with (or hacking) the go compiler.
 
-Thses abilities include [Mock](#mock), [Trap](#trap) and [Trace](#trace).
+Theses abilities include [Mock](#mock), [Trap](#trap) and [Trace](#trace).
 
 See [Usage](#usage) and [Documentation](#xgo) for more details. 
 
