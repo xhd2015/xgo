@@ -5,7 +5,7 @@ Enable function Trap for `go`, and provide tools like Mock and Trace to help go 
 
 It adds missing abilities to go program by cooperating with (or hacking) the go compiler.
 
-Theses abilities include [Mock](#mock), [Trap](#trap) and [Trace](#trace).
+These abilities include [Mock](#mock), [Trap](#trap) and [Trace](#trace).
 
 See [Usage](#usage) and [Documentation](#xgo) for more details. 
 
