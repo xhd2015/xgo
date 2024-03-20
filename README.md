@@ -16,6 +16,19 @@ See [Usage](#usage) and [Documentation](#xgo) for more details.
 curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | bash
 ```
 
+If you've already installed `xgo`, you can upgrade it with:
+
+```sh
+xgo upgrade
+```
+
+# Requirement
+`xgo` requires at least `go1.17` to compile.
+
+There is no specific limitation on OS and Architecture. 
+
+**All OS and Architectures** are supported by `xgo` as long as they are supported by `go`.
+
 # Usage
 The following code demonstrates how to setup mock on a given function:
 - The function `add(a,b)` normally adds `a` and `b` up, resulting in `a+b`,
@@ -182,7 +195,7 @@ import (
 )
 
 func init() {
-    trace.Use()
+    trace.Enable()
 }
 
 func main() {
@@ -229,6 +242,11 @@ XGO_TRACE_OUTPUT=stdout xgo run ./
 # NOTE: other fields are ommited for displaying key information.
 ```
 
+You can view the trace with:`xgo tool trace TestExample.json`
+
+Output:
+![trace html](cmd/trace/testdata/stack_trace.jpg "Trace")
+
 By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
 - `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purepose,
 - `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
@@ -242,6 +260,3 @@ The strategy employed by `go-mock` works well but causes much longer build time 
 However, `go-mock` is remarkable for it's discovery of Trap, Trace besides Mock, and additional abilities like trapping variable and disabling map randomness.
 
 It is the shoulder which `xgo` stands on.
-
-# Go Version Requirement
-`xgo` requires at least `go1.17` to compile.

@@ -193,9 +193,10 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 	bins := [][2]string{
 		{"xgo", "./cmd/xgo"},
 		{"exec_tool", "./cmd/exec_tool"},
+		{"trace", "./cmd/trace"},
 	}
 	var archiveFiles []string
-	// build xgo and exec_tool
+	// build xgo, exec_tool and trace
 	for _, bin := range bins {
 		binName, binSrc := bin[0], bin[1]
 		archiveFiles = append(archiveFiles, "./"+binName)

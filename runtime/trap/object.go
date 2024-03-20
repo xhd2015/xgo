@@ -19,7 +19,13 @@ type field struct {
 	valPtr interface{}
 }
 
+type objectWithErr struct {
+	object
+	err field
+}
+
 var _ core.Object = (object)(nil)
+var _ core.ObjectWithErr = (*objectWithErr)(nil)
 var _ core.Field = field{}
 
 func appendFields(obj object, ptrs []interface{}, names []string) object {
@@ -51,6 +57,10 @@ func (c object) GetFieldIndex(i int) core.Field {
 
 func (c object) NumField() int {
 	return len(c)
+}
+
+func (c *objectWithErr) GetErr() core.Field {
+	return c.err
 }
 
 func (c field) Name() string {

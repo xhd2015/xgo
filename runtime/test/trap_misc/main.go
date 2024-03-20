@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	trace.Use()
+	trace.Enable()
 }
 
 // can break some

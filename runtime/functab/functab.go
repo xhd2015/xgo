@@ -112,11 +112,16 @@ func ensureMapping() {
 				Generic:      generic,
 
 				// runtime info
-				PC:       pc, // nil for generic
-				Func:     fn, // nil for geneirc
+				PC:   pc, // nil for generic
+				Func: fn, // nil for geneirc
+
 				RecvName: recvName,
 				ArgNames: argNames,
 				ResNames: resNames,
+
+				// brief info
+				FirstArgCtx:   firstArgCtx,
+				LastResultErr: lastResErr,
 			}
 			funcInfos = append(funcInfos, info)
 			if !generic {

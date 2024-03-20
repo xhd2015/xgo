@@ -6,6 +6,12 @@ type Object interface {
 	NumField() int
 }
 
+type ObjectWithErr interface {
+	Object
+
+	GetErr() Field
+}
+
 type Field interface {
 	Name() string
 	Value() interface{}

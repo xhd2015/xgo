@@ -16,6 +16,10 @@ type FuncInfo struct {
 
 	Generic bool
 
+	// source info
+	File string
+	Line int
+
 	PC       uintptr     `json:"-"`
 	Func     interface{} `json:"-"`
 	RecvName string

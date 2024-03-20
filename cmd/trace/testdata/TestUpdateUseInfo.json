@@ -1,0 +1,695 @@
+{
+    "Top": {
+        "FuncInfo": {
+            "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace",
+            "IdentityName": "TestUpdateUseInfo",
+            "Name": "TestUpdateUseInfo",
+            "RecvType": "",
+            "RecvPtr": false,
+            "Generic": false,
+            "RecvName": "",
+            "ArgNames": [
+                "t"
+            ],
+            "ResNames": null,
+            "FirstArgCtx": false,
+            "LastResultErr": false
+        },
+        "Begin": 1756,
+        "End": 206659,
+        "Args": {
+            "t": {}
+        },
+        "Results": {},
+        "Panic": false,
+        "Error": "",
+        "Children": [
+            {
+                "FuncInfo": {
+                    "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace",
+                    "IdentityName": "UpdateUseInfo",
+                    "Name": "UpdateUseInfo",
+                    "RecvType": "",
+                    "RecvPtr": false,
+                    "Generic": false,
+                    "RecvName": "",
+                    "ArgNames": [
+                        "name"
+                    ],
+                    "ResNames": [
+                        "actualName",
+                        "err"
+                    ],
+                    "FirstArgCtx": false,
+                    "LastResultErr": true
+                },
+                "Begin": 22434,
+                "End": 187365,
+                "Args": {
+                    "name": "old user"
+                },
+                "Results": {
+                    "actualName": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                },
+                "Panic": false,
+                "Error": "",
+                "Children": [
+                    {
+                        "FuncInfo": {
+                            "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                            "IdentityName": "CheckUserName",
+                            "Name": "CheckUserName",
+                            "RecvType": "",
+                            "RecvPtr": false,
+                            "Generic": false,
+                            "RecvName": "",
+                            "ArgNames": [
+                                "name"
+                            ],
+                            "ResNames": [
+                                ""
+                            ],
+                            "FirstArgCtx": false,
+                            "LastResultErr": true
+                        },
+                        "Begin": 27787,
+                        "End": 60388,
+                        "Args": {
+                            "name": "old user"
+                        },
+                        "Results": {},
+                        "Panic": false,
+                        "Error": "invalid user name",
+                        "Children": null
+                    },
+                    {
+                        "FuncInfo": {
+                            "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                            "IdentityName": "GenerateUserName",
+                            "Name": "GenerateUserName",
+                            "RecvType": "",
+                            "RecvPtr": false,
+                            "Generic": false,
+                            "RecvName": "",
+                            "ArgNames": [
+                                "id"
+                            ],
+                            "ResNames": [
+                                ""
+                            ],
+                            "FirstArgCtx": false,
+                            "LastResultErr": false
+                        },
+                        "Begin": 62675,
+                        "End": 155252,
+                        "Args": {
+                            "id": 1
+                        },
+                        "Results": {
+                            "": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                        },
+                        "Panic": false,
+                        "Error": "",
+                        "Children": [
+                            {
+                                "FuncInfo": {
+                                    "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                    "IdentityName": "randMD5",
+                                    "Name": "randMD5",
+                                    "RecvType": "",
+                                    "RecvPtr": false,
+                                    "Generic": false,
+                                    "RecvName": "",
+                                    "ArgNames": null,
+                                    "ResNames": [
+                                        ""
+                                    ],
+                                    "FirstArgCtx": false,
+                                    "LastResultErr": false
+                                },
+                                "Begin": 64489,
+                                "End": 139123,
+                                "Args": {},
+                                "Results": {
+                                    "": "8c33a65fb05003fba506e1469864b64f"
+                                },
+                                "Panic": false,
+                                "Error": "",
+                                "Children": [
+                                    {
+                                        "FuncInfo": {
+                                            "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                            "IdentityName": "generateID",
+                                            "Name": "generateID",
+                                            "RecvType": "",
+                                            "RecvPtr": false,
+                                            "Generic": false,
+                                            "RecvName": "",
+                                            "ArgNames": null,
+                                            "ResNames": [
+                                                ""
+                                            ],
+                                            "FirstArgCtx": false,
+                                            "LastResultErr": false
+                                        },
+                                        "Begin": 70801,
+                                        "End": 108887,
+                                        "Args": {},
+                                        "Results": {
+                                            "": 1903259192436963451
+                                        },
+                                        "Panic": false,
+                                        "Error": "",
+                                        "Children": null
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "FuncInfo": {
+                            "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                            "IdentityName": "SaveUserName",
+                            "Name": "SaveUserName",
+                            "RecvType": "",
+                            "RecvPtr": false,
+                            "Generic": false,
+                            "RecvName": "",
+                            "ArgNames": [
+                                "name"
+                            ],
+                            "ResNames": [
+                                ""
+                            ],
+                            "FirstArgCtx": false,
+                            "LastResultErr": true
+                        },
+                        "Begin": 160255,
+                        "End": 186213,
+                        "Args": {
+                            "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                        },
+                        "Results": {},
+                        "Panic": false,
+                        "Error": "",
+                        "Children": [
+                            {
+                                "FuncInfo": {
+                                    "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                    "IdentityName": "CheckUserName",
+                                    "Name": "CheckUserName",
+                                    "RecvType": "",
+                                    "RecvPtr": false,
+                                    "Generic": false,
+                                    "RecvName": "",
+                                    "ArgNames": [
+                                        "name"
+                                    ],
+                                    "ResNames": [
+                                        ""
+                                    ],
+                                    "FirstArgCtx": false,
+                                    "LastResultErr": true
+                                },
+                                "Begin": 162077,
+                                "End": 163589,
+                                "Args": {
+                                    "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                                },
+                                "Results": {},
+                                "Panic": false,
+                                "Error": "",
+                                "Children": null
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "FuncInfo": {
+                    "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace",
+                    "IdentityName": "UpdateUseInfo",
+                    "Name": "UpdateUseInfo",
+                    "RecvType": "",
+                    "RecvPtr": false,
+                    "Generic": false,
+                    "RecvName": "",
+                    "ArgNames": [
+                        "name"
+                    ],
+                    "ResNames": [
+                        "actualName",
+                        "err"
+                    ],
+                    "FirstArgCtx": false,
+                    "LastResultErr": true
+                },
+                "Begin": 189278,
+                "End": 205626,
+                "Args": {
+                    "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                },
+                "Results": {
+                    "actualName": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                },
+                "Panic": false,
+                "Error": "",
+                "Children": [
+                    {
+                        "FuncInfo": {
+                            "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                            "IdentityName": "CheckUserName",
+                            "Name": "CheckUserName",
+                            "RecvType": "",
+                            "RecvPtr": false,
+                            "Generic": false,
+                            "RecvName": "",
+                            "ArgNames": [
+                                "name"
+                            ],
+                            "ResNames": [
+                                ""
+                            ],
+                            "FirstArgCtx": false,
+                            "LastResultErr": true
+                        },
+                        "Begin": 190924,
+                        "End": 192093,
+                        "Args": {
+                            "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                        },
+                        "Results": {},
+                        "Panic": false,
+                        "Error": "",
+                        "Children": null
+                    },
+                    {
+                        "FuncInfo": {
+                            "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                            "IdentityName": "SaveUserName",
+                            "Name": "SaveUserName",
+                            "RecvType": "",
+                            "RecvPtr": false,
+                            "Generic": false,
+                            "RecvName": "",
+                            "ArgNames": [
+                                "name"
+                            ],
+                            "ResNames": [
+                                ""
+                            ],
+                            "FirstArgCtx": false,
+                            "LastResultErr": true
+                        },
+                        "Begin": 193680,
+                        "End": 204598,
+                        "Args": {
+                            "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                        },
+                        "Results": {},
+                        "Panic": false,
+                        "Error": "",
+                        "Children": [
+                            {
+                                "FuncInfo": {
+                                    "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                    "IdentityName": "CheckUserName",
+                                    "Name": "CheckUserName",
+                                    "RecvType": "",
+                                    "RecvPtr": false,
+                                    "Generic": false,
+                                    "RecvName": "",
+                                    "ArgNames": [
+                                        "name"
+                                    ],
+                                    "ResNames": [
+                                        ""
+                                    ],
+                                    "FirstArgCtx": false,
+                                    "LastResultErr": true
+                                },
+                                "Begin": 199184,
+                                "End": 200503,
+                                "Args": {
+                                    "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                                },
+                                "Results": {},
+                                "Panic": false,
+                                "Error": "",
+                                "Children": null
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Begin": "2024-03-20T20:28:36.682571+08:00",
+    "Children": [
+        {
+            "FuncInfo": {
+                "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace",
+                "IdentityName": "TestUpdateUseInfo",
+                "Name": "TestUpdateUseInfo",
+                "RecvType": "",
+                "RecvPtr": false,
+                "Generic": false,
+                "RecvName": "",
+                "ArgNames": [
+                    "t"
+                ],
+                "ResNames": null,
+                "FirstArgCtx": false,
+                "LastResultErr": false
+            },
+            "Begin": 1756,
+            "End": 206659,
+            "Args": {
+                "t": {}
+            },
+            "Results": {},
+            "Panic": false,
+            "Error": "",
+            "Children": [
+                {
+                    "FuncInfo": {
+                        "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace",
+                        "IdentityName": "UpdateUseInfo",
+                        "Name": "UpdateUseInfo",
+                        "RecvType": "",
+                        "RecvPtr": false,
+                        "Generic": false,
+                        "RecvName": "",
+                        "ArgNames": [
+                            "name"
+                        ],
+                        "ResNames": [
+                            "actualName",
+                            "err"
+                        ],
+                        "FirstArgCtx": false,
+                        "LastResultErr": true
+                    },
+                    "Begin": 22434,
+                    "End": 187365,
+                    "Args": {
+                        "name": "old user"
+                    },
+                    "Results": {
+                        "actualName": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                    },
+                    "Panic": false,
+                    "Error": "",
+                    "Children": [
+                        {
+                            "FuncInfo": {
+                                "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                "IdentityName": "CheckUserName",
+                                "Name": "CheckUserName",
+                                "RecvType": "",
+                                "RecvPtr": false,
+                                "Generic": false,
+                                "RecvName": "",
+                                "ArgNames": [
+                                    "name"
+                                ],
+                                "ResNames": [
+                                    ""
+                                ],
+                                "FirstArgCtx": false,
+                                "LastResultErr": true
+                            },
+                            "Begin": 27787,
+                            "End": 60388,
+                            "Args": {
+                                "name": "old user"
+                            },
+                            "Results": {},
+                            "Panic": false,
+                            "Error": "invalid user name",
+                            "Children": null
+                        },
+                        {
+                            "FuncInfo": {
+                                "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                "IdentityName": "GenerateUserName",
+                                "Name": "GenerateUserName",
+                                "RecvType": "",
+                                "RecvPtr": false,
+                                "Generic": false,
+                                "RecvName": "",
+                                "ArgNames": [
+                                    "id"
+                                ],
+                                "ResNames": [
+                                    ""
+                                ],
+                                "FirstArgCtx": false,
+                                "LastResultErr": false
+                            },
+                            "Begin": 62675,
+                            "End": 155252,
+                            "Args": {
+                                "id": 1
+                            },
+                            "Results": {
+                                "": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                            },
+                            "Panic": false,
+                            "Error": "",
+                            "Children": [
+                                {
+                                    "FuncInfo": {
+                                        "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                        "IdentityName": "randMD5",
+                                        "Name": "randMD5",
+                                        "RecvType": "",
+                                        "RecvPtr": false,
+                                        "Generic": false,
+                                        "RecvName": "",
+                                        "ArgNames": null,
+                                        "ResNames": [
+                                            ""
+                                        ],
+                                        "FirstArgCtx": false,
+                                        "LastResultErr": false
+                                    },
+                                    "Begin": 64489,
+                                    "End": 139123,
+                                    "Args": {},
+                                    "Results": {
+                                        "": "8c33a65fb05003fba506e1469864b64f"
+                                    },
+                                    "Panic": false,
+                                    "Error": "",
+                                    "Children": [
+                                        {
+                                            "FuncInfo": {
+                                                "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                                "IdentityName": "generateID",
+                                                "Name": "generateID",
+                                                "RecvType": "",
+                                                "RecvPtr": false,
+                                                "Generic": false,
+                                                "RecvName": "",
+                                                "ArgNames": null,
+                                                "ResNames": [
+                                                    ""
+                                                ],
+                                                "FirstArgCtx": false,
+                                                "LastResultErr": false
+                                            },
+                                            "Begin": 70801,
+                                            "End": 108887,
+                                            "Args": {},
+                                            "Results": {
+                                                "": 1903259192436963451
+                                            },
+                                            "Panic": false,
+                                            "Error": "",
+                                            "Children": null
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "FuncInfo": {
+                                "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                "IdentityName": "SaveUserName",
+                                "Name": "SaveUserName",
+                                "RecvType": "",
+                                "RecvPtr": false,
+                                "Generic": false,
+                                "RecvName": "",
+                                "ArgNames": [
+                                    "name"
+                                ],
+                                "ResNames": [
+                                    ""
+                                ],
+                                "FirstArgCtx": false,
+                                "LastResultErr": true
+                            },
+                            "Begin": 160255,
+                            "End": 186213,
+                            "Args": {
+                                "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                            },
+                            "Results": {},
+                            "Panic": false,
+                            "Error": "",
+                            "Children": [
+                                {
+                                    "FuncInfo": {
+                                        "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                        "IdentityName": "CheckUserName",
+                                        "Name": "CheckUserName",
+                                        "RecvType": "",
+                                        "RecvPtr": false,
+                                        "Generic": false,
+                                        "RecvName": "",
+                                        "ArgNames": [
+                                            "name"
+                                        ],
+                                        "ResNames": [
+                                            ""
+                                        ],
+                                        "FirstArgCtx": false,
+                                        "LastResultErr": true
+                                    },
+                                    "Begin": 162077,
+                                    "End": 163589,
+                                    "Args": {
+                                        "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                                    },
+                                    "Results": {},
+                                    "Panic": false,
+                                    "Error": "",
+                                    "Children": null
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "FuncInfo": {
+                        "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace",
+                        "IdentityName": "UpdateUseInfo",
+                        "Name": "UpdateUseInfo",
+                        "RecvType": "",
+                        "RecvPtr": false,
+                        "Generic": false,
+                        "RecvName": "",
+                        "ArgNames": [
+                            "name"
+                        ],
+                        "ResNames": [
+                            "actualName",
+                            "err"
+                        ],
+                        "FirstArgCtx": false,
+                        "LastResultErr": true
+                    },
+                    "Begin": 189278,
+                    "End": 205626,
+                    "Args": {
+                        "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                    },
+                    "Results": {
+                        "actualName": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                    },
+                    "Panic": false,
+                    "Error": "",
+                    "Children": [
+                        {
+                            "FuncInfo": {
+                                "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                "IdentityName": "CheckUserName",
+                                "Name": "CheckUserName",
+                                "RecvType": "",
+                                "RecvPtr": false,
+                                "Generic": false,
+                                "RecvName": "",
+                                "ArgNames": [
+                                    "name"
+                                ],
+                                "ResNames": [
+                                    ""
+                                ],
+                                "FirstArgCtx": false,
+                                "LastResultErr": true
+                            },
+                            "Begin": 190924,
+                            "End": 192093,
+                            "Args": {
+                                "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                            },
+                            "Results": {},
+                            "Panic": false,
+                            "Error": "",
+                            "Children": null
+                        },
+                        {
+                            "FuncInfo": {
+                                "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                "IdentityName": "SaveUserName",
+                                "Name": "SaveUserName",
+                                "RecvType": "",
+                                "RecvPtr": false,
+                                "Generic": false,
+                                "RecvName": "",
+                                "ArgNames": [
+                                    "name"
+                                ],
+                                "ResNames": [
+                                    ""
+                                ],
+                                "FirstArgCtx": false,
+                                "LastResultErr": true
+                            },
+                            "Begin": 193680,
+                            "End": 204598,
+                            "Args": {
+                                "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                            },
+                            "Results": {},
+                            "Panic": false,
+                            "Error": "",
+                            "Children": [
+                                {
+                                    "FuncInfo": {
+                                        "Pkg": "github.com/xhd2015/xgo/runtime/test/stack_trace/user_info",
+                                        "IdentityName": "CheckUserName",
+                                        "Name": "CheckUserName",
+                                        "RecvType": "",
+                                        "RecvPtr": false,
+                                        "Generic": false,
+                                        "RecvName": "",
+                                        "ArgNames": [
+                                            "name"
+                                        ],
+                                        "ResNames": [
+                                            ""
+                                        ],
+                                        "FirstArgCtx": false,
+                                        "LastResultErr": true
+                                    },
+                                    "Begin": 199184,
+                                    "End": 200503,
+                                    "Args": {
+                                        "name": "xhd2015_1_8c33a65fb05003fba506e1469864b64f"
+                                    },
+                                    "Results": {},
+                                    "Panic": false,
+                                    "Error": "",
+                                    "Children": null
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

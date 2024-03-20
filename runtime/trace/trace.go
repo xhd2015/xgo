@@ -57,24 +57,7 @@ func __xgo_link_on_goexit(fn func()) {
 	panic("failed to link __xgo_link_on_goexit")
 }
 
-type Root struct {
-	// current executed function
-	Top      *Stack
-	Children []*Stack
-}
-
-type Stack struct {
-	FuncInfo *core.FuncInfo
-
-	Args    core.Object
-	Results core.Object
-	// Recv     interface{}
-	// Args     []interface{}
-	// Results  []interface{}
-	Children []*Stack
-}
-
-func Use() {
+func Enable() {
 	if getTraceOutput() == "off" {
 		return
 	}
@@ -95,15 +78,18 @@ func Use() {
 			if !ok {
 				// initial stack
 				root := &Root{
-					Top: stack,
+					Top:   stack,
+					Begin: time.Now(),
 					Children: []*Stack{
 						stack,
 					},
 				}
+				stack.Begin = int64(time.Since(root.Begin))
 				stackMap.Store(key, root)
 				return nil, nil
 			}
 			root := v.(*Root)
+			stack.Begin = int64(time.Since(root.Begin))
 			prevTop := root.Top
 			root.Top.Children = append(root.Top.Children, stack)
 			root.Top = stack
@@ -117,12 +103,17 @@ func Use() {
 				panic(fmt.Errorf("unbalanced stack"))
 			}
 			root := v.(*Root)
+			if errObj, ok := results.(core.ObjectWithErr); ok {
+				fnErr := errObj.GetErr().Value()
+				if fnErr != nil {
+					root.Top.Error = fnErr.(error)
+				}
+			}
+			root.Top.End = int64(time.Since(root.Begin))
 			if data == nil {
 				// stack finished
 				stackMap.Delete(key)
-				err := emitTrace(&Stack{
-					Children: root.Children,
-				})
+				err := emitTrace(root)
 				if err != nil {
 					return err
 				}
@@ -135,17 +126,20 @@ func Use() {
 	})
 }
 
+// new API proposal:
+//   stackTrace,err := Collect(func())
+
 func getTraceOutput() string {
 	return os.Getenv("XGO_TRACE_OUTPUT")
 }
 
-var marshalStack func(stack *Stack) ([]byte, error)
+var marshalStack func(root *Root) ([]byte, error)
 
-func SetMarshalStack(fn func(stack *Stack) ([]byte, error)) {
+func SetMarshalStack(fn func(root *Root) ([]byte, error)) {
 	marshalStack = fn
 }
 
-func fmtStack(stack *Stack) (data []byte, err error) {
+func fmtStack(root *Root) (data []byte, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			if pe, ok := e.(error); ok {
@@ -157,14 +151,14 @@ func fmtStack(stack *Stack) (data []byte, err error) {
 		}
 	}()
 	if marshalStack != nil {
-		return marshalStack(stack)
+		return marshalStack(root)
 	}
-	return json.Marshal(stack)
+	return json.Marshal(root.Export())
 }
 
 // this should also be marked as trap.Skip()
 // TODO: may add callback for this
-func emitTrace(stack *Stack) error {
+func emitTrace(root *Root) error {
 	var testName string
 
 	key := uintptr(__xgo_link_getcurg())
@@ -194,7 +188,7 @@ func emitTrace(stack *Stack) error {
 		fmt.Printf("%s: ", subName)
 	}
 	var traceOut []byte
-	trace, stackErr := fmtStack(stack)
+	trace, stackErr := fmtStack(root)
 	if stackErr != nil {
 		traceOut = []byte("error:" + stackErr.Error())
 	} else {

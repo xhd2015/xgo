@@ -5,7 +5,7 @@ import (
 )
 
 func init() {
-	trace.Use()
+	trace.Enable()
 }
 
 func main() {

@@ -95,6 +95,8 @@ func ClearSyntaxDeclMapping() {
 	syntaxDeclMapping = nil
 }
 
+const xgoRuntimePkgPrefix = "github.com/xhd2015/xgo/runtime/"
+
 func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
 	if len(fileList) == 0 {
 		return
@@ -106,10 +108,15 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 
 	// }
 
-	if pkgPath == "" || pkgPath == "runtime" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") || strings.HasPrefix(pkgPath, "github.com/xhd2015/xgo/runtime/") || isSkippableSpecialPkg() {
+	if pkgPath == "" || pkgPath == "runtime" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") || isSkippableSpecialPkg() {
 		// runtime/internal should not be rewritten
 		// internal/api has problem with the function register
 		return
+	}
+	if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) {
+		if !strings.HasPrefix(pkgPath[len(xgoRuntimePkgPrefix):], "test/") {
+			return
+		}
 	}
 	pkgName := fileList[0].PkgName.Value
 	// if true {
@@ -263,7 +270,10 @@ func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 				strconv.Quote(declFunc.RecvTypeName), strconv.FormatBool(declFunc.RecvPtr), strconv.Quote(declFunc.Name),
 				strconv.Quote(declFunc.IdentityName()), strconv.FormatBool(declFunc.Generic), // generic
 				strconv.Quote(declFunc.RecvName), quoteNamesExpr(declFunc.ArgNames), quoteNamesExpr(declFunc.ResNames),
-				strconv.FormatBool(declFunc.FirstArgCtx), strconv.FormatBool(declFunc.LastResError)}, ","),
+				strconv.FormatBool(declFunc.FirstArgCtx), strconv.FormatBool(declFunc.LastResError),
+			},
+				",",
+			),
 		))
 	}
 	if len(stmts) == 0 {

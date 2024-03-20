@@ -1,0 +1,132 @@
+.root {
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+#detail-info {}
+
+
+.detail label {
+    font-weight: bolder;
+}
+
+#detail-info-pkg,
+#detail-info-func {
+    display: inline;
+    color: rgb(119, 119, 119);
+    user-select: text;
+}
+
+.trace-list-root {
+    height: 100%;
+    border: 1px solid grey;
+    list-style: none;
+}
+
+/*set first trace-list's margin top to 1*/
+.trace-list-root>.trace-list {
+    margin-top: 2px;
+    padding-left: 8px;
+}
+
+.trace-list li {
+    margin-bottom: 2px;
+}
+
+.trace-sub-list {
+    list-style: none;
+    padding-left: 1em;
+}
+
+.trace-list.collapsed,
+.trace-sub-list.collapsed {
+    display: none;
+}
+
+.detail {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border: 1px solid grey;
+    flex-grow: 1;
+}
+
+#detail-request {
+    flex-grow: 1;
+    resize: none;
+}
+
+#detail-response {
+    flex-grow: 1;
+    resize: none;
+}
+
+.selected {
+    /* background-color: #b6fdff; */
+    background-color: rgb(238, 238, 238);
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    padding-left: 0.6em;
+    padding-right: 0.6em;
+    position: relative;
+}
+
+.head-block {
+    width: 4px;
+    height: 1em;
+    margin-right: 2px;
+    background-color: rgb(25, 183, 190);
+}
+
+.head-block.error {
+    /*red*/
+    background-color: #DA2829;
+}
+
+.head-block.panic {
+    /*orange-like*/
+    background-color: #ffb500;
+}
+
+.head-info {
+    display: flex;
+    align-items: center;
+}
+
+.head-name {
+    cursor: pointer;
+}
+
+.head-cost {
+    white-space: nowrap;
+    color: rgb(151, 145, 139);
+    margin-left: 5px;
+}
+
+
+/*toggle*/
+.toggle {
+    position: absolute;
+    left: -8px;
+    min-width: fit-content;
+}
+
+.toggle>.toggle-icon-down {
+    display: none;
+}
+
+.toggle>.toggle-icon-right {
+    display: none;
+}
+
+.toggle.down>.toggle-icon-down {
+    display: initial;
+}
+
+.toggle.right>.toggle-icon-right {
+    display: initial;
+}

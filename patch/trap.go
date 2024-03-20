@@ -176,9 +176,12 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 		return "", false
 	}
 
-	if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) && !strings.HasPrefix(pkgPath[len(xgoRuntimePkgPrefix):], "test/") {
-		// skip all packages for xgo,except test
-		return "", false
+	// skip all packages for xgo,except test
+	if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) {
+		remain := pkgPath[len(xgoRuntimePkgPrefix):]
+		if !strings.HasPrefix(remain, "test/") && !strings.HasPrefix(remain, "runtime/test/") {
+			return "", false
+		}
 	}
 
 	// check if function body's first statement is a call to 'trap.Skip()'

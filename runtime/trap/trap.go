@@ -94,14 +94,27 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 		}
 		req = appendFields(req, args[1:], argNames)
 	}
+
+	var resObject core.Object
 	if !f.LastResultErr {
 		result = appendFields(result, results, f.ResNames)
+		resObject = result
 	} else {
 		resNames := f.ResNames
+		var errName string
 		if resNames != nil {
+			errName = resNames[len(resNames)-1]
 			resNames = resNames[:len(resNames)-1]
 		}
+		errField := field{
+			name:   errName,
+			valPtr: results[len(results)-1],
+		}
 		result = appendFields(result, results[:len(results)-1], resNames)
+		resObject = &objectWithErr{
+			object: result,
+			err:    errField,
+		}
 	}
 
 	// TODO: what about inlined func?
@@ -113,19 +126,15 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 
 	// TODO: will results always have names?
 	var perr *error
-	if len(results) > 0 {
-		if errPtr, ok := results[len(results)-1].(*error); ok {
-			perr = errPtr
-		}
+	if f.LastResultErr {
+		perr = results[len(results)-1].(*error)
 	}
 
-	// NOTE: ctx may
+	// NOTE: ctx
 	var ctx context.Context
-	if len(args) > 0 {
+	if f.FirstArgCtx {
 		// TODO: is *HttpRequest a *Context?
-		if argCtxPtr, ok := args[0].(*context.Context); ok {
-			ctx = *argCtxPtr
-		}
+		ctx = *(args[0].(*context.Context))
 	}
 	// NOTE: context.TODO() is a constant
 	if ctx == nil {
@@ -140,7 +149,7 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 			continue
 		}
 		// if
-		data, err := interceptor.Pre(ctx, f, req, result)
+		data, err := interceptor.Pre(ctx, f, req, resObject)
 		dataList[i] = data
 		if err != nil {
 			if err == ErrAbort {
@@ -164,7 +173,7 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 			if interceptor.Post == nil {
 				continue
 			}
-			err := interceptor.Post(ctx, f, req, result, dataList[i])
+			err := interceptor.Post(ctx, f, req, resObject, dataList[i])
 			if err != nil {
 				if err == ErrAbort {
 					return nil, true
@@ -191,7 +200,7 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 			if interceptor.Post == nil {
 				continue
 			}
-			err := interceptor.Post(ctx, f, req, result, dataList[i])
+			err := interceptor.Post(ctx, f, req, resObject, dataList[i])
 			if err != nil {
 				if err == ErrAbort {
 					return

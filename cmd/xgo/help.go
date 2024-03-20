@@ -18,12 +18,15 @@ The commands are:
     version     print xgo version
     revision    print xgo revision
     upgrade     upgrade to latest version of xgo
+    tool        invoke xgo tools      
 
 Examples:
     xgo buil -o main ./                          build current module
     xgo buil -o main -gcflags="all=-N -l" ./     build current module with debug flags
     xgo run ./                                   run current module
+    xgo test ./...                               test all test cases of current module
     xgo exec go version                          print instrumented go version
+    xgo tool trace   TestSomething.json          view test trace
 
 See https://github.com/xhd2015/xgo for documentation.
 

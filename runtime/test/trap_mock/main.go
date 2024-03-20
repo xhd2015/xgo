@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	trace.Use()
+	trace.Enable()
 	mock.Use()
 }
 
