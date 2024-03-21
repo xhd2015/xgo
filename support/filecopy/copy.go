@@ -44,14 +44,29 @@ func CopyReplaceDir(srcDir string, targetDir string, useLink bool) error {
 }
 
 func copyDir(srcDir string, targetAbsDir string) error {
-	n := len(srcDir)
+
+	// special case, when srcDir is a symbolic, it fails to
+	// walk, so we make a workaround here
+	stat, err := os.Lstat(srcDir)
+	if err != nil {
+		return err
+	}
+	actualDir := srcDir
+	if !stat.IsDir() {
+		linkDir, err := os.Readlink(srcDir)
+		if err != nil {
+			return err
+		}
+		actualDir = linkDir
+	}
+	n := len(actualDir)
 	prefixLen := n + len(string(filepath.Separator))
-	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+	return filepath.WalkDir(actualDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		// root
-		if path == srcDir {
+		if path == actualDir {
 			return os.MkdirAll(targetAbsDir, 0755)
 		}
 		subPath := path[prefixLen:]
