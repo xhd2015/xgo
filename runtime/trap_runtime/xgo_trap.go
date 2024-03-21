@@ -83,6 +83,16 @@ func __xgo_get_test_starts() []interface{} {
 	return __xgo_on_test_starts
 }
 
+// check gorecover() for implementation details
+func __xgo_peek_panic() interface{} {
+	gp := getg()
+	p := gp._panic
+	if p == nil || p.goexit || p.recovered {
+		return nil
+	}
+	return p.arg
+}
+
 // func GetFuncs_Requires_Xgo() []interface{} {
 // 	return funcs
 // }

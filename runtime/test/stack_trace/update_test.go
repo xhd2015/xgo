@@ -10,7 +10,7 @@ func init() {
 	trace.Enable()
 }
 
-// xgo test ./test/stack_trace
+// xgo test -run TestUpdateUserInfo -v ./test/stack_trace
 func TestUpdateUserInfo(t *testing.T) {
 	oldUserName := "old user"
 	actualName, err := UpdateUserInfo(oldUserName)
@@ -27,4 +27,9 @@ func TestUpdateUserInfo(t *testing.T) {
 	if newActualName != actualName {
 		t.Fatalf("expect new user name: %s, actual: %s", actualName, newActualName)
 	}
+}
+
+// xgo test -run TestDeleteUserInfoPanic -v ./test/stack_trace
+func TestDeleteUserInfoPanic(t *testing.T) {
+	DeleteUserInfo("xhd2015")
 }

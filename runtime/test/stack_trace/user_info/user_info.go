@@ -32,6 +32,14 @@ func SaveUserName(name string) error {
 	return nil
 }
 
+func DeleteUserName(name string) error {
+	if name == "xhd2015_1" {
+		return fmt.Errorf("cannot delete xhd2015_1")
+	}
+	fmt.Printf("user %s deleted\n", name)
+	return nil
+}
+
 func randMD5() string {
 	h := md5.New()
 	n := generateID()

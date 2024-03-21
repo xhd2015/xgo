@@ -21,4 +21,5 @@ var linkMap = map[string]string{
 	"__xgo_link_on_test_start":                xgoOnTestStart,
 	"__xgo_link_get_test_starts":              "__xgo_get_test_starts",
 	"__xgo_link_retrieve_all_funcs_and_clear": "__xgo_retrieve_all_funcs_and_clear",
+	"__xgo_link_peek_panic":                   "__xgo_peek_panic",
 }

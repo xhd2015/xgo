@@ -57,6 +57,11 @@ func __xgo_link_on_goexit(fn func()) {
 	panic("failed to link __xgo_link_on_goexit")
 }
 
+// linked by compiler
+func __xgo_link_peek_panic() interface{} {
+	return nil
+}
+
 func Enable() {
 	if getTraceOutput() == "off" {
 		return
@@ -103,10 +108,21 @@ func Enable() {
 				panic(fmt.Errorf("unbalanced stack"))
 			}
 			root := v.(*Root)
-			if errObj, ok := results.(core.ObjectWithErr); ok {
-				fnErr := errObj.GetErr().Value()
-				if fnErr != nil {
-					root.Top.Error = fnErr.(error)
+			// detect panic
+			pe := __xgo_link_peek_panic()
+			if pe != nil {
+				root.Top.Panic = true
+				peErr, ok := pe.(error)
+				if !ok {
+					peErr = fmt.Errorf("panic: %v", pe)
+				}
+				root.Top.Error = peErr
+			} else {
+				if errObj, ok := results.(core.ObjectWithErr); ok {
+					fnErr := errObj.GetErr().Value()
+					if fnErr != nil {
+						root.Top.Error = fnErr.(error)
+					}
 				}
 			}
 			root.Top.End = int64(time.Since(root.Begin))
