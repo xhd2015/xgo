@@ -4,7 +4,6 @@ import "time"
 
 type RootExport struct {
 	// current executed function
-	Top      *StackExport
 	Begin    time.Time
 	Children []*StackExport
 }

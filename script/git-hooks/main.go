@@ -123,12 +123,18 @@ func install() error {
 		return err
 	}
 
-	err = installHook(filepath.Join(gitDir, "hooks", "pre-commit"), preCommitCmdHead, preCommitCmd)
+	hooksDir := filepath.Join(gitDir, "hooks")
+	err = os.MkdirAll(hooksDir, 0755)
+	if err != nil {
+		return err
+	}
+
+	err = installHook(filepath.Join(hooksDir, "pre-commit"), preCommitCmdHead, preCommitCmd)
 	if err != nil {
 		return fmt.Errorf("pre-commit: %w", err)
 	}
 
-	err = installHook(filepath.Join(gitDir, "hooks", "post-commit"), postCommitCmdHead, postCommitCmd)
+	err = installHook(filepath.Join(hooksDir, "post-commit"), postCommitCmdHead, postCommitCmd)
 	if err != nil {
 		return fmt.Errorf("post-commit: %w", err)
 	}
@@ -178,7 +184,7 @@ func installHook(hookFile string, head string, cmd string) error {
 	}
 
 	// chmod to what? it is 0755 already
-	if needChmod && false {
+	if needChmod {
 		err := os.Chmod(hookFile, 0755)
 		if err != nil {
 			return err

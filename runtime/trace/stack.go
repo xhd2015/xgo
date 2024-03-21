@@ -34,7 +34,6 @@ func (c *Root) Export() *RootExport {
 		return nil
 	}
 	return &RootExport{
-		Top:      c.Top.Export(),
 		Begin:    c.Begin,
 		Children: (stacks)(c.Children).Export(),
 	}

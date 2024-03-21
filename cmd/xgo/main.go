@@ -183,6 +183,12 @@ func handleBuild(cmd string, args []string) error {
 	if isDevelopment {
 		realXgoSrc = optXgoSrc
 		if realXgoSrc == "" {
+			_, statErr := os.Stat(filepath.Join("cmd", "xgo", "main.go"))
+			if statErr == nil {
+				realXgoSrc, _ = os.Getwd()
+			}
+		}
+		if realXgoSrc == "" {
 			return fmt.Errorf("requires --xgo-src")
 		}
 	}

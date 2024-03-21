@@ -130,14 +130,16 @@ function toggleTraceList(id, toggle, collapsed) {
     traceList.classList.remove("collapsed")
 }
 
-// for debugging
-window.traces = traces
+// event listeners
 window.onClickHead = onClickHead
 window.onClickToggle = onClickToggle
 window.onClickExpandAll = onClickExpandAll
 
-window.shit = function () {
+// for debugging
+window.traces = traces
+window.debug = function () {
     debugger
-    alert("shit")
+    alert("debug")
 }
+// go to head
 onClickHead("2")

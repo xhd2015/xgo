@@ -15,7 +15,6 @@ import (
 //  go run ./script/build-release
 //  go run ./script/build-release --local --local-name xgo_exp
 
-// TODO: apply build tag for development and release mode
 func main() {
 	args := os.Args[1:]
 	n := len(args)

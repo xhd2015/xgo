@@ -7,7 +7,10 @@ It adds missing abilities to go program by cooperating with(or hacking) the go c
 
 Thses abilities include [Mock](#mock), [Trap](#trap) and [Trace](#trace).
 
-See [Usage](#usage) and [Documentation](#xgo) for more details. 
+See [Usage](#usage) and [Documentation](doc) for more details.
+
+Want to help contribute to `xgo`? Great! Check [CONTRIBUTING
+](CONTRIBUTING.md) for help.
 
 
 # Installation
@@ -21,6 +24,15 @@ If you've already installed `xgo`, you can upgrade it with:
 ```sh
 xgo upgrade
 ```
+
+If you want to build from source, run with:
+
+```sh
+git clone https://github.com/xhd2015/xgo
+cd xgo
+go run ./script/build-release --local
+```
+
 
 # Requirement
 `xgo` requires at least `go1.17` to compile.
