@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -41,6 +42,7 @@ func init() {
 	__xgo_link_on_goexit(func() {
 		key := uintptr(__xgo_link_getcurg())
 		testInfoMaping.Delete(key)
+		collectingMap.Delete(key)
 	})
 }
 
@@ -56,31 +58,98 @@ func __xgo_link_getcurg() unsafe.Pointer {
 func __xgo_link_on_goexit(fn func()) {
 	panic("failed to link __xgo_link_on_goexit")
 }
+func __xgo_link_init_finished() bool {
+	panic("xgo failed to link __xgo_link_init_finished")
+}
 
 // linked by compiler
 func __xgo_link_peek_panic() interface{} {
 	return nil
 }
 
+var enabledGlobal int32
+
 func Enable() {
 	if getTraceOutput() == "off" {
 		return
 	}
+	if __xgo_link_init_finished() {
+		panic("Enable must be called from init")
+	}
+	if !atomic.CompareAndSwapInt32(&enabledGlobal, 0, 1) {
+		return
+	}
+	setupInterceptor()
+}
+
+// executes f and collect its trace
+// by default trace output will be
+// controlled by XGO_TRACE_OUTPUT
+func Collect(f func()) {
+	if !__xgo_link_init_finished() {
+		panic("Collect cannot be called from init")
+	}
+	collect(f, &collectOpts{})
+}
+
+type collectOpts struct {
+	name       string
+	onComplete func(root *Root)
+	root       *Root
+}
+
+func Options() *collectOpts {
+	return &collectOpts{}
+}
+
+func (c *collectOpts) Name(name string) *collectOpts {
+	c.name = name
+	return c
+}
+
+func (c *collectOpts) OnComplete(f func(root *Root)) *collectOpts {
+	c.onComplete = f
+	return c
+}
+
+func (c *collectOpts) Collect(f func()) {
+	collect(f, c)
+}
+
+func setupInterceptor() func() {
 	// collect trace
-	trap.AddInterceptor(&trap.Interceptor{
+	return trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
-			trap.Skip()
+			key := uintptr(__xgo_link_getcurg())
+			localOptStack, ok := collectingMap.Load(key)
+			var locaOpts *collectOpts
+			if ok {
+				l := localOptStack.(*optStack)
+				if len(l.list) > 0 {
+					locaOpts = l.list[len(l.list)-1]
+				}
+			}
 			stack := &Stack{
 				FuncInfo: f,
 				Args:     args,
 				Results:  results,
-				// Recv:     args.Recv,
-				// Args:     args.Args,
-				// Results:  args.Results,
 			}
-			key := uintptr(__xgo_link_getcurg())
-			v, ok := stackMap.Load(key)
-			if !ok {
+			var globalRoot interface{}
+			var localRoot *Root
+			var initial bool
+			if locaOpts == nil {
+				var globalLoaded bool
+				globalRoot, globalLoaded = stackMap.Load(key)
+				if !globalLoaded {
+					initial = true
+				}
+			} else {
+				localRoot = locaOpts.root
+				if localRoot == nil {
+					initial = true
+				}
+			}
+			if initial {
 				// initial stack
 				root := &Root{
 					Top:   stack,
@@ -90,10 +159,20 @@ func Enable() {
 					},
 				}
 				stack.Begin = int64(time.Since(root.Begin))
-				stackMap.Store(key, root)
+				if locaOpts == nil {
+					stackMap.Store(key, root)
+				} else {
+					locaOpts.root = root
+				}
+				// NOTE: for initial stack, the data is nil
 				return nil, nil
 			}
-			root := v.(*Root)
+			var root *Root
+			if locaOpts != nil {
+				root = localRoot
+			} else {
+				root = globalRoot.(*Root)
+			}
 			stack.Begin = int64(time.Since(root.Begin))
 			prevTop := root.Top
 			root.Top.Children = append(root.Top.Children, stack)
@@ -103,11 +182,29 @@ func Enable() {
 		Post: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object, data interface{}) error {
 			trap.Skip()
 			key := uintptr(__xgo_link_getcurg())
-			v, ok := stackMap.Load(key)
-			if !ok {
-				panic(fmt.Errorf("unbalanced stack"))
+
+			localOptStack, ok := collectingMap.Load(key)
+			var locaOpts *collectOpts
+			if ok {
+				l := localOptStack.(*optStack)
+				if len(l.list) > 0 {
+					locaOpts = l.list[len(l.list)-1]
+				}
 			}
-			root := v.(*Root)
+			var root *Root
+			if locaOpts != nil {
+				if locaOpts.root == nil {
+					panic(fmt.Errorf("unbalanced stack"))
+				}
+				root = locaOpts.root
+			} else {
+				v, ok := stackMap.Load(key)
+				if !ok {
+					panic(fmt.Errorf("unbalanced stack"))
+				}
+				root = v.(*Root)
+			}
+
 			// detect panic
 			pe := __xgo_link_peek_panic()
 			if pe != nil {
@@ -128,22 +225,63 @@ func Enable() {
 			root.Top.End = int64(time.Since(root.Begin))
 			if data == nil {
 				// stack finished
+				if locaOpts != nil {
+					if locaOpts.onComplete != nil {
+						locaOpts.onComplete(root)
+						return nil
+					}
+					err := emitTrace(locaOpts.name, root)
+					if err != nil {
+						return err
+					}
+					return nil
+				}
+
+				// global
 				stackMap.Delete(key)
-				err := emitTrace(root)
+				err := emitTrace("", root)
 				if err != nil {
 					return err
 				}
-			} else {
-				// pop stack
-				root.Top = data.(*Stack)
+				return nil
 			}
+			// pop stack
+			root.Top = data.(*Stack)
 			return nil
 		},
 	})
 }
 
-// new API proposal:
-//   stackTrace,err := Collect(func())
+var collectingMap sync.Map // <uintptr> -> []*collectOpts
+
+type optStack struct {
+	list []*collectOpts
+}
+
+func collect(f func(), collOpts *collectOpts) {
+	if atomic.LoadInt32(&enabledGlobal) == 0 {
+		cancel := setupInterceptor()
+		defer cancel()
+	}
+	key := uintptr(__xgo_link_getcurg())
+	if collOpts.name == "" {
+		collOpts.name = fmt.Sprintf("g_%x", uint(key))
+	}
+
+	act, _ := collectingMap.LoadOrStore(key, &optStack{})
+	opts := act.(*optStack)
+
+	// push
+	opts.list = append(opts.list, collOpts)
+	defer func() {
+		// pop
+		opts.list = opts.list[:len(opts.list)-1]
+		if len(opts.list) == 0 {
+			collectingMap.Delete(key)
+		}
+	}()
+	f()
+}
 
 func getTraceOutput() string {
 	return os.Getenv("XGO_TRACE_OUTPUT")
@@ -174,19 +312,19 @@ func fmtStack(root *Root) (data []byte, err error) {
 
 // this should also be marked as trap.Skip()
 // TODO: may add callback for this
-func emitTrace(root *Root) error {
-	var testName string
-
-	key := uintptr(__xgo_link_getcurg())
-	tinfo, ok := testInfoMaping.Load(key)
-	if ok {
-		testName = tinfo.(*testInfo).name
+func emitTrace(name string, root *Root) error {
+	if name == "" {
+		key := uintptr(__xgo_link_getcurg())
+		tinfo, ok := testInfoMaping.Load(key)
+		if ok {
+			name = tinfo.(*testInfo).name
+		}
 	}
 
 	xgoTraceOutput := getTraceOutput()
 	useStdout := xgoTraceOutput == "stdout"
-	subName := testName
-	if testName == "" {
+	subName := name
+	if name == "" {
 		traceIDNum := int64(1)
 		ghex := fmt.Sprintf("g_%x", __xgo_link_getcurg())
 		traceID := "t_" + strconv.FormatInt(traceIDNum, 10)

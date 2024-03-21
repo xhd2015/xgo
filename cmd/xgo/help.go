@@ -20,8 +20,8 @@ The commands are:
     tool        invoke xgo tools      
 
 Examples:
-    xgo buil -o main ./                          build current module
-    xgo buil -o main -gcflags="all=-N -l" ./     build current module with debug flags
+    xgo build -o main ./                         build current module
+    xgo build -o main -gcflags="all=-N -l" ./    build current module with debug flags
     xgo run ./                                   run current module
     xgo test ./...                               test all test cases of current module
     xgo exec go version                          print instrumented go version
