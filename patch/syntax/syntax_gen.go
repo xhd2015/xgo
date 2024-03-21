@@ -2,4 +2,4 @@
 
 package syntax
 
-const sig_gen__xgo_register_func = `func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)`
+const sig_gen__xgo_register_func = `func(info interface{})`

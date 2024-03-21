@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core"
 )
@@ -28,8 +29,8 @@ func init() {
 
 // rewrite at compile time by compiler, the body will be replaced with
 // a call to runtime.__xgo_for_each_func
-func __xgo_link_for_each_func(f func(pkgPath string, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)) {
-	panic("failed to link __xgo_link_for_each_func")
+func __xgo_link_retrieve_all_funcs_and_clear(f func(fn interface{})) {
+	panic("failed to link __xgo_link_retrieve_all_funcs_and_clear")
 }
 
 func __xgo_link_on_init_finished(f func()) {
@@ -94,11 +95,34 @@ func ensureMapping() {
 	mappingOnce.Do(func() {
 		funcPCMapping = make(map[uintptr]*core.FuncInfo)
 		funcInfoMapping = make(map[string]map[string]*core.FuncInfo)
-		__xgo_link_for_each_func(func(pkgPath string, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool) {
+		__xgo_link_retrieve_all_funcs_and_clear(func(fnInfo interface{}) {
+			rv := reflect.ValueOf(fnInfo)
+			if rv.Kind() != reflect.Struct {
+				panic(fmt.Errorf("expect struct, actual: %s", rv.Kind().String()))
+			}
+			identityName := rv.FieldByName("IdentityName").String()
 			if identityName == "" {
 				// 	fmt.Fprintf(os.Stderr, "empty name\n",pkgPath)
 				return
 			}
+
+			pkgPath := rv.FieldByName("PkgPath").String()
+			recvTypeName := rv.FieldByName("RecvTypeName").String()
+			recvPtr := rv.FieldByName("RecvPtr").Bool()
+			name := rv.FieldByName("Name").String()
+			generic := rv.FieldByName("Generic").Bool()
+			f := rv.FieldByName("Fn").Interface()
+			var pc uintptr
+			if !generic {
+				pc = getFuncPC(f)
+			}
+			recvName := rv.FieldByName("RecvName").String()
+			argNames := rv.FieldByName("ArgNames").Interface().([]string)
+			resNames := rv.FieldByName("ResNames").Interface().([]string)
+			firstArgCtx := rv.FieldByName("FirstArgCtx").Bool()
+			lastResErr := rv.FieldByName("LastResErr").Bool()
+			file := rv.FieldByName("File").String()
+			line := int(rv.FieldByName("Line").Int())
 			// if pkgPath == "main" {
 			// 	fmt.Fprintf(os.Stderr, "reg: funcName=%s,pc=%x,generic=%v,genericname=%s\n", funcName, pc, generic, genericName)
 			// }
@@ -111,9 +135,12 @@ func ensureMapping() {
 				RecvPtr:      recvPtr,
 				Generic:      generic,
 
+				File: file,
+				Line: line,
+
 				// runtime info
 				PC:   pc, // nil for generic
-				Func: fn, // nil for geneirc
+				Func: f,  // nil for geneirc
 
 				RecvName: recvName,
 				ArgNames: argNames,
@@ -137,4 +164,13 @@ func ensureMapping() {
 			}
 		})
 	})
+}
+
+func getFuncPC(fn interface{}) uintptr {
+	type intf struct {
+		_  uintptr
+		pc *uintptr
+	}
+	v := (*intf)(unsafe.Pointer(&fn))
+	return *v.pc
 }

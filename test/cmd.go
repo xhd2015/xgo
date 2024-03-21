@@ -20,7 +20,7 @@ const (
 )
 
 type options struct {
-	xgoCmd xgoCmd // the command is run
+	xgoCmd xgoCmd
 	exec   bool
 	noTrim bool
 	env    []string

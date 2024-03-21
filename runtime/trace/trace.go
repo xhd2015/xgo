@@ -196,7 +196,7 @@ func emitTrace(root *Root) error {
 	}
 
 	if useStdout {
-		fmt.Print(traceOut)
+		fmt.Printf("%s\n", traceOut)
 		return nil
 	}
 

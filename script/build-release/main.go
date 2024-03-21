@@ -14,16 +14,22 @@ import (
 // usage:
 //  go run ./script/build-release
 //  go run ./script/build-release --local --local-name xgo_exp
+//  go run ./script/build-release --local --local-name xgo_exp --debug
 
 func main() {
 	args := os.Args[1:]
 	n := len(args)
 	var installLocal bool
 	var localName string
+	var debug bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--local" {
 			installLocal = true
+			continue
+		}
+		if arg == "--debug" {
+			debug = true
 			continue
 		}
 		if arg == "--local-name" {
@@ -44,13 +50,14 @@ func main() {
 			{"windows", "amd64"},
 			{"windows", "arm64"},
 		}
+		debug = false
 	} else {
 		archs = []*osArch{
 			{runtime.GOOS, runtime.GOARCH},
 		}
 	}
 
-	err := buildRelease("xgo-release", installLocal, localName, archs)
+	err := buildRelease("xgo-release", installLocal, localName, debug, archs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -62,7 +69,7 @@ type osArch struct {
 	goarch string
 }
 
-func buildRelease(releaseDir string, installLocal bool, localName string, osArches []*osArch) error {
+func buildRelease(releaseDir string, installLocal bool, localName string, debug bool, osArches []*osArch) error {
 	if installLocal && len(osArches) != 1 {
 		return fmt.Errorf("--install-local requires only one target")
 	}
@@ -80,7 +87,11 @@ func buildRelease(releaseDir string, installLocal bool, localName string, osArch
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpDir)
+	if !debug {
+		defer os.RemoveAll(tmpDir)
+	} else {
+		fmt.Printf("%s\n", tmpDir)
+	}
 
 	tmpSrcDir := filepath.Join(tmpDir, "src")
 
@@ -91,7 +102,11 @@ func buildRelease(releaseDir string, installLocal bool, localName string, osArch
 		return err
 	}
 	// --force: delete files even there is untracked content
-	defer cmd.Run("git", "worktree", "remove", "--force", tmpSrcDir)
+	if !debug {
+		defer cmd.Run("git", "worktree", "remove", "--force", tmpSrcDir)
+	} else {
+		fmt.Printf("git worktree remove --force %s\n", tmpSrcDir)
+	}
 	// update the version
 	rev, err := revision.GetCommitHash("", "HEAD")
 	if err != nil {
@@ -104,7 +119,7 @@ func buildRelease(releaseDir string, installLocal bool, localName string, osArch
 	}
 
 	for _, osArch := range osArches {
-		err := buildBinaryRelease(dir, tmpSrcDir, version, osArch.goos, osArch.goarch, installLocal, localName)
+		err := buildBinaryRelease(dir, tmpSrcDir, ".", version, osArch.goos, osArch.goarch, installLocal, localName, debug)
 		if err != nil {
 			return fmt.Errorf("GOOS=%s GOARCH=%s:%w", osArch.goos, osArch.goarch, err)
 		}
@@ -167,7 +182,7 @@ func generateSums(dir string, sumFile string) error {
 // c2876990b545be8396b7d13f0f9c3e23b38236de8f0c9e79afe04bcf1d03742e  xgo1.0.0-darwin-arm64.tar.gz
 // 6ae476cb4c3ab2c81a94d1661070e34833e4a8bda3d95211570391fb5e6a3cc0  xgo1.0.0-darwin-amd64.tar.gz
 
-func buildBinaryRelease(dir string, srcDir string, version string, goos string, goarch string, installLocal bool, localName string) error {
+func buildBinaryRelease(dir string, srcDir string, origSrcDir string, version string, goos string, goarch string, installLocal bool, localName string, debug bool) error {
 	if version == "" {
 		return fmt.Errorf("requires version")
 	}
@@ -187,6 +202,11 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 	}
 	defer os.RemoveAll(tmpDir)
 
+	origSrcDir, err = filepath.Abs(origSrcDir)
+	if err != nil {
+		return err
+	}
+
 	archive := filepath.Join(tmpDir, "archive")
 
 	bins := [][2]string{
@@ -199,9 +219,16 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 	for _, bin := range bins {
 		binName, binSrc := bin[0], bin[1]
 		archiveFiles = append(archiveFiles, "./"+binName)
+		buildArgs := []string{"build", "-o", filepath.Join(tmpDir, binName)}
+		if debug {
+			buildArgs = append(buildArgs, "-gcflags=all=-N -l")
+			// buildArgs = append(buildArgs, fmt.Sprintf("-gcflags=main=-trimpath=%s=>%s", srcDir, origSrcDir))
+		}
+		buildArgs = append(buildArgs, binSrc)
+		// fmt.Printf("flags: %v\n", buildArgs)
 		err = cmd.Env([]string{"GOOS=" + goos, "GOARCH=" + goarch}).
 			Dir(srcDir).
-			Run("go", "build", "-o", filepath.Join(tmpDir, binName), binSrc)
+			Run("go", buildArgs...)
 		if err != nil {
 			return err
 		}

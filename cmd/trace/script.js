@@ -22,53 +22,50 @@ function onClickHead(id) {
     if (!el) {
         return
     }
+    if (selectedID === id) {
+        return
+    }
     const classList = el.classList
-    if (classList.contains("selected")) {
-        classList.remove("selected")
-    } else {
-        classList.add("selected")
+    classList.toggle("selected")
+
+    const prev = document.getElementById(getHeadID(selectedID))
+    if (prev) {
+        prev.classList.remove("selected")
+    }
+    selectedID = id
+    const info = document.getElementById("detail-info")
+    const infoPkg = document.getElementById("detail-info-pkg")
+    const infoFunc = document.getElementById("detail-info-func")
+    const vscodeIcon = document.getElementById("vscode-icon")
+    const req = document.getElementById("detail-request")
+    const resp = document.getElementById("detail-response")
+    const traceData = traces[id]
+
+    if (traceData.error) {
+        infoPkg.innerText = "<unknown>"
+        infoFunc.innerText = "<unknown>"
+        vscodeIcon.classList.add("disabled")
+        req.value = traceData.error
+        resp.value = ''
+        return
     }
 
-    if (selectedID !== id) {
-        const prev = document.getElementById(getHeadID(selectedID))
-        if (prev) {
-            prev.classList.remove("selected")
+    if (traceData.FuncInfo?.File) {
+        vscodeIcon.classList.remove("disabled")
+    } else {
+        vscodeIcon.classList.add("disabled")
+    }
+    infoPkg.innerText = traceData.FuncInfo?.Pkg || ""
+    infoFunc.innerText = traceData.FuncInfo?.IdentityName || ""
+    req.value = JSON.stringify(traceData.Args, null, "    ")
+    if (traceData.Error) {
+        let msg = traceData.Error
+        if (!msg.includes("err")) {
+            msg = "error:" + msg
         }
-        selectedID = id
-        const info = document.getElementById("detail-info")
-        const infoPkg = document.getElementById("detail-info-pkg")
-        const infoFunc = document.getElementById("detail-info-func")
-        const vscodeIcon = document.getElementById("vscode-icon")
-        const req = document.getElementById("detail-request")
-        const resp = document.getElementById("detail-response")
-        const traceData = traces[id]
-
-        if (traceData.error) {
-            infoPkg.innerText = "<unknown>"
-            infoFunc.innerText = "<unknown>"
-            vscodeIcon.classList.add("disabled")
-            req.value = traceData.error
-            resp.value = ''
-            return
-        }
-
-        if (traceData.FuncInfo?.File) {
-            vscodeIcon.classList.remove("disabled")
-        } else {
-            vscodeIcon.classList.add("disabled")
-        }
-        infoPkg.innerText = traceData.FuncInfo?.Pkg || ""
-        infoFunc.innerText = traceData.FuncInfo?.IdentityName || ""
-        req.value = JSON.stringify(traceData.Args, null, "    ")
-        if (traceData.Error) {
-            let msg = traceData.Error
-            if (!msg.includes("err")) {
-                msg = "error:" + msg
-            }
-            resp.value = msg
-        } else {
-            resp.value = JSON.stringify(traceData.Results, null, "    ")
-        }
+        resp.value = msg
+    } else {
+        resp.value = JSON.stringify(traceData.Results, null, "    ")
     }
 }
 
@@ -121,7 +118,6 @@ function onClickExpandAll(e) {
     }
 }
 function onClickVscodeIcon(e) {
-    debugger
     if (!selectedID) {
         return
     }

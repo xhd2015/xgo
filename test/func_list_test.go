@@ -18,14 +18,18 @@ func TestFuncList(t *testing.T) {
 
 	// t.Logf("%s", output)
 
-	expectStdLines := []string{
-		"func:strconv FormatBool",
-		"func:time Now",
-		"func:os MkdirAll",
-		"func:fmt Printf",
-		"func:strings Split",
+	if false {
+		// NOTE: since xgo v1.0.3, std libs
+		// are not included in functab
+		expectStdLines := []string{
+			"func:strconv FormatBool",
+			"func:time Now",
+			"func:os MkdirAll",
+			"func:fmt Printf",
+			"func:strings Split",
+		}
+		expectContains(t, output, expectStdLines)
 	}
-	expectContains(t, output, expectStdLines)
 
 	var expectMainLines []string
 	// go1.18, with generic

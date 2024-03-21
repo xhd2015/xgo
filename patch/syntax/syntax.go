@@ -4,19 +4,29 @@ import (
 	"cmd/compile/internal/syntax"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strconv"
 	"strings"
+	"time"
 
 	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
 	xgo_func_name "cmd/compile/internal/xgo_rewrite_internal/patch/func_name"
 )
 
-const sig_expected__xgo_register_func = "func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)"
+const sig_expected__xgo_register_func = `func(info interface{})`
 
 func init() {
 	if sig_gen__xgo_register_func != sig_expected__xgo_register_func {
 		panic(fmt.Errorf("__xgo_register_func signature changed, run go generate and update sig_expected__xgo_register_func correspondly"))
 	}
+}
+
+func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
+	afterFilesParsed(fileList, addFile)
+}
+
+func GetSyntaxDeclMapping() map[string]map[LineCol]*DeclInfo {
+	return getSyntaxDeclMapping()
 }
 
 var allFiles []*syntax.File
@@ -45,23 +55,22 @@ type LineCol struct {
 
 var syntaxDeclMapping map[string]map[LineCol]*DeclInfo
 
-func GetSyntaxDeclMapping() map[string]map[LineCol]*DeclInfo {
+func getSyntaxDeclMapping() map[string]map[LineCol]*DeclInfo {
 	if syntaxDeclMapping != nil {
 		return syntaxDeclMapping
 	}
 	// build pos -> syntax mapping
 	syntaxDeclMapping = make(map[string]map[LineCol]*DeclInfo)
 	for _, syntaxDecl := range allDecls {
-		pos := syntaxDecl.FuncDecl.Pos()
-		file := pos.RelFilename()
+		file := syntaxDecl.File
 		fileMapping := syntaxDeclMapping[file]
 		if fileMapping == nil {
 			fileMapping = make(map[LineCol]*DeclInfo)
 			syntaxDeclMapping[file] = fileMapping
 		}
 		fileMapping[LineCol{
-			Line: pos.Line(),
-			Col:  pos.Col(),
+			Line: uint(syntaxDecl.Line),
+			Col:  syntaxDecl.FuncDecl.Pos().Col(),
 		}] = syntaxDecl
 	}
 	return syntaxDeclMapping
@@ -97,16 +106,15 @@ func ClearSyntaxDeclMapping() {
 
 const xgoRuntimePkgPrefix = "github.com/xhd2015/xgo/runtime/"
 
-func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
+func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
 	if len(fileList) == 0 {
+		return
+	}
+	if xgo_ctxt.SkipPackageTrap() {
 		return
 	}
 	allFiles = fileList
 	pkgPath := xgo_ctxt.GetPkgPath()
-
-	// if pkgPath == "github.com/xhd2015/xgo/runtime/core/functab_debug" {
-
-	// }
 
 	if pkgPath == "" || pkgPath == "runtime" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") || isSkippableSpecialPkg() {
 		// runtime/internal should not be rewritten
@@ -135,14 +143,24 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	if body == "" {
 		return
 	}
-
-	autoGen := "package " + pkgName + "\n" +
+	autoGenStmts := []string{
+		"package " + pkgName,
+		// "import \"reflect\"", // debug
+		// "import \"fmt\"",     // debug
 		// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
-		"func __xgo_register_funcs(__xgo_reg_func " + sig_gen__xgo_register_func + "){\n" +
-		body +
-		"\n}"
-	// ioutil.WriteFile("test.log", []byte(autoGen), 0755)
-	addFile("__xgo_autogen.go", strings.NewReader(autoGen))
+		"func __xgo_register_funcs(__xgo_reg_func " + sig_gen__xgo_register_func + "){",
+		body,
+		"}",
+		"",
+	}
+
+	autoGen := strings.Join(autoGenStmts, "\n")
+	if false {
+		// debug
+		ioutil.WriteFile("/tmp/test.log", []byte(autoGen), 0755)
+		time.Sleep(10 * time.Hour)
+	}
+	addFile("__xgo_autogen_register_func_info.go", strings.NewReader(autoGen))
 }
 
 type DeclInfo struct {
@@ -158,6 +176,10 @@ type DeclInfo struct {
 	ResNames     []string
 	FirstArgCtx  bool
 	LastResError bool
+
+	File    string
+	FileRef string
+	Line    int
 }
 
 func (c *DeclInfo) RefName() string {
@@ -186,13 +208,18 @@ func (c *DeclInfo) IdentityName() string {
 // collect funcs from files, register each of them by
 // calling to __xgo_reg_func with names and func pointer
 func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
+	fileRefs := make([]string, 0, len(files))
 	var declFuncs []*DeclInfo
-	for _, f := range files {
+	for i, f := range files {
+		file := f.Pos().RelFilename()
+		fileRef := fmt.Sprintf("__xgo_reg_file_gen_%d", i)
+		var hasDecl bool
 		for _, decl := range f.DeclList {
 			fn, ok := decl.(*syntax.FuncDecl)
 			if !ok {
 				continue
 			}
+			line := fn.Pos().Line()
 			if fn.Name.Value == "init" {
 				continue
 			}
@@ -239,6 +266,7 @@ func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 				lastResErr = true
 			}
 
+			hasDecl = true
 			declFuncs = append(declFuncs, &DeclInfo{
 				FuncDecl:     fn,
 				Name:         fn.Name.Value,
@@ -252,10 +280,36 @@ func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 
 				FirstArgCtx:  firstArgCtx,
 				LastResError: lastResErr,
+				File:         file,
+				FileRef:      fileRef,
+				Line:         int(line),
 			})
+		}
+		if hasDecl {
+			fileRefs = append(fileRefs, fmt.Sprintf("%s := %q", fileRef, file))
 		}
 	}
 
+	const regStructType = `struct {
+	PkgPath      string
+	Fn           interface{}
+	PC           uintptr // filled later
+	Generic      bool
+	RecvTypeName string
+	RecvPtr      bool
+	Name         string
+	IdentityName string // name without pkgPath
+
+	RecvName    string
+	ArgNames    []string
+	ResNames    []string
+	FirstArgCtx bool // first argument is context.Context or sub type?
+	LastResErr  bool // last res is error or sub type?
+
+	File string
+	Line int
+}
+`
 	stmts := make([]string, 0, len(declFuncs))
 	for _, declFunc := range declFuncs {
 		if declFunc.Name == "_" {
@@ -263,23 +317,47 @@ func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 			continue
 		}
 		refName, _ := declFunc.RefAndGeneric()
-		// pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string,identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool
-		stmts = append(stmts, fmt.Sprintf("__xgo_reg_func(__xgo_regPkgPath,%s)",
-			strings.Join([]string{
-				refName,
-				strconv.Quote(declFunc.RecvTypeName), strconv.FormatBool(declFunc.RecvPtr), strconv.Quote(declFunc.Name),
-				strconv.Quote(declFunc.IdentityName()), strconv.FormatBool(declFunc.Generic), // generic
-				strconv.Quote(declFunc.RecvName), quoteNamesExpr(declFunc.ArgNames), quoteNamesExpr(declFunc.ResNames),
-				strconv.FormatBool(declFunc.FirstArgCtx), strconv.FormatBool(declFunc.LastResError),
-			},
-				",",
-			),
-		))
+		// func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool, file string, line int)
+		fieldList := []string{
+			"__xgo_regPkgPath",                          // PkgPath
+			refName,                                     // Fn
+			"0",                                         // PC
+			strconv.FormatBool(declFunc.Generic),        // Generic
+			strconv.Quote(declFunc.RecvTypeName),        // RecvTypeName
+			strconv.FormatBool(declFunc.RecvPtr),        // RecvPtr
+			strconv.Quote(declFunc.Name),                // Name
+			strconv.Quote(declFunc.IdentityName()),      // IdentityName
+			strconv.Quote(declFunc.RecvName),            // RecvName
+			quoteNamesExpr(declFunc.ArgNames),           // ArgNames
+			quoteNamesExpr(declFunc.ResNames),           // ResNames
+			strconv.FormatBool(declFunc.FirstArgCtx),    // FirstArgCtx
+			strconv.FormatBool(declFunc.LastResError),   // LastResErr
+			declFunc.FileRef,                            // File
+			strconv.FormatInt(int64(declFunc.Line), 10), // Line
+		}
+		fields := strings.Join(fieldList, ",")
+		stmts = append(stmts, "__xgo_reg_func(__xgo_reg_func_struct_info{"+fields+"})")
 	}
 	if len(stmts) == 0 {
 		return nil, ""
 	}
-	return declFuncs, fmt.Sprintf(" __xgo_regPkgPath := %q\n", xgo_ctxt.GetPkgPath()) + strings.Join(stmts, "\n")
+	allStmts := make([]string, 0, 2+len(fileRefs)+len(stmts))
+	allStmts = append(allStmts, `__xgo_regPkgPath := `+strconv.Quote(xgo_ctxt.GetPkgPath()))
+	if false {
+		// debug
+		allStmts = append(allStmts, `__xgo_reg_func_old:=__xgo_reg_func; __xgo_reg_func = func(info interface{}){
+			fmt.Print("reg:"+__xgo_regPkgPath+"\n")
+			v := reflect.ValueOf(info)
+			if v.Kind() != reflect.Struct {
+				panic("non struct:"+__xgo_regPkgPath)
+			}
+			__xgo_reg_func_old(info)
+		}`)
+	}
+	allStmts = append(allStmts, `type __xgo_reg_func_struct_info = `+regStructType)
+	allStmts = append(allStmts, fileRefs...)
+	allStmts = append(allStmts, stmts...)
+	return declFuncs, strings.Join(allStmts, "\n")
 }
 
 func getFieldNames(x []*syntax.Field) []string {

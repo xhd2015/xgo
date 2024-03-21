@@ -193,6 +193,7 @@ func handleBuild(cmd string, args []string) error {
 		}
 	}
 
+	var revisionChanged bool
 	if !noInstrument && !noSetup {
 		err = ensureDirs(binDir, logDir, instrumentDir)
 		if err != nil {
@@ -202,19 +203,30 @@ func handleBuild(cmd string, args []string) error {
 		if isDevelopment {
 			revision = revision + " DEV"
 		}
-		revisionChanged, err := checkRevisionChanged(revisionFile, revision)
+		var err error
+		revisionChanged, err = checkRevisionChanged(revisionFile, revision)
 		if err != nil {
 			return err
 		}
-		err = syncGoroot(goroot, instrumentGoroot, resetInstrument, revisionChanged)
-		if err != nil {
-			return err
+
+		if resetInstrument || revisionChanged {
+			err := os.RemoveAll(instrumentDir)
+			if err != nil {
+				return err
+			}
 		}
-		// patch go runtime and compiler
-		err = patchRuntimeAndCompiler(instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, revisionChanged)
-		if err != nil {
-			return err
+		if isDevelopment || revisionChanged {
+			err = syncGoroot(goroot, instrumentGoroot, revisionChanged)
+			if err != nil {
+				return err
+			}
+			// patch go runtime and compiler
+			err = patchRuntimeAndCompiler(instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, revisionChanged)
+			if err != nil {
+				return err
+			}
 		}
+
 		if revisionChanged {
 			err := os.WriteFile(revisionFile, []byte(revision), 0755)
 			if err != nil {
@@ -260,7 +272,7 @@ func handleBuild(cmd string, args []string) error {
 		if toolExecFlag != "" {
 			buildCmdArgs = append(buildCmdArgs, toolExecFlag)
 		}
-		if flagA || compilerChanged {
+		if flagA || compilerChanged || revisionChanged {
 			buildCmdArgs = append(buildCmdArgs, "-a")
 		}
 		if flagV {

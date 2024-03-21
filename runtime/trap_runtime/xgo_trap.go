@@ -37,64 +37,22 @@ func __xgo_set_trap(trap func(pkgPath string, identityName string, generic bool,
 	__xgo_trap_impl = trap
 }
 
-type __xgo_func_info struct {
-	pkgPath      string
-	fn           interface{}
-	generic      bool
-	recvTypeName string
-	recvPtr      bool
-	name         string
-	identityName string // name without pkgPath
-	recvName     string
-	argNames     []string
-	resNames     []string
-	firstArgCtx  bool // first argument is context.Context or sub type?
-	lastResErr   bool // last res is error or sub type?
+// NOTE: runtime has problem when using slice
+var __xgo_registerd_func_infos []interface{}
+
+// a function cannot have too many params, so use a struct to wrap them
+// the client should use reflect to retrieve these fields respectively
+
+func __xgo_register_func(info interface{}) {
+	__xgo_registerd_func_infos = append(__xgo_registerd_func_infos, info)
 }
 
-var funcs []*__xgo_func_info
-
-func __xgo_register_func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool) {
-	// type intf struct {
-	// 	_  uintptr
-	// 	pc *uintptr
-	// }
-	// v := (*intf)(unsafe.Pointer(&fn))
-	// fnVal := findfunc(*v.pc)
-	// funcName := fnVal.datap.funcName(fnVal.nameOff)
-	// println("register func:", funcName)
-	funcs = append(funcs, &__xgo_func_info{
-		pkgPath:      pkgPath,
-		fn:           fn,
-		generic:      generic,
-		recvTypeName: recvTypeName,
-		recvPtr:      recvPtr,
-		name:         name,
-		identityName: identityName,
-		recvName:     recvName,
-		argNames:     argNames,
-		resNames:     resNames,
-		firstArgCtx:  firstArgCtx,
-		lastResErr:   lastResErr,
-	})
-}
-
-func __xgo_for_each_func(f func(pkgPath string, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, pc uintptr, fn interface{}, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool)) {
-	for _, fn := range funcs {
-		var pc uintptr
-
-		if !fn.generic {
-			type intf struct {
-				_  uintptr
-				pc *uintptr
-			}
-			v := (*intf)(unsafe.Pointer(&fn.fn))
-			pc = *v.pc
-			// fnVal := findfunc(pc)
-			// funcName = fnVal.datap.funcName(fnVal.nameOff)
-		}
-		f(fn.pkgPath, fn.recvTypeName, fn.recvPtr, fn.name, fn.identityName, fn.generic, pc, fn.fn, fn.recvName, fn.argNames, fn.resNames, fn.firstArgCtx, fn.lastResErr)
+func __xgo_retrieve_all_funcs_and_clear(f func(info interface{})) {
+	for _, fn := range __xgo_registerd_func_infos {
+		f(fn)
 	}
+	// clear
+	__xgo_registerd_func_infos = nil
 }
 
 var __xgo_is_init_finished bool

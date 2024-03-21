@@ -11,7 +11,7 @@ func init() {
 }
 
 // xgo test ./test/stack_trace
-func TestUpdateUseInfo(t *testing.T) {
+func TestUpdateUserInfo(t *testing.T) {
 	oldUserName := "old user"
 	actualName, err := UpdateUserInfo(oldUserName)
 	if err != nil {

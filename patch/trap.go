@@ -44,25 +44,6 @@ func Patch() {
 	initRegFuncs()
 }
 
-const xgoRuntimePkgPrefix = "github.com/xhd2015/xgo/runtime/"
-const xgoRuntimeTrapPkg = xgoRuntimePkgPrefix + "trap"
-
-// accepts interface{} as argument
-const xgoOnTestStart = "__xgo_on_test_start"
-
-const setTrap = "__xgo_set_trap"
-
-var linkMap = map[string]string{
-	"__xgo_link_for_each_func":    "__xgo_for_each_func",
-	"__xgo_link_getcurg":          "__xgo_getcurg",
-	"__xgo_link_set_trap":         setTrap,
-	"__xgo_link_init_finished":    "__xgo_init_finished",
-	"__xgo_link_on_init_finished": "__xgo_on_init_finished",
-	"__xgo_link_on_goexit":        "__xgo_on_goexit",
-	"__xgo_link_on_test_start":    xgoOnTestStart,
-	"__xgo_link_get_test_starts":  "__xgo_get_test_starts",
-}
-
 var inited bool
 var intfSlice *types.Type
 
@@ -90,25 +71,28 @@ func insertTrapPoints() {
 
 	// printString := typecheck.LookupRuntime("printstring")
 	forEachFunc(func(fn *ir.Func) bool {
-		linkName, insertTrap := CanInsertTrapOrLink(fn)
-		if linkName != "" {
-			replaceWithRuntimeCall(fn, linkName)
-			return true
-		}
-		if !insertTrap {
-			return true
-		}
-
-		if !InsertTrapForFunc(fn, false) {
-			return true
-		}
-		typeCheckBody(fn)
-		xgo_record.SetRewrittenBody(fn, fn.Body)
-
-		// ir.Dump("after:", fn)
-
+		trapOrLink(fn)
 		return true
 	})
+}
+
+func trapOrLink(fn *ir.Func) {
+	linkName, insertTrap := CanInsertTrapOrLink(fn)
+	if linkName != "" {
+		replaceWithRuntimeCall(fn, linkName)
+		return
+	}
+	if !insertTrap {
+		return
+	}
+
+	if !InsertTrapForFunc(fn, false) {
+		return
+	}
+	typeCheckBody(fn)
+	xgo_record.SetRewrittenBody(fn, fn.Body)
+
+	// ir.Dump("after:", fn)
 }
 
 func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
@@ -138,6 +122,9 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 			return linkName, false
 		}
 		// ir.Dump("after:", fn)
+		return "", false
+	}
+	if xgo_ctxt.SkipPackageTrap() {
 		return "", false
 	}
 	// TODO: read comment

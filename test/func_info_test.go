@@ -15,10 +15,11 @@ func TestFuncInfo(t *testing.T) {
 	output, err := buildWithRuntimeAndOutput("./testdata/func_info", buildRuntimeOpts{
 		// debug: true,
 	})
+
+	// t.Logf("output: %s", output)
 	if err != nil {
 		t.Fatal(getErrMsg(err))
 	}
-	// t.Logf("%s", output)
 
 	expectNonGeneric := "example identityName: example\nexample args: [a]\n"
 	if !strings.HasPrefix(output, expectNonGeneric) {

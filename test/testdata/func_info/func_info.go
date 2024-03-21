@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 
+	_ "reflect"
+
 	"github.com/xhd2015/xgo/runtime/functab"
 )
 

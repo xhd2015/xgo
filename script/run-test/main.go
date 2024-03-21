@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/xhd2015/xgo/support/cmd"
 )
 
 // usage:
@@ -20,6 +22,8 @@ func main() {
 
 	n := len(args)
 	var remainArgs []string
+
+	var resetInstrument bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--exclude" {
@@ -35,6 +39,14 @@ func main() {
 		if arg == "-run" {
 			remainArgs = append(remainArgs, arg, args[i+1])
 			i++
+			continue
+		}
+		if arg == "--reset-instrument" {
+			resetInstrument = true
+			continue
+		}
+		if arg == "-a" {
+			remainArgs = append(remainArgs, arg)
 			continue
 		}
 		if arg == "-v" || strings.HasPrefix(arg, "-count=") {
@@ -78,9 +90,19 @@ func main() {
 		fmt.Fprintf(os.Stderr, "no go select\n")
 		os.Exit(1)
 	}
-
 	for _, goroot := range goroots {
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
+		if resetInstrument {
+			err := cmd.Run("go", "run", "./cmd/xgo", "--reset-instrument", "--with-goroot", goroot, "--build-compiler")
+			if err != nil {
+				if extErr, ok := err.(*exec.ExitError); ok {
+					fmt.Fprintf(os.Stderr, "%s\n", extErr.Stderr)
+				} else {
+					fmt.Fprintf(os.Stderr, "%v", err)
+				}
+				os.Exit(1)
+			}
+		}
 		err := runTest(filepath.Join(goRelease, goroot), remainArgs)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "FAIL %s: %v\n", goroot, err)
@@ -123,8 +145,7 @@ func runTest(goroot string, args []string) error {
 		return err
 	}
 
-	var testArgs []string
-	testArgs = append(testArgs, "test")
+	testArgs := []string{"test"}
 	if len(args) > 0 {
 		testArgs = append(testArgs, args...)
 	}

@@ -101,7 +101,7 @@ func patchRuntimeTesting(goroot string) error {
 		return content, nil
 	})
 }
-func importCompileInternalPatch(goroot string, xgoSrc string, revisionChanged bool, syncWithLink bool) error {
+func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, syncWithLink bool) error {
 	dstDir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
 	if isDevelopment {
 		// copy compiler internal dependencies
@@ -121,7 +121,7 @@ func importCompileInternalPatch(goroot string, xgoSrc string, revisionChanged bo
 		return nil
 	}
 
-	if revisionChanged {
+	if forceReset {
 		// -a causes repatch
 		err := os.RemoveAll(dstDir)
 		if err != nil {
@@ -217,9 +217,9 @@ func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
 	})
 }
 
-func patchCompiler(goroot string, goVersion *goinfo.GoVersion, xgoSrc string, revisionChanged bool, syncWithLink bool) error {
+func patchCompiler(goroot string, goVersion *goinfo.GoVersion, xgoSrc string, forceReset bool, syncWithLink bool) error {
 	// copy compiler internal dependencies
-	err := importCompileInternalPatch(goroot, xgoSrc, revisionChanged, syncWithLink)
+	err := importCompileInternalPatch(goroot, xgoSrc, forceReset, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -619,23 +619,14 @@ func readOrEmpty(file string) (string, error) {
 }
 
 // NOTE: flagA never cause goroot to reset
-func syncGoroot(goroot string, dstDir string, resetInstrument bool, revisionChanged bool) error {
+func syncGoroot(goroot string, dstDir string, forceCopy bool) error {
 	// check if src goroot has src/runtime
 	srcRuntimeDir := filepath.Join(goroot, "src", "runtime")
 	err := assertDir(srcRuntimeDir)
 	if err != nil {
 		return err
 	}
-	if !isDevelopment && !revisionChanged {
-		return nil
-	}
-	if revisionChanged || resetInstrument {
-		// remove dst
-		err := os.RemoveAll(dstDir)
-		if err != nil {
-			return err
-		}
-	} else {
+	if !forceCopy {
 		srcGoBin := filepath.Join(goroot, "bin", "go")
 		dstGoBin := filepath.Join(dstDir, "bin", "go")
 
@@ -660,6 +651,7 @@ func syncGoroot(goroot string, dstDir string, resetInstrument bool, revisionChan
 			return nil
 		}
 	}
+
 	// need copy, delete target dst dir first
 	// TODO: use git worktree add if .git exists
 	return filecopy.CopyReplaceDir(goroot, dstDir, false)
