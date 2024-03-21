@@ -34,6 +34,9 @@ type FuncInfoExport struct {
 
 	Generic bool
 
+	File string
+	Line int
+
 	RecvName string
 	ArgNames []string
 	ResNames []string

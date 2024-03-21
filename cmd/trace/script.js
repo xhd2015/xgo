@@ -4,7 +4,6 @@
 // trace example:
 ///   {"FuncInfo":{"Pkg":"github.com/xhd2015/xgo","IdentityName":"TestHelloWorld","Name":"TestHelloWorld","RecvType":"","RecvPtr":false,"Generic":false,"RecvName":"","ArgNames":["t"],"ResNames":[],"FirstArgCtx":false,"LastResultErr":false},"Begin":0,"End":0,"Args":{"t":{}},"Results":{},"Children":null}
 
-let selectedID = ""
 
 function getHeadID(id) {
     return `head_${id}`
@@ -16,6 +15,7 @@ function getTraceListID(id) {
     return `trace_list_${id}`
 }
 
+let selectedID = ""
 function onClickHead(id) {
     const headID = getHeadID(id)
     const el = document.getElementById(headID)
@@ -29,15 +29,16 @@ function onClickHead(id) {
         classList.add("selected")
     }
 
-    if (selectedID !== headID) {
-        const prev = document.getElementById(selectedID)
+    if (selectedID !== id) {
+        const prev = document.getElementById(getHeadID(selectedID))
         if (prev) {
             prev.classList.remove("selected")
         }
-        selectedID = headID
+        selectedID = id
         const info = document.getElementById("detail-info")
         const infoPkg = document.getElementById("detail-info-pkg")
         const infoFunc = document.getElementById("detail-info-func")
+        const vscodeIcon = document.getElementById("vscode-icon")
         const req = document.getElementById("detail-request")
         const resp = document.getElementById("detail-response")
         const traceData = traces[id]
@@ -45,11 +46,17 @@ function onClickHead(id) {
         if (traceData.error) {
             infoPkg.innerText = "<unknown>"
             infoFunc.innerText = "<unknown>"
+            vscodeIcon.classList.add("disabled")
             req.value = traceData.error
             resp.value = ''
             return
         }
 
+        if (traceData.FuncInfo?.File) {
+            vscodeIcon.classList.remove("disabled")
+        } else {
+            vscodeIcon.classList.add("disabled")
+        }
         infoPkg.innerText = traceData.FuncInfo?.Pkg || ""
         infoFunc.innerText = traceData.FuncInfo?.IdentityName || ""
         req.value = JSON.stringify(traceData.Args, null, "    ")
@@ -113,6 +120,27 @@ function onClickExpandAll(e) {
         }
     }
 }
+function onClickVscodeIcon(e) {
+    debugger
+    if (!selectedID) {
+        return
+    }
+    const trace = traces[selectedID]
+    if (!trace) {
+        return
+    }
+    // execute code --goto file:line
+    const file = trace.FuncInfo?.File
+    const line = trace.FuncInfo?.Line
+    if (!file) {
+        return
+    }
+    const args = { file }
+    if (Number(line) > 0) {
+        args["line"] = Number(line)
+    }
+    fetch("/openVscodeFile" + "?" + new URLSearchParams(args).toString())
+}
 
 function toggleTraceList(id, toggle, collapsed) {
     const traceList = document.getElementById(getTraceListID(id))
@@ -134,6 +162,7 @@ function toggleTraceList(id, toggle, collapsed) {
 window.onClickHead = onClickHead
 window.onClickToggle = onClickToggle
 window.onClickExpandAll = onClickExpandAll
+window.onClickVscodeIcon = onClickVscodeIcon
 
 // for debugging
 window.traces = traces

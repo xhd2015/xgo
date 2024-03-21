@@ -90,5 +90,8 @@ func ExportFuncInfo(c *core.FuncInfo) *FuncInfoExport {
 
 		FirstArgCtx:   c.FirstArgCtx,
 		LastResultErr: c.LastResultErr,
+
+		File: c.File,
+		Line: c.Line,
 	}
 }

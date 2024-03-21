@@ -1,6 +1,5 @@
 package main
 
-// TODO: revise documentation link
 const help = `
 Xgo is a tool for instrumenting Go source code.
 
@@ -26,7 +25,7 @@ Examples:
     xgo run ./                                   run current module
     xgo test ./...                               test all test cases of current module
     xgo exec go version                          print instrumented go version
-    xgo tool trace   TestSomething.json          view test trace
+    xgo tool trace TestSomething.json            view test trace
 
 See https://github.com/xhd2015/xgo for documentation.
 

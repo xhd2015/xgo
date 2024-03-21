@@ -6,9 +6,29 @@
 
 #detail-info {}
 
+#detail-info>* {
+    margin-bottom: 2px;
+}
 
 .detail label {
     font-weight: bolder;
+}
+
+.label-value {
+    display: flex;
+    align-items: center;
+}
+
+.label-value>* {
+    margin-right: 4px;
+}
+
+.vscode-icon {
+    cursor: pointer;
+}
+
+.vscode-icon.disabled {
+    display: none;
 }
 
 #detail-info-pkg,

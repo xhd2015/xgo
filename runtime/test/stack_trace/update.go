@@ -4,7 +4,7 @@ import (
 	"github.com/xhd2015/xgo/runtime/test/stack_trace/user_info"
 )
 
-func UpdateUseInfo(name string) (actualName string, err error) {
+func UpdateUserInfo(name string) (actualName string, err error) {
 	actualName = name
 	checkErr := user_info.CheckUserName(name)
 	if checkErr != nil {

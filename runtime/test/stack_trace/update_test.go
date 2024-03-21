@@ -13,14 +13,14 @@ func init() {
 // xgo test ./test/stack_trace
 func TestUpdateUseInfo(t *testing.T) {
 	oldUserName := "old user"
-	actualName, err := UpdateUseInfo(oldUserName)
+	actualName, err := UpdateUserInfo(oldUserName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if actualName == oldUserName {
 		t.Fatalf("expect user name: %s, actual: %s", oldUserName, actualName)
 	}
-	newActualName, err := UpdateUseInfo(actualName)
+	newActualName, err := UpdateUserInfo(actualName)
 	if err != nil {
 		t.Fatal(err)
 	}

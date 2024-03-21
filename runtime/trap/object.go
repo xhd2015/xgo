@@ -82,11 +82,15 @@ func (c object) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteRune('{')
 	for i, field := range c {
-		buf.WriteString(strconv.Quote(field.name))
+		name := field.name
+		if name == "" {
+			name = "field_" + strconv.FormatInt(int64(i), 10)
+		}
+		buf.WriteString(strconv.Quote(name))
 		buf.WriteRune(':')
 		val, err := json.Marshal(field.valPtr)
 		if err != nil {
-			return nil, fmt.Errorf("field %s:%w", field.name, err)
+			return nil, fmt.Errorf("field %s: %w", name, err)
 		}
 		buf.Write(val)
 		if i < len(c)-1 {

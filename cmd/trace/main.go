@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -43,6 +44,38 @@ func serveFile(file string) {
 		w.Header().Set("Content-Type", "text/html")
 		renderRecordHTML(record, file, w)
 	})
+	server.HandleFunc("/openVscodeFile", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		file := q.Get("file")
+		if file == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, "no file\n")
+			return
+		}
+		_, err := os.Stat(file)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, err.Error())
+			return
+		}
+		line := q.Get("line")
+
+		fileLine := file
+		if line != "" {
+			fileLine = file + ":" + line
+		}
+		output, err := exec.Command("code", "--goto", fileLine).Output()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				w.Write(exitErr.Stderr)
+			} else {
+				io.WriteString(w, err.Error())
+			}
+			return
+		}
+		w.Write(output)
+	})
 	port := 7070
 	url := fmt.Sprintf("http://localhost:%d", port)
 	fmt.Printf("Server listen at %s\n", url)
@@ -52,7 +85,7 @@ func serveFile(file string) {
 		cmd.Run("open", url)
 	}()
 
-	err := http.ListenAndServe(":7070", server)
+	err := http.ListenAndServe(fmt.Sprintf(":%d", port), server)
 	if err != nil {
 		panic(err)
 	}
@@ -63,6 +96,9 @@ var styles string
 
 //go:embed script.js
 var script string
+
+//go:embed vscode.svg
+var vscodeIconSVG string
 
 func parseRecord(file string) (*RootExport, error) {
 	data, err := os.ReadFile(file)
@@ -151,10 +187,16 @@ func renderRecordHTML(root *RootExport, file string, w io.Writer) {
 	h("</ul>")
 	h(`</div>`)
 
+	vscode := vscodeIconSVG
+	vscode = strings.Replace(vscode, `width="100"`, `width="14"`, 1)
+	vscode = strings.Replace(vscode, `height="100"`, `height="14"`, 1)
+
+	vscode = `<div id="vscode-icon" class="vscode-icon" onclick="onClickVscodeIcon(arguments[0])">` + vscode + `</div>`
+
 	h(`<div class="detail">`)
 	h(`<div id="detail-info">
 	   <div class="label-value"> <label>Pkg:</label>	   <div id="detail-info-pkg"> </div> </div>
-	   <div class="label-value"> <label>Func:</label>    <div id="detail-info-func"> </div> </div>
+	   <div class="label-value"> <label>Func:</label>    <div id="detail-info-func"> </div> ` + vscode + `</div>
 	</div>`)
 	h(`<label>Request</label>`)
 	h(`<textarea id="detail-request"  placeholder="request..."></textarea>`)
@@ -284,20 +326,29 @@ func formatCost(begin int64, end int64) string {
 		sign = "-"
 		cost = -cost
 	}
-	unit := "μs"
+	type unit struct {
+		name      string
+		scaleLast int
+	}
+	var units = []unit{
+		{"ns", 1},
+		{"μs", 1000},
+		{"ms", 1000},
+		{"s", 1000},
+		{"m", 60},
+		{"h", 60},
+		{"d", 24},
+	}
+	unitName := units[0].name
 	f := float64(cost)
-	if f >= 1000 {
-		f = f / 1000
-		unit = "ms"
-		if f >= 1000 {
-			f = f / 1000
-			unit = "s"
-			if f >= 60 {
-				f = f / 60
-				unit = "m"
-			}
+	for i := 1; i < len(units); i++ {
+		x := float64(units[i].scaleLast)
+		if f < x {
+			break
 		}
+		f = f / x
+		unitName = units[i].name
 	}
 
-	return fmt.Sprintf("%s%d%s", sign, int(f), unit)
+	return fmt.Sprintf("%s%d%s", sign, int(f), unitName)
 }
