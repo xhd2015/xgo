@@ -270,6 +270,7 @@ func getFuncDecls(files []*syntax.File) []*DeclInfo {
 	// fileInfos := make([]*FileDecl, 0, len(files))
 	var declFuncs []*DeclInfo
 	for i, f := range files {
+		file := f.Pos().RelFilename()
 		for _, decl := range f.DeclList {
 			fn, ok := decl.(*syntax.FuncDecl)
 			if !ok {
@@ -338,190 +339,12 @@ func getFuncDecls(files []*syntax.File) []*DeclInfo {
 
 				FileSyntax: f,
 				FileIndex:  i,
+				File:       file,
 				Line:       int(line),
 			})
 		}
 	}
 	return declFuncs
-}
-
-func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
-	fileRefs := make([]string, 0, len(files))
-	var declFuncs []*DeclInfo
-	for i, f := range files {
-		file := f.Pos().RelFilename()
-		fileRef := fmt.Sprintf("__xgo_reg_file_gen_%d", i)
-		var hasDecl bool
-		for _, decl := range f.DeclList {
-			fn, ok := decl.(*syntax.FuncDecl)
-			if !ok {
-				continue
-			}
-			line := fn.Pos().Line()
-			if fn.Name.Value == "init" {
-				continue
-			}
-			var genericFunc bool
-			if len(fn.TParamList) > 0 {
-				genericFunc = true
-				// cannot handle generic
-			}
-			var recvTypeName string
-			var recvPtr bool
-			var recvName string
-			var genericRecv bool
-			if fn.Recv != nil {
-				recvName = "_"
-				if fn.Recv.Name != nil {
-					recvName = fn.Recv.Name.Value
-				}
-
-				recvTypeExpr := fn.Recv.Type
-
-				// *A
-				if starExpr, ok := fn.Recv.Type.(*syntax.Operation); ok && starExpr.Op == syntax.Mul {
-					// *A
-					recvTypeExpr = starExpr.X
-					recvPtr = true
-				}
-				// check if generic
-				if indexExpr, ok := recvTypeExpr.(*syntax.IndexExpr); ok {
-					// *A[T] or A[T]
-					// the generic receiver
-					// currently not handled
-					genericRecv = true
-					recvTypeExpr = indexExpr.X
-				}
-
-				recvTypeName = recvTypeExpr.(*syntax.Name).Value
-			}
-			var firstArgCtx bool
-			var lastResErr bool
-			if len(fn.Type.ParamList) > 0 && hasQualifiedName(fn.Type.ParamList[0].Type, "context", "Context") {
-				firstArgCtx = true
-			}
-			if len(fn.Type.ResultList) > 0 && isName(fn.Type.ResultList[len(fn.Type.ResultList)-1].Type, "error") {
-				lastResErr = true
-			}
-
-			hasDecl = true
-			declFuncs = append(declFuncs, &DeclInfo{
-				FuncDecl:     fn,
-				Name:         fn.Name.Value,
-				RecvTypeName: recvTypeName,
-				RecvPtr:      recvPtr,
-				Generic:      genericFunc || genericRecv,
-
-				RecvName: recvName,
-				ArgNames: getFieldNames(fn.Type.ParamList),
-				ResNames: getFieldNames(fn.Type.ResultList),
-
-				FirstArgCtx:  firstArgCtx,
-				LastResError: lastResErr,
-				FileIndex:    i,
-				File:         file,
-				FileRef:      fileRef,
-				Line:         int(line),
-			})
-		}
-		fileValue := file
-		// useFileVal := true
-		if true {
-			// debug
-			// useFileVal = false
-			fileValue = ""
-		}
-		if hasDecl {
-			fileRefs = append(fileRefs, fmt.Sprintf("%s := %q", fileRef, fileValue))
-		}
-	}
-
-	const regStructType = `struct {
-	PkgPath      string
-	Fn           interface{}
-	PC           uintptr // filled later
-	Generic      bool
-	RecvTypeName string
-	RecvPtr      bool
-	Name         string
-	IdentityName string // name without pkgPath
-
-	RecvName    string
-	ArgNames    []string
-	ResNames    []string
-	FirstArgCtx bool // first argument is context.Context or sub type?
-	LastResErr  bool // last res is error or sub type?
-
-	File string
-	Line int
-}
-`
-	stmts := make([]string, 0, len(declFuncs))
-	for _, declFunc := range declFuncs {
-		if declFunc.Name == "_" {
-			// there are function with name "_"
-			continue
-		}
-		refName, _ := declFunc.RefAndGeneric()
-		// func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool, file string, line int)
-		fieldList := []string{
-			"__xgo_regPkgPath",                        // PkgPath
-			refName,                                   // Fn
-			"0",                                       // PC
-			strconv.FormatBool(declFunc.Generic),      // Generic
-			strconv.Quote(declFunc.RecvTypeName),      // RecvTypeName
-			strconv.FormatBool(declFunc.RecvPtr),      // RecvPtr
-			strconv.Quote(declFunc.Name),              // Name
-			strconv.Quote(declFunc.IdentityName()),    // IdentityName
-			strconv.Quote(declFunc.RecvName),          // RecvName
-			quoteNamesExpr(declFunc.ArgNames),         // ArgNames
-			quoteNamesExpr(declFunc.ResNames),         // ResNames
-			strconv.FormatBool(declFunc.FirstArgCtx),  // FirstArgCtx
-			strconv.FormatBool(declFunc.LastResError), // LastResErr
-			`""`, /* declFunc.FileRef */ // File
-			strconv.FormatInt(int64(declFunc.Line), 10), // Line
-		}
-		fields := strings.Join(fieldList, ",")
-		stmts = append(stmts, "__xgo_reg_func(__xgo_reg_func_struct_info{"+fields+"})")
-	}
-	if len(stmts) == 0 {
-		return nil, ""
-	}
-	allStmts := make([]string, 0, 2+len(fileRefs)+len(stmts))
-	allStmts = append(allStmts, `__xgo_regPkgPath := `+strconv.Quote(xgo_ctxt.GetPkgPath()))
-	if false {
-		// debug
-		allStmts = append(allStmts, `__xgo_reg_func_old:=__xgo_reg_func; __xgo_reg_func = func(info interface{}){
-			fmt.Print("reg:"+__xgo_regPkgPath+"\n")
-			v := reflect.ValueOf(info)
-			if v.Kind() != reflect.Struct {
-				panic("non struct:"+__xgo_regPkgPath)
-			}
-			__xgo_reg_func_old(info)
-		}`)
-	}
-	allStmts = append(allStmts, `type __xgo_reg_func_struct_info = `+regStructType)
-	if false {
-		// debug, do not include file paths
-		allStmts = append(allStmts, fileRefs...)
-	}
-	if true {
-		// debug
-		pkgPath := xgo_ctxt.GetPkgPath()
-		if strings.HasSuffix(pkgPath, "dao/impl") {
-			if true {
-				code := strings.Join(append(allStmts, stmts...), "\n")
-				os.WriteFile("/tmp/test.go", []byte(code), 0755)
-				panic("shit")
-			}
-
-			if len(stmts) > 100 {
-				stmts = stmts[:100]
-			}
-		}
-	}
-	allStmts = append(allStmts, stmts...)
-	return declFuncs, strings.Join(allStmts, "\n")
 }
 
 func getFileRef(i int) string {
