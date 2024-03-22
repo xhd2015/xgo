@@ -1,12 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"path/filepath"
-	"testing"
 )
 
-func TestExampleGitListWorkingTree(t *testing.T) {
+func ExampleGitListWorkingTreeChangedFiles() {
 	gitDir, err := getGitDir()
 	if err != nil {
 		log.Fatal(err)
@@ -16,5 +16,7 @@ func TestExampleGitListWorkingTree(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("files: %v\n", files)
+	fmt.Printf("files: %v\n", files)
+	// Output [ignored]:
+	//   files: [script/build-release/fixup_test.go]
 }

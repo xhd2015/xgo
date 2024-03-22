@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -260,16 +261,32 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 			return err
 		}
 		binDir := filepath.Join(homeDir, ".xgo", "bin")
+		err = os.MkdirAll(binDir, 0755)
+		if err != nil {
+			return err
+		}
+		var exeSuffix string
+		if goos == "windows" {
+			exeSuffix = ".exe"
+		}
+		xgoBaseName := "xgo"
 		for _, file := range archiveFiles {
 			baseName := filepath.Base(file)
 			toBaseName := baseName
 			if toBaseName == "xgo" && localName != "" {
 				toBaseName = localName
+				xgoBaseName = localName
 			}
-			err := os.Rename(filepath.Join(tmpDir, baseName), filepath.Join(binDir, toBaseName))
+			err := os.Rename(filepath.Join(tmpDir, baseName), filepath.Join(binDir, toBaseName)+exeSuffix)
 			if err != nil {
 				return err
 			}
+		}
+
+		xgoExeName := xgoBaseName + exeSuffix
+		_, lookPathErr := exec.LookPath(xgoExeName)
+		if lookPathErr != nil {
+			fmt.Printf("%s built successfully, you may need to add %s to your PATH variables", xgoExeName, binDir)
 		}
 		return nil
 	}

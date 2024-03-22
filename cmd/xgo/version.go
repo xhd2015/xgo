@@ -3,8 +3,8 @@ package main
 import "fmt"
 
 const VERSION = "1.0.4"
-const REVISION = "1685f0ddb83838bc9e0d3c9c4983f5ae7d25e1cd+1"
-const NUMBER = 92
+const REVISION = "5834fe9106ac8ef652fa99d1b34597bef941c34a+1"
+const NUMBER = 93
 
 func getRevision() string {
 	return fmt.Sprintf("%s %s BUILD_%d", VERSION, REVISION, NUMBER)
