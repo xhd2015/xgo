@@ -180,7 +180,14 @@ func handleBuild(cmd string, args []string) error {
 	compilerBin := filepath.Join(instrumentDir, "compile")
 	compilerBuildID := filepath.Join(instrumentDir, "compile.buildid.txt")
 	instrumentGoroot := filepath.Join(instrumentDir, goVersionName)
-	buildCacheDir := filepath.Join(instrumentDir, "build-cache")
+
+	// gcflags can cause the build cache to invalidate
+	// so separate them with normal one
+	buildCacheSuffix := ""
+	if gcflags != "" {
+		buildCacheSuffix = "-gcflags"
+	}
+	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
 	revisionFile := filepath.Join(instrumentDir, "xgo-revision.txt")
 
 	var realXgoSrc string

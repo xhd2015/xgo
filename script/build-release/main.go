@@ -6,15 +6,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/xhd2015/xgo/script/build-release/revision"
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/filecopy"
 )
 
 // usage:
 //  go run ./script/build-release
-//  go run ./script/build-release --local --local-name xgo_exp
-//  go run ./script/build-release --local --local-name xgo_exp --debug
+//  go run ./script/build-release --local --local-name xgo_dev
+//  go run ./script/build-release --local --local-name xgo_dev --debug
 
 func main() {
 	args := os.Args[1:]
@@ -69,15 +71,23 @@ type osArch struct {
 	goarch string
 }
 
-func buildRelease(releaseDir string, installLocal bool, localName string, debug bool, osArches []*osArch) error {
+func buildRelease(releaseDirName string, installLocal bool, localName string, debug bool, osArches []*osArch) error {
 	if installLocal && len(osArches) != 1 {
 		return fmt.Errorf("--install-local requires only one target")
 	}
-	version, err := cmd.Output("go", "run", "./cmd/xgo", "version")
+	gitDir, err := getGitDir()
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(releaseDir, version)
+	projectRoot, err := filepath.Abs(filepath.Dir(gitDir))
+	if err != nil {
+		return err
+	}
+	version, err := cmd.Dir(projectRoot).Output("go", "run", "./cmd/xgo", "version")
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(filepath.Join(projectRoot, releaseDirName), version)
 	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		return err
@@ -94,23 +104,38 @@ func buildRelease(releaseDir string, installLocal bool, localName string, debug 
 	}
 
 	tmpSrcDir := filepath.Join(tmpDir, "src")
-
 	// use git worktree to prepare the directory for building
 	// add a worktree detached at HEAD
-	err = cmd.Run("git", "worktree", "add", "--detach", tmpSrcDir, "HEAD")
+	err = cmd.Dir(projectRoot).Run("git", "worktree", "add", "--detach", tmpSrcDir, "HEAD")
 	if err != nil {
 		return err
 	}
 	// --force: delete files even there is untracked content
 	if !debug {
-		defer cmd.Run("git", "worktree", "remove", "--force", tmpSrcDir)
+		defer cmd.Dir(projectRoot).Run("git", "worktree", "remove", "--force", tmpSrcDir)
 	} else {
 		fmt.Printf("git worktree remove --force %s\n", tmpSrcDir)
 	}
+
+	// copy modified files
+	modifiedFiles, err := gitListWorkingTreeChangedFiles(projectRoot)
+	if err != nil {
+		return err
+	}
+	for _, file := range modifiedFiles {
+		err := filecopy.CopyFileAll(filepath.Join(projectRoot, file), filepath.Join(tmpSrcDir, file))
+		if err != nil {
+			return fmt.Errorf("copying file %s: %w", file, err)
+		}
+	}
+
 	// update the version
 	rev, err := revision.GetCommitHash("", "HEAD")
 	if err != nil {
 		return err
+	}
+	if len(modifiedFiles) > 0 {
+		rev += fmt.Sprintf("_DEV_%s", time.Now().UTC().Format("2006-01-02T15:04:05Z"))
 	}
 
 	err = fixupSrcDir(tmpSrcDir, rev)
@@ -119,7 +144,7 @@ func buildRelease(releaseDir string, installLocal bool, localName string, debug 
 	}
 
 	for _, osArch := range osArches {
-		err := buildBinaryRelease(dir, tmpSrcDir, ".", version, osArch.goos, osArch.goarch, installLocal, localName, debug)
+		err := buildBinaryRelease(dir, tmpSrcDir, version, osArch.goos, osArch.goarch, installLocal, localName, debug)
 		if err != nil {
 			return fmt.Errorf("GOOS=%s GOARCH=%s:%w", osArch.goos, osArch.goarch, err)
 		}
@@ -182,7 +207,7 @@ func generateSums(dir string, sumFile string) error {
 // c2876990b545be8396b7d13f0f9c3e23b38236de8f0c9e79afe04bcf1d03742e  xgo1.0.0-darwin-arm64.tar.gz
 // 6ae476cb4c3ab2c81a94d1661070e34833e4a8bda3d95211570391fb5e6a3cc0  xgo1.0.0-darwin-amd64.tar.gz
 
-func buildBinaryRelease(dir string, srcDir string, origSrcDir string, version string, goos string, goarch string, installLocal bool, localName string, debug bool) error {
+func buildBinaryRelease(dir string, srcDir string, version string, goos string, goarch string, installLocal bool, localName string, debug bool) error {
 	if version == "" {
 		return fmt.Errorf("requires version")
 	}
@@ -201,11 +226,6 @@ func buildBinaryRelease(dir string, srcDir string, origSrcDir string, version st
 		return err
 	}
 	defer os.RemoveAll(tmpDir)
-
-	origSrcDir, err = filepath.Abs(origSrcDir)
-	if err != nil {
-		return err
-	}
 
 	archive := filepath.Join(tmpDir, "archive")
 
