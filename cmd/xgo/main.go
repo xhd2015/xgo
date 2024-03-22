@@ -169,7 +169,11 @@ func handleBuild(cmd string, args []string) error {
 	xgoDir := filepath.Join(homeDir, ".xgo")
 	binDir := filepath.Join(xgoDir, "bin")
 	logDir := filepath.Join(xgoDir, "log")
-	instrumentDir := filepath.Join(xgoDir, "go-instrument", mappedGorootName)
+	instrumentSuffix := ""
+	if isDevelopment {
+		instrumentSuffix = "-dev"
+	}
+	instrumentDir := filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
 
 	execToolBin := filepath.Join(binDir, "exec_tool")
 	compileLog := filepath.Join(logDir, "compile.log")

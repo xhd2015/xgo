@@ -4,10 +4,9 @@ import (
 	"cmd/compile/internal/syntax"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
 	xgo_func_name "cmd/compile/internal/xgo_rewrite_internal/patch/func_name"
@@ -138,29 +137,86 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	// I feel the second is more proper as importcfg is an extra layer of
 	// complexity, and runtime can be compiled or cached, we cannot locate
 	// where its _pkg_.a is.
-	decls, body := getRegFuncsBody(fileList)
-	allDecls = decls
-	if body == "" {
+
+	funcDelcs := getFuncDecls(fileList)
+	if len(funcDelcs) == 0 {
 		return
 	}
-	autoGenStmts := []string{
-		"package " + pkgName,
-		// "import \"reflect\"", // debug
-		// "import \"fmt\"",     // debug
-		// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
-		"func __xgo_register_funcs(__xgo_reg_func " + sig_gen__xgo_register_func + "){",
-		body,
-		"}",
-		"",
-	}
+	// assign to global
+	allDecls = funcDelcs
 
-	autoGen := strings.Join(autoGenStmts, "\n")
-	if false {
-		// debug
-		ioutil.WriteFile("/tmp/test.log", []byte(autoGen), 0755)
-		time.Sleep(10 * time.Hour)
+	// split fileDecls to a list of batch
+	// when statements gets large, it will
+	// exceeds the compiler's threshold, causing
+	//     internal compiler error: NewBulk too big
+	// see https://github.com/golang/go/issues/33437
+	// see also: https://github.com/golang/go/issues/57832 The input code is just too big for the compiler to handle.
+	// here we split the files per 1000 functions
+	batchFuncDecls := splitBatch(funcDelcs, 1000)
+	var subFuncNames []string
+	for i, funcDecls := range batchFuncDecls {
+		if len(funcDecls) == 0 {
+			continue
+		}
+
+		body := generateFuncRegBody(funcDecls)
+		if len(batchFuncDecls) == 1 {
+			// special when there is only one file
+			fileCode := generateRegFileCode(pkgName, "__xgo_register_funcs", body)
+			addFile("__xgo_autogen_register_func_info.go", strings.NewReader(fileCode))
+			continue
+		}
+		// declare sub function and sub file
+		fnName := fmt.Sprintf("__xgo_register_funcs_%d", i)
+		subFuncNames = append(subFuncNames, fnName)
+
+		fileCode := generateRegFileCode(pkgName, fnName, body)
+		fileName := fmt.Sprintf("__xgo_autogen_register_func_info_%d", i)
+		addFile(fileName, strings.NewReader(fileCode))
 	}
-	addFile("__xgo_autogen_register_func_info.go", strings.NewReader(autoGen))
+	if len(subFuncNames) > 0 {
+		stmts := make([]string, 0, len(subFuncNames))
+		for _, subFunc := range subFuncNames {
+			stmts = append(stmts, fmt.Sprintf("%s(__xgo_reg_func)", subFunc))
+		}
+		body := strings.Join(stmts, "\n")
+		fileCode := generateRegFileCode(pkgName, "__xgo_register_funcs", body)
+		addFile("__xgo_autogen_register_func_info.go", strings.NewReader(fileCode))
+	}
+}
+
+func getFileIndexMapping(files []*syntax.File) map[*syntax.File]int {
+	m := make(map[*syntax.File]int, len(files))
+	for i, file := range files {
+		m[file] = i
+	}
+	return m
+}
+func splitBatch(funcDecls []*DeclInfo, batch int) [][]*DeclInfo {
+	if batch <= 0 {
+		panic("invalid batch")
+	}
+	var res [][]*DeclInfo
+
+	var cur []*DeclInfo
+	n := len(funcDecls)
+	for i := 0; i < n; i++ {
+		cur = append(cur, funcDecls[i])
+		if len(cur) >= batch {
+			res = append(res, cur)
+			cur = nil
+		}
+	}
+	if len(cur) > 0 {
+		res = append(res, cur)
+		cur = nil
+	}
+	return res
+}
+
+type FileDecl struct {
+	File  *syntax.File
+	Funcs []*DeclInfo
 }
 
 type DeclInfo struct {
@@ -177,9 +233,11 @@ type DeclInfo struct {
 	FirstArgCtx  bool
 	LastResError bool
 
-	File    string
-	FileRef string
-	Line    int
+	FileSyntax *syntax.File
+	FileIndex  int
+	File       string
+	FileRef    string
+	Line       int
 }
 
 func (c *DeclInfo) RefName() string {
@@ -207,6 +265,86 @@ func (c *DeclInfo) IdentityName() string {
 
 // collect funcs from files, register each of them by
 // calling to __xgo_reg_func with names and func pointer
+
+func getFuncDecls(files []*syntax.File) []*DeclInfo {
+	// fileInfos := make([]*FileDecl, 0, len(files))
+	var declFuncs []*DeclInfo
+	for i, f := range files {
+		for _, decl := range f.DeclList {
+			fn, ok := decl.(*syntax.FuncDecl)
+			if !ok {
+				continue
+			}
+			line := fn.Pos().Line()
+			if fn.Name.Value == "init" {
+				continue
+			}
+			var genericFunc bool
+			if len(fn.TParamList) > 0 {
+				genericFunc = true
+				// cannot handle generic
+			}
+			var recvTypeName string
+			var recvPtr bool
+			var recvName string
+			var genericRecv bool
+			if fn.Recv != nil {
+				recvName = "_"
+				if fn.Recv.Name != nil {
+					recvName = fn.Recv.Name.Value
+				}
+
+				recvTypeExpr := fn.Recv.Type
+
+				// *A
+				if starExpr, ok := fn.Recv.Type.(*syntax.Operation); ok && starExpr.Op == syntax.Mul {
+					// *A
+					recvTypeExpr = starExpr.X
+					recvPtr = true
+				}
+				// check if generic
+				if indexExpr, ok := recvTypeExpr.(*syntax.IndexExpr); ok {
+					// *A[T] or A[T]
+					// the generic receiver
+					// currently not handled
+					genericRecv = true
+					recvTypeExpr = indexExpr.X
+				}
+
+				recvTypeName = recvTypeExpr.(*syntax.Name).Value
+			}
+			var firstArgCtx bool
+			var lastResErr bool
+			if len(fn.Type.ParamList) > 0 && hasQualifiedName(fn.Type.ParamList[0].Type, "context", "Context") {
+				firstArgCtx = true
+			}
+			if len(fn.Type.ResultList) > 0 && isName(fn.Type.ResultList[len(fn.Type.ResultList)-1].Type, "error") {
+				lastResErr = true
+			}
+
+			declFuncs = append(declFuncs, &DeclInfo{
+				FuncDecl:     fn,
+				Name:         fn.Name.Value,
+				RecvTypeName: recvTypeName,
+				RecvPtr:      recvPtr,
+				Generic:      genericFunc || genericRecv,
+
+				RecvName: recvName,
+				ArgNames: getFieldNames(fn.Type.ParamList),
+				ResNames: getFieldNames(fn.Type.ResultList),
+
+				FirstArgCtx:  firstArgCtx,
+				LastResError: lastResErr,
+
+				FileSyntax: f,
+				FileIndex:  i,
+				Line:       int(line),
+			})
+		}
+	}
+	return declFuncs
+}
+
 func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 	fileRefs := make([]string, 0, len(files))
 	var declFuncs []*DeclInfo
@@ -280,13 +418,21 @@ func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 
 				FirstArgCtx:  firstArgCtx,
 				LastResError: lastResErr,
+				FileIndex:    i,
 				File:         file,
 				FileRef:      fileRef,
 				Line:         int(line),
 			})
 		}
+		fileValue := file
+		// useFileVal := true
+		if true {
+			// debug
+			// useFileVal = false
+			fileValue = ""
+		}
 		if hasDecl {
-			fileRefs = append(fileRefs, fmt.Sprintf("%s := %q", fileRef, file))
+			fileRefs = append(fileRefs, fmt.Sprintf("%s := %q", fileRef, fileValue))
 		}
 	}
 
@@ -319,20 +465,20 @@ func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 		refName, _ := declFunc.RefAndGeneric()
 		// func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool, file string, line int)
 		fieldList := []string{
-			"__xgo_regPkgPath",                          // PkgPath
-			refName,                                     // Fn
-			"0",                                         // PC
-			strconv.FormatBool(declFunc.Generic),        // Generic
-			strconv.Quote(declFunc.RecvTypeName),        // RecvTypeName
-			strconv.FormatBool(declFunc.RecvPtr),        // RecvPtr
-			strconv.Quote(declFunc.Name),                // Name
-			strconv.Quote(declFunc.IdentityName()),      // IdentityName
-			strconv.Quote(declFunc.RecvName),            // RecvName
-			quoteNamesExpr(declFunc.ArgNames),           // ArgNames
-			quoteNamesExpr(declFunc.ResNames),           // ResNames
-			strconv.FormatBool(declFunc.FirstArgCtx),    // FirstArgCtx
-			strconv.FormatBool(declFunc.LastResError),   // LastResErr
-			declFunc.FileRef,                            // File
+			"__xgo_regPkgPath",                        // PkgPath
+			refName,                                   // Fn
+			"0",                                       // PC
+			strconv.FormatBool(declFunc.Generic),      // Generic
+			strconv.Quote(declFunc.RecvTypeName),      // RecvTypeName
+			strconv.FormatBool(declFunc.RecvPtr),      // RecvPtr
+			strconv.Quote(declFunc.Name),              // Name
+			strconv.Quote(declFunc.IdentityName()),    // IdentityName
+			strconv.Quote(declFunc.RecvName),          // RecvName
+			quoteNamesExpr(declFunc.ArgNames),         // ArgNames
+			quoteNamesExpr(declFunc.ResNames),         // ResNames
+			strconv.FormatBool(declFunc.FirstArgCtx),  // FirstArgCtx
+			strconv.FormatBool(declFunc.LastResError), // LastResErr
+			`""`, /* declFunc.FileRef */ // File
 			strconv.FormatInt(int64(declFunc.Line), 10), // Line
 		}
 		fields := strings.Join(fieldList, ",")
@@ -355,9 +501,142 @@ func getRegFuncsBody(files []*syntax.File) ([]*DeclInfo, string) {
 		}`)
 	}
 	allStmts = append(allStmts, `type __xgo_reg_func_struct_info = `+regStructType)
-	allStmts = append(allStmts, fileRefs...)
+	if false {
+		// debug, do not include file paths
+		allStmts = append(allStmts, fileRefs...)
+	}
+	if true {
+		// debug
+		pkgPath := xgo_ctxt.GetPkgPath()
+		if strings.HasSuffix(pkgPath, "dao/impl") {
+			if true {
+				code := strings.Join(append(allStmts, stmts...), "\n")
+				os.WriteFile("/tmp/test.go", []byte(code), 0755)
+				panic("shit")
+			}
+
+			if len(stmts) > 100 {
+				stmts = stmts[:100]
+			}
+		}
+	}
 	allStmts = append(allStmts, stmts...)
 	return declFuncs, strings.Join(allStmts, "\n")
+}
+
+func getFileRef(i int) string {
+	return fmt.Sprintf("__xgo_reg_file_gen_%d", i)
+}
+func generateFuncRegBody(funcDecls []*DeclInfo) string {
+	const regStructType = `struct {
+	PkgPath      string
+	Fn           interface{}
+	PC           uintptr // filled later
+	Generic      bool
+	RecvTypeName string
+	RecvPtr      bool
+	Name         string
+	IdentityName string // name without pkgPath
+
+	RecvName    string
+	ArgNames    []string
+	ResNames    []string
+	FirstArgCtx bool // first argument is context.Context or sub type?
+	LastResErr  bool // last res is error or sub type?
+
+	File string
+	Line int
+}
+`
+	fileDeclaredMapping := make(map[int]bool)
+	var fileDefs []string
+	stmts := make([]string, 0, len(funcDecls))
+	for _, funcDecl := range funcDecls {
+		if funcDecl.Name == "_" {
+			// there are function with name "_"
+			continue
+		}
+		refName, _ := funcDecl.RefAndGeneric()
+		fileIdx := funcDecl.FileIndex
+		fileRef := getFileRef(fileIdx)
+		// func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool, file string, line int)
+		fieldList := []string{
+			"__xgo_regPkgPath",                        // PkgPath
+			refName,                                   // Fn
+			"0",                                       // PC
+			strconv.FormatBool(funcDecl.Generic),      // Generic
+			strconv.Quote(funcDecl.RecvTypeName),      // RecvTypeName
+			strconv.FormatBool(funcDecl.RecvPtr),      // RecvPtr
+			strconv.Quote(funcDecl.Name),              // Name
+			strconv.Quote(funcDecl.IdentityName()),    // IdentityName
+			strconv.Quote(funcDecl.RecvName),          // RecvName
+			quoteNamesExpr(funcDecl.ArgNames),         // ArgNames
+			quoteNamesExpr(funcDecl.ResNames),         // ResNames
+			strconv.FormatBool(funcDecl.FirstArgCtx),  // FirstArgCtx
+			strconv.FormatBool(funcDecl.LastResError), // LastResErr
+			fileRef, /* declFunc.FileRef */ // File
+			strconv.FormatInt(int64(funcDecl.Line), 10), // Line
+		}
+		fields := strings.Join(fieldList, ",")
+		stmts = append(stmts, "__xgo_reg_func(__xgo_reg_func_struct_info{"+fields+"})")
+
+		// add files
+		if !fileDeclaredMapping[fileIdx] {
+			fileDeclaredMapping[fileIdx] = true
+			fileValue := funcDecl.FileSyntax.Pos().RelFilename()
+			fileDefs = append(fileDefs, fmt.Sprintf("%s := %q", fileRef, fileValue))
+		}
+	}
+
+	if len(stmts) == 0 {
+		return ""
+	}
+	allStmts := make([]string, 0, 2+len(fileDefs)+len(stmts))
+	allStmts = append(allStmts, `__xgo_regPkgPath := `+strconv.Quote(xgo_ctxt.GetPkgPath()))
+	if false {
+		// debug
+		allStmts = append(allStmts, `__xgo_reg_func_old:=__xgo_reg_func; __xgo_reg_func = func(info interface{}){
+			fmt.Print("reg:"+__xgo_regPkgPath+"\n")
+			v := reflect.ValueOf(info)
+			if v.Kind() != reflect.Struct {
+				panic("non struct:"+__xgo_regPkgPath)
+			}
+			__xgo_reg_func_old(info)
+		}`)
+	}
+	allStmts = append(allStmts, `type __xgo_reg_func_struct_info = `+regStructType)
+	// debug, do not include file paths
+	allStmts = append(allStmts, fileDefs...)
+	if false {
+		// debug
+		pkgPath := xgo_ctxt.GetPkgPath()
+		if strings.HasSuffix(pkgPath, "dao/impl") {
+			if true {
+				code := strings.Join(append(allStmts, stmts...), "\n")
+				os.WriteFile("/tmp/test.go", []byte(code), 0755)
+				panic("shit")
+			}
+
+			if len(stmts) > 100 {
+				stmts = stmts[:100]
+			}
+		}
+	}
+	allStmts = append(allStmts, stmts...)
+	return strings.Join(allStmts, "\n")
+}
+func generateRegFileCode(pkgName string, fnName string, body string) string {
+	autoGenStmts := []string{
+		"package " + pkgName,
+		// "import \"reflect\"", // debug
+		// "import \"fmt\"",     // debug
+		// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
+		"func " + fnName + "(__xgo_reg_func " + sig_gen__xgo_register_func + "){",
+		body,
+		"}",
+		"",
+	}
+	return strings.Join(autoGenStmts, "\n")
 }
 
 func getFieldNames(x []*syntax.Field) []string {
