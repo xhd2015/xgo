@@ -93,6 +93,10 @@ func __xgo_peek_panic() interface{} {
 	return p.arg
 }
 
+func __xgo_mem_equal(a, b unsafe.Pointer, size uintptr) bool {
+	return memequal(a, b, size)
+}
+
 // func GetFuncs_Requires_Xgo() []interface{} {
 // 	return funcs
 // }

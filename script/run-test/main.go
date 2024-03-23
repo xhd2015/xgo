@@ -15,6 +15,13 @@ import (
 //	go run ./script/run-test/ --include go1.19.13
 //	go run ./script/run-test/ --include go1.19.13 -run TestHelloWorld -v
 //	go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
+
+
+// TODO: remove duplicate test between xgo test and runtime test
+var runtimeTests = []string{
+	"mock_method",
+}
+
 func main() {
 	args := os.Args[1:]
 	var excludes []string
@@ -24,6 +31,8 @@ func main() {
 	var remainArgs []string
 
 	var resetInstrument bool
+	var xgoTestOnly bool
+	var xgoRuntimeTestOnly bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--exclude" {
@@ -51,6 +60,16 @@ func main() {
 		}
 		if arg == "-v" || strings.HasPrefix(arg, "-count=") {
 			remainArgs = append(remainArgs, arg)
+			continue
+		}
+		if arg == "--xgo-test-only" {
+			xgoTestOnly = true
+			xgoRuntimeTestOnly = false
+			continue
+		}
+		if arg == "--xgo-runtime-test-only" {
+			xgoRuntimeTestOnly = true
+			xgoTestOnly = false
 			continue
 		}
 		if arg == "--" {
@@ -103,10 +122,39 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		err := runTest(filepath.Join(goRelease, goroot), remainArgs)
-		if err != nil {
-			fmt.Fprintf(os.Stdout, "FAIL %s: %v\n", goroot, err)
-			os.Exit(1)
+		runDefault := true
+		runXgoTestFlag := true
+		runRuntimeTestFlag := true
+		if xgoTestOnly {
+			runDefault = false
+			runXgoTestFlag = true
+			runRuntimeTestFlag = false
+		} else if xgoRuntimeTestOnly {
+			runDefault = false
+			runXgoTestFlag = false
+			runRuntimeTestFlag = true
+		}
+		if runDefault {
+			err := runDefaultTest(filepath.Join(goRelease, goroot), remainArgs)
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "FAIL %s: %v\n", goroot, err)
+				os.Exit(1)
+			}
+		}
+		if runXgoTestFlag {
+			err := runXgoTest(filepath.Join(goRelease, goroot), remainArgs)
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "FAIL %s: %v\n", goroot, err)
+				os.Exit(1)
+			}
+		}
+
+		if runRuntimeTestFlag {
+			err := runRuntimeTest(filepath.Join(goRelease, goroot), remainArgs)
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "FAIL %s: %v\n", goroot, err)
+				os.Exit(1)
+			}
 		}
 		fmt.Fprintf(os.Stdout, "PASS %s\n", goroot)
 	}
@@ -139,17 +187,54 @@ func listGoroots(dir string) ([]string, error) {
 	return dirs, nil
 }
 
-func runTest(goroot string, args []string) error {
+func runDefaultTest(goroot string, args []string) error {
+	return doRunTest(goroot, testKind_default, args)
+}
+
+func runXgoTest(goroot string, args []string) error {
+	return doRunTest(goroot, testKind_xgoTest, args)
+}
+
+func runRuntimeTest(goroot string, args []string) error {
+	return doRunTest(goroot, testKind_runtimeTest, args)
+}
+
+type testKind string
+
+const (
+	testKind_default     testKind = ""
+	testKind_xgoTest     testKind = "xgo-test"
+	testKind_runtimeTest testKind = "runtime-test"
+)
+
+func doRunTest(goroot string, kind testKind, args []string) error {
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
 		return err
 	}
-
-	testArgs := []string{"test"}
-	if len(args) > 0 {
-		testArgs = append(testArgs, args...)
+	var testArgs []string
+	switch kind {
+	case testKind_default:
+		testArgs = []string{"test"}
+		if len(args) > 0 {
+			testArgs = append(testArgs, args...)
+		}
+		testArgs = append(testArgs, "./test")
+	case testKind_xgoTest:
+		testArgs = []string{"run", "./cmd/xgo", "test"}
+		if len(args) > 0 {
+			testArgs = append(testArgs, args...)
+		}
+		testArgs = append(testArgs, "./test/xgo_test/...")
+	case testKind_runtimeTest:
+		testArgs = []string{"run", "./cmd/xgo", "test", "--project-dir", "runtime"}
+		if len(args) > 0 {
+			testArgs = append(testArgs, args...)
+		}
+		for _, runtimeTest := range runtimeTests {
+			testArgs = append(testArgs, "./test/"+runtimeTest)
+		}
 	}
-	testArgs = append(testArgs, "./test")
 
 	execCmd := exec.Command(filepath.Join(goroot, "bin", "go"), testArgs...)
 	execCmd.Stdout = os.Stdout

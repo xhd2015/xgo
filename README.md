@@ -96,6 +96,8 @@ xgo run ./
 #  after mock: add(5,2)=3
 ```
 
+For mocking method, check [Mock](#Mock) for more details.
+
 # Trap
 Trap allows developer to intercept function execution on the fly.
 
@@ -184,10 +186,57 @@ func main(){
 # Mock
 Mock simplifies the process of setting up Trap interceptors.
 
-It exposes 1 API:
-- `AddFuncInterceptor()`
+The Mock API:
+- `Mock(fn, interceptor)`
 
-The detailed usage can be found in [Usage](#usage) section.
+Arguments:
+- If `fn` is a simple function(i.e. not a method of a struct or interface),then all call to that function will be intercepted, 
+- If `fn` is a method(i.e. `file.Read`),then only call to the instance will be intercepted, other instances will not be affected
+
+Scope:
+- If `Mock` is called from `init`, then all goroutines will be mocked.
+- Otherwise, if `Mock` is called after `init`, the mock interceptor will only be effective for current gorotuine, other goroutines are not affected.
+
+Function mock example:
+```go
+func MyFunc() string {
+    return "my func"
+}
+func TestFuncMock(t *testing.T){
+    mock.Mock(MyFunc, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
+        results.GetFieldIndex(0).Set("mock func")
+        return nil
+    })
+    text := MyFunc()
+    if text!="mock func"{
+        t.Fatalf("expect MyFunc() to be 'mock func', actual: %s", text)
+    }
+}
+```
+
+Method mock example:
+```go
+type MyStruct struct {
+    name string
+}
+func (c *MyStruct) Name() name{
+    return c.name
+}
+
+func TestMethodMock(t *testing.T){
+    myStruct := &MyStruct{
+        name: "my struct",
+    }
+    mock.Mock(myStruct.Name, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
+        results.GetFieldIndex(0).Set("mock struct")
+        return nil
+    })
+    name := myStruct.Name()
+    if name!="mock struct"{
+        t.Fatalf("expect myStruct.Name() to be 'mock struct', actual: %s", name)
+    }
+}
+```
 
 # Trace
 It is painful when debugging with a deep call stack.

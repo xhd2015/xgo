@@ -263,6 +263,26 @@ func (c *DeclInfo) IdentityName() string {
 	return xgo_func_name.FormatFuncRefName(c.RecvTypeName, c.RecvPtr, c.Name)
 }
 
+func fillMissingArgNames(fn *syntax.FuncDecl) {
+	if fn.Recv != nil {
+		fillName(fn.Recv, "__xgo_recv_auto_filled")
+	}
+	for i, p := range fn.Type.ParamList {
+		fillName(p, fmt.Sprintf("__xgo_arg_auto_filled_%d", i))
+	}
+}
+
+func fillName(field *syntax.Field, namePrefix string) {
+	if field.Name == nil {
+		field.Name = syntax.NewName(field.Pos(), namePrefix)
+		return
+	}
+	if field.Name.Value == "_" {
+		field.Name.Value = namePrefix + "_blank"
+		return
+	}
+}
+
 // collect funcs from files, register each of them by
 // calling to __xgo_reg_func with names and func pointer
 
@@ -283,12 +303,12 @@ func getFuncDecls(files []*syntax.File) []*DeclInfo {
 			var genericFunc bool
 			if len(fn.TParamList) > 0 {
 				genericFunc = true
-				// cannot handle generic
 			}
 			var recvTypeName string
 			var recvPtr bool
 			var recvName string
 			var genericRecv bool
+			fillMissingArgNames(fn)
 			if fn.Recv != nil {
 				recvName = "_"
 				if fn.Recv.Name != nil {

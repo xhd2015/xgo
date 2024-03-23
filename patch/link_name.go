@@ -5,6 +5,7 @@ import (
 )
 
 const xgoRuntimePkgPrefix = xgo_ctxt.XgoRuntimePkg + "/"
+const xgoTestPkgPrefix = xgo_ctxt.XgoModule + "/test/"
 const xgoRuntimeTrapPkg = xgoRuntimePkgPrefix + "trap"
 
 // accepts interface{} as argument
@@ -22,4 +23,5 @@ var linkMap = map[string]string{
 	"__xgo_link_get_test_starts":              "__xgo_get_test_starts",
 	"__xgo_link_retrieve_all_funcs_and_clear": "__xgo_retrieve_all_funcs_and_clear",
 	"__xgo_link_peek_panic":                   "__xgo_peek_panic",
+	"__xgo_link_mem_equal":                    "__xgo_mem_equal",
 }

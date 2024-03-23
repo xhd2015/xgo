@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
-	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
@@ -368,45 +367,6 @@ func handleBuild(cmd string, args []string) error {
 		}
 	}
 	return nil
-}
-
-func handleTool(tool string, args []string) error {
-	baseName := filepath.Base(tool)
-	if baseName != tool {
-		return fmt.Errorf("unknown tool: %s", tool)
-	}
-	curName := filepath.Base(os.Args[0])
-	if baseName == curName {
-		// cannot invoke itself
-		return fmt.Errorf("unknown tool: %s", tool)
-	}
-	dirName := filepath.Dir(os.Args[0])
-	toolExec := filepath.Join(dirName, tool)
-
-	var retryHome bool
-	stat, statErr := os.Stat(toolExec)
-	if statErr != nil {
-		if !errors.Is(statErr, os.ErrNotExist) {
-			return fmt.Errorf("unknown tool: %s", tool)
-		}
-		retryHome = true
-	} else if stat.IsDir() {
-		retryHome = true
-	}
-	if retryHome {
-		// try ~/.xgo/bin/tool
-		home, homeErr := os.UserHomeDir()
-		if homeErr != nil {
-			return fmt.Errorf("unknown tool: %s", tool)
-		}
-		toolExec = filepath.Join(home, ".xgo", "bin", tool)
-		stat, statErr := os.Stat(toolExec)
-		if statErr != nil || stat.IsDir() {
-			return fmt.Errorf("unknown tool: %s", tool)
-		}
-	}
-
-	return cmd.Run(toolExec, args...)
 }
 
 func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error) {

@@ -111,7 +111,7 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 	// TODO: what about unnamed closure?
 	linkName := linkMap[fnName]
 	if linkName != "" {
-		if !strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) && pkgPath != "testing" {
+		if !strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) && !strings.HasPrefix(pkgPath, xgoTestPkgPrefix) && pkgPath != "testing" {
 			return "", false
 		}
 		// ir.Dump("before:", fn)
@@ -498,14 +498,31 @@ func takeAddr(fn *ir.Func, field *types.Field, nameOnly bool) ir.Node {
 	}
 	// go1.20 only? no Nname, so cannot refer to it
 	// but we should display it in trace?(better to do so)
+	var isNilOrEmptyName bool
+
 	if field.Nname == nil {
-		return newNilInterface(pos)
+		isNilOrEmptyName = true
+	} else if field.Sym != nil && field.Sym.Name == "_" {
+		isNilOrEmptyName = true
 	}
-	// if name is "_", return nil
-	if field.Sym != nil && field.Sym.Name == "_" {
-		return newNilInterface(pos)
+	var fieldRef *ir.Name
+	if isNilOrEmptyName {
+		// if name is "_" or empty, return nil
+		if true {
+			return newNilInterface(pos)
+		}
+		if false {
+			// NOTE: not working when IR
+			tmpName := typecheck.TempAt(pos, fn, field.Type)
+			field.Nname = tmpName
+			field.Sym = tmpName.Sym()
+			fieldRef = tmpName
+		}
+	} else {
+		fieldRef = field.Nname.(*ir.Name)
 	}
-	arg := ir.NewAddrExpr(pos, field.Nname.(*ir.Name))
+
+	arg := ir.NewAddrExpr(pos, fieldRef)
 
 	if nameOnly {
 		fieldType := field.Type

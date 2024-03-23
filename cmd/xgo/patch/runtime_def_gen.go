@@ -15,4 +15,5 @@ func __xgo_on_init_finished(fn func())
 func __xgo_on_goexit(fn func())
 func __xgo_on_test_start(fn interface{})
 func __xgo_get_test_starts() []interface{}
-func __xgo_peek_panic() interface{}`
+func __xgo_peek_panic() interface{}
+func __xgo_mem_equal(a, b unsafe.Pointer, size uintptr) bool`

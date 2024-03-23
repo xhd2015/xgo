@@ -70,6 +70,9 @@ func (c field) Name() string {
 func (c field) Set(val interface{}) {
 	reflect.ValueOf(c.valPtr).Elem().Set(reflect.ValueOf(val))
 }
+func (c field) Ptr() interface{} {
+	return c.valPtr
+}
 
 func (c field) Value() interface{} {
 	return reflect.ValueOf(c.valPtr).Elem().Interface()

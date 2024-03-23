@@ -15,5 +15,6 @@ type ObjectWithErr interface {
 type Field interface {
 	Name() string
 	Value() interface{}
+	Ptr() interface{}
 	Set(val interface{})
 }
