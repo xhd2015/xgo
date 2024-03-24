@@ -197,6 +197,12 @@ Scope:
 - If `Mock` is called from `init`, then all goroutines will be mocked.
 - Otherwise, if `Mock` is called after `init`, the mock interceptor will only be effective for current gorotuine, other goroutines are not affected.
 
+Interceptor Signature: `func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error`
+- If the interceptor returns `nil`, then the target function is mocked,
+- If the interceptor returns `mock.ErrCallOld`, then the target function is called again,
+- Otherwise, the interceptor returns a non-nil error, that will be set to the function's return error.
+
+
 Function mock example:
 ```go
 func MyFunc() string {
@@ -219,7 +225,7 @@ Method mock example:
 type MyStruct struct {
     name string
 }
-func (c *MyStruct) Name() name{
+func (c *MyStruct) Name() string {
     return c.name
 }
 
