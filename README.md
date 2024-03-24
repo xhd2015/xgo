@@ -17,6 +17,9 @@ Want to help contribute to `xgo`? Great! Check [CONTRIBUTING
 ```sh
 # macOS and Linux
 curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | bash
+
+# windows
+powershell -c "irm github.com/xhd2015/xgo/raw/master/install.ps1|iex"
 ```
 
 If you've already installed `xgo`, you can upgrade it with:
