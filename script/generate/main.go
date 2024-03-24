@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/xhd2015/xgo/support/filecopy"
 )
 
 func main() {
@@ -39,6 +41,17 @@ func generate(rootDir string) error {
 		filepath.Join(rootDir, "runtime", "trace", "stack_export.go"),
 		filepath.Join(rootDir, "cmd", "trace", "stack_export.go"),
 	)
+	if err != nil {
+		return err
+	}
+
+	upgradeDst := filepath.Join(rootDir, "script", "install", "upgrade")
+	err = os.RemoveAll(upgradeDst)
+	if err != nil {
+		return err
+	}
+
+	err = copyUpgrade(filepath.Join(rootDir, "cmd", "xgo", "upgrade"), upgradeDst)
 	if err != nil {
 		return err
 	}
@@ -123,6 +136,29 @@ func copyTraceExport(srcFile string, targetFile string) error {
 	return os.WriteFile(targetFile, []byte(content), 0755)
 }
 
+func copyUpgrade(srcDir string, targetDir string) error {
+	err := filecopy.CopyReplaceDir(srcDir, targetDir, false)
+	if err != nil {
+		return err
+	}
+	files, err := os.ReadDir(targetDir)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		fullFile := filepath.Join(targetDir, file.Name())
+		content, err := os.ReadFile(fullFile)
+		if err != nil {
+			return err
+		}
+		content = append([]byte(prelude), content...)
+		err = os.WriteFile(fullFile, content, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func getSlice(code string, fset *token.FileSet, start token.Pos, end token.Pos) string {
 	i := fset.Position(start).Offset
 	j := fset.Position(end).Offset
