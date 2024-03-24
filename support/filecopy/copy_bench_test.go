@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"runtime"
+	"strings"
 
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/filecopy"
@@ -25,10 +27,11 @@ func TestExampleCopy5g(t *testing.T) {
 
 // go test -run TestExampleCopy10g -v ./support/filecopy
 func TestExampleCopy10g(t *testing.T) {
+	// on windows this took 4.79s
 	testCopyDir(t, "go1.22.1", 10)
 }
 
-// go test -run TestExampleCopy10g -v ./support/filecopy
+// go test -run TestExampleCopy20g -v ./support/filecopy
 func TestExampleCopy20g(t *testing.T) {
 	testCopyDir(t, "go1.22.1", 20)
 }
@@ -48,6 +51,16 @@ func getGitRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if runtime.GOOS == "windows" {
+		if strings.HasPrefix(gitDir,"/cygdrive") {
+			// the cygwin git
+			subDirs := strings.Split(gitDir,"/")
+			if subDirs[0]==""{
+				subDirs = subDirs[1:]
+			}
+			gitDir = subDirs[1]+"://"+ strings.Join(subDirs[2:],"\\")
+		}
+	}
 	return filepath.Abs(filepath.Dir(gitDir))
 }
 func testCopyDir(t *testing.T, src string, n int) {
@@ -55,7 +68,8 @@ func testCopyDir(t *testing.T, src string, n int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir, err := os.MkdirTemp("/tmp", "cp")
+	// fmt.Printf("root: %s\n",root)
+	dir, err := os.MkdirTemp("", "cp")
 	if err != nil {
 		t.Fatal(err)
 	}

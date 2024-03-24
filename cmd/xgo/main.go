@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/support/osinfo"
+
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
@@ -174,9 +176,11 @@ func handleBuild(cmd string, args []string) error {
 	}
 	instrumentDir := filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
 
-	execToolBin := filepath.Join(binDir, "exec_tool")
+	exeSuffix := osinfo.EXE_SUFFIX
+	// NOTE: on windows, go build -o xxx will always yield xxx.exe
+	execToolBin := filepath.Join(binDir, "exec_tool"+exeSuffix)
 	compileLog := filepath.Join(logDir, "compile.log")
-	compilerBin := filepath.Join(instrumentDir, "compile")
+	compilerBin := filepath.Join(instrumentDir, "compile"+exeSuffix)
 	compilerBuildID := filepath.Join(instrumentDir, "compile.buildid.txt")
 	instrumentGoroot := filepath.Join(instrumentDir, goVersionName)
 
@@ -433,8 +437,8 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 				return false, "", err
 			}
 		}
-
 	}
+
 	execToolCmd := []string{actualExecToolBin, "--enable"}
 	if logCompile {
 		execToolCmd = append(execToolCmd, "--log-compile")
@@ -460,7 +464,8 @@ func findBuiltExecTool() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	execToolBin := filepath.Join(absDirName, "exec_tool")
+	exeSuffix := osinfo.EXE_SUFFIX
+	execToolBin := filepath.Join(absDirName, "exec_tool"+exeSuffix)
 	_, statErr := os.Stat(execToolBin)
 	if statErr == nil {
 		return execToolBin, nil
@@ -469,7 +474,7 @@ func findBuiltExecTool() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("exec_tool not found in %s", dirName)
 	}
-	execToolBin = filepath.Join(homeDir, ".xgo", "bin", "exec_tool")
+	execToolBin = filepath.Join(homeDir, ".xgo", "bin", "exec_tool"+exeSuffix)
 	_, statErr = os.Stat(execToolBin)
 	if statErr == nil {
 		return execToolBin, nil

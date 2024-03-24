@@ -4,8 +4,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
+
+	"github.com/xhd2015/xgo/support/osinfo"
 
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -29,18 +32,28 @@ func tmpWithRuntimeGoModeAndTest(testDir string) (rootDir string, subDir string,
 }
 
 func linkRuntimeAndTest(testDir string, goModOnly bool) (rootDir string, subDir string, err error) {
-	tmpDir, err := os.MkdirTemp(os.TempDir(), "test")
+	tmpDir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		return "", "", err
 	}
 
-	// copy runtime to a tmp directory, and
-	// test under there
-	if goModOnly {
-		err = filecopy.LinkFile("../runtime/go.mod", filepath.Join(tmpDir, "go.mod"))
+	// windows no link
+	if runtime.GOOS != "windows" {
+		// copy runtime to a tmp directory, and
+		// test under there
+		if goModOnly {
+			err = filecopy.LinkFile(filepath.Join("..", "runtime", "go.mod"), filepath.Join(tmpDir, "go.mod"))
+		} else {
+			err = filecopy.LinkFiles(filepath.Join("..", "runtime"), tmpDir)
+		}
 	} else {
-		err = filecopy.LinkFiles("../runtime", tmpDir)
+		if goModOnly {
+			err = filecopy.CopyFile(filepath.Join("..", "runtime", "go.mod"), filepath.Join(tmpDir, "go.mod"))
+		} else {
+			err = filecopy.CopyReplaceDir(filepath.Join("..", "runtime"), tmpDir, false)
+		}
 	}
+
 	if err != nil {
 		return "", "", err
 	}
@@ -50,7 +63,11 @@ func linkRuntimeAndTest(testDir string, goModOnly bool) (rootDir string, subDir 
 		return "", "", err
 	}
 
-	err = filecopy.LinkFiles(testDir, subDir)
+	if runtime.GOOS != "windows" {
+		err = filecopy.LinkFiles(testDir, subDir)
+	} else {
+		err = filecopy.CopyReplaceDir(testDir, subDir, false)
+	}
 	if err != nil {
 		return "", "", err
 	}
@@ -89,7 +106,16 @@ func getGoVersion() (*goinfo.GoVersion, error) {
 
 var xgoInitErr error
 
-const xgoBinary string = "./xgo"
+var xgoBinary string
+
+func init() {
+	curDir, err := filepath.Abs(".")
+	if err != nil {
+		panic(err)
+	}
+	exeSuffix := osinfo.EXE_SUFFIX
+	xgoBinary = filepath.Join(curDir, "xgo"+exeSuffix)
+}
 
 var xgoInitOnce sync.Once
 

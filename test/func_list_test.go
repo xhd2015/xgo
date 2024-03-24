@@ -31,20 +31,21 @@ func TestFuncList(t *testing.T) {
 		expectContains(t, output, expectStdLines)
 	}
 
-	var expectMainLines []string
-	// go1.18, with generic
-	if goVersion.Major >= 1 && goVersion.Minor >= 18 {
-		expectMainLines = append(expectMainLines, []string{
-			"func:main generic",
-			"func:main List.size",
-		}...)
-	}
-	expectMainLines = append(expectMainLines, []string{
+	expectMainLines := []string{
 		"func:main example",
 		"func:main someInt.value",
 		// "func:main (*someInt).inc", // this output is replaced with a simplier display name
 		"func:main someInt.inc",
-	}...)
+	}
 
 	expectSequence(t, output, expectMainLines)
+
+	// go1.18, with generic
+	if goVersion.Major >= 1 && goVersion.Minor >= 18 {
+		expectGenericLines := []string{
+			"func:main generic",
+			"func:main List.size",
+		}
+		expectSequence(t, output, expectGenericLines)
+	}
 }

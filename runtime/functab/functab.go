@@ -2,6 +2,7 @@ package functab
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -13,28 +14,18 @@ import (
 const __XGO_SKIP_TRAP = true
 
 func init() {
-	func() {
-		defer func() {
-			if e := recover(); e != nil {
-				if s, ok := e.(string); ok && s == "failed to link __xgo_link_on_init_finished" {
-					// silent as this is not always needed to run eagerly
-					return
-				}
-				panic(e)
-			}
-		}()
-		__xgo_link_on_init_finished(ensureMapping)
-	}()
+	__xgo_link_on_init_finished(ensureMapping)
 }
 
 // rewrite at compile time by compiler, the body will be replaced with
 // a call to runtime.__xgo_for_each_func
 func __xgo_link_retrieve_all_funcs_and_clear(f func(fn interface{})) {
-	panic("failed to link __xgo_link_retrieve_all_funcs_and_clear")
+	// linked at runtime
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_retrieve_all_funcs_and_clear")
 }
 
 func __xgo_link_on_init_finished(f func()) {
-	panic("failed to link __xgo_link_on_init_finished")
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_on_init_finished")
 }
 
 var funcInfos []*core.FuncInfo

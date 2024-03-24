@@ -2,10 +2,13 @@ package test
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/xhd2015/xgo/support/osinfo"
 
 	"github.com/xhd2015/xgo/support/cmd"
 )
@@ -26,6 +29,8 @@ type options struct {
 	env    []string
 
 	noPipeStderr bool
+
+	stderr io.Writer
 
 	init bool
 
@@ -77,7 +82,11 @@ func runXgo(args []string, opts *options) (string, error) {
 	}
 	xgoArgs = append(xgoArgs, args...)
 	cmd := exec.Command(xgoBinary, xgoArgs...)
-	if opts == nil || !opts.noPipeStderr {
+	if opts == nil {
+		cmd.Stderr = os.Stderr
+	} else if opts.stderr != nil {
+		cmd.Stderr = opts.stderr
+	} else if !opts.noPipeStderr {
 		cmd.Stderr = os.Stderr
 	}
 	if opts != nil && len(opts.env) > 0 {
@@ -116,8 +125,11 @@ func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error
 	if err != nil {
 		return "", err
 	}
+	exeSuffix := osinfo.EXE_SUFFIX
+	tmpFile += exeSuffix
 	defer os.RemoveAll(tmpFile)
 
+	tmpExe := tmpFile
 	// func_list depends on xgo/runtime, but xgo/runtime is
 	// a separate module, so we need to merge them
 	// together first
@@ -128,7 +140,7 @@ func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error
 	defer os.RemoveAll(tmpDir)
 
 	xgoBuildArgs := []string{
-		"-o", tmpFile,
+		"-o", tmpExe,
 		// "-a",
 		"--project-dir", funcListDir,
 	}
@@ -144,10 +156,10 @@ func buildWithRuntimeAndOutput(dir string, opts buildRuntimeOpts) (string, error
 		return "", err
 	}
 	if opts.debug {
-		fmt.Println(tmpFile)
+		fmt.Println(tmpExe)
 		time.Sleep(10 * time.Minute)
 	}
-	runCmd := exec.Command(tmpFile)
+	runCmd := exec.Command(tmpExe)
 	runCmd.Env = os.Environ()
 	runCmd.Env = append(runCmd.Env, opts.runEnv...)
 	output, err := runCmd.Output()
@@ -171,6 +183,8 @@ func buildAndRunOutputArgs(args []string, opts buildAndOutputOptions) (output st
 	if err != nil {
 		return "", err
 	}
+	exeSuffix := osinfo.EXE_SUFFIX
+	testBin += exeSuffix
 	defer os.RemoveAll(testBin)
 	buildArgs := []string{"-o", testBin}
 	buildArgs = append(buildArgs, args...)

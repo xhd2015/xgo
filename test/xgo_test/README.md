@@ -1,6 +1,8 @@
 # Test using xgo 
 The xgo_test directory are for testing if xgo link names correctly.
 
+These tests should be driven by xgo.
+
 To test:
 ```sh
 # run all

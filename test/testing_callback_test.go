@@ -11,7 +11,7 @@ func TestTestingCallbackShouldBeCalled(t *testing.T) {
 		// t.Logf("orig output: %s", output)
 		expectSequence(t, output, []string{
 			"RUN", "TestExample\n",
-			"main_test.go", "TEST EXAMPLE\n",
+			"_test.go", "TEST EXAMPLE\n",
 			"PASS",
 		})
 		return nil
@@ -22,7 +22,7 @@ func TestTestingCallbackShouldBeCalled(t *testing.T) {
 			"TEST STARTED: \n",
 			"RUN", "TestExample\n",
 			"TEST STARTED: TestExample\n",
-			"main_test.go", "TEST EXAMPLE\n",
+			"_test.go", "TEST EXAMPLE\n",
 			"PASS",
 		})
 		return nil

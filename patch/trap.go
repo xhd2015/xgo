@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/constant"
 	"os"
+	"runtime"
 	"strings"
 
 	"cmd/compile/internal/base"
@@ -85,10 +86,17 @@ func trapOrLink(fn *ir.Func) {
 	if !insertTrap {
 		return
 	}
-
-	if !InsertTrapForFunc(fn, false) {
-		return
+	fnName := fn.Sym().Name
+	if fnName != "__debug_ir_rewrite" {
+		if !InsertTrapForFunc(fn, false) {
+			return
+		}
+	} else {
+		fn.Body = []ir.Node{ir.NewReturnStmt(fn.Pos(), []ir.Node{
+			fn.Type().Params()[0].Nname.(*ir.Name),
+		})}
 	}
+
 	typeCheckBody(fn)
 	xgo_record.SetRewrittenBody(fn, fn.Body)
 
@@ -116,7 +124,8 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 		}
 		// ir.Dump("before:", fn)
 		if !disableXgoLink {
-			if linkName == setTrap && pkgPath != xgoRuntimeTrapPkg {
+			// trap & test
+			if linkName == setTrap && (pkgPath != xgoRuntimeTrapPkg && !strings.HasPrefix(pkgPath, xgoTestPkgPrefix)) {
 				return "", false
 			}
 			return linkName, false
@@ -248,9 +257,19 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 	posLine := pos.Line()
 	posCol := pos.Col()
 
+	// for windows, posFile has the form:
+	//    C:/a/b/c
+	// which syncDeclMapping's file has the form:
+	//    C:\a\b\c
+
 	syncDeclMapping := xgo_syntax.GetSyntaxDeclMapping()
 
-	decl := syncDeclMapping[posFile][xgo_syntax.LineCol{
+	fileMapping := syncDeclMapping[posFile]
+	if fileMapping == nil && runtime.GOOS == "windows" {
+		normPosFile := strings.ReplaceAll(posFile, "/", "\\")
+		fileMapping = syncDeclMapping[normPosFile]
+	}
+	decl := fileMapping[xgo_syntax.LineCol{
 		Line: posLine,
 		Col:  posCol,
 	}]

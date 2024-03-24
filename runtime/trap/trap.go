@@ -2,6 +2,8 @@ package trap
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -19,7 +21,7 @@ func ensureInit() {
 }
 
 func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
-	panic("failed to link __xgo_link_set_trap")
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_set_trap")
 }
 
 // Skip serves as mark to tell xgo not insert

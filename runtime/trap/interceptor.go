@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"unsafe"
 
@@ -16,30 +17,21 @@ var ErrAbort error = errors.New("abort trap interceptor")
 
 // link by compiler
 func __xgo_link_getcurg() unsafe.Pointer {
-	panic("xgo failed to link __xgo_link_getcurg")
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_getcurg")
+	return nil
 }
 
 func __xgo_link_init_finished() bool {
-	panic("xgo failed to link __xgo_link_init_finished")
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_init_finished")
+	return false
 }
 
 func __xgo_link_on_goexit(fn func()) {
-	panic("failed to link __xgo_link_on_goexit")
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_on_goexit")
 }
 
 func init() {
-	func() {
-		defer func() {
-			if e := recover(); e != nil {
-				if s, ok := e.(string); ok && s == "failed to link __xgo_link_on_goexit" {
-					// silent
-					return
-				}
-				panic(e)
-			}
-		}()
-		__xgo_link_on_goexit(clearLocalInterceptorsAndMark)
-	}()
+	__xgo_link_on_goexit(clearLocalInterceptorsAndMark)
 }
 
 type Interceptor struct {

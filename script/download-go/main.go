@@ -122,7 +122,7 @@ func downloadGo(cmd string, version string) error {
 
 		fmt.Fprintf(os.Stdout, "download from %s\n", downloadLink)
 		downloadFile := filepath.Join(goReleaseDir, baseName)
-		err = cmd_exec.Run("curl", "-L", "-o", downloadFile, downloadLink)
+		err = curlDownload(downloadLink, downloadFile)
 		if err != nil {
 			return err
 		}
@@ -145,6 +145,9 @@ func downloadGo(cmd string, version string) error {
 		return fmt.Errorf("unrecognized cmd: %s", cmd)
 	}
 	return nil
+}
+func curlDownload(url string, file string) error {
+	return cmd_exec.Run("curl"+osinfo.EXE_SUFFIX, "-L", "-o", downloadFile, downloadLink)
 }
 
 type DownloadInfo struct {

@@ -3,7 +3,6 @@ package trace
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,22 +47,26 @@ func init() {
 
 // link by compiler
 func __xgo_link_on_test_start(fn func(t *testing.T, fn func(t *testing.T))) {
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_on_test_start")
 }
 
 // link by compiler
 func __xgo_link_getcurg() unsafe.Pointer {
-	panic(errors.New("failed to link __xgo_link_getcurg"))
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_getcurg")
+	return nil
 }
 
 func __xgo_link_on_goexit(fn func()) {
-	panic("failed to link __xgo_link_on_goexit")
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_on_goexit")
 }
 func __xgo_link_init_finished() bool {
-	panic("xgo failed to link __xgo_link_init_finished")
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_init_finished")
+	return false
 }
 
 // linked by compiler
 func __xgo_link_peek_panic() interface{} {
+	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_peek_panic")
 	return nil
 }
 

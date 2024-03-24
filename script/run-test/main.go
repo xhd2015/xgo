@@ -19,6 +19,8 @@ import (
 // TODO: remove duplicate test between xgo test and runtime test
 var runtimeTests = []string{
 	"mock_method",
+	"trace_panic_peek",
+	"func_list",
 }
 
 func main() {
@@ -32,6 +34,7 @@ func main() {
 	var resetInstrument bool
 	var xgoTestOnly bool
 	var xgoRuntimeTestOnly bool
+	var xgoDefaultTestOnly bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--exclude" {
@@ -64,11 +67,19 @@ func main() {
 		if arg == "--xgo-test-only" {
 			xgoTestOnly = true
 			xgoRuntimeTestOnly = false
+			xgoDefaultTestOnly = false
 			continue
 		}
 		if arg == "--xgo-runtime-test-only" {
-			xgoRuntimeTestOnly = true
 			xgoTestOnly = false
+			xgoRuntimeTestOnly = true
+			xgoDefaultTestOnly = false
+			continue
+		}
+		if arg == "--xgo-default-test-only" {
+			xgoTestOnly = false
+			xgoRuntimeTestOnly = false
+			xgoDefaultTestOnly = true
 			continue
 		}
 		if arg == "--" {
@@ -125,13 +136,17 @@ func main() {
 		runXgoTestFlag := true
 		runRuntimeTestFlag := true
 		if xgoTestOnly {
-			runDefault = false
-			runXgoTestFlag = true
-			runRuntimeTestFlag = false
-		} else if xgoRuntimeTestOnly {
-			runDefault = false
-			runXgoTestFlag = false
 			runRuntimeTestFlag = true
+			runXgoTestFlag = true
+			runDefault = false
+		} else if xgoRuntimeTestOnly {
+			runRuntimeTestFlag = true
+			runXgoTestFlag = false
+			runDefault = false
+		} else if xgoDefaultTestOnly {
+			runRuntimeTestFlag = false
+			runXgoTestFlag = false
+			runDefault = true
 		}
 		if runDefault {
 			err := runDefaultTest(filepath.Join(goRelease, goroot), remainArgs)

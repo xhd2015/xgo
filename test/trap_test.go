@@ -1,10 +1,15 @@
 package test
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/xhd2015/xgo/support/osinfo"
 )
 
 // go test -run TestTrap$ -v ./test
@@ -15,14 +20,27 @@ func TestTrap(t *testing.T) {
 	testTrap(t, "./testdata/trap", origExpect, expectOut)
 }
 
-// go test -run TestTrapNormalBuildShouldFail -v ./test
-func TestTrapNormalBuildShouldFail(t *testing.T) {
+// go test -run TestTrapNormalBuildShouldWarn -v ./test
+func TestTrapNormalBuildShouldWarn(t *testing.T) {
 	t.Parallel()
-	expectOut := "panic: failed to link __xgo_link_set_trap"
-	runAndCompareInstrumentOutput(t, "./testdata/trap", "", expectOut, testTrapOpts{
-		expectOrigErr:       true,
+	expectOrigStderr := "failed to link __xgo_link_set_trap"
+
+	var origStderr bytes.Buffer
+	runAndCheckInstrumentOutput(t, "./testdata/trap", func(output string) error {
+		stderr := origStderr.String()
+		// t.Logf("orig stderr: %s", stderr)
+		if !strings.Contains(stderr, expectOrigStderr) {
+			return fmt.Errorf("expect orig stderr contains: %q, actual: %q", expectOrigStderr, stderr)
+		}
+		return nil
+	}, func(output string) error {
+		t.Fatalf("runInstrument set to false, should not be called")
+		return nil
+	}, testTrapOpts{
+		expectOrigErr:       false,
 		withNoInstrumentEnv: false,
 		runInstrument:       false,
+		origStderr:          &origStderr,
 	})
 }
 
@@ -48,6 +66,8 @@ type testTrapOpts struct {
 	expectOrigErr       bool
 	withNoInstrumentEnv bool
 	runInstrument       bool
+
+	origStderr io.Writer
 }
 
 func runAndCompareInstrumentOutput(t *testing.T, testDir string, origExpect string, expectOut string, opts testTrapOpts) {
@@ -77,6 +97,8 @@ func runAndCheckInstrumentOutput(t *testing.T, testDir string, orig func(output 
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
+	exeSuffix := osinfo.EXE_SUFFIX
+	tmpFile += exeSuffix
 	defer os.RemoveAll(tmpFile)
 
 	if debug {
@@ -108,6 +130,7 @@ func runAndCheckInstrumentOutput(t *testing.T, testDir string, orig func(output 
 		noTrim:       true,
 		env:          env,
 		noPipeStderr: opts.expectOrigErr,
+		stderr:       opts.origStderr,
 	})
 	if opts.expectOrigErr {
 		if err == nil {

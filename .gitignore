@@ -5,9 +5,12 @@
 *.log
 *.bin
 *.a
+*.exe
 # the xgo binary
 /xgo
+/xgo.exe
 /test/xgo
+/test/xgo.exe
 
 /tools/compile-devel
 /tools/compile

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime/debug"
+	"runtime"
 	"strings"
 	"time"
 
@@ -82,7 +83,11 @@ func serveFile(file string) {
 
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		cmd.Run("open", url)
+		openCmd := "open"
+		if runtime.GOOS == "windows" {
+			openCmd = "explorer"
+		}
+		cmd.Run(openCmd, url)
 	}()
 
 	err := http.ListenAndServe(fmt.Sprintf(":%d", port), server)

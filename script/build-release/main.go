@@ -12,6 +12,7 @@ import (
 	"github.com/xhd2015/xgo/script/build-release/revision"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/filecopy"
+	"github.com/xhd2015/xgo/support/osinfo"
 )
 
 // usage:
@@ -150,9 +151,11 @@ func buildRelease(releaseDirName string, installLocal bool, localName string, de
 			return fmt.Errorf("GOOS=%s GOARCH=%s:%w", osArch.goos, osArch.goarch, err)
 		}
 	}
-	err = generateSums(dir, filepath.Join(dir, "SHASUMS256.txt"))
-	if err != nil {
-		return fmt.Errorf("sum sha256: %w", err)
+	if !installLocal {
+		err = generateSums(dir, filepath.Join(dir, "SHASUMS256.txt"))
+		if err != nil {
+			return fmt.Errorf("sum sha256: %w", err)
+		}
 	}
 	return nil
 }
@@ -228,6 +231,8 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 	}
 	defer os.RemoveAll(tmpDir)
 
+	exeSuffix := osinfo.EXE_SUFFIX
+
 	archive := filepath.Join(tmpDir, "archive")
 
 	bins := [][2]string{
@@ -235,12 +240,13 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 		{"exec_tool", "./cmd/exec_tool"},
 		{"trace", "./cmd/trace"},
 	}
+
 	var archiveFiles []string
 	// build xgo, exec_tool and trace
 	for _, bin := range bins {
 		binName, binSrc := bin[0], bin[1]
-		archiveFiles = append(archiveFiles, "./"+binName)
-		buildArgs := []string{"build", "-o", filepath.Join(tmpDir, binName)}
+		archiveFiles = append(archiveFiles, "./"+binName+exeSuffix)
+		buildArgs := []string{"build", "-o", filepath.Join(tmpDir, binName) + exeSuffix}
 		if debug {
 			buildArgs = append(buildArgs, "-gcflags=all=-N -l")
 			// buildArgs = append(buildArgs, fmt.Sprintf("-gcflags=main=-trimpath=%s=>%s", srcDir, origSrcDir))
@@ -265,10 +271,6 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 		if err != nil {
 			return err
 		}
-		var exeSuffix string
-		if goos == "windows" {
-			exeSuffix = ".exe"
-		}
 		xgoBaseName := "xgo"
 		for _, file := range archiveFiles {
 			baseName := filepath.Base(file)
@@ -286,7 +288,7 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 		xgoExeName := xgoBaseName + exeSuffix
 		_, lookPathErr := exec.LookPath(xgoExeName)
 		if lookPathErr != nil {
-			fmt.Printf("%s built successfully, you may need to add %s to your PATH variables", xgoExeName, binDir)
+			fmt.Printf("%s built successfully, you may need to add %s to your PATH variables\n", xgoExeName, binDir)
 		}
 		return nil
 	}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -55,8 +56,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// on windows, cmd ends with .exe
 	baseName := filepath.Base(cmd)
-	if baseName != "compile" {
+	isCompile := baseName == "compile"
+	if !isCompile && runtime.GOOS == "windows" {
+		isCompile = baseName == "compile.exe"
+	}
+	if !isCompile {
 		// invoke the process as is
 		runCommandExit(cmd, toolArgs)
 		return

@@ -9,11 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/osinfo"
 	"github.com/xhd2015/xgo/support/strutil"
 )
 
@@ -104,8 +106,13 @@ func patchRuntimeTesting(goroot string) error {
 func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, syncWithLink bool) error {
 	dstDir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
 	if isDevelopment {
+		symLink := syncWithLink
+		if osinfo.FORCE_COPY_UNSYM {
+			// windows: A required privilege is not held by the client.
+			symLink = false
+		}
 		// copy compiler internal dependencies
-		err := filecopy.CopyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir, syncWithLink)
+		err := filecopy.CopyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir, symLink)
 		if err != nil {
 			return err
 		}
@@ -441,6 +448,13 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 			)
 		}
 
+		// turn off inline when there is rewrite(gcflags=-l)
+		// windows: also turn off optimization(gcflags=-N)
+		var flagNSwitch = ""
+		if runtime.GOOS == "windows" {
+			flagNSwitch = "\n" + "base.Flag.N = 1"
+		}
+
 		// there are two ways to turn off inline
 		// - 1. by not calling to inline.InlinePackage
 		// - 2. by override base.Flag.LowerL to 0
@@ -459,7 +473,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 				inlineAnchors,
 				inlineGuard,
 				`	// NOTE: turn off inline if there is any rewrite
-		`+strings.TrimSuffix(inlineGuard, " {")+` && !xgo_record.HasRewritten() {`)
+		`+strings.TrimSuffix(inlineGuard, " {")+` && !xgo_record.HasRewritten() {`+flagNSwitch)
 		} else if go117 || go118 || go119 || go120 || go121 {
 			inlineCall := `inline.InlinePackage(profile)`
 			if go119AndUnder {
@@ -474,6 +488,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 				`	// NOTE: turn off inline if there is any rewrite
 		if !xgo_record.HasRewritten() {
 			`+inlineCall+`
+		}else{`+flagNSwitch+`
 		}
 `)
 		} else if go122 {
@@ -483,13 +498,14 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 				"/*<begin prevent_inline_by_override_flag>*/", "/*<end prevent_inline_by_override_flag>*/",
 				[]string{`if base.Flag.LowerL <= 1 {`, `base.Flag.LowerL = 1 - base.Flag.LowerL`, "}", "xgo_patch.Patch()", "}", "\n"},
 				`	// NOTE: turn off inline if there is any rewrite
-						if xgo_record.HasRewritten() {
+						if xgo_record.HasRewritten() {`+flagNSwitch+`
 							base.Flag.LowerL = 0
 						}
 				`)
 		} else {
 			return "", fmt.Errorf("inline for %v not defined", goVersion)
 		}
+
 		return content, nil
 	})
 }
