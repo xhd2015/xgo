@@ -250,7 +250,7 @@ func TestMethodMock(t *testing.T){
     // otherStruct is not affected
     otherName := otherStruct.Name()
     if otherName!="other struct"{
-        t.Fatalf("expect otherStruct.Name() to be 'mocotherk struct', actual: %s", otherName)
+        t.Fatalf("expect otherStruct.Name() to be 'other struct', actual: %s", otherName)
     }
 }
 ```

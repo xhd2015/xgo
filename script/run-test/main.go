@@ -16,7 +16,6 @@ import (
 //	go run ./script/run-test/ --include go1.19.13 -run TestHelloWorld -v
 //	go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
 
-
 // TODO: remove duplicate test between xgo test and runtime test
 var runtimeTests = []string{
 	"mock_method",

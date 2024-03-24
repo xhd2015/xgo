@@ -18,7 +18,7 @@ go run ./script/run-test/ --xgo-test-only -count=1
 
 To debug the test:
 ```sh
-go run ./cmd/xgo test -c -o debug.bin ./test/xgo_test/method_value_cmp
+go run ./cmd/xgo test -c -o debug.bin -gcflags="all=-N -l"  ./test/xgo_test/method_value_cmp
 
 dlv exec ./debug.bin -test.v
 ```

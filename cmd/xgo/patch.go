@@ -654,5 +654,7 @@ func syncGoroot(goroot string, dstDir string, forceCopy bool) error {
 
 	// need copy, delete target dst dir first
 	// TODO: use git worktree add if .git exists
-	return filecopy.CopyReplaceDir(goroot, dstDir, false)
+	return filecopy.NewOptions().
+		Concurrent(10).
+		CopyReplaceDir(goroot, dstDir)
 }
