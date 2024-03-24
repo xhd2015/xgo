@@ -1,5 +1,5 @@
 package core
 
 const VERSION = "1.0.5"
-const REVISION = "d9ad37e4e3332b051fcb718eb7eb9f06203a7b7d+1"
-const NUMBER = 98
+const REVISION = "f07938bdff12fa4bd066d0e9cfde64e99f17122a+1"
+const NUMBER = 99
