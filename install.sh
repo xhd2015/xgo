@@ -94,7 +94,7 @@ xgoTip=xgo
 sourceTip=""
 if ! command -v xgo >/dev/null;then
      xgoTip="~/.xgo/bin/xgo"
-     sourceTip="You may need to source shell profile to use xgo"
+     sourceTip=$'You may need to source shell profile or add xgo to PATH to use:\n    export PATH=~/.xgo/bin:$PATH'
 fi
 
 echo "Successfully installed, to get started, run:"

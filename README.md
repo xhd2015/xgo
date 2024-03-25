@@ -15,7 +15,7 @@ Want to help contribute to `xgo`? Great! Check [CONTRIBUTING
 
 # Installation
 ```sh
-# macOS and Linux
+# macOS and Linux (and WSL)
 curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | bash
 
 # windows
@@ -36,6 +36,12 @@ cd xgo
 go run ./script/build-release --local
 ```
 
+Verify if xgo has been successfully installed:
+```sh
+xgo version
+# output:
+#   1.0.x
+```
 
 # Requirement
 `xgo` requires at least `go1.17` to compile.

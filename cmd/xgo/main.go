@@ -96,8 +96,7 @@ func main() {
 			errMsg = string(e.Stderr)
 			exitCode = e.ExitCode()
 		} else {
-			errMsg = e.Error()
-
+			errMsg = err.Error()
 		}
 		logDebug("finished with error: %s", errMsg)
 		fmt.Fprintf(os.Stderr, "%v\n", errMsg)
