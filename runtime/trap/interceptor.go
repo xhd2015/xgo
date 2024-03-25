@@ -17,17 +17,17 @@ var ErrAbort error = errors.New("abort trap interceptor")
 
 // link by compiler
 func __xgo_link_getcurg() unsafe.Pointer {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_getcurg")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_getcurg.(xgo required)")
 	return nil
 }
 
 func __xgo_link_init_finished() bool {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_init_finished")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_init_finished.(xgo required)")
 	return false
 }
 
 func __xgo_link_on_goexit(fn func()) {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_on_goexit")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_goexit.(xgo required)")
 }
 
 func init() {

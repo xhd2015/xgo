@@ -21,7 +21,7 @@ func ensureInit() {
 }
 
 func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_set_trap")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_set_trap.(xgo required)")
 }
 
 // Skip serves as mark to tell xgo not insert

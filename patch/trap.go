@@ -93,7 +93,7 @@ func trapOrLink(fn *ir.Func) {
 		}
 	} else {
 		fn.Body = []ir.Node{ir.NewReturnStmt(fn.Pos(), []ir.Node{
-			fn.Type().Params()[0].Nname.(*ir.Name),
+			GetFieldIndex(fn.Type().Params(), 0).Nname.(*ir.Name),
 		})}
 	}
 

@@ -21,11 +21,11 @@ func init() {
 // a call to runtime.__xgo_for_each_func
 func __xgo_link_retrieve_all_funcs_and_clear(f func(fn interface{})) {
 	// linked at runtime
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_retrieve_all_funcs_and_clear")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_retrieve_all_funcs_and_clear.(xgo required)")
 }
 
 func __xgo_link_on_init_finished(f func()) {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_on_init_finished")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_init_finished.(xgo required)")
 }
 
 var funcInfos []*core.FuncInfo

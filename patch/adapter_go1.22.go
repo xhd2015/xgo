@@ -79,6 +79,10 @@ func ForEachField(params []*types.Field, callback func(field *types.Field) bool)
 	}
 }
 
+func GetFieldIndex(fields []*types.Field, i int) *types.Field {
+	return fields[i]
+}
+
 func getCallee(callNode *ir.CallExpr) ir.Node {
 	return callNode.Fun
 }

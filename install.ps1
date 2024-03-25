@@ -6,6 +6,8 @@ if (!(Get-Command go -errorAction SilentlyContinue))
     exit 1
 }
 
+$ErrorActionPreference = "Stop" 
+
 $XgoRoot = "${Home}\.xgo" 
 $XgoBin = mkdir -Force "${XgoRoot}\bin"
 $XgoInstallSrc = mkdir -Force "${XgoRoot}\install-src"

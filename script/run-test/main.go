@@ -95,6 +95,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
+	if len(includes) > 0 && len(excludes) > 0 {
+		fmt.Fprintf(os.Stderr, "--exclude and --include cannot be used together\n")
+		os.Exit(1)
+	}
 	if len(includes) > 0 {
 		i := 0
 		for _, goroot := range goroots {

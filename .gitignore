@@ -18,3 +18,7 @@
 
 /go-release
 /xgo-release
+
+# generated traces
+/runtime/test/**/*.json
+/test/**/*.json

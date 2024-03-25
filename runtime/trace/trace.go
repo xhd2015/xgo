@@ -47,26 +47,26 @@ func init() {
 
 // link by compiler
 func __xgo_link_on_test_start(fn func(t *testing.T, fn func(t *testing.T))) {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_on_test_start")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_test_start.(xgo required)")
 }
 
 // link by compiler
 func __xgo_link_getcurg() unsafe.Pointer {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_getcurg")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_getcurg.(xgo required)")
 	return nil
 }
 
 func __xgo_link_on_goexit(fn func()) {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_on_goexit")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_goexit.(xgo required)")
 }
 func __xgo_link_init_finished() bool {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_init_finished")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_init_finished.(xgo required)")
 	return false
 }
 
 // linked by compiler
 func __xgo_link_peek_panic() interface{} {
-	fmt.Fprintln(os.Stderr, "failed to link __xgo_link_peek_panic")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_peek_panic.(xgo required)")
 	return nil
 }
 

@@ -23,7 +23,7 @@ func TestTrap(t *testing.T) {
 // go test -run TestTrapNormalBuildShouldWarn -v ./test
 func TestTrapNormalBuildShouldWarn(t *testing.T) {
 	t.Parallel()
-	expectOrigStderr := "failed to link __xgo_link_set_trap"
+	expectOrigStderr := "WARNING: failed to link __xgo_link_set_trap.(xgo required)"
 
 	var origStderr bytes.Buffer
 	runAndCheckInstrumentOutput(t, "./testdata/trap", func(output string) error {

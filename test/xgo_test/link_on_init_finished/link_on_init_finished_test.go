@@ -3,7 +3,7 @@ package trap_set
 import "testing"
 
 func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
-	panic("failed to link __xgo_link_set_trap")
+	panic("WARNING: failed to link __xgo_link_set_trap.(xgo required)")
 }
 
 // go run ./cmd/xgo test -v -run TestTrapSet ./test/xgo_test/trap_set
