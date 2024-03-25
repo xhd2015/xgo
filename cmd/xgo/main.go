@@ -90,9 +90,18 @@ func main() {
 
 	err := handleBuild(cmd, args)
 	if err != nil {
-		logDebug("finished with error: %v", err)
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
+		var errMsg string
+		var exitCode int = 1
+		if e, ok := err.(*exec.ExitError); ok {
+			errMsg = string(e.Stderr)
+			exitCode = e.ExitCode()
+		} else {
+			errMsg = e.Error()
+
+		}
+		logDebug("finished with error: %s", errMsg)
+		fmt.Fprintf(os.Stderr, "%v\n", errMsg)
+		os.Exit(exitCode)
 	}
 	logDebug("finished successfully")
 }
@@ -264,7 +273,7 @@ func handleBuild(cmd string, args []string) error {
 			}
 			// patch go runtime and compiler
 			logDebug("patch compiler at: %s", instrumentGoroot)
-			err = patchRuntimeAndCompiler(instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, revisionChanged)
+			err = patchRuntimeAndCompiler(goroot, instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, revisionChanged)
 			if err != nil {
 				return err
 			}

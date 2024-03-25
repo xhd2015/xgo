@@ -21,7 +21,8 @@ import (
 
 // assume go 1.20
 // the patch should be idempotent
-func patchRuntimeAndCompiler(goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, revisionChanged bool) error {
+// the origGoroot is used to generate runtime defs, see https://github.com/xhd2015/xgo/issues/4#issuecomment-2017880791
+func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, revisionChanged bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
@@ -39,7 +40,7 @@ func patchRuntimeAndCompiler(goroot string, xgoSrc string, goVersion *goinfo.GoV
 	}
 
 	// compiler
-	err = patchCompiler(goroot, goVersion, xgoSrc, revisionChanged, syncWithLink)
+	err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, revisionChanged, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -170,25 +171,26 @@ func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, s
 	return nil
 }
 
-func patchRuntimeDef(goRoot string, goVersion *goinfo.GoVersion) error {
-	err := prepareRuntimeDefs(goRoot, goVersion)
+func patchRuntimeDef(origGoroot string, goroot string, goVersion *goinfo.GoVersion) error {
+	err := prepareRuntimeDefs(origGoroot, goVersion)
 	if err != nil {
 		return err
 	}
 
 	// run mkbuiltin
-	cmd := exec.Command(filepath.Join(goRoot, "bin", "go"), "run", "mkbuiltin.go")
+	cmd := exec.Command(filepath.Join(origGoroot, "bin", "go"), "run", "mkbuiltin.go")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 
-	dir := "src/cmd/compile/internal/typecheck"
-	if goVersion.Major == 1 && goVersion.Minor <= 16 {
-		dir = "src/cmd/compile/internal/gc"
+	var dirs []string
+	if goVersion.Major > 1 || (goVersion.Major == 1 && goVersion.Minor > 16) {
+		dirs = []string{goroot, "src", "cmd", "compile", "internal", "typecheck"}
+	} else {
+		dirs = []string{goroot, "src", "cmd", "compile", "internal", "gc"}
 	}
-	cmd.Dir = filepath.Join(goRoot, dir)
-
+	cmd.Dir = filepath.Join(dirs...)
 	cmd.Env = os.Environ()
-	cmd.Env, err = patchEnvWithGoroot(cmd.Env, goRoot)
+	cmd.Env, err = patchEnvWithGoroot(cmd.Env, origGoroot)
 	if err != nil {
 		return err
 	}
@@ -202,15 +204,16 @@ func patchRuntimeDef(goRoot string, goVersion *goinfo.GoVersion) error {
 }
 
 func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
-	runtimeDefFile := "src/cmd/compile/internal/typecheck/_builtin/runtime.go"
+	runtimeDefFiles := []string{"src", "cmd", "compile", "internal", "typecheck", "_builtin", "runtime.go"}
 	if goVersion.Major == 1 && goVersion.Minor <= 19 {
 		if goVersion.Minor > 16 {
 			// in go1.19 and below, builtin has no _ prefix
-			runtimeDefFile = "src/cmd/compile/internal/typecheck/builtin/runtime.go"
+			runtimeDefFiles = []string{"src", "cmd", "compile", "internal", "typecheck", "builtin", "runtime.go"}
 		} else {
-			runtimeDefFile = "src/cmd/compile/internal/gc/builtin/runtime.go"
+			runtimeDefFiles = []string{"src", "cmd", "compile", "internal", "gc", "builtin", "runtime.go"}
 		}
 	}
+	runtimeDefFile := filepath.Join(runtimeDefFiles...)
 	fullFile := filepath.Join(goRoot, runtimeDefFile)
 
 	extraDef := patch.RuntimeExtraDef
@@ -224,7 +227,7 @@ func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
 	})
 }
 
-func patchCompiler(goroot string, goVersion *goinfo.GoVersion, xgoSrc string, forceReset bool, syncWithLink bool) error {
+func patchCompiler(origGoroot string, goroot string, goVersion *goinfo.GoVersion, xgoSrc string, forceReset bool, syncWithLink bool) error {
 	// copy compiler internal dependencies
 	err := importCompileInternalPatch(goroot, xgoSrc, forceReset, syncWithLink)
 	if err != nil {
@@ -236,7 +239,7 @@ func patchCompiler(goroot string, goVersion *goinfo.GoVersion, xgoSrc string, fo
 	}
 
 	if runtimeDefUpdated {
-		err = patchRuntimeDef(goroot, goVersion)
+		err = patchRuntimeDef(origGoroot, goroot, goVersion)
 		if err != nil {
 			return err
 		}
@@ -281,8 +284,13 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	if err != nil {
 		return false, err
 	}
+	const buildIgnore = "//go:build ignore"
 
-	content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
+	// buggy: content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
+	content, err = replaceMarkerNewline(content, []byte(buildIgnore))
+	if err != nil {
+		return false, fmt.Errorf("file %s: %w", filepath.Base(dstFile), err)
+	}
 
 	// the func.entry is a field, not a function
 	if goVersion.Major == 1 && goVersion.Minor <= 17 {
@@ -304,13 +312,28 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	return true, ioutil.WriteFile(dstFile, content, 0755)
 }
 
+// content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
+func replaceMarkerNewline(content []byte, marker []byte) ([]byte, error) {
+	idx := bytes.Index(content, marker)
+	if idx < 0 {
+		return nil, fmt.Errorf("missing %s", string(marker))
+	}
+	idx += len(marker)
+	if idx < len(content) && content[idx] == '\r' {
+		idx++
+	}
+	if idx < len(content) && content[idx] == '\n' {
+		idx++
+	}
+	return content[idx:], nil
+}
 func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
-	file := "src/cmd/compile/internal/noder/noder.go"
+	files := []string{"src", "cmd", "compile", "internal", "noder", "noder.go"}
 	var noderFiles string
 	if goVersion.Major == 1 {
 		minor := goVersion.Minor
 		if minor == 16 {
-			file = "src/cmd/compile/internal/gc/noder.go"
+			files = []string{"src", "cmd", "compile", "internal", "gc", "noder.go"}
 			noderFiles = patch.NoderFiles_1_17
 		} else if minor == 17 {
 			noderFiles = patch.NoderFiles_1_17
@@ -329,6 +352,7 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	if noderFiles == "" {
 		return fmt.Errorf("unsupported: %v", goVersion)
 	}
+	file := filepath.Join(files...)
 	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
 		content = addCodeAfterImports(content,
 			"/*<begin file_autogen_import>*/", "/*<end file_autogen_import>*/",
@@ -360,8 +384,8 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 }
 
 func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
-	file := "src/cmd/compile/internal/noder/irgen.go"
-	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
+	file := filepath.Join(goroot, "src", "cmd", "compile", "internal", "noder", "irgen.go")
+	return editFile(file, func(content string) (string, error) {
 		imports := []string{
 			`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
 		}
@@ -385,7 +409,7 @@ func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
 }
 
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
-	file := "src/cmd/compile/internal/gc/main.go"
+	file := filepath.Join(goroot, "src", "cmd", "compile", "internal", "gc", "main.go")
 	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= 16
 	go117 := goVersion.Major == 1 && goVersion.Minor == 17
 	go118 := goVersion.Major == 1 && goVersion.Minor == 18
@@ -395,7 +419,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	go121 := goVersion.Major == 1 && goVersion.Minor == 21
 	go122 := goVersion.Major == 1 && goVersion.Minor == 22
 
-	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
+	return editFile(file, func(content string) (string, error) {
 		imports := []string{
 			`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
 			`xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"`,
