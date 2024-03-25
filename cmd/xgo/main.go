@@ -28,6 +28,8 @@ import (
 //   -disable-trap          disable trap
 //   -disable-runtime-link  disable runtime link
 
+var closeDebug func()
+
 func main() {
 	args := os.Args[1:]
 
@@ -80,12 +82,19 @@ func main() {
 		fmt.Fprintf(os.Stderr, "xgo %s: unknown command\nRun 'xgo help' for usage.\n", cmd)
 		os.Exit(1)
 	}
+	defer func() {
+		if closeDebug != nil {
+			defer closeDebug()
+		}
+	}()
 
 	err := handleBuild(cmd, args)
 	if err != nil {
+		logDebug("finished with error: %v", err)
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
+	logDebug("finished successfully")
 }
 
 func handleBuild(cmd string, args []string) error {
@@ -104,6 +113,7 @@ func handleBuild(cmd string, args []string) error {
 	flagX := opts.flagX
 	flagC := opts.flagC
 	logCompile := opts.logCompile
+	logDebugFile := opts.logDebug
 	optXgoSrc := opts.xgoSrc
 	noBuildOutput := opts.noBuildOutput
 	noInstrument := opts.noInstrument
@@ -134,6 +144,19 @@ func handleBuild(cmd string, args []string) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
+	closeDebug, err = setupDebugLog(logDebugFile)
+	if err != nil {
+		return err
+	}
+	if logDebugFile != nil {
+		logDebug("start: %v", os.Args)
+		logDebug("runtime.GOOS=%s", runtime.GOOS)
+		logDebug("runtime.GOARCH=%s", runtime.GOARCH)
+		logDebug("runtime.Version()=%s", runtime.Version())
+		logDebug("os exe suffix: %s", osinfo.EXE_SUFFIX)
+		logDebug("os force copy unsym: %v", osinfo.FORCE_COPY_UNSYM)
+	}
+
 	var vscodeDebugFile string
 	var vscodeDebugFileSuffix string
 	if !noInstrument && debug != "" {
@@ -156,12 +179,14 @@ func handleBuild(cmd string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("get config under home directory: %v", err)
 	}
+	logDebug("effective GOROOT: %s", goroot)
 	goVersion, err := checkGoVersion(goroot, noInstrument)
 	if err != nil {
 		return err
 	}
 
 	goVersionName := fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch)
+	logDebug("go version: %s", goVersionName)
 	mappedGorootName, err := pathsum.PathSum(goVersionName+"_", goroot)
 	if err != nil {
 		return err
@@ -175,6 +200,7 @@ func handleBuild(cmd string, args []string) error {
 		instrumentSuffix = "-dev"
 	}
 	instrumentDir := filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
+	logDebug("instrument dir: %s", instrumentDir)
 
 	exeSuffix := osinfo.EXE_SUFFIX
 	// NOTE: on windows, go build -o xxx will always yield xxx.exe
@@ -224,17 +250,20 @@ func handleBuild(cmd string, args []string) error {
 		}
 
 		if resetInstrument || revisionChanged {
+			logDebug("revision changed, reset %s", instrumentDir)
 			err := os.RemoveAll(instrumentDir)
 			if err != nil {
 				return err
 			}
 		}
 		if isDevelopment || revisionChanged {
+			logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
 			err = syncGoroot(goroot, instrumentGoroot, revisionChanged)
 			if err != nil {
 				return err
 			}
 			// patch go runtime and compiler
+			logDebug("patch compiler at: %s", instrumentGoroot)
 			err = patchRuntimeAndCompiler(instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, revisionChanged)
 			if err != nil {
 				return err
@@ -242,6 +271,7 @@ func handleBuild(cmd string, args []string) error {
 		}
 
 		if revisionChanged {
+			logDebug("revision %s write to %s", revision, revisionFile)
 			err := os.WriteFile(revisionFile, []byte(revision), 0755)
 			if err != nil {
 				return err
@@ -250,6 +280,7 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	if isDevelopment && (setupDev || buildCompiler) {
+		logDebug("setup dev dir: %s", instrumentGoroot)
 		err := setupDevDir(instrumentGoroot, setupDev)
 		if err != nil {
 			return err
@@ -265,10 +296,13 @@ func handleBuild(cmd string, args []string) error {
 	var compilerChanged bool
 	var toolExecFlag string
 	if !noInstrument {
+		logDebug("setup dev dir: %s", instrumentGoroot)
 		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug, logCompile, noSetup)
 		if err != nil {
 			return err
 		}
+		logDebug("compiler changed: %v", compilerChanged)
+		logDebug("tool exec flags: %v", toolExecFlag)
 	}
 	if buildCompiler {
 		return nil
@@ -320,8 +354,11 @@ func handleBuild(cmd string, args []string) error {
 			}
 		}
 		buildCmdArgs = append(buildCmdArgs, remainArgs...)
-		execCmd = exec.Command(filepath.Join(instrumentGoroot, "bin", "go"), buildCmdArgs...)
+		instrumentGo := filepath.Join(instrumentGoroot, "bin", "go")
+		logDebug("command: %s %v", instrumentGo, buildCmdArgs)
+		execCmd = exec.Command(instrumentGo, buildCmdArgs...)
 	} else {
+		logDebug("command: %v", remainArgs)
 		execCmd = exec.Command(remainArgs[0], remainArgs[1:]...)
 	}
 	execCmd.Env = os.Environ()
@@ -340,11 +377,14 @@ func handleBuild(cmd string, args []string) error {
 			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_VSCODE="+vscodeDebugFile+vscodeDebugFileSuffix)
 		}
 	}
+	logDebug("command env: %v", execCmd.Env)
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
 	if projectDir != "" {
 		execCmd.Dir = projectDir
 	}
+	logDebug("command dir: %v", execCmd.Dir)
+	logDebug("command executable path: %v", execCmd.Path)
 	err = execCmd.Run()
 	if err != nil {
 		return err
@@ -403,7 +443,7 @@ func ensureDirs(binDir string, logDir string, instrumentDir string) error {
 	}
 	err = os.MkdirAll(instrumentDir, 0755)
 	if err != nil {
-		return fmt.Errorf("create ~/.xgo/log: %w", err)
+		return fmt.Errorf("create ~/.xgo/%s: %w", filepath.Base(instrumentDir), err)
 	}
 	return nil
 }

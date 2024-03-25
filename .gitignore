@@ -12,6 +12,8 @@
 /test/xgo
 /test/xgo.exe
 
+/*.log
+
 /tools/compile-devel
 /tools/compile
 /tools/build-cache

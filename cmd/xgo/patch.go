@@ -614,6 +614,7 @@ func checkRevisionChanged(revisionFile string, currentRevision string) (bool, er
 	if err != nil {
 		return false, err
 	}
+	logDebug("current revision: %s, last revision: %s from file %s", currentRevision, savedRevision, revisionFile)
 	if savedRevision == "" || savedRevision != currentRevision {
 		return true, nil
 	}

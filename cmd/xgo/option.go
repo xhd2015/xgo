@@ -22,6 +22,8 @@ type options struct {
 
 	logCompile bool
 
+	logDebug *string
+
 	noBuildOutput   bool
 	noInstrument    bool
 	resetInstrument bool
@@ -65,6 +67,7 @@ func parseOptions(args []string) (*options, error) {
 	var dumpIR string
 
 	var logCompile bool
+	var logDebug *string
 
 	var noBuildOutput bool
 
@@ -178,6 +181,15 @@ func parseOptions(args []string) (*options, error) {
 			noSetup = true
 			continue
 		}
+		if arg == "--log-debug" {
+			var logDebugStr string
+			idx := strings.Index(arg, "=")
+			if idx >= 0 {
+				logDebugStr = arg[idx+1:]
+			}
+			logDebug = &logDebugStr
+			continue
+		}
 		var found bool
 		for _, flagVal := range flagValues {
 			ok, err := flag.TryParseFlagsValue(flagVal.Flags, flagVal.Value, &i, args)
@@ -230,6 +242,7 @@ func parseOptions(args []string) (*options, error) {
 		dumpIR:     dumpIR,
 
 		logCompile: logCompile,
+		logDebug:   logDebug,
 
 		noBuildOutput:   noBuildOutput,
 		noInstrument:    noInstrument,
