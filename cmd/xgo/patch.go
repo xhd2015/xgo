@@ -172,7 +172,7 @@ func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, s
 }
 
 func patchRuntimeDef(origGoroot string, goroot string, goVersion *goinfo.GoVersion) error {
-	err := prepareRuntimeDefs(origGoroot, goVersion)
+	err := prepareRuntimeDefs(goroot, goVersion)
 	if err != nil {
 		return err
 	}
