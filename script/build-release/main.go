@@ -241,11 +241,11 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 		{"trace", "./cmd/trace"},
 	}
 
-	var archiveFiles []string
+	var archiveFilesWithExe []string
 	// build xgo, exec_tool and trace
 	for _, bin := range bins {
 		binName, binSrc := bin[0], bin[1]
-		archiveFiles = append(archiveFiles, "./"+binName+exeSuffix)
+		archiveFilesWithExe = append(archiveFilesWithExe, "./"+binName+exeSuffix)
 		buildArgs := []string{"build", "-o", filepath.Join(tmpDir, binName) + exeSuffix}
 		if debug {
 			buildArgs = append(buildArgs, "-gcflags=all=-N -l")
@@ -271,21 +271,25 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 		if err != nil {
 			return err
 		}
-		xgoBaseName := "xgo"
-		for _, file := range archiveFiles {
-			baseName := filepath.Base(file)
-			toBaseName := baseName
-			if toBaseName == "xgo" && localName != "" {
-				toBaseName = localName
-				xgoBaseName = localName
+		xgoBaseNameExe := "xgo" + exeSuffix
+		for _, file := range archiveFilesWithExe {
+			baseNameExe := filepath.Base(file)
+			toBaseNameExe := baseNameExe
+			if toBaseNameExe == "xgo"+exeSuffix && localName != "" {
+				localNameExe := localName
+				if !strings.HasSuffix(localNameExe, exeSuffix) {
+					localNameExe += exeSuffix
+				}
+				toBaseNameExe = localNameExe
+				xgoBaseNameExe = localNameExe
 			}
-			err := os.Rename(filepath.Join(tmpDir, baseName), filepath.Join(binDir, toBaseName)+exeSuffix)
+			err := os.Rename(filepath.Join(tmpDir, baseNameExe), filepath.Join(binDir, toBaseNameExe))
 			if err != nil {
 				return err
 			}
 		}
 
-		xgoExeName := xgoBaseName + exeSuffix
+		xgoExeName := xgoBaseNameExe
 		_, lookPathErr := exec.LookPath(xgoExeName)
 		if lookPathErr != nil {
 			fmt.Printf("%s built successfully, you may need to add %s to your PATH variables\n", xgoExeName, binDir)
@@ -294,7 +298,7 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 	}
 
 	// package it as a tar.gz
-	err = cmd.Dir(tmpDir).Run("tar", append([]string{"-czf", archive}, archiveFiles...)...)
+	err = cmd.Dir(tmpDir).Run("tar", append([]string{"-czf", archive}, archiveFilesWithExe...)...)
 	if err != nil {
 		return err
 	}
