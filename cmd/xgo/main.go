@@ -121,7 +121,7 @@ func handleBuild(cmd string, args []string) error {
 	flagX := opts.flagX
 	flagC := opts.flagC
 	logCompile := opts.logCompile
-	logDebugFile := opts.logDebug
+	logDebugOption := opts.logDebug
 	optXgoSrc := opts.xgoSrc
 	noBuildOutput := opts.noBuildOutput
 	noInstrument := opts.noInstrument
@@ -152,11 +152,11 @@ func handleBuild(cmd string, args []string) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	closeDebug, err = setupDebugLog(logDebugFile)
+	closeDebug, err = setupDebugLog(logDebugOption)
 	if err != nil {
 		return err
 	}
-	if logDebugFile != nil {
+	if logDebugOption != nil {
 		logDebug("start: %v", os.Args)
 		logDebug("runtime.GOOS=%s", runtime.GOOS)
 		logDebug("runtime.GOARCH=%s", runtime.GOARCH)

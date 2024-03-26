@@ -9,18 +9,18 @@ import (
 
 var logDebugFile *os.File
 
-func setupDebugLog(logDebug *string) (func(), error) {
-	var logDebugFile string
-	if logDebug != nil {
-		logDebugFile = *logDebug
-		if logDebugFile == "" {
-			logDebugFile = "debug.log"
+func setupDebugLog(logDebugOption *string) (func(), error) {
+	var logDebugFileName string
+	if logDebugOption != nil {
+		logDebugFileName = *logDebugOption
+		if logDebugFileName == "" {
+			logDebugFileName = "debug.log"
 		}
 	}
-	if logDebugFile == "" {
+	if logDebugFileName == "" {
 		return nil, nil
 	}
-	return initLog(logDebugFile)
+	return initLog(logDebugFileName)
 }
 
 func initLog(logDebugFileName string) (func(), error) {

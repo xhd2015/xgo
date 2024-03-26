@@ -12,6 +12,7 @@ import (
 	"github.com/xhd2015/xgo/script/build-release/revision"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/filecopy"
+	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 
@@ -77,6 +78,23 @@ func buildRelease(releaseDirName string, installLocal bool, localName string, de
 	if installLocal && len(osArches) != 1 {
 		return fmt.Errorf("--install-local requires only one target")
 	}
+	goVersionStr, err := goinfo.GetGoVersionOutput("go")
+	if err != nil {
+		return err
+	}
+	goVersion, err := goinfo.ParseGoVersion(goVersionStr)
+	if err != nil {
+		return fmt.Errorf("parsing go version: %s %w", goVersionStr, err)
+	}
+	var extraBuildFlags []string
+	// requires at least go1.18 to support -trimpath
+	// see: https://github.com/golang/go/issues/50402
+	if goVersion.Major == 1 && goVersion.Minor < 18 {
+		return fmt.Errorf("build-release relies on go1.18 or later to use 'go build -trimpath' option,current: %s", goVersionStr)
+	} else {
+		extraBuildFlags = append(extraBuildFlags, "-trimpath")
+	}
+
 	gitDir, err := getGitDir()
 	if err != nil {
 		return err
@@ -85,11 +103,11 @@ func buildRelease(releaseDirName string, installLocal bool, localName string, de
 	if err != nil {
 		return err
 	}
-	version, err := cmd.Dir(projectRoot).Output("go", "run", "./cmd/xgo", "version")
+	xgoVersionStr, err := cmd.Dir(projectRoot).Output("go", "run", "./cmd/xgo", "version")
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(filepath.Join(projectRoot, releaseDirName), version)
+	dir := filepath.Join(filepath.Join(projectRoot, releaseDirName), xgoVersionStr)
 	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		return err
@@ -145,8 +163,12 @@ func buildRelease(releaseDirName string, installLocal bool, localName string, de
 		return err
 	}
 
+	if debug {
+		extraBuildFlags = append(extraBuildFlags, "-gcflags=all=-N -l")
+	}
+
 	for _, osArch := range osArches {
-		err := buildBinaryRelease(dir, tmpSrcDir, version, osArch.goos, osArch.goarch, installLocal, localName, debug)
+		err := buildBinaryRelease(dir, tmpSrcDir, xgoVersionStr, osArch.goos, osArch.goarch, installLocal, localName, extraBuildFlags)
 		if err != nil {
 			return fmt.Errorf("GOOS=%s GOARCH=%s:%w", osArch.goos, osArch.goarch, err)
 		}
@@ -211,7 +233,7 @@ func generateSums(dir string, sumFile string) error {
 // c2876990b545be8396b7d13f0f9c3e23b38236de8f0c9e79afe04bcf1d03742e  xgo1.0.0-darwin-arm64.tar.gz
 // 6ae476cb4c3ab2c81a94d1661070e34833e4a8bda3d95211570391fb5e6a3cc0  xgo1.0.0-darwin-amd64.tar.gz
 
-func buildBinaryRelease(dir string, srcDir string, version string, goos string, goarch string, installLocal bool, localName string, debug bool) error {
+func buildBinaryRelease(dir string, srcDir string, version string, goos string, goarch string, installLocal bool, localName string, extraBuildFlags []string) error {
 	if version == "" {
 		return fmt.Errorf("requires version")
 	}
@@ -247,10 +269,7 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 		binName, binSrc := bin[0], bin[1]
 		archiveFilesWithExe = append(archiveFilesWithExe, "./"+binName+exeSuffix)
 		buildArgs := []string{"build", "-o", filepath.Join(tmpDir, binName) + exeSuffix}
-		if debug {
-			buildArgs = append(buildArgs, "-gcflags=all=-N -l")
-			// buildArgs = append(buildArgs, fmt.Sprintf("-gcflags=main=-trimpath=%s=>%s", srcDir, origSrcDir))
-		}
+		buildArgs = append(buildArgs, extraBuildFlags...)
 		buildArgs = append(buildArgs, binSrc)
 		// fmt.Printf("flags: %v\n", buildArgs)
 		err = cmd.Env([]string{"GOOS=" + goos, "GOARCH=" + goarch}).

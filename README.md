@@ -356,7 +356,7 @@ func TestMethodMock(t *testing.T){
 }
 ```
 
-# Trace
+## Trace
 It is painful when debugging with a deep call stack.
 
 Trace addresses this issue by collecting the hiearchical stack trace and stores it into file for later use. 
