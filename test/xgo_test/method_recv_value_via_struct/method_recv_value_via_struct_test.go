@@ -1,4 +1,4 @@
-package method_fm_suffix
+package method_recv_value_via_struct
 
 import (
 	"testing"

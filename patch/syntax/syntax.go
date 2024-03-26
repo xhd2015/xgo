@@ -61,6 +61,9 @@ func getSyntaxDeclMapping() map[string]map[LineCol]*DeclInfo {
 	// build pos -> syntax mapping
 	syntaxDeclMapping = make(map[string]map[LineCol]*DeclInfo)
 	for _, syntaxDecl := range allDecls {
+		if syntaxDecl.Interface {
+			continue
+		}
 		file := syntaxDecl.File
 		fileMapping := syntaxDeclMapping[file]
 		if fileMapping == nil {
@@ -163,6 +166,11 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 		if len(batchFuncDecls) == 1 {
 			// special when there is only one file
 			fileCode := generateRegFileCode(pkgName, "__xgo_register_funcs", body)
+			if false && pkgPath == "main" {
+				// debug
+				os.WriteFile("/tmp/debug.go", []byte(fileCode), 0755)
+				panic("debug")
+			}
 			addFile("__xgo_autogen_register_func_info.go", strings.NewReader(fileCode))
 			continue
 		}
@@ -226,6 +234,10 @@ type DeclInfo struct {
 	RecvPtr      bool
 	Generic      bool
 
+	// this is an interface type declare
+	// only the RecvTypeName is valid
+	Interface bool
+
 	// arg names
 	RecvName     string
 	ArgNames     []string
@@ -241,15 +253,11 @@ type DeclInfo struct {
 }
 
 func (c *DeclInfo) RefName() string {
-	return xgo_func_name.FormatFuncRefName(c.RecvTypeName, c.RecvPtr, c.Name)
-}
-
-func (c *DeclInfo) RefAndGeneric() (refName string, genericName string) {
-	refName = c.RefName()
-	if !c.Generic {
-		return refName, ""
+	if c.Interface {
+		return "nil"
 	}
-	return "nil", refName
+	// if c.Generic, then the ref name is for generic
+	return xgo_func_name.FormatFuncRefName(c.RecvTypeName, c.RecvPtr, c.Name)
 }
 
 func (c *DeclInfo) GenericName() string {
@@ -260,6 +268,9 @@ func (c *DeclInfo) GenericName() string {
 }
 
 func (c *DeclInfo) IdentityName() string {
+	if c.Interface {
+		return c.RecvTypeName
+	}
 	return xgo_func_name.FormatFuncRefName(c.RecvTypeName, c.RecvPtr, c.Name)
 }
 
@@ -292,79 +303,117 @@ func getFuncDecls(files []*syntax.File) []*DeclInfo {
 	for i, f := range files {
 		file := f.Pos().RelFilename()
 		for _, decl := range f.DeclList {
-			fn, ok := decl.(*syntax.FuncDecl)
-			if !ok {
-				continue
-			}
-			line := fn.Pos().Line()
-			if fn.Name.Value == "init" {
-				continue
-			}
-			var genericFunc bool
-			if len(fn.TParamList) > 0 {
-				genericFunc = true
-			}
-			var recvTypeName string
-			var recvPtr bool
-			var recvName string
-			var genericRecv bool
-			fillMissingArgNames(fn)
-			if fn.Recv != nil {
-				recvName = "_"
-				if fn.Recv.Name != nil {
-					recvName = fn.Recv.Name.Value
-				}
-
-				recvTypeExpr := fn.Recv.Type
-
-				// *A
-				if starExpr, ok := fn.Recv.Type.(*syntax.Operation); ok && starExpr.Op == syntax.Mul {
-					// *A
-					recvTypeExpr = starExpr.X
-					recvPtr = true
-				}
-				// check if generic
-				if indexExpr, ok := recvTypeExpr.(*syntax.IndexExpr); ok {
-					// *A[T] or A[T]
-					// the generic receiver
-					// currently not handled
-					genericRecv = true
-					recvTypeExpr = indexExpr.X
-				}
-
-				recvTypeName = recvTypeExpr.(*syntax.Name).Value
-			}
-			var firstArgCtx bool
-			var lastResErr bool
-			if len(fn.Type.ParamList) > 0 && hasQualifiedName(fn.Type.ParamList[0].Type, "context", "Context") {
-				firstArgCtx = true
-			}
-			if len(fn.Type.ResultList) > 0 && isName(fn.Type.ResultList[len(fn.Type.ResultList)-1].Type, "error") {
-				lastResErr = true
-			}
-
-			declFuncs = append(declFuncs, &DeclInfo{
-				FuncDecl:     fn,
-				Name:         fn.Name.Value,
-				RecvTypeName: recvTypeName,
-				RecvPtr:      recvPtr,
-				Generic:      genericFunc || genericRecv,
-
-				RecvName: recvName,
-				ArgNames: getFieldNames(fn.Type.ParamList),
-				ResNames: getFieldNames(fn.Type.ResultList),
-
-				FirstArgCtx:  firstArgCtx,
-				LastResError: lastResErr,
-
-				FileSyntax: f,
-				FileIndex:  i,
-				File:       file,
-				Line:       int(line),
-			})
+			fnDecls := extractFuncDecls(i, f, file, decl)
+			declFuncs = append(declFuncs, fnDecls...)
 		}
 	}
 	return declFuncs
+}
+
+func extractFuncDecls(fileIndex int, f *syntax.File, file string, decl syntax.Decl) []*DeclInfo {
+	switch decl := decl.(type) {
+	case *syntax.FuncDecl:
+		info := getFuncDeclInfo(fileIndex, f, file, decl)
+		if info == nil {
+			return nil
+		}
+		return []*DeclInfo{info}
+	case *syntax.TypeDecl:
+		if decl.Alias {
+			return nil
+		}
+		// TODO: test generic interface
+		if len(decl.TParamList) > 0 {
+			return nil
+		}
+
+		// NOTE: for interface type, we only set a marker
+		// because we cannot handle Embed interface if
+		// the that comes from other package
+		if _, ok := decl.Type.(*syntax.InterfaceType); ok {
+			return []*DeclInfo{
+				&DeclInfo{
+					RecvTypeName: decl.Name.Value,
+					Interface:    true,
+
+					FileSyntax: f,
+					FileIndex:  fileIndex,
+					File:       file,
+					Line:       int(decl.Pos().Line()),
+				},
+			}
+		}
+	}
+	return nil
+}
+
+func getFuncDeclInfo(fileIndex int, f *syntax.File, file string, fn *syntax.FuncDecl) *DeclInfo {
+	line := fn.Pos().Line()
+	if fn.Name.Value == "init" {
+		return nil
+	}
+	var genericFunc bool
+	if len(fn.TParamList) > 0 {
+		genericFunc = true
+	}
+	var recvTypeName string
+	var recvPtr bool
+	var recvName string
+	var genericRecv bool
+	fillMissingArgNames(fn)
+	if fn.Recv != nil {
+		recvName = "_"
+		if fn.Recv.Name != nil {
+			recvName = fn.Recv.Name.Value
+		}
+
+		recvTypeExpr := fn.Recv.Type
+
+		// *A
+		if starExpr, ok := fn.Recv.Type.(*syntax.Operation); ok && starExpr.Op == syntax.Mul {
+			// *A
+			recvTypeExpr = starExpr.X
+			recvPtr = true
+		}
+		// check if generic
+		if indexExpr, ok := recvTypeExpr.(*syntax.IndexExpr); ok {
+			// *A[T] or A[T]
+			// the generic receiver
+			// currently not handled
+			genericRecv = true
+			recvTypeExpr = indexExpr.X
+		}
+
+		recvTypeName = recvTypeExpr.(*syntax.Name).Value
+	}
+	var firstArgCtx bool
+	var lastResErr bool
+	if len(fn.Type.ParamList) > 0 && hasQualifiedName(fn.Type.ParamList[0].Type, "context", "Context") {
+		firstArgCtx = true
+	}
+	if len(fn.Type.ResultList) > 0 && isName(fn.Type.ResultList[len(fn.Type.ResultList)-1].Type, "error") {
+		lastResErr = true
+	}
+
+	return &DeclInfo{
+		FuncDecl:     fn,
+		Name:         fn.Name.Value,
+		RecvTypeName: recvTypeName,
+		RecvPtr:      recvPtr,
+		Generic:      genericFunc || genericRecv,
+
+		RecvName: recvName,
+		ArgNames: getFieldNames(fn.Type.ParamList),
+		ResNames: getFieldNames(fn.Type.ResultList),
+
+		FirstArgCtx:  firstArgCtx,
+		LastResError: lastResErr,
+
+		FileSyntax: f,
+		FileIndex:  fileIndex,
+		File:       file,
+		Line:       int(line),
+	}
 }
 
 func getFileRef(i int) string {
@@ -375,6 +424,7 @@ func generateFuncRegBody(funcDecls []*DeclInfo) string {
 	PkgPath      string
 	Fn           interface{}
 	PC           uintptr // filled later
+	Interface    bool
 	Generic      bool
 	RecvTypeName string
 	RecvPtr      bool
@@ -399,14 +449,18 @@ func generateFuncRegBody(funcDecls []*DeclInfo) string {
 			// there are function with name "_"
 			continue
 		}
-		refName, _ := funcDecl.RefAndGeneric()
+		var refName string = "nil"
+		if !funcDecl.Generic {
+			refName = funcDecl.RefName()
+		}
 		fileIdx := funcDecl.FileIndex
 		fileRef := getFileRef(fileIdx)
 		// func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool, file string, line int)
 		fieldList := []string{
 			"__xgo_regPkgPath",                        // PkgPath
 			refName,                                   // Fn
-			"0",                                       // PC
+			"0",                                       // PC, filled later
+			strconv.FormatBool(funcDecl.Interface),    // Interface
 			strconv.FormatBool(funcDecl.Generic),      // Generic
 			strconv.Quote(funcDecl.RecvTypeName),      // RecvTypeName
 			strconv.FormatBool(funcDecl.RecvPtr),      // RecvPtr
@@ -457,7 +511,7 @@ func generateFuncRegBody(funcDecls []*DeclInfo) string {
 			if true {
 				code := strings.Join(append(allStmts, stmts...), "\n")
 				os.WriteFile("/tmp/test.go", []byte(code), 0755)
-				panic("shit")
+				panic("debug")
 			}
 
 			if len(stmts) > 100 {

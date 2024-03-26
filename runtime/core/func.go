@@ -2,18 +2,25 @@ package core
 
 import (
 	"reflect"
+	"strings"
 )
 
 const __XGO_SKIP_TRAP = true
 
 type FuncInfo struct {
-	// FullName string
+	// full name, format: {pkgPath}.{receiver}.{funcName}
+	// example:  github.com/xhd2015/xgo/runtime/core.(*FuncInfo).IsFunc
+	FullName     string
 	Pkg          string
 	IdentityName string
 	Name         string
 	RecvType     string
 	RecvPtr      bool
 
+	// is this an interface method?
+	Interface bool
+
+	// is this a generic function?
 	Generic bool
 
 	// source info
@@ -48,4 +55,92 @@ func (c *FuncInfo) IsFunc(fn interface{}) bool {
 		return false
 	}
 	return c.PC == v.Pointer()
+}
+
+// a/b/c.A
+// a/b/c.(*C).X
+// a/b/c.C.Y
+// a/b/c.Z
+// a/b/c.Z[].X
+// a/b/c.X[]
+func ParseFuncName(fullName string) (pkgPath string, recvName string, recvPtr bool, typeGeneric string, funcGeneric string, funcName string) {
+	sepIdx := strings.LastIndex(fullName, "/")
+	pkg_recv_func_no_generic := fullName
+	// func generic
+	if strings.HasSuffix(pkg_recv_func_no_generic, "]") {
+		leftIdx := strings.LastIndex(pkg_recv_func_no_generic, "[")
+		if leftIdx < 0 {
+			// invalid
+			return
+		}
+		funcGeneric = pkg_recv_func_no_generic[leftIdx+1 : len(pkg_recv_func_no_generic)-1]
+		pkg_recv_func_no_generic = pkg_recv_func_no_generic[:leftIdx]
+	}
+
+	// func name
+	funcNameDot := strings.LastIndex(pkg_recv_func_no_generic, ".")
+	if funcNameDot < 0 {
+		funcName = pkg_recv_func_no_generic
+		return
+	}
+	funcName = pkg_recv_func_no_generic[funcNameDot+1:]
+
+	// Type
+	pkg_recv_generic_paren := pkg_recv_func_no_generic[:funcNameDot]
+
+	var hasParen bool
+	pkg_recv_generic := pkg_recv_generic_paren
+	if strings.HasSuffix(pkg_recv_generic_paren, ")") {
+		// receiver wrap
+		leftIdx := strings.LastIndex(pkg_recv_generic_paren, "(")
+		if leftIdx < 0 {
+			// invalid
+			return
+		}
+		pkg_recv_generic = pkg_recv_generic_paren[leftIdx+1 : len(pkg_recv_generic_paren)-1]
+		if pkg_recv_generic_paren[leftIdx-1] != '.' {
+			// invalid
+			return
+		}
+		pkgPath = pkg_recv_generic_paren[:leftIdx-1]
+		hasParen = true
+	}
+
+	pkg_recv := pkg_recv_generic
+	// parse generic
+	if strings.HasSuffix(pkg_recv_generic, "]") {
+		leftIdx := strings.LastIndex(pkg_recv_generic, "[")
+		if leftIdx < 0 {
+			// invalid
+			return
+		}
+		typeGeneric = pkg_recv_generic[leftIdx+1 : len(pkg_recv_generic)-1]
+		pkg_recv = pkg_recv_generic[:leftIdx]
+	}
+
+	// pkgPath_recv
+	recv_ptr := pkg_recv
+	if !hasParen {
+		dotIdx := strings.LastIndex(pkg_recv, ".")
+		if dotIdx < 0 {
+			pkgPath = recv_ptr
+			// invalid
+			return
+		}
+		if dotIdx < sepIdx {
+			// no recv
+			pkgPath = recv_ptr
+			return
+		}
+		pkgPath = pkg_recv[:dotIdx]
+		recv_ptr = pkg_recv[dotIdx+1:]
+	}
+
+	recvName = recv_ptr
+	if strings.HasPrefix(recv_ptr, "*") {
+		recvPtr = true
+		recvName = recv_ptr[1:]
+	}
+
+	return
 }

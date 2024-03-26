@@ -275,7 +275,7 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 	}]
 
 	// no identity name
-	if decl == nil {
+	if decl == nil || decl.Interface {
 		return false
 	}
 

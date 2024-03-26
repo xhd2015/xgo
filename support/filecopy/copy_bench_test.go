@@ -3,46 +3,58 @@ package filecopy_test
 import (
 	"os"
 	"path/filepath"
-	"testing"
-	"time"
 	"runtime"
 	"strings"
+	"testing"
+	"time"
 
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/filecopy"
 )
+
+func checkSkip(t *testing.T) {
+	if os.Getenv("XGO_TEST_ENABLE_FILECOPY") != "true" {
+		t.Skipf("%s skipped, need set XGO_TEST_ENABLE_FILECOPY", t.Name())
+	}
+}
 
 // conclusion:
 //   10 goroutine seems enough to copy(go1.22.1 cost ~1.9s, has 12876 files)
 
 // go test -run TestExampleCopy1g -v ./support/filecopy
 func TestExampleCopy1g(t *testing.T) {
+	checkSkip(t)
 	testCopyDir(t, "go1.22.1", 1)
 }
 
 // go test -run TestExampleCopy5g -v ./support/filecopy
 func TestExampleCopy5g(t *testing.T) {
+	checkSkip(t)
 	testCopyDir(t, "go1.22.1", 5)
 }
 
 // go test -run TestExampleCopy10g -v ./support/filecopy
 func TestExampleCopy10g(t *testing.T) {
+	checkSkip(t)
 	// on windows this took 4.79s
 	testCopyDir(t, "go1.22.1", 10)
 }
 
 // go test -run TestExampleCopy20g -v ./support/filecopy
 func TestExampleCopy20g(t *testing.T) {
+	checkSkip(t)
 	testCopyDir(t, "go1.22.1", 20)
 }
 
 // go test -run TestExampleCopy50g -v ./support/filecopy
 func TestExampleCopy50g(t *testing.T) {
+	checkSkip(t)
 	testCopyDir(t, "go1.22.1", 50)
 }
 
 // go test -run TestExampleCopy100g -v ./support/filecopy
 func TestExampleCopy100g(t *testing.T) {
+	checkSkip(t)
 	testCopyDir(t, "go1.22.1", 100)
 }
 
@@ -52,13 +64,13 @@ func getGitRoot() (string, error) {
 		return "", err
 	}
 	if runtime.GOOS == "windows" {
-		if strings.HasPrefix(gitDir,"/cygdrive") {
+		if strings.HasPrefix(gitDir, "/cygdrive") {
 			// the cygwin git
-			subDirs := strings.Split(gitDir,"/")
-			if subDirs[0]==""{
+			subDirs := strings.Split(gitDir, "/")
+			if subDirs[0] == "" {
 				subDirs = subDirs[1:]
 			}
-			gitDir = subDirs[1]+"://"+ strings.Join(subDirs[2:],"\\")
+			gitDir = subDirs[1] + "://" + strings.Join(subDirs[2:], "\\")
 		}
 	}
 	return filepath.Abs(filepath.Dir(gitDir))

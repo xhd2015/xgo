@@ -9,6 +9,7 @@ import "testing"
 // function trap when instantiated from other packages
 
 // go test -run TestAtomicGenericPtr -v ./test
+// go run ./script/run-test/ --include go1.18.10 --xgo-default-test-only -run TestAtomicGenericPtr -v ./test
 func TestAtomicGenericPtr(t *testing.T) {
 	t.Parallel()
 	goVersion, err := getGoVersion()

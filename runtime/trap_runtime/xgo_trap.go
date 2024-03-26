@@ -97,12 +97,9 @@ func __xgo_mem_equal(a, b unsafe.Pointer, size uintptr) bool {
 	return memequal(a, b, size)
 }
 
-// func GetFuncs_Requires_Xgo() []interface{} {
-// 	return funcs
-// }
-// func GetMethods_Requires_Xgo() []interface{} {
-// 	return methods
-// }
+func __xgo_get_pc_name(pc uintptr) string {
+	return __xgo_get_pc_name_impl(pc)
+}
 
 // func Getcallerpc() uintptr {
 // 	return getcallerpc()

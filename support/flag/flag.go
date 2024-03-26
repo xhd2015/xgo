@@ -35,6 +35,24 @@ func TryParseFlagsValue(flags []string, pval *string, pi *int, args []string) (o
 	return false, nil
 }
 
+// TrySingleFlag parses given flags with the form:
+// -a
+// -a=xxx
+func TrySingleFlag(flags []string, arg string) (flag string, value string) {
+	for _, f := range flags {
+		if !strings.HasPrefix(arg, f) {
+			continue
+		}
+		if len(arg) == len(f) {
+			return f, ""
+		}
+		if arg[len(f)] == '=' {
+			return f, arg[len(f)+1:]
+		}
+	}
+	return "", ""
+}
+
 func tryParseArg(flag string, arg string) (value string, next bool, ok bool) {
 	if !strings.HasPrefix(arg, flag) {
 		return "", false, false

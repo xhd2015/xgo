@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/xhd2015/xgo/support/cmd"
 )
@@ -16,11 +17,24 @@ import (
 //	go run ./script/run-test/ --include go1.19.13 -run TestHelloWorld -v
 //	go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
 
+// runtime test:
+//     go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncList -v ./test/func_list
+
+// xgo default test:
+//    go run ./script/run-test/ --include go1.18.10 --xgo-default-test-only -run TestAtomicGenericPtr -v ./test
+
+// xgo test
+//    go run ./script/run-test/ --include go1.18.10 --xgo-test-only -run TestFuncNames -v ./test/xgo_test/func_names
+
+// run specific test for all go versions
+//     go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1 --xgo-default-test-only -run TestFuncNameSliceShouldWorlWithDebug -v
+
 // TODO: remove duplicate test between xgo test and runtime test
 var runtimeTests = []string{
 	"mock_method",
 	"trace_panic_peek",
 	"func_list",
+	"trap_inspect_func",
 }
 
 func main() {
@@ -30,6 +44,7 @@ func main() {
 
 	n := len(args)
 	var remainArgs []string
+	var remainTests []string
 
 	var resetInstrument bool
 	var xgoTestOnly bool
@@ -88,6 +103,11 @@ func main() {
 			}
 			break
 		}
+		if !strings.HasPrefix(arg, "-") {
+			remainTests = append(remainTests, arg)
+			continue
+		}
+		panic(fmt.Errorf("unknown flag: %s", arg))
 	}
 	goRelease := "go-release"
 	goroots, err := listGoroots(goRelease)
@@ -124,6 +144,7 @@ func main() {
 		os.Exit(1)
 	}
 	for _, goroot := range goroots {
+		begin := time.Now()
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
 		if resetInstrument {
 			err := cmd.Run("go", "run", "./cmd/xgo", "--reset-instrument", "--with-goroot", goroot, "--build-compiler")
@@ -140,7 +161,7 @@ func main() {
 		runXgoTestFlag := true
 		runRuntimeTestFlag := true
 		if xgoTestOnly {
-			runRuntimeTestFlag = true
+			runRuntimeTestFlag = false
 			runXgoTestFlag = true
 			runDefault = false
 		} else if xgoRuntimeTestOnly {
@@ -152,29 +173,29 @@ func main() {
 			runXgoTestFlag = false
 			runDefault = true
 		}
-		if runDefault {
-			err := runDefaultTest(filepath.Join(goRelease, goroot), remainArgs)
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "FAIL %s: %v\n", goroot, err)
-				os.Exit(1)
-			}
-		}
 		if runXgoTestFlag {
-			err := runXgoTest(filepath.Join(goRelease, goroot), remainArgs)
+			err := runXgoTest(filepath.Join(goRelease, goroot), remainArgs, remainTests)
 			if err != nil {
-				fmt.Fprintf(os.Stdout, "FAIL %s: %v\n", goroot, err)
+				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
 				os.Exit(1)
 			}
 		}
 
 		if runRuntimeTestFlag {
-			err := runRuntimeTest(filepath.Join(goRelease, goroot), remainArgs)
+			err := runRuntimeTest(filepath.Join(goRelease, goroot), remainArgs, remainTests)
 			if err != nil {
-				fmt.Fprintf(os.Stdout, "FAIL %s: %v\n", goroot, err)
+				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
 				os.Exit(1)
 			}
 		}
-		fmt.Fprintf(os.Stdout, "PASS %s\n", goroot)
+		if runDefault {
+			err := runDefaultTest(filepath.Join(goRelease, goroot), remainArgs, remainTests)
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+				os.Exit(1)
+			}
+		}
+		fmt.Fprintf(os.Stdout, "PASS %s(%v)\n", goroot, time.Since(begin))
 	}
 }
 
@@ -205,16 +226,16 @@ func listGoroots(dir string) ([]string, error) {
 	return dirs, nil
 }
 
-func runDefaultTest(goroot string, args []string) error {
-	return doRunTest(goroot, testKind_default, args)
+func runDefaultTest(goroot string, args []string, tests []string) error {
+	return doRunTest(goroot, testKind_default, args, tests)
 }
 
-func runXgoTest(goroot string, args []string) error {
-	return doRunTest(goroot, testKind_xgoTest, args)
+func runXgoTest(goroot string, args []string, tests []string) error {
+	return doRunTest(goroot, testKind_xgoTest, args, tests)
 }
 
-func runRuntimeTest(goroot string, args []string) error {
-	return doRunTest(goroot, testKind_runtimeTest, args)
+func runRuntimeTest(goroot string, args []string, tests []string) error {
+	return doRunTest(goroot, testKind_runtimeTest, args, tests)
 }
 
 type testKind string
@@ -225,7 +246,7 @@ const (
 	testKind_runtimeTest testKind = "runtime-test"
 )
 
-func doRunTest(goroot string, kind testKind, args []string) error {
+func doRunTest(goroot string, kind testKind, args []string, tests []string) error {
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
 		return err
@@ -234,25 +255,43 @@ func doRunTest(goroot string, kind testKind, args []string) error {
 	switch kind {
 	case testKind_default:
 		testArgs = []string{"test"}
-		if len(args) > 0 {
-			testArgs = append(testArgs, args...)
+		testArgs = append(testArgs, args...)
+		if len(tests) > 0 {
+			testArgs = append(testArgs, tests...)
+		} else {
+			testArgs = append(testArgs, "./test")
+			testArgs = append(testArgs, "./support/...")
+			testArgs = append(testArgs, "./cmd/...")
 		}
-		testArgs = append(testArgs, "./test")
 	case testKind_xgoTest:
 		testArgs = []string{"run", "./cmd/xgo", "test"}
-		if len(args) > 0 {
-			testArgs = append(testArgs, args...)
+		testArgs = append(testArgs, args...)
+		if len(tests) > 0 {
+			testArgs = append(testArgs, tests...)
+		} else {
+			testArgs = append(testArgs, "./test/xgo_test/...")
 		}
-		testArgs = append(testArgs, "./test/xgo_test/...")
 	case testKind_runtimeTest:
 		testArgs = []string{"run", "./cmd/xgo", "test", "--project-dir", "runtime"}
-		if len(args) > 0 {
-			testArgs = append(testArgs, args...)
-		}
-		for _, runtimeTest := range runtimeTests {
-			testArgs = append(testArgs, "./test/"+runtimeTest)
+		testArgs = append(testArgs, args...)
+		if len(tests) > 0 {
+			testArgs = append(testArgs, tests...)
+		} else {
+			for _, runtimeTest := range runtimeTests {
+				testArgs = append(testArgs, "./test/"+runtimeTest)
+			}
+			testArgs = append(testArgs,
+				"./core/...",
+				"./functab/...",
+				"./trace/...",
+				"./trap/...",
+				"./mock/...",
+			)
 		}
 	}
+
+	// debug
+	// fmt.Printf("test Args: %v\n", testArgs)
 
 	execCmd := exec.Command(filepath.Join(goroot, "bin", "go"), testArgs...)
 	execCmd.Stdout = os.Stdout

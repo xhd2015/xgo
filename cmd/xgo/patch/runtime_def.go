@@ -23,16 +23,49 @@ const TestingStart = `for _,__xgo_on_test_start:=range __xgo_link_get_test_start
 }
 `
 
-const RuntimeFuncNamePatch = ""
+const RuntimeGetFuncName_Go117_120 = `
+func __xgo_get_pc_name_impl(pc uintptr) string {
+	return FuncForPC(pc).Name()
+}
+`
 
-// Not used because now we pass pkg name, func name as standalone strings
-const RuntimeFuncNamePatch_Not_Used = `// workaround for go1.20, go1.21 will including this by go
+// start with go1.21, the runtime.FuncForPC(pc).Name()
+// was wrapped in funcNameForPrint(...), we unwrap it
+// NOTE: when upgrading to go1.23, should check
+// the implementation again
+const RuntimeGetFuncName_Go121 = `
+func __xgo_get_pc_name_impl(pc uintptr) string {
+	return FuncForPC(pc).__xgo_no_print_name()
+}
+
+func (f *Func) __xgo_no_print_name() string {
+	if f == nil {
+		return ""
+	}
+	fn := f.raw()
+	if fn.isInlined() { // inlined version
+		fi := (*funcinl)(unsafe.Pointer(fn))
+		return fi.name
+	}
+	return funcname(f.funcInfo())
+}
+`
+
+// FuncForPC(pc).Name() just works fine, there is no
+// string split
+const RuntimeGetFuncName_Go120_Unused = `
+func __xgo_get_pc_name_impl(pc uintptr) string {
+	fn := findfunc(pc)
+	return fn.datap.funcName(fn.nameOff)
+}
+// workaround for go1.20, go1.21 will including this by go
 func (md *moduledata) funcName(nameOff int32) string {
 	if nameOff == 0 {
 		return ""
 	}
 	return gostringnocopy(&md.funcnametab[nameOff])
-}`
+}
+`
 
 const NoderFiles_1_17 = `	// auto gen
 if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
@@ -41,7 +74,9 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 		files = append(files, n.file)
 	}
 	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) {
-		p := &noder{}
+		p := &noder{
+			err: make(chan syntax.Error),
+		}
 		fbase := syntax.NewFileBase(name)
 		file, err := syntax.Parse(fbase, r, nil, p.pragma, syntax.CheckBranches)
 		if err != nil {

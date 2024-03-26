@@ -115,3 +115,26 @@ func TestMethodMockBlankName(t *testing.T) {
 		t.Fatalf("expect s1TypAfterMockCancel to be %s, actual: %s", s1TypExpect, s1TypAfterMockCancel)
 	}
 }
+
+type interface_ interface {
+	String() string
+}
+
+// go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestMethodMockOnInterface -v ./test/mock_method
+func TestMethodMockOnInterface(t *testing.T) {
+	s1 := &struct_{
+		name:  "s1",
+		value: 1,
+	}
+	var intf interface_ = s1
+
+	mockStr := "mock interface"
+	mock.Mock(intf.String, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		results.GetFieldIndex(0).Set(mockStr)
+		return nil
+	})
+	res := intf.String()
+	if res != mockStr {
+		t.Fatalf("expect mock interface_.String() to be %s, actual: %s", mockStr, res)
+	}
+}

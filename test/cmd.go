@@ -34,6 +34,7 @@ type options struct {
 
 	init bool
 
+	buildArgs  []string
 	projectDir string
 }
 
@@ -65,6 +66,7 @@ func runXgo(args []string, opts *options) (string, error) {
 		} else if opts.exec {
 			xgoCmd = "exec"
 		}
+		extraArgs = append(extraArgs, opts.buildArgs...)
 	}
 	xgoArgs := []string{
 		xgoCmd,
@@ -174,7 +176,10 @@ func buildAndRunOutput(program string) (output string, err error) {
 }
 
 type buildAndOutputOptions struct {
-	build      func(args []string) error
+	build func(args []string) error
+
+	buildTest  bool
+	buildArgs  []string
 	projectDir string
 }
 
@@ -186,12 +191,20 @@ func buildAndRunOutputArgs(args []string, opts buildAndOutputOptions) (output st
 	exeSuffix := osinfo.EXE_SUFFIX
 	testBin += exeSuffix
 	defer os.RemoveAll(testBin)
+
 	buildArgs := []string{"-o", testBin}
 	buildArgs = append(buildArgs, args...)
 	if opts.build != nil {
 		err = opts.build(buildArgs)
 	} else {
+		cmd := xgoCmd_build
+		if opts.buildTest {
+			cmd = xgoCmd_testBuild
+		}
 		_, err = runXgo(buildArgs, &options{
+			xgoCmd: cmd,
+
+			buildArgs:  opts.buildArgs,
 			projectDir: opts.projectDir,
 		})
 	}

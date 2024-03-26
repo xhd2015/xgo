@@ -77,8 +77,10 @@ func parseOptions(args []string) (*options, error) {
 	nArg := len(args)
 
 	type FlagValue struct {
-		Flags []string
-		Value *string
+		Flags  []string
+		Value  *string
+		Single bool
+		Set    func(v string)
 	}
 
 	var flagValues []FlagValue = []FlagValue{
@@ -113,6 +115,14 @@ func parseOptions(args []string) (*options, error) {
 		{
 			Flags: []string{"-gcflags"},
 			Value: &gcflags,
+		},
+		{
+
+			Flags:  []string{"--log-debug"},
+			Single: true,
+			Set: func(v string) {
+				logDebug = &v
+			},
 		},
 	}
 	for i := 0; i < nArg; i++ {
@@ -181,17 +191,17 @@ func parseOptions(args []string) (*options, error) {
 			noSetup = true
 			continue
 		}
-		if arg == "--log-debug" {
-			var logDebugStr string
-			idx := strings.Index(arg, "=")
-			if idx >= 0 {
-				logDebugStr = arg[idx+1:]
-			}
-			logDebug = &logDebugStr
-			continue
-		}
 		var found bool
 		for _, flagVal := range flagValues {
+			if flagVal.Single {
+				flag, val := flag.TrySingleFlag(flagVal.Flags, arg)
+				if flag != "" {
+					flagVal.Set(val)
+					found = true
+					break
+				}
+				continue
+			}
 			ok, err := flag.TryParseFlagsValue(flagVal.Flags, flagVal.Value, &i, args)
 			if err != nil {
 				return nil, err

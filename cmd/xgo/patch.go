@@ -305,10 +305,19 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		content = append(content, oldContent[idx+len(entryPatchBytes):]...)
 	}
 
-	// TODO: remove the patch
-	if goVersion.Major == 1 && goVersion.Minor == 20 {
-		content = append(content, []byte(patch.RuntimeFuncNamePatch)...)
+	// func name patch
+	if goVersion.Major > 1 || goVersion.Minor > 22 {
+		panic("should check the implementation of runtime.FuncForPC(pc).Name() to ensure __xgo_get_pc_name is not wrapped in print format above go1.22")
 	}
+	if goVersion.Major > 1 || goVersion.Minor >= 21 {
+		content = append(content, []byte(patch.RuntimeGetFuncName_Go121)...)
+	} else if goVersion.Major == 1 {
+		if goVersion.Minor >= 17 {
+			// go1.17,go1.18,go1.19
+			content = append(content, []byte(patch.RuntimeGetFuncName_Go117_120)...)
+		}
+	}
+
 	return true, ioutil.WriteFile(dstFile, content, 0755)
 }
 

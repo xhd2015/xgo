@@ -145,6 +145,11 @@ func handleBuild(cmd string, args []string) error {
 	if err != nil {
 		return err
 	}
+	// make the goroot abs
+	goroot, err = filepath.Abs(goroot)
+	if err != nil {
+		return err
+	}
 	// create a tmp dir for communication with exec_tool
 	tmpDir, err := os.MkdirTemp("", "xgo-"+cmd)
 	if err != nil {
@@ -161,6 +166,7 @@ func handleBuild(cmd string, args []string) error {
 		logDebug("runtime.GOOS=%s", runtime.GOOS)
 		logDebug("runtime.GOARCH=%s", runtime.GOARCH)
 		logDebug("runtime.Version()=%s", runtime.Version())
+		logDebug("runtime.GOROOT()=%s", runtime.GOROOT())
 		logDebug("os exe suffix: %s", osinfo.EXE_SUFFIX)
 		logDebug("os force copy unsym: %v", osinfo.FORCE_COPY_UNSYM)
 	}

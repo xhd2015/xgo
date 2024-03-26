@@ -16,4 +16,5 @@ func __xgo_on_goexit(fn func())
 func __xgo_on_test_start(fn interface{})
 func __xgo_get_test_starts() []interface{}
 func __xgo_peek_panic() interface{}
-func __xgo_mem_equal(a, b unsafe.Pointer, size uintptr) bool`
+func __xgo_mem_equal(a, b unsafe.Pointer, size uintptr) bool
+func __xgo_get_pc_name(pc uintptr) string`

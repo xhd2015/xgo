@@ -14,7 +14,7 @@ import (
 
 var setupOnce sync.Once
 
-func ensureInit() {
+func ensureTrapInstall() {
 	setupOnce.Do(func() {
 		__xgo_link_set_trap(trapImpl)
 	})

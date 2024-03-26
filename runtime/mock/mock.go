@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
-	"strings"
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core"
@@ -48,18 +47,10 @@ func AddFuncInterceptor(fn interface{}, interceptor Interceptor) func() {
 // no abort, run mocks
 // mocks are special in that they on run in pre stage
 func mock(fn interface{}, interceptor Interceptor) func() {
-	rv := reflect.ValueOf(fn)
-	if rv.Kind() != reflect.Func {
-		panic(fmt.Errorf("mock requires func, actual: %v", rv.Kind().String()))
-	}
-	pc := rv.Pointer()
-	fnName := runtime.FuncForPC(pc).Name()
-
-	const fmSuffix = "-fm"
-	isMethod := strings.HasSuffix(fnName, fmSuffix)
-	var fnNamePrefix string
-	if isMethod {
-		fnNamePrefix = fnName[:len(fnName)-len(fmSuffix)]
+	mockRecvPtr, mockInfo := trap.Inspect(fn)
+	if mockInfo == nil {
+		pc := reflect.ValueOf(fn).Pointer()
+		panic(fmt.Errorf("failed to setup mock for: %v", runtime.FuncForPC(pc).Name()))
 	}
 
 	return trap.AddInterceptor(&trap.Interceptor{
@@ -68,27 +59,22 @@ func mock(fn interface{}, interceptor Interceptor) func() {
 				// no match, continue
 				return nil, nil
 			}
-			var match bool
-			if isMethod {
-				// runtime.
-				var recvField core.Field
-				if runtime.FuncForPC(f.PC).Name() == fnNamePrefix && f.RecvType != "" {
-					// the first field is recv
-					recvField = args.GetFieldIndex(0)
-				}
-				var recvPtr interface{}
-				if recvField != nil {
-					recvPtr = recvField.Ptr()
-				}
-				if recvPtr != nil {
-					match = isSameBoundMethod(recvPtr, fn)
-				}
-			} else if f.PC == pc {
-				match = true
-			}
-			if !match {
-				// continue
+			if f != mockInfo {
+				// no match
 				return nil, nil
+			}
+
+			if f.RecvType != "" {
+				// check recv instance
+				recvPtr := args.GetFieldIndex(0).Ptr()
+
+				// check they pointing to the same variable
+				re := reflect.ValueOf(recvPtr).Elem().Interface()
+				me := reflect.ValueOf(mockRecvPtr).Elem().Interface()
+				if re != me {
+					// if *recvPtr != *mockRecvPtr {
+					return nil, nil
+				}
 			}
 
 			// TODO: add panic check
@@ -113,6 +99,7 @@ func CallOld() {
 // to the given `methodValue`.
 // The `methodValue` should be passed as
 // `file.Write“.
+// Deprecated: left here only for reference purepose
 func isSameBoundMethod(recvPtr interface{}, methodValue interface{}) bool {
 	// can also be a constant
 	// size := unsafe.Sizeof(*(*large)(nil))
