@@ -5,13 +5,9 @@ Enable function Trap for `go`, and provide tools like Mock and Trace to help go 
 
 It adds missing abilities to go program by cooperating with(or hacking) the go compiler.
 
-Thses abilities include [Mock](#mock), [Trap](#trap) and [Trace](#trace).
+These abilities include [Mock](#mock), [Trap](#trap) and [Trace](#trace).
 
-See [Usage](#usage) and [Documentation](doc) for more details.
-
-Want to help contribute to `xgo`? Great! Check [CONTRIBUTING
-](CONTRIBUTING.md) for help.
-
+See [Quick Start](#quick-start) and [Documentation](./doc) for more details.
 
 # Installation
 ```sh
@@ -36,7 +32,7 @@ cd xgo
 go run ./script/build-release --local
 ```
 
-Verify if xgo has been successfully installed:
+Verify the installation:
 ```sh
 xgo version
 # output:
@@ -50,64 +46,104 @@ There is no specific limitation on OS and Architecture.
 
 **All OS and Architectures** are supported by `xgo` as long as they are supported by `go`.
 
-# Usage
-The following code demonstrates how to setup mock on a given function:
-- The function `add(a,b)` normally adds `a` and `b` up, resulting in `a+b`,
-- However, after `mock.AddFuncInterceptor`, the logic is changed to `a-b`.
+OS:
+- MacOS
+- Linux
+- Windows (+WSL)
+- ...
 
-(check [test/testdata/mock_res/main.go](test/testdata/mock_res/main.go) for more details.)
+Architecture:
+- x86
+- x86_64(amd64)
+- arm64
+- ...
+
+# Quick Start
+Let's write a unit test with `xgo`:
+
+1. Ensure you have installed `xgo` by following the [Installation](#installation) section, and verify the installation with:
+```sh
+xgo version
+# output
+#   1.0.x
+```
+If `xgo` is not found, you may need to add `~/.xgo/bin` to your `PATH` variable.
+
+2. Init a go project:
+```sh
+mkdir demo
+cd demo
+go mod init demo
+```
+3. Add `demo_test.go` with following code:
 ```go
-package main
+package demo
 
 import (
-    "context"
-    "fmt"
+	"context"
+	"testing"
 
-    "github.com/xhd2015/xgo/runtime/core"
-    "github.com/xhd2015/xgo/runtime/mock"
+	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/mock"
 )
 
-func main() {
-    before := add(5, 2)
-    fmt.Printf("before mock: add(5,2)=%d\n", before)
-    mock.AddFuncInterceptor(add, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
-        a := args.GetField("a").Value().(int)
-        b := args.GetField("b").Value().(int)
-        res := a - b
-        results.GetFieldIndex(0).Set(res)
-        return nil
-    })
-    after := add(5, 2)
-    fmt.Printf("after mock: add(5,2)=%d\n", after)
+func MyFunc() string {
+	return "my func"
 }
-
-func add(a int, b int) int {
-    return a + b
+func TestFuncMock(t *testing.T) {
+	mock.Mock(MyFunc, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
+		results.GetFieldIndex(0).Set("mock func")
+		return nil
+	})
+	text := MyFunc()
+	if text != "mock func" {
+		t.Fatalf("expect MyFunc() to be 'mock func', actual: %s", text)
+	}
 }
-
 ```
-
-Run with `go`:
-
+4. Get the `xgo/runtime` dependency:
 ```sh
-go run ./
-# output:
-#  before mock: add(5,2)=7
-#  after mock: add(5,2)=7
+go get github.com/xhd2015/xgo/runtime
 ```
-
-Run with `xgo`:
-
+5. Run the code:
 ```sh
-xgo run ./
-# output:
-#  before mock: add(5,2)=7
-#  after mock: add(5,2)=3
+# NOTE: xgo will take some time 
+# for the first time to setup.
+# It will be as fast as go after setup.
+xgo test -v ./
 ```
 
-For mocking method, check [Mock](#Mock) for more details.
+Output:
+```sh
+=== RUN   TestFuncMock
+--- PASS: TestFuncMock (0.00s)
+PASS
+ok      demo
+```
 
-# Trap
+If you run that with go, it would fail:
+```sh
+go test -v ./
+```
+
+Output:
+```sh
+WARNING: failed to link __xgo_link_on_init_finished.(xgo required)
+WARNING: failed to link __xgo_link_on_goexit.(xgo required)
+=== RUN   TestFuncMock
+WARNING: failed to link __xgo_link_set_trap.(xgo required)
+WARNING: failed to link __xgo_link_init_finished.(xgo required)
+    demo_test.go:21: expect MyFunc() to be 'mock func', actual: my func
+--- FAIL: TestFuncMock (0.00s)
+FAIL
+FAIL    demo    0.771s
+FAIL
+```
+
+The above demo can be found at [doc/demo](./doc/demo).
+
+# API
+## Trap
 Trap allows developer to intercept function execution on the fly.
 
 Trap is the core of `xgo` as it is the basis of other abilities like Mock and Trace.
@@ -192,7 +228,7 @@ func main(){
 }
 ```
 
-# Mock
+## Mock
 Mock simplifies the process of setting up Trap interceptors.
 
 The Mock API:
@@ -212,7 +248,63 @@ Interceptor Signature: `func(ctx context.Context, fn *core.FuncInfo, args core.O
 - Otherwise, the interceptor returns a non-nil error, that will be set to the function's return error.
 
 
-Function mock example:
+Function mock example(1):
+
+The following code demonstrates how to setup mock on a given function:
+- The function `add(a,b)` normally adds `a` and `b` up, resulting in `a+b`,
+- However, after `mock.AddFuncInterceptor`, the logic is changed to `a-b`.
+
+(check [test/testdata/mock_res/main.go](test/testdata/mock_res/main.go) for more details.)
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/xhd2015/xgo/runtime/core"
+    "github.com/xhd2015/xgo/runtime/mock"
+)
+
+func main() {
+    before := add(5, 2)
+    fmt.Printf("before mock: add(5,2)=%d\n", before)
+    mock.Mock(add, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
+        a := args.GetField("a").Value().(int)
+        b := args.GetField("b").Value().(int)
+        res := a - b
+        results.GetFieldIndex(0).Set(res)
+        return nil
+    })
+    after := add(5, 2)
+    fmt.Printf("after mock: add(5,2)=%d\n", after)
+}
+
+func add(a int, b int) int {
+    return a + b
+}
+
+```
+
+Run with `go`:
+
+```sh
+go run ./
+# output:
+#  before mock: add(5,2)=7
+#  after mock: add(5,2)=7
+```
+
+Run with `xgo`:
+
+```sh
+xgo run ./
+# output:
+#  before mock: add(5,2)=7
+#  after mock: add(5,2)=3
+```
+
+Function mock example(2):
 ```go
 func MyFunc() string {
     return "my func"
@@ -338,6 +430,36 @@ By default, Trace will write traces to a temp directory under current working di
 - `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purepose,
 - `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
 - `XGO_TRACE_OUTPUT=off`: turn off trace.
+
+# Comparing `xgo` with `monkey`
+The project [bouk/monkey](https://github.com/bouk/monkey), was initially created by bouk, as described in his blog https://bou.ke/blog/monkey-patching-in-go.
+
+In short, it uses a low level assembly hack to replace function at runtime. Which exposes lots of confusing problems to its users as it gets used more and more widely(especially on MacOS).
+
+Then it was archived and no longer maintained by the author himself. However, two projects later take over the asm idea and add support for newer go versions and architectures like Apple M1.
+
+Still, the two does not solve the underlying compatiblility issues introduced by asm, including cross-platform support, the need to write to a read-only section of the execution code and lacking of general mock.
+
+So developers still get annoying breaked every now and then.
+
+Xgo managed to solve these problems by avoiding low level hacking of the language itself. Instead, it relies on the IR representation employed by the go compiler. 
+
+It does a so-called `IR Rewritting` on the fly when the compiler compiles the source code. The IR(Intermediate Representation) is closer to the source code rather than the machine code. Thus it is much more stable than the monkey solution.
+
+In conclusion, `xgo` and monkey are compared as the following:
+||xgo|monkey|
+|-|-|-|
+|Technique|IR|ASM|
+|Function mock|Y|Y|
+|Per-goroutine mock|Y|N|
+|Stack trace|Y|N|
+|General trap|Y|N|
+|Compatiblility|NO LIMIT|limited to amd64 and arm64|
+|Integration effore|easy|hard|
+
+# Contribution
+Want to help contribute to `xgo`? Great! Check [CONTRIBUTING
+](CONTRIBUTING.md) for help.
 
 # Evolution of `xgo`
 `xgo` is the successor of the original [go-mock](https://github.com/xhd2015/go-mock), which works by rewriting go code before compile.
