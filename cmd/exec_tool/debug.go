@@ -7,7 +7,22 @@ import (
 	"path/filepath"
 )
 
-func getVscodeDebugCmd(cmd string, args []string) *VscodeDebugConfig {
+func getDebugEnv(xgoCompilerEnableEnv string) map[string]string {
+	return map[string]string{
+		"COMPILER_ALLOW_IR_REWRITE":      "true",
+		"COMPILER_ALLOW_SYNTAX_REWRITE":  "true",
+		"COMPILER_DEBUG_IR_REWRITE_FUNC": os.Getenv("COMPILER_DEBUG_IR_REWRITE_FUNC"),
+		"COMPILER_DEBUG_IR_DUMP_FUNCS":   os.Getenv("COMPILER_DEBUG_IR_DUMP_FUNCS"),
+		XGO_DEBUG_DUMP_IR:                os.Getenv(XGO_DEBUG_DUMP_IR),
+		XGO_DEBUG_DUMP_IR_FILE:           os.Getenv(XGO_DEBUG_DUMP_IR_FILE),
+		"GOCACHE":                        os.Getenv("GOCACHE"),
+		"GOROOT":                         "../..",
+		"PATH":                           "../../bin:${env:PATH}",
+		"XGO_COMPILER_ENABLE":            xgoCompilerEnableEnv,
+	}
+}
+
+func getVscodeDebugCmd(cmd string, xgoCompilerEnableEnv string, args []string) *VscodeDebugConfig {
 	return &VscodeDebugConfig{
 		Name:    fmt.Sprintf("Launch %s", cmd),
 		Type:    "go",
@@ -15,17 +30,7 @@ func getVscodeDebugCmd(cmd string, args []string) *VscodeDebugConfig {
 		Mode:    "exec",
 		Program: cmd,
 		Args:    args,
-		Env: map[string]string{
-			"COMPILER_ALLOW_IR_REWRITE":      "true",
-			"COMPILER_ALLOW_SYNTAX_REWRITE":  "true",
-			"COMPILER_DEBUG_IR_REWRITE_FUNC": os.Getenv("COMPILER_DEBUG_IR_REWRITE_FUNC"),
-			"COMPILER_DEBUG_IR_DUMP_FUNCS":   os.Getenv("COMPILER_DEBUG_IR_DUMP_FUNCS"),
-			XGO_DEBUG_DUMP_IR:                os.Getenv(XGO_DEBUG_DUMP_IR),
-			XGO_DEBUG_DUMP_IR_FILE:           os.Getenv(XGO_DEBUG_DUMP_IR_FILE),
-			"GOCACHE":                        os.Getenv("GOCACHE"),
-			"GOROOT":                         "../..",
-			"PATH":                           "../../bin:${env:PATH}",
-		},
+		Env:     getDebugEnv(xgoCompilerEnableEnv),
 	}
 }
 
@@ -91,3 +96,13 @@ func (c *VscodeDebugConfig) ToMap() (map[string]interface{}, error) {
 	}
 	return m, nil
 }
+
+const vscodeRemoteDebug = `{
+  "name": "dlv remoe localhost:2345",
+  "type": "go",
+  "request": "attach",
+  "mode": "remote",
+  "remotePath": "./",
+  "port": 2345,
+  "host": "127.0.0.1"
+}`

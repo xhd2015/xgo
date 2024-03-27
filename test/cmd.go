@@ -39,12 +39,18 @@ type options struct {
 }
 
 func runXgo(args []string, opts *options) (string, error) {
+	if logs {
+		fmt.Printf("run xgo: args=%v, opts=%+v\n", args, opts)
+	}
 	if opts == nil || !opts.init {
 		err := ensureXgoInit()
 		if err != nil {
 			return "", err
 		}
 	} else {
+		if logs {
+			fmt.Printf("build xgo binary: output=%v\n", xgoBinary)
+		}
 		// build the xgo binary
 		err := cmd.Run("go", "build", "-o", xgoBinary, "../cmd/xgo")
 		if err != nil {
@@ -83,6 +89,7 @@ func runXgo(args []string, opts *options) (string, error) {
 		xgoArgs = append(xgoArgs, "--project-dir", opts.projectDir)
 	}
 	xgoArgs = append(xgoArgs, args...)
+
 	cmd := exec.Command(xgoBinary, xgoArgs...)
 	if opts == nil {
 		cmd.Stderr = os.Stderr
@@ -93,9 +100,14 @@ func runXgo(args []string, opts *options) (string, error) {
 	}
 	if opts != nil && len(opts.env) > 0 {
 		cmd.Env = os.Environ()
+		if logs {
+			fmt.Printf("adding xgo env: %v\n", opts.env)
+		}
 		cmd.Env = append(cmd.Env, opts.env...)
 	}
-
+	if logs {
+		fmt.Printf("executing xgo: %v\n", xgoArgs)
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err

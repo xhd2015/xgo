@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -119,8 +120,15 @@ func init() {
 
 var xgoInitOnce sync.Once
 
+const logs = false
+
+// const logs = true
+
 func ensureXgoInit() error {
 	xgoInitOnce.Do(func() {
+		if logs {
+			fmt.Printf("init xgo\n")
+		}
 		_, xgoInitErr = runXgo([]string{"--build-compiler"}, &options{
 			init: true,
 		})

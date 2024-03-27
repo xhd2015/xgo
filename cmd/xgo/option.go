@@ -29,6 +29,10 @@ type options struct {
 	resetInstrument bool
 	noSetup         bool
 
+	// dev only
+	debugWithDlv bool
+	xgoHome      string
+
 	// TODO: make these options available only at develop
 	// deprecated
 	syncXgoOnly   bool
@@ -56,6 +60,9 @@ func parseOptions(args []string) (*options, error) {
 	var noInstrument bool
 	var resetInstrument bool
 	var noSetup bool
+
+	var debugWithDlv bool
+	var xgoHome string
 
 	var xgoSrc string
 	var syncXgoOnly bool
@@ -125,6 +132,14 @@ func parseOptions(args []string) (*options, error) {
 			},
 		},
 	}
+
+	if isDevelopment {
+		flagValues = append(flagValues, FlagValue{
+			Flags: []string{"--xgo-home"},
+			Value: &xgoHome,
+		})
+	}
+
 	for i := 0; i < nArg; i++ {
 		arg := args[i]
 		if !strings.HasPrefix(arg, "-") {
@@ -189,6 +204,10 @@ func parseOptions(args []string) (*options, error) {
 		}
 		if arg == "--no-setup" {
 			noSetup = true
+			continue
+		}
+		if isDevelopment && arg == "--debug-with-dlv" {
+			debugWithDlv = true
 			continue
 		}
 		var found bool
@@ -258,6 +277,8 @@ func parseOptions(args []string) (*options, error) {
 		noInstrument:    noInstrument,
 		resetInstrument: resetInstrument,
 		noSetup:         noSetup,
+		debugWithDlv:    debugWithDlv,
+		xgoHome:         xgoHome,
 
 		syncXgoOnly:   syncXgoOnly,
 		setupDev:      setupDev,

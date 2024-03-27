@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/xhd2015/xgo/support/osinfo"
 )
@@ -70,22 +71,22 @@ type testTrapOpts struct {
 	origStderr io.Writer
 }
 
-func runAndCompareInstrumentOutput(t *testing.T, testDir string, origExpect string, expectOut string, opts testTrapOpts) {
-	runAndCheckInstrumentOutput(t, testDir, func(output string) error {
+func runAndCompareInstrumentOutput(t *testing.T, testDir string, origExpect string, expectInstrumentOutput string, opts testTrapOpts) {
+	runAndCheckInstrumentOutput(t, testDir, func(originalOutput string) error {
 		if opts.expectOrigErr {
-			if expectOut == "" || !strings.Contains(output, expectOut) {
-				t.Fatalf("expect build err contains: %q, actual: %s", expectOut, output)
+			if expectInstrumentOutput == "" || !strings.Contains(originalOutput, expectInstrumentOutput) {
+				t.Fatalf("expect build err contains: %q, actual: %s", expectInstrumentOutput, originalOutput)
 			}
 			return nil
 		}
 
-		if output != origExpect {
-			t.Fatalf("expect original output: %q, actual: %q", origExpect, output)
+		if originalOutput != origExpect {
+			t.Fatalf("expect original output: %q, actual: %q", origExpect, originalOutput)
 		}
 		return nil
-	}, func(output string) error {
-		if output != expectOut {
-			t.Fatalf("expect output: %q, actual: %q", expectOut, output)
+	}, func(instrumentOutput string) error {
+		if instrumentOutput != expectInstrumentOutput {
+			t.Fatalf("expect instrument output: %q, actual: %q", expectInstrumentOutput, instrumentOutput)
 		}
 		return nil
 	}, opts)
@@ -125,6 +126,9 @@ func runAndCheckInstrumentOutput(t *testing.T, testDir string, orig func(output 
 		origCmd = xgoCmd_test
 		testArgs = append(testArgs, "-v")
 	}
+	if logs {
+		fmt.Printf("run original version\n")
+	}
 	origOut, err := runXgo(append([]string{"--no-instrument", "--project-dir", tmpDir, "./"}, testArgs...), &options{
 		xgoCmd:       origCmd,
 		noTrim:       true,
@@ -132,6 +136,10 @@ func runAndCheckInstrumentOutput(t *testing.T, testDir string, orig func(output 
 		noPipeStderr: opts.expectOrigErr,
 		stderr:       opts.origStderr,
 	})
+
+	if logs {
+		fmt.Printf("original output: %s\n", origOut)
+	}
 	if opts.expectOrigErr {
 		if err == nil {
 			t.Fatalf("expect build no instrument err, actual no err")
@@ -166,6 +174,9 @@ func runAndCheckInstrumentOutput(t *testing.T, testDir string, orig func(output 
 		instrCmd = xgoCmd_testBuild
 		instrArgs = append(instrArgs, "-test.v")
 	}
+	if logs {
+		fmt.Printf("run instrument version\n")
+	}
 	_, err = runXgo([]string{
 		"-o", tmpFile,
 		"--project-dir", tmpDir,
@@ -177,6 +188,13 @@ func runAndCheckInstrumentOutput(t *testing.T, testDir string, orig func(output 
 	}, &options{
 		xgoCmd: instrCmd,
 	})
+
+	if false {
+		// debug
+		fmt.Printf("tmpDir: %s\n", tmpDir)
+		fmt.Printf("tmpFile: %s\n", tmpFile)
+		time.Sleep(20 * time.Hour)
+	}
 	if err != nil {
 		fatalExecErr(t, err)
 	}
@@ -187,9 +205,12 @@ func runAndCheckInstrumentOutput(t *testing.T, testDir string, orig func(output 
 		}
 		t.Fatalf("%v", err)
 	}
+
 	outStr := string(out)
 	// t.Logf("%s", outStr)
-
+	if logs {
+		fmt.Printf("instrument output: %s\n", outStr)
+	}
 	if err := instr(outStr); err != nil {
 		t.Fatal(err)
 	}

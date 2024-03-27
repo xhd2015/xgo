@@ -92,6 +92,9 @@ func main() {
 		var exitCode int = 1
 		if e, ok := err.(*exec.ExitError); ok {
 			errMsg = string(e.Stderr)
+			if errMsg == "" {
+				errMsg = err.Error()
+			}
 			exitCode = e.ExitCode()
 		} else {
 			errMsg = err.Error()
@@ -125,6 +128,8 @@ func handleBuild(cmd string, args []string) error {
 	noInstrument := opts.noInstrument
 	resetInstrument := opts.resetInstrument
 	noSetup := opts.noSetup
+	debugWithDlv := opts.debugWithDlv
+	xgoHome := opts.xgoHome
 	syncXgoOnly := opts.syncXgoOnly
 	setupDev := opts.setupDev
 	buildCompiler := opts.buildCompiler
@@ -183,10 +188,6 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	// build the exec tool
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("get config under home directory: %v", err)
-	}
 	goVersion, err := checkGoVersion(goroot, noInstrument)
 	if err != nil {
 		return err
@@ -199,7 +200,11 @@ func handleBuild(cmd string, args []string) error {
 		return err
 	}
 
-	xgoDir := filepath.Join(homeDir, ".xgo")
+	// abs xgo dir
+	xgoDir, err := getXgoHome(xgoHome)
+	if err != nil {
+		return err
+	}
 	binDir := filepath.Join(xgoDir, "bin")
 	logDir := filepath.Join(xgoDir, "log")
 	instrumentSuffix := ""
@@ -304,7 +309,7 @@ func handleBuild(cmd string, args []string) error {
 	var toolExecFlag string
 	if !noInstrument {
 		logDebug("setup dev dir: %s", instrumentGoroot)
-		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug, logCompile, noSetup)
+		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug, logCompile, noSetup, debugWithDlv)
 		if err != nil {
 			return err
 		}
@@ -437,6 +442,31 @@ func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error)
 		}
 	}
 	return goVersion, nil
+}
+
+// getXgoHome returns absolute path to xgo homoe
+func getXgoHome(xgoHome string) (string, error) {
+	if xgoHome == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("get config under home directory: %v", err)
+		}
+		return filepath.Join(homeDir, ".xgo"), nil
+	}
+
+	absHome, err := filepath.Abs(xgoHome)
+	if err != nil {
+		return "", fmt.Errorf("make abs --xgo-home %s: %w", xgoHome, err)
+	}
+	absHomeDir := filepath.Dir(absHome)
+	if absHomeDir == "." || absHomeDir == "" || absHomeDir == "/" || absHomeDir == absHome {
+		return "", fmt.Errorf("invalid --xgo-home: %s", xgoHome)
+	}
+	_, err = os.Stat(absHomeDir)
+	if err != nil {
+		return "", fmt.Errorf("not found --xgo-home %s: %w", xgoHome, err)
+	}
+	return absHome, nil
 }
 
 func checkGoroot(goroot string) (string, error) {

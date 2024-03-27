@@ -3,12 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	cmd_exec "github.com/xhd2015/xgo/support/cmd"
 )
 
 // invoking examples:
@@ -79,6 +82,7 @@ func handleCompile(cmd string, opts *options, args []string) error {
 		runCommandExit(cmd, args)
 		return nil
 	}
+	debugWithDlv := opts.debugWithDlv
 	// pkg path: the argment after the -p
 	pkgPath := findArgAfterFlag(args, "-p")
 	if pkgPath == "" {
@@ -115,11 +119,51 @@ func handleCompile(cmd string, opts *options, args []string) error {
 	}
 	if isDebug {
 		// TODO: add env
-		if logCompileEnable {
-			logCompile("to debug with dlv: dlv exec --api-version=2 --listen=localhost:2345 --check-go-version=false --headless -- %s %s\n", compilerBin, strings.Join(args, " "))
+		if logCompileEnable || debugWithDlv {
+			dlvArgs := []string{"--api-version=2",
+				"--listen=localhost:2345",
+				"--check-go-version=false",
+				"--log=true",
+				// "--accept-multiclient", // exits when client exits
+				"--headless", "exec",
+				compilerBin,
+				"--",
+			}
+			envs := getDebugEnv(xgoCompilerEnableEnv)
+			// dlvArgs = append(dlvArgs, compilerBin)
+			dlvArgs = append(dlvArgs, args...)
+			var strPrint []string
+			envList := make([]string, 0, len(envs))
+			for k, v := range envs {
+				envKV := fmt.Sprintf("%s=%s", k, v)
+				if logCompileEnable {
+					strPrint = append(strPrint, fmt.Sprintf("  export %s", envKV))
+				}
+				envList = append(envList, envKV)
+			}
+			if logCompileEnable {
+				strPrint = append(strPrint, fmt.Sprintf("  dlv %s", strings.Join(dlvArgs, " ")))
+				logCompile("to debug with dlv:\n%s\n", strings.Join(strPrint, "\n"))
+			}
+			if debugWithDlv {
+				logCompile("connect to dlv using CLI: dlv connect localhost:2345\n")
+				logCompile("connect to dlv remote using vscode: %s\n", vscodeRemoteDebug)
+				var redir io.Writer
+				if compileLogFile != nil {
+					redir = compileLogFile
+				} else {
+					redir = io.Discard
+				}
+				err := cmd_exec.New().Env(envList).Stderr(redir).Stdout(redir).Run("dlv", dlvArgs...)
+				if err != nil {
+					return fmt.Errorf("dlv: %w", err)
+				}
+				for {
+					time.Sleep(60 * time.Hour)
+				}
+			}
 		}
-		debugCmd := getVscodeDebugCmd(compilerBin, args)
-		debugCmd.Env[XGO_COMPILER_ENABLE] = xgoCompilerEnableEnv
+		debugCmd := getVscodeDebugCmd(compilerBin, xgoCompilerEnableEnv, args)
 		debugCmdJSON, err := json.MarshalIndent(debugCmd, "", "    ")
 		if err != nil {
 			return err

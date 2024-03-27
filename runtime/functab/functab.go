@@ -67,6 +67,11 @@ func Info(pkg string, identityName string) *core.FuncInfo {
 	return funcInfoMapping[pkg][identityName]
 }
 
+// GetFuncByPkg:
+//
+//	pkg.Func
+//	pkg.Recv.Func
+//	pkg.(*Recv).Func
 func GetFuncByPkg(pkg string, name string) *core.FuncInfo {
 	ensureMapping()
 	pkgMapping := funcInfoMapping[pkg]
@@ -77,14 +82,20 @@ func GetFuncByPkg(pkg string, name string) *core.FuncInfo {
 	if fn != nil {
 		return fn
 	}
+	// already have "("
+	if strings.HasPrefix(name, "(") {
+		return nil
+	}
+
+	// NOTE: may handle generic
 	dotIdx := strings.Index(name, ".")
 	if dotIdx < 0 {
-		return fn
+		return nil
 	}
 	typName := name[:dotIdx]
 	funcName := name[dotIdx+1:]
 
-	return pkgMapping[".(*"+typName+")."+funcName]
+	return pkgMapping["(*"+typName+")."+funcName]
 }
 
 func GetFuncByFullName(fullName string) *core.FuncInfo {

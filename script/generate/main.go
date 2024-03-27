@@ -45,6 +45,16 @@ func generate(rootDir string) error {
 		return err
 	}
 
+	info, err := generateFuncTabInfo(filepath.Join(rootDir, "patch", "syntax", "helper_code.go"))
+	if err != nil {
+		return err
+	}
+	infoCode := info.formatCode("syntax")
+	err = os.WriteFile(filepath.Join(rootDir, "patch", "syntax", "helper_code_gen.go"), []byte(infoCode), 0755)
+	if err != nil {
+		return err
+	}
+
 	upgradeDst := filepath.Join(rootDir, "script", "install", "upgrade")
 	err = os.RemoveAll(upgradeDst)
 	if err != nil {
@@ -121,6 +131,71 @@ func generateRunTimeDefs(file string, defFile string, syntaxFile string, trapFil
 		return err
 	}
 
+	return nil
+}
+
+type genInfo struct {
+	funcStub   string
+	helperCode string
+}
+
+func (c *genInfo) formatCode(pkgName string) string {
+	codes := []string{
+		prelude,
+		fmt.Sprintf("package %s", pkgName),
+	}
+	codes = append(codes, fmt.Sprintf("const __xgo_stub_def = `%s`", c.funcStub))
+	codes = append(codes, "")
+	codes = append(codes, fmt.Sprintf("const helperCodeGen = `%s`", c.helperCode))
+	codes = append(codes, "")
+	return strings.Join(codes, "\n")
+}
+
+func generateFuncTabInfo(srcFile string) (*genInfo, error) {
+	astFile, fset, err := parseGoFile(srcFile)
+	if err != nil {
+		return nil, err
+	}
+	funcStub := getTypeDecl(astFile.Decls, "__xgo_local_func_stub")
+	if funcStub == nil {
+		return nil, fmt.Errorf("type __xgo_local_func_stub not found")
+	}
+
+	st, ok := funcStub.Type.(*ast.StructType)
+	if !ok {
+		return nil, fmt.Errorf("expect __xgo_local_func_stub to be StructType, actual: %T", funcStub.Type)
+	}
+	codeBytes, err := os.ReadFile(srcFile)
+	if err != nil {
+		return nil, err
+	}
+	code := string(codeBytes)
+
+	funcStubCode := getSlice(code, fset, st.Pos(), st.End())
+
+	helperCode := getSlice(code, fset, astFile.Name.End(), astFile.FileEnd)
+	return &genInfo{
+		funcStub:   funcStubCode,
+		helperCode: helperCode,
+	}, nil
+}
+
+func getTypeDecl(decls []ast.Decl, name string) *ast.TypeSpec {
+	for _, decl := range decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+			if typeSpec.Name != nil && typeSpec.Name.Name == name {
+				return typeSpec
+			}
+		}
+	}
 	return nil
 }
 

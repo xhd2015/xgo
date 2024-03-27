@@ -35,6 +35,7 @@ func ClearFiles() {
 	allFiles = nil
 }
 
+// not used anywhere
 func GetFiles() []*syntax.File {
 	return allFiles
 }
@@ -108,27 +109,22 @@ func ClearSyntaxDeclMapping() {
 
 const xgoRuntimePkgPrefix = "github.com/xhd2015/xgo/runtime/"
 
-func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
-	if len(fileList) == 0 {
-		return
-	}
-	if xgo_ctxt.SkipPackageTrap() {
-		return
-	}
-	allFiles = fileList
-	pkgPath := xgo_ctxt.GetPkgPath()
+// this link function is considered safe as we do not allow user
+// to define such one,there will no abuse
+const XgoLinkGeneratedRegisterFunc = "__xgo_link_generated_register_func"
+const XgoRegisterFuncs = "__xgo_register_funcs"
+const XgoLocalFuncStub = "__xgo_local_func_stub"
 
-	if pkgPath == "" || pkgPath == "runtime" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") || isSkippableSpecialPkg() {
-		// runtime/internal should not be rewritten
-		// internal/api has problem with the function register
+func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
+	allFiles = fileList
+	if !shouldTrap() {
 		return
 	}
-	if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) {
-		if !strings.HasPrefix(pkgPath[len(xgoRuntimePkgPrefix):], "test/") {
-			return
-		}
+	var pkgName string
+	pkgPath := xgo_ctxt.GetPkgPath()
+	if len(fileList) > 0 {
+		pkgName = fileList[0].PkgName.Value
 	}
-	pkgName := fileList[0].PkgName.Value
 	// if true {
 	// 	return
 	// }
@@ -142,11 +138,18 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	// where its _pkg_.a is.
 
 	funcDelcs := getFuncDecls(fileList)
-	if len(funcDelcs) == 0 {
-		return
+	for _, funcDecl := range funcDelcs {
+		if funcDecl.RecvTypeName == "" && funcDecl.Name == XgoLinkGeneratedRegisterFunc {
+			// ensure we are safe
+			// refuse to link such volatile package
+			return
+		}
 	}
 	// assign to global
 	allDecls = funcDelcs
+
+	// always generate a helper to aid IR
+	addFile("__xgo_autogen_register_func_helper.go", strings.NewReader(generateRegHelperCode(pkgName)))
 
 	// split fileDecls to a list of batch
 	// when statements gets large, it will
@@ -156,41 +159,49 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	// see also: https://github.com/golang/go/issues/57832 The input code is just too big for the compiler to handle.
 	// here we split the files per 1000 functions
 	batchFuncDecls := splitBatch(funcDelcs, 1000)
-	var subFuncNames []string
 	for i, funcDecls := range batchFuncDecls {
 		if len(funcDecls) == 0 {
 			continue
 		}
 
-		body := generateFuncRegBody(funcDecls)
-		if len(batchFuncDecls) == 1 {
-			// special when there is only one file
-			fileCode := generateRegFileCode(pkgName, "__xgo_register_funcs", body)
-			if false && pkgPath == "main" {
-				// debug
-				os.WriteFile("/tmp/debug.go", []byte(fileCode), 0755)
-				panic("debug")
-			}
-			addFile("__xgo_autogen_register_func_info.go", strings.NewReader(fileCode))
-			continue
-		}
-		// declare sub function and sub file
-		fnName := fmt.Sprintf("__xgo_register_funcs_%d", i)
-		subFuncNames = append(subFuncNames, fnName)
+		// use XgoLinkRegFunc for general purepose
+		body := generateFuncRegBody(funcDecls, XgoLinkGeneratedRegisterFunc, XgoLocalFuncStub)
 
-		fileCode := generateRegFileCode(pkgName, fnName, body)
-		fileName := fmt.Sprintf("__xgo_autogen_register_func_info_%d", i)
-		addFile(fileName, strings.NewReader(fileCode))
-	}
-	if len(subFuncNames) > 0 {
-		stmts := make([]string, 0, len(subFuncNames))
-		for _, subFunc := range subFuncNames {
-			stmts = append(stmts, fmt.Sprintf("%s(__xgo_reg_func)", subFunc))
+		// NOTE: here the trick is to use init across multiple files,
+		// in go, init can appear more than once even in single file
+		fileCode := generateRegFileCode(pkgName, "init", body)
+		fileNameBase := "__xgo_autogen_register_func_info"
+		if len(batchFuncDecls) > 1 {
+			// special when there are multiple files
+			fileNameBase += fmt.Sprintf("_%d", i)
 		}
-		body := strings.Join(stmts, "\n")
-		fileCode := generateRegFileCode(pkgName, "__xgo_register_funcs", body)
-		addFile("__xgo_autogen_register_func_info.go", strings.NewReader(fileCode))
+		addFile(fileNameBase+".go", strings.NewReader(fileCode))
+		if false && pkgPath == "main" {
+			// debug
+			os.WriteFile("/tmp/debug.go", []byte(fileCode), 0755)
+			panic("debug")
+		}
 	}
+}
+
+func shouldTrap() bool {
+	if xgo_ctxt.SkipPackageTrap() {
+		return false
+	}
+
+	pkgPath := xgo_ctxt.GetPkgPath()
+	if pkgPath == "" || pkgPath == "runtime" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") || isSkippableSpecialPkg() {
+		// runtime/internal should not be rewritten
+		// internal/api has problem with the function register
+		return false
+	}
+	if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) {
+		// skip all xgo runtime pkgs except test
+		if !strings.HasPrefix(pkgPath[len(xgoRuntimePkgPrefix):], "test/") {
+			return false
+		}
+	}
+	return true
 }
 
 func getFileIndexMapping(files []*syntax.File) map[*syntax.File]int {
@@ -233,6 +244,7 @@ type DeclInfo struct {
 	RecvTypeName string
 	RecvPtr      bool
 	Generic      bool
+	Closure      bool
 
 	// this is an interface type declare
 	// only the RecvTypeName is valid
@@ -419,28 +431,25 @@ func getFuncDeclInfo(fileIndex int, f *syntax.File, file string, fn *syntax.Func
 func getFileRef(i int) string {
 	return fmt.Sprintf("__xgo_reg_file_gen_%d", i)
 }
-func generateFuncRegBody(funcDecls []*DeclInfo) string {
-	const regStructType = `struct {
-	PkgPath      string
-	Fn           interface{}
-	PC           uintptr // filled later
-	Interface    bool
-	Generic      bool
-	RecvTypeName string
-	RecvPtr      bool
-	Name         string
-	IdentityName string // name without pkgPath
 
-	RecvName    string
-	ArgNames    []string
-	ResNames    []string
-	FirstArgCtx bool // first argument is context.Context or sub type?
-	LastResErr  bool // last res is error or sub type?
-
-	File string
-	Line int
+func gen() string {
+	return ""
 }
-`
+
+type StructDef struct {
+	Field string
+	Type  string
+}
+
+func genStructType(fields []*StructDef) string {
+	concats := make([]string, 0, len(fields))
+	for _, field := range fields {
+		concats = append(concats, fmt.Sprintf("%s %s", field.Field, field.Type))
+	}
+	return fmt.Sprintf("struct{\n%s\n}\n", strings.Join(concats, "\n"))
+}
+
+func generateFuncRegBody(funcDecls []*DeclInfo, xgoRegFunc string, xgoLocalFuncStub string) string {
 	fileDeclaredMapping := make(map[int]bool)
 	var fileDefs []string
 	stmts := make([]string, 0, len(funcDecls))
@@ -456,12 +465,15 @@ func generateFuncRegBody(funcDecls []*DeclInfo) string {
 		fileIdx := funcDecl.FileIndex
 		fileRef := getFileRef(fileIdx)
 		// func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool, file string, line int)
+
+		// check __xgo_local_func_stub for correctness
 		fieldList := []string{
 			"__xgo_regPkgPath",                        // PkgPath
 			refName,                                   // Fn
 			"0",                                       // PC, filled later
 			strconv.FormatBool(funcDecl.Interface),    // Interface
 			strconv.FormatBool(funcDecl.Generic),      // Generic
+			strconv.FormatBool(funcDecl.Closure),      // Closure
 			strconv.Quote(funcDecl.RecvTypeName),      // RecvTypeName
 			strconv.FormatBool(funcDecl.RecvPtr),      // RecvPtr
 			strconv.Quote(funcDecl.Name),              // Name
@@ -475,7 +487,7 @@ func generateFuncRegBody(funcDecls []*DeclInfo) string {
 			strconv.FormatInt(int64(funcDecl.Line), 10), // Line
 		}
 		fields := strings.Join(fieldList, ",")
-		stmts = append(stmts, "__xgo_reg_func(__xgo_reg_func_struct_info{"+fields+"})")
+		stmts = append(stmts, fmt.Sprintf("%s(%s{%s})", xgoRegFunc, xgoLocalFuncStub, fields))
 
 		// add files
 		if !fileDeclaredMapping[fileIdx] {
@@ -501,7 +513,6 @@ func generateFuncRegBody(funcDecls []*DeclInfo) string {
 			__xgo_reg_func_old(info)
 		}`)
 	}
-	allStmts = append(allStmts, `type __xgo_reg_func_struct_info = `+regStructType)
 	// debug, do not include file paths
 	allStmts = append(allStmts, fileDefs...)
 	if false {
@@ -528,10 +539,18 @@ func generateRegFileCode(pkgName string, fnName string, body string) string {
 		// "import \"reflect\"", // debug
 		// "import \"fmt\"",     // debug
 		// "const __XGO_SKIP_TRAP = true" + "\n" + // don't do this
-		"func " + fnName + "(__xgo_reg_func " + sig_gen__xgo_register_func + "){",
+		"func " + fnName + "(){",
 		body,
 		"}",
 		"",
+	}
+	return strings.Join(autoGenStmts, "\n")
+}
+
+func generateRegHelperCode(pkgName string) string {
+	autoGenStmts := []string{
+		"package " + pkgName,
+		helperCode,
 	}
 	return strings.Join(autoGenStmts, "\n")
 }

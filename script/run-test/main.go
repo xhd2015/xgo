@@ -35,6 +35,7 @@ var runtimeTests = []string{
 	"trace_panic_peek",
 	"func_list",
 	"trap_inspect_func",
+	"trap",
 }
 
 func main() {

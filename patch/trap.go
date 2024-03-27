@@ -2,7 +2,6 @@ package patch
 
 import (
 	"fmt"
-	"go/constant"
 	"os"
 	"runtime"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"cmd/compile/internal/ir"
 	"cmd/compile/internal/typecheck"
 	"cmd/compile/internal/types"
-	"cmd/internal/src"
 
 	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
 	xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"
@@ -43,6 +41,7 @@ func Patch() {
 	}
 	insertTrapPoints()
 	initRegFuncs()
+	initClosureRegs()
 }
 
 var inited bool
@@ -101,97 +100,6 @@ func trapOrLink(fn *ir.Func) {
 	xgo_record.SetRewrittenBody(fn, fn.Body)
 
 	// ir.Dump("after:", fn)
-}
-
-func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
-	pkgPath := xgo_ctxt.GetPkgPath()
-	// for _, fn := range typecheck.Target.Funcs {
-	// NOTE: fnName is main, not main.main
-	fnName := fn.Sym().Name
-	// if this is a closure, skip it
-	// NOTE: 'init.*' can be init function, or closure inside init functions, so they have prefix 'init.'
-	if fnName == "init" || (strings.HasPrefix(fnName, "init.") && fn.OClosure == nil) {
-		// the name `init` is package level auto generated init,
-		// so don't trap this
-		return "", false
-	}
-	// process link name
-	// TODO: what about unnamed closure?
-	linkName := linkMap[fnName]
-	if linkName != "" {
-		if !strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) && !strings.HasPrefix(pkgPath, xgoTestPkgPrefix) && pkgPath != "testing" {
-			return "", false
-		}
-		// ir.Dump("before:", fn)
-		if !disableXgoLink {
-			// trap & test
-			if linkName == setTrap && (pkgPath != xgoRuntimeTrapPkg && !strings.HasPrefix(pkgPath, xgoTestPkgPrefix)) {
-				return "", false
-			}
-			return linkName, false
-		}
-		// ir.Dump("after:", fn)
-		return "", false
-	}
-	if xgo_ctxt.SkipPackageTrap() {
-		return "", false
-	}
-	// TODO: read comment
-	if xgo_syntax.HasSkipTrap() || strings.HasPrefix(fnName, "__xgo") || strings.HasSuffix(fnName, "_xgo_trap_skip") {
-		// the __xgo prefix is reserved for xgo
-		return "", false
-	}
-	if disableTrap {
-		return "", false
-	}
-	if base.Flag.Std {
-		// skip std lib, especially skip:
-		//    runtime, runtime/internal, runtime/*, reflect, unsafe, syscall, sync, sync/atomic,  internal/*
-		//
-		// however, there are some funcs in stdlib that we can
-		// trap, for example, db connection
-		// for example:
-		//     errors, math, math/bits, unicode, unicode/utf8, unicode/utf16, strconv, path, sort, time, encoding/json
-
-		// NOTE: base.Flag.Std in does not always reflect func's package path,
-		// because generic instantiation happens in other package, so this
-		// func may be a foreigner.
-		return "", false
-	}
-	if !canInsertTrap(fn) {
-		return "", false
-	}
-	if false {
-		// skip non-main package paths?
-		if pkgPath != "main" {
-			return "", false
-		}
-	}
-	if fn.Body == nil {
-		// in go, function can have name without body
-		return "", false
-	}
-
-	// skip all packages for xgo,except test
-	if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) {
-		remain := pkgPath[len(xgoRuntimePkgPrefix):]
-		if !strings.HasPrefix(remain, "test/") && !strings.HasPrefix(remain, "runtime/test/") {
-			return "", false
-		}
-	}
-
-	// check if function body's first statement is a call to 'trap.Skip()'
-	if isFirstStmtSkipTrap(fn.Body) {
-		return "", false
-	}
-
-	// func marked nosplit will skip trap because
-	// inserting traps when -gcflags=-N -l enabled
-	// would cause stack overflow 792 bytes
-	if fn.Pragma&ir.Nosplit != 0 {
-		return "", false
-	}
-	return "", true
 }
 
 /*
@@ -257,15 +165,14 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 	posLine := pos.Line()
 	posCol := pos.Col()
 
-	// for windows, posFile has the form:
-	//    C:/a/b/c
-	// which syncDeclMapping's file has the form:
-	//    C:\a\b\c
-
 	syncDeclMapping := xgo_syntax.GetSyntaxDeclMapping()
 
 	fileMapping := syncDeclMapping[posFile]
 	if fileMapping == nil && runtime.GOOS == "windows" {
+		// for windows, posFile has the form:
+		//    C:/a/b/c
+		// while syncDeclMapping's file has the form:
+		//    C:\a\b\c
 		normPosFile := strings.ReplaceAll(posFile, "/", "\\")
 		fileMapping = syncDeclMapping[normPosFile]
 	}
@@ -346,6 +253,101 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 	return true
 }
 
+func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
+	pkgPath := xgo_ctxt.GetPkgPath()
+	// for _, fn := range typecheck.Target.Funcs {
+	// NOTE: fnName is main, not main.main
+	fnName := fn.Sym().Name
+	// if this is a closure, skip it
+	// NOTE: 'init.*' can be init function, or closure inside init functions, so they have prefix 'init.'
+	if fnName == "init" || (strings.HasPrefix(fnName, "init.") && fn.OClosure == nil) {
+		// the name `init` is package level auto generated init,
+		// so don't trap this
+		return "", false
+	}
+	// process link name
+	// TODO: what about unnamed closure?
+	linkName := linkMap[fnName]
+	if linkName != "" {
+		// safety checked previousely
+		safeGenerated := fnName == xgo_syntax.XgoLinkGeneratedRegisterFunc
+		if !safeGenerated && !strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) && !strings.HasPrefix(pkgPath, xgoTestPkgPrefix) && pkgPath != "testing" {
+			return "", false
+		}
+		// ir.Dump("before:", fn)
+		if !disableXgoLink {
+			// trap & test
+			if linkName == setTrap && (pkgPath != xgoRuntimeTrapPkg && !strings.HasPrefix(pkgPath, xgoTestPkgPrefix)) {
+				return "", false
+			}
+			return linkName, false
+		}
+		// ir.Dump("after:", fn)
+		return "", false
+	}
+	if xgo_ctxt.SkipPackageTrap() {
+		return "", false
+	}
+	// TODO: read comment
+	if xgo_syntax.HasSkipTrap() || strings.HasPrefix(fnName, "__xgo") || strings.HasSuffix(fnName, "_xgo_trap_skip") {
+		// the __xgo prefix is reserved for xgo
+		return "", false
+	}
+	if disableTrap {
+		return "", false
+	}
+	if base.Flag.Std {
+		// skip std lib, especially skip:
+		//    runtime, runtime/internal, runtime/*, reflect, unsafe, syscall, sync, sync/atomic,  internal/*
+		//
+		// however, there are some funcs in stdlib that we can
+		// trap, for example, db connection
+		// for example:
+		//     errors, math, math/bits, unicode, unicode/utf8, unicode/utf16, strconv, path, sort, time, encoding/json
+
+		// NOTE: base.Flag.Std in does not always reflect func's package path,
+		// because generic instantiation happens in other package, so this
+		// func may be a foreigner.
+		return "", false
+	}
+	if !canInsertTrap(fn) {
+		return "", false
+	}
+	if false {
+		// skip non-main package paths?
+		if pkgPath != "main" {
+			return "", false
+		}
+	}
+	if fn.Body == nil {
+		// in go, function can have name without body
+		return "", false
+	}
+
+	// skip all packages for xgo,except test
+	if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) {
+		remain := pkgPath[len(xgoRuntimePkgPrefix):]
+		if !strings.HasPrefix(remain, "test/") && !strings.HasPrefix(remain, "runtime/test/") {
+			return "", false
+		}
+	}
+
+	// check if function body's first statement is a call to 'trap.Skip()'
+	if isFirstStmtSkipTrap(fn.Body) {
+		return "", false
+	}
+
+	// func marked nosplit will skip trap because
+	// inserting traps when -gcflags=-N -l enabled
+	// would cause stack overflow 792 bytes
+	if fn.Pragma&ir.Nosplit != 0 {
+		return "", false
+	}
+	return "", true
+}
+
+// Deprecated, there is no __xgo_register_funcs any more,
+// so this function is useless
 func initRegFuncs() {
 	// if types.LocalPkg.Name != "main" {
 	// 	return
@@ -364,6 +366,19 @@ func initRegFuncs() {
 	nodes := []ir.Node{node}
 	typecheck.Stmts(nodes)
 	prependInit(pos, typecheck.Target, nodes)
+}
+
+func initClosureRegs() {
+	if true {
+		return
+	}
+	// TODO:
+	regFunc := typecheck.LookupRuntime("__xgo_register_func")
+
+	_ = regFunc
+	var nodes []ir.Node
+
+	typecheck.Stmts(nodes)
 }
 
 // for go1.20 and above, needs to convert
@@ -468,131 +483,4 @@ func typeCheckBody(fn *ir.Func) {
 	ir.CurFunc = fn
 	typecheck.Stmts(fn.Body)
 	ir.CurFunc = savedFunc
-}
-
-func ifConstant(pos src.XPos, b bool, body []ir.Node, els []ir.Node) *ir.IfStmt {
-	return ir.NewIfStmt(pos,
-		NewBoolLit(pos, true),
-		body,
-		els,
-	)
-}
-
-func NewStringLit(pos src.XPos, s string) ir.Node {
-	return NewBasicLit(pos, types.Types[types.TSTRING], constant.MakeString(s))
-}
-func NewBoolLit(pos src.XPos, b bool) ir.Node {
-	return NewBasicLit(pos, types.Types[types.TBOOL], constant.MakeBool(b))
-}
-
-// how to delcare a new function?
-// init names are usually init.0, init.1, ...
-//
-// NOTE: when there is already an init function, declare new init function
-// will give an error: main..inittask: relocation target main.init.1 not defined
-
-// with go1.22, modifying existing init's body may cause the error:
-//
-//	__xgo_autogen.go:2:6: internal compiler error: unexpected initialization statement: (.)
-const needToCreateInit = goMajor > 1 || (goMajor == 1 && goMinor >= 22)
-
-func prependInit(pos src.XPos, target *ir.Package, body []ir.Node) {
-	if !needToCreateInit && len(target.Inits) > 0 {
-		target.Inits[0].Body.Prepend(body...)
-		return
-	}
-
-	sym := types.LocalPkg.Lookup(fmt.Sprintf("init.%d", len(target.Inits)))
-	regFunc := NewFunc(pos, pos, sym, NewSignature(types.LocalPkg, nil, nil, nil, nil))
-	regFunc.Body = body
-
-	target.Inits = append(target.Inits, regFunc)
-	AddFuncs(regFunc)
-}
-
-func takeAddr(fn *ir.Func, field *types.Field, nameOnly bool) ir.Node {
-	pos := fn.Pos()
-	if field == nil {
-		return newNilInterface(pos)
-	}
-	// go1.20 only? no Nname, so cannot refer to it
-	// but we should display it in trace?(better to do so)
-	var isNilOrEmptyName bool
-
-	if field.Nname == nil {
-		isNilOrEmptyName = true
-	} else if field.Sym != nil && field.Sym.Name == "_" {
-		isNilOrEmptyName = true
-	}
-	var fieldRef *ir.Name
-	if isNilOrEmptyName {
-		// if name is "_" or empty, return nil
-		if true {
-			return newNilInterface(pos)
-		}
-		if false {
-			// NOTE: not working when IR
-			tmpName := typecheck.TempAt(pos, fn, field.Type)
-			field.Nname = tmpName
-			field.Sym = tmpName.Sym()
-			fieldRef = tmpName
-		}
-	} else {
-		fieldRef = field.Nname.(*ir.Name)
-	}
-
-	arg := ir.NewAddrExpr(pos, fieldRef)
-
-	if nameOnly {
-		fieldType := field.Type
-		arg.SetType(types.NewPtr(fieldType))
-		return arg
-	}
-
-	return convToEFace(pos, arg, field.Type, true)
-}
-
-func convToEFace(pos src.XPos, x ir.Node, t *types.Type, ptr bool) *ir.ConvExpr {
-	conv := ir.NewConvExpr(pos, ir.OCONV, types.Types[types.TINTER], x)
-	conv.SetImplicit(true)
-
-	// go1.20 and above: must have Typeword
-	if ptr {
-		SetConvTypeWordPtr(conv, t)
-	} else {
-		SetConvTypeWord(conv, t)
-	}
-	return conv
-}
-
-func isFirstStmtSkipTrap(nodes ir.Nodes) bool {
-	for _, node := range nodes {
-		if isCallTo(node, xgoRuntimeTrapPkg, "Skip") {
-			return true
-		}
-	}
-	return false
-}
-
-func isCallTo(node ir.Node, pkgPath string, name string) bool {
-	callNode, ok := node.(*ir.CallExpr)
-	if !ok {
-		return false
-	}
-	nameNode, ok := getCallee(callNode).(*ir.Name)
-	if !ok {
-		return false
-	}
-	sym := nameNode.Sym()
-	if sym == nil {
-		return false
-	}
-	return sym.Pkg != nil && sym.Name == name && sym.Pkg.Path == pkgPath
-}
-
-func newNilInterface(pos src.XPos) ir.Expr {
-	return NewNilExpr(pos, types.Types[types.TINTER])
-}
-func newNilInterfaceSlice(pos src.XPos) ir.Expr {
-	return NewNilExpr(pos, types.NewSlice(types.Types[types.TINTER]))
 }

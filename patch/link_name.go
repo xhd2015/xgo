@@ -2,6 +2,7 @@ package patch
 
 import (
 	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
+	xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"
 )
 
 const xgoRuntimePkgPrefix = xgo_ctxt.XgoRuntimePkg + "/"
@@ -25,4 +26,5 @@ var linkMap = map[string]string{
 	"__xgo_link_peek_panic":                   "__xgo_peek_panic",
 	"__xgo_link_mem_equal":                    "__xgo_mem_equal",
 	"__xgo_link_get_pc_name":                  "__xgo_get_pc_name",
+	xgo_syntax.XgoLinkGeneratedRegisterFunc:   "__xgo_register_func",
 }

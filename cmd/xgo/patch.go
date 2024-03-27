@@ -609,7 +609,7 @@ func syncGoroot(goroot string, dstDir string, forceCopy bool) error {
 		CopyReplaceDir(goroot, dstDir)
 }
 
-func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool, noSetup bool) (compilerChanged bool, toolExecFlag string, err error) {
+func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool, noSetup bool, debugWithDlv bool) (compilerChanged bool, toolExecFlag string, err error) {
 	actualExecToolBin := execToolBin
 	if !noSetup {
 		// build the instrumented compiler
@@ -646,6 +646,9 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 	}
 	if debugPkg != "" {
 		execToolCmd = append(execToolCmd, "--debug="+debugPkg)
+	}
+	if debugWithDlv {
+		execToolCmd = append(execToolCmd, "--debug-with-dlv")
 	}
 	// always add trailing '--' to mark exec tool flags end
 	execToolCmd = append(execToolCmd, "--")

@@ -38,6 +38,15 @@ func Mock(fn interface{}, interceptor Interceptor) func() {
 	return mock(fn, interceptor)
 }
 
+// func MockByName(pkgPath string, funcName string, interceptor Interceptor) func() {
+// 	return mock(fn, interceptor)
+// }
+// func MockMethodByName(instance interface{}, method string, interceptor Interceptor) func() {
+// 	recv := reflect.ValueOf(instance)
+// 	recv.MethodByName()
+// 	return mock(fn, interceptor)
+// }
+
 // Deprecated: use Mock instead
 func AddFuncInterceptor(fn interface{}, interceptor Interceptor) func() {
 	return mock(fn, interceptor)
