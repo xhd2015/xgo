@@ -16,7 +16,6 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/osinfo"
-	"github.com/xhd2015/xgo/support/strutil"
 )
 
 // assume go 1.20
@@ -543,105 +542,6 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	})
 }
 
-func editFile(file string, callback func(content string) (string, error)) error {
-	bytes, err := ioutil.ReadFile(file)
-	if err != nil {
-		return err
-	}
-	content := string(bytes)
-	newContent, err := callback(content)
-	if err != nil {
-		return err
-	}
-	if newContent == content {
-		return nil
-	}
-	return ioutil.WriteFile(file, []byte(newContent), 0755)
-}
-
-func addCodeAfterImports(code string, beginMark string, endMark string, contents []string) string {
-	idx := indexSeq(code, []string{"import", "(", "\n"}, false)
-	if idx < 0 {
-		panic(fmt.Errorf("import not found"))
-	}
-	return insertConentNoDudplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
-}
-
-func addContentBefore(content string, beginMark string, endMark string, seq []string, addContent string) string {
-	return addContentAt(content, beginMark, endMark, seq, addContent, true)
-}
-
-func addContentAfter(content string, beginMark string, endMark string, seq []string, addContent string) string {
-	return addContentAt(content, beginMark, endMark, seq, addContent, false)
-}
-
-func addContentAt(content string, beginMark string, endMark string, seq []string, addContent string, begin bool) string {
-	idx := indexSeq(content, seq, begin)
-	if idx < 0 {
-		panic(fmt.Errorf("sequence not found: %v", seq))
-	}
-	return insertConentNoDudplicate(content, beginMark, endMark, idx, addContent)
-}
-
-func replaceContentAfter(content string, beginMark string, endMark string, seq []string, target string, replaceContent string) string {
-	if replaceContent == "" {
-		return content
-	}
-	closuerContent := beginMark + "\n" + replaceContent + "\n" + endMark + "\n"
-	idx := indexSeq(content, seq, false)
-	if idx < 0 {
-		panic(fmt.Errorf("sequence not found: %v", seq))
-	}
-	if strings.Contains(content, closuerContent) {
-		return content
-	}
-	content, ok := tryReplaceWithMark(content, beginMark, endMark, closuerContent)
-	if ok {
-		return content
-	}
-	targetIdx := strings.Index(content[idx:], target)
-	if targetIdx < 0 {
-		panic(fmt.Errorf("not found: %s", target))
-	}
-	return content[:idx+targetIdx] + closuerContent + content[idx+targetIdx+len(target):]
-}
-
-// signature example: /*<begin ident>*/ {content} /*<end ident>*/
-func insertConentNoDudplicate(content string, beginMark string, endMark string, idx int, insertContent string) string {
-	if insertContent == "" {
-		return content
-	}
-	closuerContent := beginMark + "\n" + insertContent + "\n" + endMark + "\n"
-	content, ok := tryReplaceWithMark(content, beginMark, endMark, closuerContent)
-	if ok {
-		return content
-	}
-	if strings.Contains(content, closuerContent) {
-		return content
-	}
-	return content[:idx] + closuerContent + content[idx:]
-}
-
-func tryReplaceWithMark(content string, beginMark string, endMark string, closureContent string) (string, bool) {
-	beginIdx := strings.Index(content, beginMark)
-	if beginIdx < 0 {
-		return content, false
-	}
-	endIdx := strings.Index(content, endMark)
-	if endIdx < 0 {
-		return content, false
-	}
-	lastIdx := endIdx + len(endMark)
-	if lastIdx+1 < len(content) && content[lastIdx+1] == '\n' {
-		lastIdx++
-	}
-	return content[:beginIdx] + closureContent + content[lastIdx:], true
-}
-
-func indexSeq(s string, sequence []string, begin bool) int {
-	return strutil.IndexSequenceAt(s, sequence, begin)
-}
-
 func checkRevisionChanged(revisionFile string, currentRevision string) (bool, error) {
 	savedRevision, err := readOrEmpty(revisionFile)
 	if err != nil {
@@ -707,4 +607,126 @@ func syncGoroot(goroot string, dstDir string, forceCopy bool) error {
 	return filecopy.NewOptions().
 		Concurrent(10).
 		CopyReplaceDir(goroot, dstDir)
+}
+
+func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool, noSetup bool) (compilerChanged bool, toolExecFlag string, err error) {
+	actualExecToolBin := execToolBin
+	if !noSetup {
+		// build the instrumented compiler
+		err = buildCompiler(goroot, compilerBin)
+		if err != nil {
+			return false, "", err
+		}
+		compilerChanged, err = compareAndUpdateCompilerID(compilerBin, compilerBuildIDFile)
+		if err != nil {
+			return false, "", err
+		}
+
+		if isDevelopment {
+			// build exec tool
+			buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
+			buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
+			buildExecToolCmd.Stdout = os.Stdout
+			buildExecToolCmd.Stderr = os.Stderr
+			err = buildExecToolCmd.Run()
+			if err != nil {
+				return false, "", err
+			}
+		} else {
+			actualExecToolBin, err = findBuiltExecTool()
+			if err != nil {
+				return false, "", err
+			}
+		}
+	}
+
+	execToolCmd := []string{actualExecToolBin, "--enable"}
+	if logCompile {
+		execToolCmd = append(execToolCmd, "--log-compile")
+	}
+	if debugPkg != "" {
+		execToolCmd = append(execToolCmd, "--debug="+debugPkg)
+	}
+	// always add trailing '--' to mark exec tool flags end
+	execToolCmd = append(execToolCmd, "--")
+
+	toolExecFlag = "-toolexec=" + strings.Join(execToolCmd, " ")
+	return compilerChanged, toolExecFlag, nil
+}
+
+// find exec_tool, first try the same dir with xgo,
+// but if that is not found, we can fallback to ~/.xgo/bin/exec_tool
+// because exec_tool changes rarely, so it is safe to use
+// an older version.
+// we may add version to check if exec_tool is compitable
+func findBuiltExecTool() (string, error) {
+	dirName := filepath.Dir(os.Args[0])
+	absDirName, err := filepath.Abs(dirName)
+	if err != nil {
+		return "", err
+	}
+	exeSuffix := osinfo.EXE_SUFFIX
+	execToolBin := filepath.Join(absDirName, "exec_tool"+exeSuffix)
+	_, statErr := os.Stat(execToolBin)
+	if statErr == nil {
+		return execToolBin, nil
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("exec_tool not found in %s", dirName)
+	}
+	execToolBin = filepath.Join(homeDir, ".xgo", "bin", "exec_tool"+exeSuffix)
+	_, statErr = os.Stat(execToolBin)
+	if statErr == nil {
+		return execToolBin, nil
+	}
+	return "", fmt.Errorf("exec_tool not found in %s and ~/.xgo/bin", dirName)
+}
+func buildCompiler(goroot string, output string) error {
+	args := []string{"build"}
+	if isDevelopment {
+		args = append(args, "-gcflags=all=-N -l")
+	}
+	args = append(args, "-o", output, "./")
+	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	env, err := patchEnvWithGoroot(os.Environ(), goroot)
+	if err != nil {
+		return err
+	}
+	cmd.Env = env
+	cmd.Dir = filepath.Join(goroot, "src", "cmd", "compile")
+	return cmd.Run()
+}
+
+func compareAndUpdateCompilerID(compilerFile string, compilerIDFile string) (changed bool, err error) {
+	prevData, err := ioutil.ReadFile(compilerIDFile)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return false, err
+		}
+		err = nil
+	}
+	prevID := string(prevData)
+	curID, err := getBuildID(compilerFile)
+	if err != nil {
+		return false, err
+	}
+	if prevID != "" && prevID == curID {
+		return false, nil
+	}
+	err = ioutil.WriteFile(compilerIDFile, []byte(curID), 0755)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func getBuildID(file string) (string, error) {
+	data, err := exec.Command("go", "tool", "buildid", file).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(string(data), "\n"), nil
 }

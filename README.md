@@ -1,11 +1,17 @@
 # xgo
+
+**English | [简体中文](./README_zh_cn.md)**
+
 Enable function Trap for `go`, and provide tools like Mock and Trace to help go developers write unit test and debug both easier and faster.
 
 `xgo` works as a drop-in replacement for `go run`,`go build`, and `go test`.
 
 It adds missing abilities to go program by cooperating with(or hacking) the go compiler.
 
-These abilities include [Mock](#mock), [Trap](#trap) and [Trace](#trace).
+These abilities:
+- [Trap](#trap) 
+- [Mock](#mock)
+- [Trace](#trace)
 
 See [Quick Start](#quick-start) and [Documentation](./doc) for more details.
 
@@ -252,7 +258,7 @@ Function mock example(1):
 
 The following code demonstrates how to setup mock on a given function:
 - The function `add(a,b)` normally adds `a` and `b` up, resulting in `a+b`,
-- However, after `mock.AddFuncInterceptor`, the logic is changed to `a-b`.
+- However, after `mock.Mock`, the logic is changed to `a-b`.
 
 (check [test/testdata/mock_res/main.go](test/testdata/mock_res/main.go) for more details.)
 ```go
@@ -451,6 +457,7 @@ In conclusion, `xgo` and monkey are compared as the following:
 |-|-|-|
 |Technique|IR|ASM|
 |Function mock|Y|Y|
+|Per-Instance Method mock|Y|N|
 |Per-goroutine mock|Y|N|
 |Stack trace|Y|N|
 |General trap|Y|N|

@@ -3,15 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
+	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/osinfo"
 
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
@@ -141,6 +139,14 @@ func handleBuild(cmd string, args []string) error {
 		return fmt.Errorf("exec requires command")
 	}
 
+	closeDebug, err = setupDebugLog(logDebugOption)
+	if err != nil {
+		return err
+	}
+	if logDebugOption != nil {
+		logStartup()
+	}
+
 	goroot, err := checkGoroot(withGoroot)
 	if err != nil {
 		return err
@@ -150,26 +156,14 @@ func handleBuild(cmd string, args []string) error {
 	if err != nil {
 		return err
 	}
+	logDebug("effective GOROOT: %s", goroot)
+
 	// create a tmp dir for communication with exec_tool
 	tmpDir, err := os.MkdirTemp("", "xgo-"+cmd)
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(tmpDir)
-
-	closeDebug, err = setupDebugLog(logDebugOption)
-	if err != nil {
-		return err
-	}
-	if logDebugOption != nil {
-		logDebug("start: %v", os.Args)
-		logDebug("runtime.GOOS=%s", runtime.GOOS)
-		logDebug("runtime.GOARCH=%s", runtime.GOARCH)
-		logDebug("runtime.Version()=%s", runtime.Version())
-		logDebug("runtime.GOROOT()=%s", runtime.GOROOT())
-		logDebug("os exe suffix: %s", osinfo.EXE_SUFFIX)
-		logDebug("os force copy unsym: %v", osinfo.FORCE_COPY_UNSYM)
-	}
 
 	var vscodeDebugFile string
 	var vscodeDebugFileSuffix string
@@ -193,7 +187,6 @@ func handleBuild(cmd string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("get config under home directory: %v", err)
 	}
-	logDebug("effective GOROOT: %s", goroot)
 	goVersion, err := checkGoVersion(goroot, noInstrument)
 	if err != nil {
 		return err
@@ -439,177 +432,32 @@ func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error)
 	}
 	if !noInstrument {
 		minor := goVersion.Minor
-		if goVersion.Major != 1 || (minor < 16 || minor > 22) {
-			return nil, fmt.Errorf("only supports go1.16.0 ~ go1.22.1, current: %s", goVersionStr)
+		if goVersion.Major != 1 || (minor < 17 || minor > 22) {
+			return nil, fmt.Errorf("only supports go1.17.0 ~ go1.22.1, current: %s", goVersionStr)
 		}
 	}
 	return goVersion, nil
 }
 
-func ensureDirs(binDir string, logDir string, instrumentDir string) error {
-	err := os.MkdirAll(binDir, 0755)
-	if err != nil {
-		return fmt.Errorf("create ~/.xgo/bin: %w", err)
-	}
-	err = os.MkdirAll(logDir, 0755)
-	if err != nil {
-		return fmt.Errorf("create ~/.xgo/log: %w", err)
-	}
-	err = os.MkdirAll(instrumentDir, 0755)
-	if err != nil {
-		return fmt.Errorf("create ~/.xgo/%s: %w", filepath.Base(instrumentDir), err)
-	}
-	return nil
-}
-
-func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool, noSetup bool) (compilerChanged bool, toolExecFlag string, err error) {
-	actualExecToolBin := execToolBin
-	if !noSetup {
-		// build the instrumented compiler
-		err = buildCompiler(goroot, compilerBin)
-		if err != nil {
-			return false, "", err
-		}
-		compilerChanged, err = compareAndUpdateCompilerID(compilerBin, compilerBuildIDFile)
-		if err != nil {
-			return false, "", err
-		}
-
-		if isDevelopment {
-			// build exec tool
-			buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
-			buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
-			buildExecToolCmd.Stdout = os.Stdout
-			buildExecToolCmd.Stderr = os.Stderr
-			err = buildExecToolCmd.Run()
-			if err != nil {
-				return false, "", err
-			}
-		} else {
-			actualExecToolBin, err = findBuiltExecTool()
-			if err != nil {
-				return false, "", err
-			}
-		}
-	}
-
-	execToolCmd := []string{actualExecToolBin, "--enable"}
-	if logCompile {
-		execToolCmd = append(execToolCmd, "--log-compile")
-	}
-	if debugPkg != "" {
-		execToolCmd = append(execToolCmd, "--debug="+debugPkg)
-	}
-	// always add trailing '--' to mark exec tool flags end
-	execToolCmd = append(execToolCmd, "--")
-
-	toolExecFlag = "-toolexec=" + strings.Join(execToolCmd, " ")
-	return compilerChanged, toolExecFlag, nil
-}
-
-// find exec_tool, first try the same dir with xgo,
-// but if that is not found, we can fallback to ~/.xgo/bin/exec_tool
-// because exec_tool changes rarely, so it is safe to use
-// an older version.
-// we may add version to check if exec_tool is compitable
-func findBuiltExecTool() (string, error) {
-	dirName := filepath.Dir(os.Args[0])
-	absDirName, err := filepath.Abs(dirName)
-	if err != nil {
-		return "", err
-	}
-	exeSuffix := osinfo.EXE_SUFFIX
-	execToolBin := filepath.Join(absDirName, "exec_tool"+exeSuffix)
-	_, statErr := os.Stat(execToolBin)
-	if statErr == nil {
-		return execToolBin, nil
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("exec_tool not found in %s", dirName)
-	}
-	execToolBin = filepath.Join(homeDir, ".xgo", "bin", "exec_tool"+exeSuffix)
-	_, statErr = os.Stat(execToolBin)
-	if statErr == nil {
-		return execToolBin, nil
-	}
-	return "", fmt.Errorf("exec_tool not found in %s and ~/.xgo/bin", dirName)
-}
-func buildCompiler(goroot string, output string) error {
-	args := []string{"build"}
-	if isDevelopment {
-		args = append(args, "-gcflags=all=-N -l")
-	}
-	args = append(args, "-o", output, "./")
-	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	env, err := patchEnvWithGoroot(os.Environ(), goroot)
-	if err != nil {
-		return err
-	}
-	cmd.Env = env
-	cmd.Dir = filepath.Join(goroot, "src", "cmd", "compile")
-	return cmd.Run()
-}
-
-func compareAndUpdateCompilerID(compilerFile string, compilerIDFile string) (changed bool, err error) {
-	prevData, err := ioutil.ReadFile(compilerIDFile)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return false, err
-		}
-		err = nil
-	}
-	prevID := string(prevData)
-	curID, err := getBuildID(compilerFile)
-	if err != nil {
-		return false, err
-	}
-	if prevID != "" && prevID == curID {
-		return false, nil
-	}
-	err = ioutil.WriteFile(compilerIDFile, []byte(curID), 0755)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func getBuildID(file string) (string, error) {
-	data, err := exec.Command("go", "tool", "buildid", file).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSuffix(string(data), "\n"), nil
-}
-
-func patchEnvWithGoroot(env []string, goroot string) ([]string, error) {
-	goroot, err := filepath.Abs(goroot)
-	if err != nil {
-		return nil, err
-	}
-	return append(env,
-		"GOROOT="+goroot,
-		fmt.Sprintf("PATH=%s%c%s", filepath.Join(goroot, "bin"), filepath.ListSeparator, os.Getenv("PATH")),
-	), nil
-}
-
-func assertDir(dir string) error {
-	fileInfo, err := os.Stat(dir)
-	if err != nil {
-		return err
-		// return fmt.Errorf("stat ~/.xgo/src: %v", err)
-	}
-	if !fileInfo.IsDir() {
-		return fmt.Errorf("not a dir")
-	}
-	return nil
-}
-
 func checkGoroot(goroot string) (string, error) {
 	if goroot == "" {
 		goroot = runtime.GOROOT()
+		if goroot == "" {
+			envGoroot, err := cmd.Output("go", "env", "GOROOT")
+			if err != nil {
+				var errMsg string
+				if e, ok := err.(*exec.ExitError); ok {
+					errMsg = string(e.Stderr)
+				} else {
+					errMsg = err.Error()
+				}
+				return "", fmt.Errorf("requires GOROOT or --with-goroot: go env GOROOT: %v", errMsg)
+			}
+			// remove special characters from output
+			envGoroot = strings.ReplaceAll(envGoroot, "\n", "")
+			envGoroot = strings.ReplaceAll(envGoroot, "\r", "")
+			goroot = envGoroot
+		}
 		if goroot == "" {
 			return "", fmt.Errorf("requires GOROOT or --with-goroot")
 		}
@@ -637,35 +485,41 @@ func checkGoroot(goroot string) (string, error) {
 	return "", err
 }
 
-// if [[ $verbose = true ]];then
-//
-//	    tail -fn1 "$shdir/compile.log" &
-//	    trap "kill -9 $!" EXIT
-//	fi
-func tailLog(logFile string) {
-	file, err := os.OpenFile(logFile, os.O_RDONLY|os.O_CREATE, 0755)
+func ensureDirs(binDir string, logDir string, instrumentDir string) error {
+	err := os.MkdirAll(binDir, 0755)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "open compile log: %v\n", err)
-		return
+		return fmt.Errorf("create ~/.xgo/bin: %w", err)
 	}
-	_, err = file.Seek(0, io.SeekEnd)
+	err = os.MkdirAll(logDir, 0755)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "seek tail compile log: %v\n", err)
-		return
+		return fmt.Errorf("create ~/.xgo/log: %w", err)
 	}
-	buf := make([]byte, 1024)
-	for {
-		n, err := file.Read(buf)
-		if n > 0 {
-			os.Stdout.Write(buf[:n])
-		}
-		if err != nil {
-			if err == io.EOF {
-				time.Sleep(50 * time.Millisecond)
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "tail compile log: %v\n", err)
-			return
-		}
+	err = os.MkdirAll(instrumentDir, 0755)
+	if err != nil {
+		return fmt.Errorf("create ~/.xgo/%s: %w", filepath.Base(instrumentDir), err)
 	}
+	return nil
+}
+
+func patchEnvWithGoroot(env []string, goroot string) ([]string, error) {
+	goroot, err := filepath.Abs(goroot)
+	if err != nil {
+		return nil, err
+	}
+	return append(env,
+		"GOROOT="+goroot,
+		fmt.Sprintf("PATH=%s%c%s", filepath.Join(goroot, "bin"), filepath.ListSeparator, os.Getenv("PATH")),
+	), nil
+}
+
+func assertDir(dir string) error {
+	fileInfo, err := os.Stat(dir)
+	if err != nil {
+		return err
+		// return fmt.Errorf("stat ~/.xgo/src: %v", err)
+	}
+	if !fileInfo.IsDir() {
+		return fmt.Errorf("not a dir")
+	}
+	return nil
 }
