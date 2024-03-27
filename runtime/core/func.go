@@ -23,6 +23,9 @@ type FuncInfo struct {
 	// is this a generic function?
 	Generic bool
 
+	// is this a closure?
+	Closure bool
+
 	// source info
 	File string
 	Line int

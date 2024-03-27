@@ -48,6 +48,7 @@ func NewBasicLit(pos src.XPos, t *types.Type, val constant.Value) ir.Node {
 	return ir.NewBasicLit(pos, t, val)
 }
 
+// NOTE: []*types.Field instead of *types.Type(go1.21)
 func takeAddrs(fn *ir.Func, t []*types.Field, nameOnly bool) ir.Expr {
 	if len(t) == 0 {
 		return NewNilExpr(fn.Pos(), intfSlice)
@@ -60,6 +61,22 @@ func takeAddrs(fn *ir.Func, t []*types.Field, nameOnly bool) ir.Expr {
 		return true
 	})
 	return ir.NewCompLitExpr(fn.Pos(), ir.OCOMPLIT, intfSlice, paramList)
+}
+
+// NOTE: []*types.Field instead of *types.Type(go1.21)
+func getFieldNames(fn *ir.Func, t []*types.Field) ir.Expr {
+	if len(t) == 0 {
+		return NewNilExpr(fn.Pos(), strSlice)
+	}
+	paramList := make([]ir.Node, len(t))
+	i := 0
+	ForEachField(t, func(field *types.Field) bool {
+		fieldName := getFieldName(fn, field)
+		paramList[i] = NewStringLit(fn.Pos(), fieldName)
+		i++
+		return true
+	})
+	return ir.NewCompLitExpr(fn.Pos(), ir.OCOMPLIT, strSlice, paramList)
 }
 
 func getTypeNames(params []*types.Field) []ir.Node {

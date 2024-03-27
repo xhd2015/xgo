@@ -1,24 +1,28 @@
 package trap_set
 
-import "testing"
+import (
+	"fmt"
+	"os"
+	"testing"
+)
 
-func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
-	panic("WARNING: failed to link __xgo_link_set_trap.(xgo required)")
+func __xgo_link_on_init_finished(f func()) {
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_init_finished.(xgo required)")
 }
 
-// go run ./cmd/xgo test -v -run TestTrapSet ./test/xgo_test/trap_set
-func TestTrapSet(t *testing.T) {
-	var haveCalledTrap bool
-	__xgo_link_set_trap(func(pkgPath, identityName string, generic bool, pc uintptr, recv interface{}, args, results []interface{}) (func(), bool) {
-		haveCalledTrap = true
-		return nil, false
-	})
-	run()
+var ran bool
 
-	if !haveCalledTrap {
-		t.Fatalf("expect have called trap, actually not called")
+func init() {
+	__xgo_link_on_init_finished(runAfterInit)
+}
+
+// go run ./cmd/xgo test -v -run TestLinkOnFinished ./test/xgo_test/link_on_init_finished
+func TestLinkOnInitFinished(t *testing.T) {
+	if !ran {
+		t.Fatalf("expect have called runAfterInit, actually not called")
 	}
 }
 
-func run() {
+func runAfterInit() {
+	ran = true
 }

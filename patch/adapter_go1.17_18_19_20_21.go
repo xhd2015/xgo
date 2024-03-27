@@ -81,6 +81,21 @@ func takeAddrs(fn *ir.Func, t *types.Type, nameOnly bool) ir.Expr {
 	return wrapListType(ir.NewCompLitExpr(fn.Pos(), ir.OCOMPLIT, typeNode(intfSlice), paramList))
 }
 
+func getFieldNames(fn *ir.Func, t *types.Type) ir.Expr {
+	if t.NumFields() == 0 {
+		return NewNilExpr(fn.Pos(), strSlice)
+	}
+	paramList := make([]ir.Node, t.NumFields())
+	i := 0
+	ForEachField(t, func(field *types.Field) bool {
+		fieldName := getFieldName(fn, field)
+		paramList[i] = NewStringLit(fn.Pos(), fieldName)
+		i++
+		return true
+	})
+	return wrapListType(ir.NewCompLitExpr(fn.Pos(), ir.OCOMPLIT, typeNode(strSlice), paramList))
+}
+
 func getTypeNames(params *types.Type) []ir.Node {
 	n := params.NumFields()
 	paramNames := make([]ir.Node, 0, n)

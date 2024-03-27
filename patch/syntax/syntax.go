@@ -548,9 +548,14 @@ func generateRegFileCode(pkgName string, fnName string, body string) string {
 }
 
 func generateRegHelperCode(pkgName string) string {
+	code := helperCode
+	if true {
+		// debug
+		code = strings.ReplaceAll(code, "__PKG__", xgo_ctxt.GetPkgPath())
+	}
 	autoGenStmts := []string{
 		"package " + pkgName,
-		helperCode,
+		code,
 	}
 	return strings.Join(autoGenStmts, "\n")
 }

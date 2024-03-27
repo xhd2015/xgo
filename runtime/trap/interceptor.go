@@ -88,6 +88,13 @@ func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
 		panic(fmt.Errorf("Inspect requires func, given: %s", fn.Kind().String()))
 	}
 	pc := fn.Pointer()
+
+	// funcs, closures and type functions can be found directly by PC
+	funcInfo = functab.InfoPC(pc)
+	if funcInfo != nil {
+		return nil, funcInfo
+	}
+
 	fullName := __xgo_link_get_pc_name(pc)
 
 	var isMethod bool

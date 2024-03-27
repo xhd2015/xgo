@@ -1,6 +1,7 @@
 package functab
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"reflect"
@@ -119,6 +120,9 @@ func getInterfaceTypeByFullName(fullName string) *core.FuncInfo {
 
 var mappingOnce sync.Once
 
+var errType = reflect.TypeOf((*error)(nil)).Elem()
+var ctxType = reflect.TypeOf((*context.Context)(nil)).Elem()
+
 func ensureMapping() {
 	mappingOnce.Do(func() {
 		funcPCMapping = make(map[uintptr]*core.FuncInfo)
@@ -130,10 +134,13 @@ func ensureMapping() {
 			if rv.Kind() != reflect.Struct {
 				panic(fmt.Errorf("expect struct, actual: %s", rv.Kind().String()))
 			}
+			closure := rv.FieldByName("Closure").Bool()
 			identityName := rv.FieldByName("IdentityName").String()
 			if identityName == "" {
+				if !closure {
+					return
+				}
 				// 	fmt.Fprintf(os.Stderr, "empty name\n",pkgPath)
-				return
 			}
 
 			pkgPath := rv.FieldByName("PkgPath").String()
@@ -143,19 +150,33 @@ func ensureMapping() {
 			interface_ := rv.FieldByName("Interface").Bool()
 			generic := rv.FieldByName("Generic").Bool()
 			f := rv.FieldByName("Fn").Interface()
+
+			firstArgCtx := rv.FieldByName("FirstArgCtx").Bool()
+			lastResErr := rv.FieldByName("LastResErr").Bool()
 			var pc uintptr
 			var fullName string
 			if !generic && !interface_ {
+				if closure {
+					// TODO: move all ctx, err check logic here
+					ft := reflect.TypeOf(f)
+					if ft.NumIn() > 0 && ft.In(0).Implements(ctxType) {
+						firstArgCtx = true
+					}
+					if ft.NumOut() > 0 && ft.Out(ft.NumOut()-1).Implements(errType) {
+						lastResErr = true
+					}
+				}
 				pc = getFuncPC(f)
 				fullName = __xgo_link_get_pc_name(pc)
 			}
 			recvName := rv.FieldByName("RecvName").String()
 			argNames := rv.FieldByName("ArgNames").Interface().([]string)
 			resNames := rv.FieldByName("ResNames").Interface().([]string)
-			firstArgCtx := rv.FieldByName("FirstArgCtx").Bool()
-			lastResErr := rv.FieldByName("LastResErr").Bool()
 			file := rv.FieldByName("File").String()
 			line := int(rv.FieldByName("Line").Int())
+
+			// debug
+			// fmt.Printf("reg: %s\n", fullName)
 			// if pkgPath == "main" {
 			// 	fmt.Fprintf(os.Stderr, "reg: funcName=%s,pc=%x,generic=%v,genericname=%s\n", funcName, pc, generic, genericName)
 			// }
@@ -170,6 +191,7 @@ func ensureMapping() {
 
 				Interface: interface_,
 				Generic:   generic,
+				Closure:   closure,
 
 				File: file,
 				Line: line,
