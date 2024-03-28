@@ -246,13 +246,14 @@ Arguments:
 
 Scope:
 - If `Mock` is called from `init`, then all goroutines will be mocked.
-- Otherwise, if `Mock` is called after `init`, the mock interceptor will only be effective for current gorotuine, other goroutines are not affected.
+- Otherwise, `Mock` is called after `init`, then the mock interceptor will only be effective for current gorotuine, other goroutines are not affected.
 
 Interceptor Signature: `func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error`
 - If the interceptor returns `nil`, then the target function is mocked,
 - If the interceptor returns `mock.ErrCallOld`, then the target function is called again,
 - Otherwise, the interceptor returns a non-nil error, that will be set to the function's return error.
 
+There are other 2 APIs can be used to setup mock based on name, check [runtime/mock/README.md](runtime/mock/README.md) for more details.
 
 Function mock example(1):
 

@@ -246,6 +246,7 @@ Mock的API:
 - 如果返回`mock.ErrCallOld`, 则目标函数会被调用,
 - 否则, 返回的其他错误, 会被设置为目标函数的error返回值, 目标函数不会被调用。
 
+Mock还有两个额外的API, 它们基于名称进行拦截, 更多细节，参见[runtime/mock/README.md](runtime/mock/README.md)。
 
 函数Mock示例(1):
 
