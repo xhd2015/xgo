@@ -3,13 +3,15 @@ package main
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/xhd2015/xgo/support/goparse"
+	"github.com/xhd2015/xgo/support/transform"
 
 	"github.com/xhd2015/xgo/support/filecopy"
 )
@@ -77,7 +79,7 @@ func generateRunTimeDefs(file string, defFile string, syntaxFile string, trapFil
 		return err
 	}
 	code := string(content)
-	astFile, fset, err := parseGoFile(file)
+	astFile, fset, err := parseGoFile(file, true)
 	if err != nil {
 		return err
 	}
@@ -152,11 +154,11 @@ func (c *genInfo) formatCode(pkgName string) string {
 }
 
 func generateFuncTabInfo(srcFile string) (*genInfo, error) {
-	astFile, fset, err := parseGoFile(srcFile)
+	astFile, fset, err := parseGoFile(srcFile, true)
 	if err != nil {
 		return nil, err
 	}
-	funcStub := getTypeDecl(astFile.Decls, "__xgo_local_func_stub")
+	funcStub := transform.GetTypeDecl(astFile.Decls, "__xgo_local_func_stub")
 	if funcStub == nil {
 		return nil, fmt.Errorf("type __xgo_local_func_stub not found")
 	}
@@ -178,25 +180,6 @@ func generateFuncTabInfo(srcFile string) (*genInfo, error) {
 		funcStub:   funcStubCode,
 		helperCode: helperCode,
 	}, nil
-}
-
-func getTypeDecl(decls []ast.Decl, name string) *ast.TypeSpec {
-	for _, decl := range decls {
-		genDecl, ok := decl.(*ast.GenDecl)
-		if !ok {
-			continue
-		}
-		for _, spec := range genDecl.Specs {
-			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok {
-				continue
-			}
-			if typeSpec.Name != nil && typeSpec.Name.Name == name {
-				return typeSpec
-			}
-		}
-	}
-	return nil
 }
 
 func copyTraceExport(srcFile string, targetFile string) error {
@@ -252,7 +235,7 @@ func getSignature(code string, fset *token.FileSet, funcType *ast.FuncType) stri
 	return "func" + getSlice(code, fset, funcType.Params.Pos(), end)
 }
 
-func parseGoFile(file string) (*ast.File, *token.FileSet, error) {
+func parseGoFile(file string, hasPkg bool) (*ast.File, *token.FileSet, error) {
 	fileName := file
 	var contentReader io.Reader
 	if file == "-" {
@@ -265,28 +248,15 @@ func parseGoFile(file string) (*ast.File, *token.FileSet, error) {
 		}
 		contentReader = readFile
 	}
-
 	content, err := ioutil.ReadAll(contentReader)
 	if err != nil {
 		return nil, nil, err
 	}
-	contentStr := string(content)
-	lines := strings.Split(contentStr, "\n")
-	var hasPackage bool
-	for _, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "package ") {
-			hasPackage = true
-			break
-		}
-	}
-	if !hasPackage {
-		contentStr = "package main;" + contentStr
+	if !hasPkg {
+		contentStr := string(content)
+		contentStr = goparse.AddMissingPackage(contentStr, "main")
+		content = []byte(contentStr)
 	}
 
-	fset := token.NewFileSet()
-	ast, err := parser.ParseFile(fset, fileName, contentStr, parser.ParseComments)
-	if err != nil {
-		return nil, nil, err
-	}
-	return ast, fset, nil
+	return goparse.ParseFileCode(fileName, content)
 }

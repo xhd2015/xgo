@@ -35,10 +35,11 @@ func __xgo_link_get_pc_name(pc uintptr) string {
 }
 
 var funcInfos []*core.FuncInfo
-var funcInfoMapping map[string]map[string]*core.FuncInfo  // pkg -> identifyName -> FuncInfo
-var funcPCMapping map[uintptr]*core.FuncInfo              // pc->FuncInfo
-var funcFullNameMapping map[string]*core.FuncInfo         // fullName -> FuncInfo
-var interfaceMapping map[string]map[string]*core.FuncInfo // pkg -> interfaceName -> FuncInfo
+var funcInfoMapping map[string]map[string]*core.FuncInfo         // pkg -> identifyName -> FuncInfo
+var funcPCMapping map[uintptr]*core.FuncInfo                     // pc->FuncInfo
+var funcFullNameMapping map[string]*core.FuncInfo                // fullName -> FuncInfo
+var interfaceMapping map[string]map[string]*core.FuncInfo        // pkg -> interfaceName -> FuncInfo
+var typeMethodMapping map[reflect.Type]map[string]*core.FuncInfo // reflect.Type -> interfaceName -> FuncInfo
 
 func GetFuncs() []*core.FuncInfo {
 	ensureMapping()
@@ -105,6 +106,11 @@ func GetFuncByFullName(fullName string) *core.FuncInfo {
 		return f
 	}
 	return getInterfaceTypeByFullName(fullName)
+}
+
+func GetTypeMethods(typ reflect.Type) map[string]*core.FuncInfo {
+	ensureTypeMapping()
+	return typeMethodMapping[typ]
 }
 
 func getInterfaceTypeByFullName(fullName string) *core.FuncInfo {
@@ -232,6 +238,30 @@ func ensureMapping() {
 				funcFullNameMapping[fullName] = info
 			}
 		})
+	})
+}
+
+var mappingTypeOnce sync.Once
+
+func ensureTypeMapping() {
+	ensureMapping()
+	mappingTypeOnce.Do(func() {
+		typeMethodMapping = make(map[reflect.Type]map[string]*core.FuncInfo)
+		for _, funcInfo := range funcInfos {
+			if funcInfo.Generic || funcInfo.Interface || funcInfo.RecvType == "" {
+				continue
+			}
+			if funcInfo.Func == nil || funcInfo.Name == "" {
+				continue
+			}
+			recvType := reflect.TypeOf(funcInfo.Func).In(0)
+			methodMapping := typeMethodMapping[recvType]
+			if methodMapping == nil {
+				methodMapping = make(map[string]*core.FuncInfo, 1)
+				typeMethodMapping[recvType] = methodMapping
+			}
+			methodMapping[funcInfo.Name] = funcInfo
+		}
 	})
 }
 

@@ -234,8 +234,8 @@ Mock的API:
 - `Mock(fn, interceptor)`
 
 参数:
-- 如果`fn`是普通函数(即不是结构体或interface的方法), 则所有对改函数的调用都将被Mock,
-- 如果`fn`是方法(例如`file.Read`), 则只有绑定的实例会被拦截, 其他实例不会被Mock.
+- 如果`fn`是普通函数(即包级别的函数, 类型的函数或者匿名函数(是的, xgo支持Mock匿名函数)), 则所有对该函数的调用都将被Mock,
+- 如果`fn`是方法(即实例或接口的方法, 例如`file.Read`), 则只有绑定的实例会被拦截, 其他实例不会被Mock.
 
 影响范围:
 - 如果`Mock`在`init`过程中调用, 则改函数在所有的Gorotuine的调用都会被Mock,
@@ -429,6 +429,18 @@ XGO_TRACE_OUTPUT=stdout xgo run ./
 - `XGO_TRACE_OUTPUT=<dir>`: 堆栈记录被写入到`<dir>`目录下,
 - `XGO_TRACE_OUTPUT=off`: 关闭堆栈记录收集。
 
+
+# 为何使用`xgo`?
+原因很简单: **避免**interface.
+
+是的, 如果仅仅是为了Mock而抽象出一个interface, 然后在别的地方注入不同的实例, 这让我感觉很疲惫，这也不是事情正确方式。
+
+基于interface的Mock强制我们按照一种唯一的方式写代码: 就是基于接口。基于自由的原因, 我反对这一点。
+
+Monkey patch是Mock最简单直接的答案。但是现有的Monkey库存在很多兼容性问题。
+
+所以, 我创建了`xgo`, 并希望`xgo`能够统一解决go中Mock的所有问题。
+
 # 对比`xgo`和`monkey`
 Bouk创建了[bouk/monkey](https://github.com/bouk/monkey)工程, 基于他的博客 https://bou.ke/blog/monkey-patching-in-go.
 
@@ -447,11 +459,14 @@ Xgo通过在IR(Intermediate Representation)重写来成功地避开了这些问�
 |-|-|-|
 |底层实现|IR|ASM|
 |函数Mock|Y|Y|
+|未导出的函数Mock|Y|N|
 |实例级别方法Mock|Y|N|
 |Goroutine级别Mock|Y|N|
+|闭包/匿名函数Mock|Y|Y|
 |堆栈收集|Y|N|
 |通用拦截器|Y|N|
 |兼容性|NO LIMIT|仅支持amd64和arm64|
+|API|简单|复杂|
 |集成使用和维护|简单|困难|
 
 # 参与贡献

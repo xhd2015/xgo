@@ -1,4 +1,4 @@
-package mock_method
+package mock_closuer
 
 import (
 	"context"

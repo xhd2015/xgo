@@ -82,6 +82,7 @@ const methodSuffix = "-fm"
 // is bound method
 // It can be used to get the unwrapped innermost function of a method
 // wrapper.
+// if f is a bound method, then guranteed that recvPtr cannot be nil
 func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
 	fn := reflect.ValueOf(f)
 	if fn.Kind() != reflect.Func {
@@ -95,7 +96,8 @@ func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
 		return nil, funcInfo
 	}
 
-	fullName := __xgo_link_get_pc_name(pc)
+	origFullName := __xgo_link_get_pc_name(pc)
+	fullName := origFullName
 
 	var isMethod bool
 	if strings.HasSuffix(fullName, methodSuffix) {
@@ -131,6 +133,9 @@ func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
 			fn.CallSlice(args)
 		}
 	})
+	if recvPtr == nil {
+		panic(fmt.Errorf("failed to retrieve instance pointer for method: %s", origFullName))
+	}
 	return recvPtr, funcInfo
 }
 

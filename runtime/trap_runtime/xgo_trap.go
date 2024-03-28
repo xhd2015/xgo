@@ -101,6 +101,17 @@ func __xgo_get_pc_name(pc uintptr) string {
 	return __xgo_get_pc_name_impl(pc)
 }
 
+// set by reflect: not enabled
+// var __xgo_get_all_method_by_name_impl func(v interface{}, name string) interface{}
+
+// func __xgo_set_all_method_by_name_impl(fn func(v interface{}, name string) interface{}) {
+// 	__xgo_get_all_method_by_name_impl = fn
+// }
+
+// func __xgo_get_all_method_by_name(v interface{}, name string) interface{} {
+// 	return __xgo_get_all_method_by_name_impl(v, name)
+// }
+
 // func Getcallerpc() uintptr {
 // 	return getcallerpc()
 // }

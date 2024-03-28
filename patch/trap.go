@@ -30,7 +30,6 @@ func init() {
 	}
 }
 
-const disableXgoLink bool = false
 const disableTrap bool = false
 
 func Patch() {
@@ -280,21 +279,12 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 	// TODO: what about unnamed closure?
 	linkName := linkMap[fnName]
 	if linkName != "" {
-		// safety checked previousely
-		safeGenerated := fnName == xgo_syntax.XgoLinkGeneratedRegisterFunc
-		if !safeGenerated && !strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) && !strings.HasPrefix(pkgPath, xgoTestPkgPrefix) && pkgPath != "testing" {
+		// ir.Dump("before:", fn)
+		if !isLinkValid(fnName, linkName, pkgPath) {
 			return "", false
 		}
-		// ir.Dump("before:", fn)
-		if !disableXgoLink {
-			// trap & test
-			if linkName == setTrap && (pkgPath != xgoRuntimeTrapPkg && !strings.HasPrefix(pkgPath, xgoTestPkgPrefix)) {
-				return "", false
-			}
-			return linkName, false
-		}
+		return linkName, false
 		// ir.Dump("after:", fn)
-		return "", false
 	}
 	if xgo_ctxt.SkipPackageTrap() {
 		return "", false

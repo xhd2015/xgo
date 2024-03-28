@@ -241,7 +241,7 @@ The Mock API:
 - `Mock(fn, interceptor)`
 
 Arguments:
-- If `fn` is a simple function(i.e. not a method of a struct or interface),then all call to that function will be intercepted, 
+- If `fn` is a simple function(i.e. a package level function, or a function owned by a type, or a closure(yes, we do support mocking closures)),then all call to that function will be intercepted, 
 - If `fn` is a method(i.e. `file.Read`),then only call to the instance will be intercepted, other instances will not be affected
 
 Scope:
@@ -437,6 +437,17 @@ By default, Trace will write traces to a temp directory under current working di
 - `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
 - `XGO_TRACE_OUTPUT=off`: turn off trace.
 
+# Why `xgo`?
+The reason is simple: **NO** interface.
+
+Yes, no interface, just for mocking. If the only reason to abstract an interface is to mock, then it only makes me feel boring, not working.
+
+Extracting interface just for mocking is never an option to me. To the domain of the problem, it's merely a workaround. It enforces the code to be written in one style, that's why we don't like it.
+
+Monkey patching simply does the right thing for the problem. But existing library are bad at compatiblility. 
+
+So I created `xgo`, so I hope `xgo` will also take over other solutions to the mocking problem.
+
 # Comparing `xgo` with `monkey`
 The project [bouk/monkey](https://github.com/bouk/monkey), was initially created by bouk, as described in his blog https://bou.ke/blog/monkey-patching-in-go.
 
@@ -456,13 +467,16 @@ In conclusion, `xgo` and monkey are compared as the following:
 ||xgo|monkey|
 |-|-|-|
 |Technique|IR|ASM|
-|Function mock|Y|Y|
-|Per-Instance Method mock|Y|N|
-|Per-goroutine mock|Y|N|
-|Stack trace|Y|N|
-|General trap|Y|N|
+|Function Mock|Y|Y|
+|Unexpected Function Mock|Y|N|
+|Per-Instance Method Mock|Y|N|
+|Per-Goroutine Mock|Y|N|
+|Closuer Mock|Y|Y|
+|Stack Trace|Y|N|
+|General Trap|Y|N|
 |Compatiblility|NO LIMIT|limited to amd64 and arm64|
-|Integration effore|easy|hard|
+|API|simple|complex|
+|Integration Effore|easy|hard|
 
 # Contribution
 Want to help contribute to `xgo`? Great! Check [CONTRIBUTING

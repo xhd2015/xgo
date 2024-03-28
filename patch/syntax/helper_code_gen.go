@@ -59,7 +59,10 @@ func init() {
 // TODO: ensure safety for this
 func __xgo_link_generate_init_regs_body() {
 	// linked later by compiler
-	// panic("failed to link __xgo_link_generate_init_regs_body at __PKG__")
+	// NOTE: if the function is called by init, don't include
+	// any extra statements, they will be executed
+	// no matther whether you have replaced it or not
+	// panic("failed to link __xgo_link_generate_init_regs_body")
 }
 
 func __xgo_link_generated_register_func(fn interface{}) {

@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/functab"
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
@@ -35,51 +36,83 @@ func GetInterceptors() []Interceptor {
 // The returned function can be used to cancel
 // the passed interceptor.
 func Mock(fn interface{}, interceptor Interceptor) func() {
-	return mock(fn, interceptor)
+	return mockByFunc(fn, interceptor)
 }
 
-// func MockByName(pkgPath string, funcName string, interceptor Interceptor) func() {
-// 	return mock(fn, interceptor)
-// }
-// func MockMethodByName(instance interface{}, method string, interceptor Interceptor) func() {
-// 	recv := reflect.ValueOf(instance)
-// 	recv.MethodByName()
-// 	return mock(fn, interceptor)
-// }
+func MockByName(pkgPath string, funcName string, interceptor Interceptor) func() {
+	funcInfo := functab.GetFuncByPkg(pkgPath, funcName)
+	if funcInfo == nil {
+		panic(fmt.Errorf("failed to setup mock for: %s.%s", pkgPath, funcName))
+	}
+	return mock(nil, funcInfo, interceptor)
+}
+
+// Can instance be nil?
+func MockMethodByName(instance interface{}, method string, interceptor Interceptor) func() {
+	// extract instance's reflect.Type
+	// use that type to query for reflect mapping in functab:
+	//    reflectTypeMapping map[reflect.Type]map[string]*funcInfo
+	t := reflect.TypeOf(instance)
+	funcMapping := functab.GetTypeMethods(t)
+	if funcMapping == nil {
+		panic(fmt.Errorf("failed to setup mock for type %T", instance))
+	}
+	fn := funcMapping[method]
+	if fn == nil {
+		panic(fmt.Errorf("failed to setup mock for: %T.%s", instance, method))
+	}
+
+	addr := reflect.New(t)
+	addr.Elem().Set(reflect.ValueOf(instance))
+	return mock(addr.Interface(), fn, interceptor)
+}
 
 // Deprecated: use Mock instead
 func AddFuncInterceptor(fn interface{}, interceptor Interceptor) func() {
-	return mock(fn, interceptor)
+	return mockByFunc(fn, interceptor)
 }
 
 // TODO: ensure them run in last?
 // no abort, run mocks
 // mocks are special in that they on run in pre stage
-func mock(fn interface{}, interceptor Interceptor) func() {
-	mockRecvPtr, mockInfo := trap.Inspect(fn)
-	if mockInfo == nil {
+func mockByFunc(fn interface{}, interceptor Interceptor) func() {
+	// if the target function is a method, then a
+	// recv ptr must be given
+	recvPtr, fnInfo := trap.Inspect(fn)
+	if fnInfo == nil {
 		pc := reflect.ValueOf(fn).Pointer()
 		panic(fmt.Errorf("failed to setup mock for: %v", runtime.FuncForPC(pc).Name()))
 	}
+	return mock(recvPtr, fnInfo, interceptor)
+}
 
+// if mockFnInfo is a function, mockRecvPtr is always nil
+// if mockFnInfo is a method,
+//   - if mockRecvPtr has a value, then only call to that instance will be mocked
+//   - if mockRecvPtr is nil, then all call to the function will be mocked
+func mock(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, interceptor Interceptor) func() {
 	return trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
 			if f.PC == 0 {
 				// no match, continue
 				return nil, nil
 			}
-			if f != mockInfo {
+			if f != mockFnInfo {
 				// no match
 				return nil, nil
 			}
 
-			if f.RecvType != "" {
+			if f.RecvType != "" && mockRecvPtr != nil {
 				// check recv instance
 				recvPtr := args.GetFieldIndex(0).Ptr()
 
 				// check they pointing to the same variable
 				re := reflect.ValueOf(recvPtr).Elem().Interface()
 				me := reflect.ValueOf(mockRecvPtr).Elem().Interface()
+				if f.RecvPtr {
+					// compare pointer
+					// unsafe.Pointer(&re)
+				}
 				if re != me {
 					// if *recvPtr != *mockRecvPtr {
 					return nil, nil
