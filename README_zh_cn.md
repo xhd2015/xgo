@@ -357,6 +357,9 @@ func TestMethodMock(t *testing.T){
 }
 ```
 
+**关于标准库Mock的注意事项**: 出于性能和安全考虑, 标准库中只有一部分包和函数能被Mock, 这个List可以在[runtime/mock/stdlib.md](./runtime/mock/stdlib.md)找到. 如果你需要Mock的标准库函数不在列表中, 可以在[Issue#6](https://github.com/xhd2015/xgo/issues/6)中进行评论。
+
+
 ## Trace
 在调试一个非常深的调用栈时, 通常会感觉非常痛苦, 并且效率低下。
 

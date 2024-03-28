@@ -9,8 +9,10 @@ import (
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
+var hasInstrument = os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false"
+
 func init() {
-	if os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false" {
+	if hasInstrument {
 		trap.AddInterceptor(&trap.Interceptor{
 			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()
@@ -28,7 +30,7 @@ func main() {
 
 func A() {
 	// non instrument mode cannot get curg
-	if os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false" {
+	if hasInstrument {
 		cancel := trap.AddInterceptor(&trap.Interceptor{
 			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()
@@ -42,7 +44,7 @@ func A() {
 }
 
 func B() {
-	if os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false" {
+	if hasInstrument {
 		cancel := trap.AddInterceptor(&trap.Interceptor{
 			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()

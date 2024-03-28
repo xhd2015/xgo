@@ -7,6 +7,7 @@ const RuntimeExtraDef = `
 // xgo
 func __xgo_getcurg() unsafe.Pointer
 func __xgo_trap(pkgPath string, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
+func __xgo_trap_for_generated(pkgPath string, pc uintptr, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
 func __xgo_set_trap(trap func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool))
 func __xgo_register_func(info interface{})
 func __xgo_retrieve_all_funcs_and_clear(f func(info interface{}))
@@ -17,6 +18,4 @@ func __xgo_on_test_start(fn interface{})
 func __xgo_get_test_starts() []interface{}
 func __xgo_peek_panic() interface{}
 func __xgo_mem_equal(a, b unsafe.Pointer, size uintptr) bool
-func __xgo_get_pc_name(pc uintptr) string
-func __xgo_set_all_method_by_name_impl(fn func(v interface{}, name string) interface{})
-func __xgo_get_all_method_by_name(v interface{}, name string) interface{}`
+func __xgo_get_pc_name(pc uintptr) string`

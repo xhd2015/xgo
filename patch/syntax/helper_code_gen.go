@@ -64,6 +64,10 @@ func __xgo_link_generate_init_regs_body() {
 	// no matther whether you have replaced it or not
 	// panic("failed to link __xgo_link_generate_init_regs_body")
 }
+func __xgo_link_trap_for_generated(pkgPath string, pc uintptr, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
+	// linked by compiler
+	return nil, false
+}
 
 func __xgo_link_generated_register_func(fn interface{}) {
 	// linked later by compiler

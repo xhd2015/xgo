@@ -9,8 +9,10 @@ import (
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
+var hasInstruments = os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false"
+
 func init() {
-	if os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false" {
+	if hasInstruments {
 		trap.AddInterceptor(&trap.Interceptor{
 			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				trap.Skip()

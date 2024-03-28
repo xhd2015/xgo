@@ -28,6 +28,16 @@ func __xgo_trap(pkgPath string, identityName string, generic bool, recv interfac
 	return __xgo_trap_impl(pkgPath, identityName, generic, fn.entry() /*>=go1.18*/, recv, args, results)
 }
 
+func __xgo_trap_for_generated(pkgPath string, pc uintptr, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
+	if __xgo_trap_impl == nil {
+		return nil, false
+	}
+	fn := findfunc(pc)
+	// TODO: what about inlined func?
+	// funcName := fn.datap.funcName(fn.nameOff) // not necessary,because it is unsafe
+	return __xgo_trap_impl(pkgPath, identityName, generic, fn.entry() /*>=go1.18*/, recv, args, results)
+}
+
 func __xgo_set_trap(trap func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	if __xgo_trap_impl != nil {
 		panic("trap already set by other packages")

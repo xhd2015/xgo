@@ -1,6 +1,7 @@
 package syntax
 
 import (
+	"cmd/compile/internal/base"
 	"cmd/compile/internal/syntax"
 	"fmt"
 	"io"
@@ -145,8 +146,13 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 			return
 		}
 	}
+	// filterFuncDecls
+	funcDelcs = filterFuncDecls(funcDelcs, pkgPath)
 	// assign to global
 	allDecls = funcDelcs
+
+	// std lib functions
+	rewriteStdDecls(funcDelcs, pkgPath)
 
 	// always generate a helper to aid IR
 	addFile("__xgo_autogen_register_func_helper.go", strings.NewReader(generateRegHelperCode(pkgName)))
@@ -320,6 +326,18 @@ func getFuncDecls(files []*syntax.File) []*DeclInfo {
 		}
 	}
 	return declFuncs
+}
+
+func filterFuncDecls(funcDecls []*DeclInfo, pkgPath string) []*DeclInfo {
+	filtered := make([]*DeclInfo, 0, len(funcDecls))
+	for _, fn := range funcDecls {
+		// disable part of stdlibs
+		if !xgo_ctxt.AllowPkgFuncTrap(pkgPath, base.Flag.Std, fn.IdentityName()) {
+			continue
+		}
+		filtered = append(filtered, fn)
+	}
+	return filtered
 }
 
 func extractFuncDecls(fileIndex int, f *syntax.File, file string, decl syntax.Decl) []*DeclInfo {

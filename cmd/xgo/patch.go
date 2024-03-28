@@ -274,6 +274,10 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 			return fmt.Errorf("patching generic trap: %w", err)
 		}
 	}
+	err = patchSynatxNode(goroot, goVersion)
+	if err != nil {
+		return fmt.Errorf("patching syntax node:%w", err)
+	}
 	err = patchGcMain(goroot, goVersion)
 	if err != nil {
 		return fmt.Errorf("patching gc main:%w", err)
@@ -317,9 +321,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		if idx < 0 {
 			return false, fmt.Errorf("expect %q in xgo_trap.go, actually not found", entryPatch)
 		}
-		oldContent := content
-		content = append(content[:idx], []byte("fn.entry")...)
-		content = append(content, oldContent[idx+len(entryPatchBytes):]...)
+		content = bytes.ReplaceAll(content, entryPatchBytes, []byte("fn.entry"))
 	}
 
 	// func name patch
@@ -672,6 +674,27 @@ func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
 			patch.GenericTrapForGo118And119)
 		return content, nil
 	})
+}
+
+func patchSynatxNode(goroot string, goVersion *goinfo.GoVersion) error {
+	if goVersion.Major > 1 || goVersion.Minor >= 22 {
+		return nil
+	}
+	var fragments []string
+
+	if goVersion.Major == 1 {
+		if goVersion.Minor < 22 {
+			fragments = append(fragments, patch.NodesGen)
+		}
+		if goVersion.Minor <= 17 {
+			fragments = append(fragments, patch.Nodes_Inspect_117)
+		}
+	}
+	if len(fragments) == 0 {
+		return nil
+	}
+	file := filepath.Join(goroot, "src", "cmd", "compile", "internal", "syntax", "xgo_nodes.go")
+	return os.WriteFile(file, []byte("package syntax\n"+strings.Join(fragments, "\n")), 0755)
 }
 
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {

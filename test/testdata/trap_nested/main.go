@@ -16,9 +16,10 @@ import (
 // After xgo v1.0.1,xgo can check dynamically
 // whether current goroutine is inside trap, if so
 // skip it
+var hasInstrument = os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false"
 
 func main() {
-	if os.Getenv("XGO_TEST_HAS_INSTRUMENT") != "false" {
+	if hasInstrument {
 		trap.AddInterceptor(&trap.Interceptor{
 			Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 				fmt.Printf("trap pre: %s\n", f.Name)

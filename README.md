@@ -127,7 +127,7 @@ PASS
 ok      demo
 ```
 
-If you run that with go, it would fail:
+If you run this with go, it would fail:
 ```sh
 go test -v ./
 ```
@@ -362,6 +362,8 @@ func TestMethodMock(t *testing.T){
     }
 }
 ```
+
+**Notice for mocking stdlib**: due to performance and security impact, only a few packages and functions of stdlib can be mocked, the list can be found at [runtime/mock/stdlib.md](./runtime/mock/stdlib.md). If you want to mock additional stdlib functions, please discussion in [Issue#6](https://github.com/xhd2015/xgo/issues/6)。
 
 ## Trace
 It is painful when debugging with a deep call stack.

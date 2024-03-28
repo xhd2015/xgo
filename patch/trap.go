@@ -99,7 +99,12 @@ func trapOrLink(fn *ir.Func) {
 	typeCheckBody(fn)
 	xgo_record.SetRewrittenBody(fn, fn.Body)
 
-	// ir.Dump("after:", fn)
+	// debug
+	if false {
+		if fnName == "Now" {
+			ir.Dump("after:", fn)
+		}
+	}
 }
 
 /*
@@ -297,20 +302,6 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 	if disableTrap {
 		return "", false
 	}
-	if base.Flag.Std {
-		// skip std lib, especially skip:
-		//    runtime, runtime/internal, runtime/*, reflect, unsafe, syscall, sync, sync/atomic,  internal/*
-		//
-		// however, there are some funcs in stdlib that we can
-		// trap, for example, db connection
-		// for example:
-		//     errors, math, math/bits, unicode, unicode/utf8, unicode/utf16, strconv, path, sort, time, encoding/json
-
-		// NOTE: base.Flag.Std in does not always reflect func's package path,
-		// because generic instantiation happens in other package, so this
-		// func may be a foreigner.
-		return "", false
-	}
 	if !canInsertTrap(fn) {
 		return "", false
 	}
@@ -335,6 +326,12 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 
 	// check if function body's first statement is a call to 'trap.Skip()'
 	if isFirstStmtSkipTrap(fn.Body) {
+		return "", false
+	}
+
+	// disable part of stdlibs
+	if base.Flag.Std {
+		// NOTE: stdlib are rewritten by source
 		return "", false
 	}
 
@@ -427,71 +424,6 @@ func initClosureRegs() {
 		return
 	}
 	replaceFuncBody(initBodyFn.Func, registerNodes)
-}
-
-// for go1.20 and above, needs to convert
-const needConvertArg = goMajor > 1 || (goMajor == 1 && goMinor >= 20)
-
-func replaceWithRuntimeCall(fn *ir.Func, name string) {
-	if false {
-		debugReplaceBody(fn)
-		// newBody = []ir.Node{debugPrint("replaced body")}
-		return
-	}
-	isRuntime := true
-	var runtimeFunc *ir.Name
-	if isRuntime {
-		runtimeFunc = typecheck.LookupRuntime(name)
-	} else {
-		// NOTE: cannot reference testing package
-		// only runtime is available
-		// lookup testing
-		testingPkg := findTestingPkg()
-		sym := testingPkg.Lookup(name)
-		if sym.Def != nil {
-			runtimeFunc = sym.Def.(*ir.Name)
-		} else {
-			runtimeFunc = NewNameAt(fn.Pos(), sym, fn.Type())
-			runtimeFunc.Class = ir.PEXTERN
-		}
-	}
-	params := fn.Type().Params()
-	results := fn.Type().Results()
-
-	paramNames := getTypeNames(params)
-	resNames := getTypeNames(results)
-	fnPos := fn.Pos()
-
-	if needConvertArg && name == xgoOnTestStart {
-		for i, p := range paramNames {
-			paramNames[i] = convToEFace(fnPos, p, p.(*ir.Name).Type(), false)
-		}
-	}
-
-	var callNode ir.Node
-	callNode = ir.NewCallExpr(fnPos, ir.OCALL, runtimeFunc, paramNames)
-	if len(resNames) > 0 {
-		// if len(resNames) == 1 {
-		// 	callNode = ir.NewAssignListStmt(fnPos, ir.OAS, resNames, []ir.Node{callNode})
-		// } else {
-		callNode = ir.NewReturnStmt(fnPos, []ir.Node{callNode})
-		// callNode = ir.NewAssignListStmt(fnPos, ir.OAS2, resNames, []ir.Node{callNode})
-
-		// callNode = ir.NewAssignListStmt(fnPos, ir.OAS2, resNames, []ir.Node{callNode})
-		// }
-	}
-	replaceFuncBody(fn, []ir.Node{
-		// debugPrint("debug getg"),
-		callNode,
-	})
-}
-
-func replaceFuncBody(fn *ir.Func, nodes []ir.Node) {
-	node := ifConstant(fn.Pos(), true, nodes, fn.Body)
-
-	fn.Body = []ir.Node{node}
-	xgo_record.SetRewrittenBody(fn, fn.Body)
-	typeCheckBody(fn)
 }
 
 var testingPkg *types.Pkg
