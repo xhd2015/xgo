@@ -4,11 +4,11 @@
 
 Enable function Trap for `go`, and provide tools like Mock and Trace to help go developers write unit test and debug both easier and faster.
 
-`xgo` works as a drop-in replacement for `go run`,`go build`, and `go test`.
+`xgo` works as a preprocessor for `go run`,`go build`, and `go test`.
 
-It adds missing abilities to go program by cooperating with(or hacking) the go compiler.
+It **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, adding missing abilities to go program by cooperating with(or hacking) the go compiler.
 
-These abilities:
+These abilities include:
 - [Trap](#trap) 
 - [Mock](#mock)
 - [Trace](#trace)
@@ -235,10 +235,35 @@ func main(){
 ```
 
 ## Mock
-Mock simplifies the process of setting up Trap interceptors.
+Mock simplifies the process of setting up Trap interceptors. 
+
+> API details: [runtime/mock/README.md](runtime/mock)
 
 The Mock API:
 - `Mock(fn, interceptor)`
+
+Cheatsheet:
+```go
+// package level func
+mock.Mock(SomeFunc, interceptor)
+
+// per-instance method
+// only the bound instance `v` will be mocked
+// `v` can be either a struct or an interface
+mock.Mock(v.Method, interceptor)
+
+// per-TParam generic function
+// only the specified `int` version will be mocked
+mock.Mock(GenericFunc[int], interceptor)
+
+// per TParam and instance generic method
+v := GenericStruct[int]
+mock.Mock(v.Method, interceptor)
+
+// closure can also be mocked
+// less used, but also supported
+mock.Mock(closure, interceptor)
+```
 
 Arguments:
 - If `fn` is a simple function(i.e. a package level function, or a function owned by a type, or a closure(yes, we do support mocking closures)),then all call to that function will be intercepted, 
@@ -254,79 +279,6 @@ Interceptor Signature: `func(ctx context.Context, fn *core.FuncInfo, args core.O
 - Otherwise, the interceptor returns a non-nil error, that will be set to the function's return error.
 
 There are other 2 APIs can be used to setup mock based on name, check [runtime/mock/README.md](runtime/mock/README.md) for more details.
-
-Function mock example(1):
-
-The following code demonstrates how to setup mock on a given function:
-- The function `add(a,b)` normally adds `a` and `b` up, resulting in `a+b`,
-- However, after `mock.Mock`, the logic is changed to `a-b`.
-
-(check [test/testdata/mock_res/main.go](test/testdata/mock_res/main.go) for more details.)
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-
-    "github.com/xhd2015/xgo/runtime/core"
-    "github.com/xhd2015/xgo/runtime/mock"
-)
-
-func main() {
-    before := add(5, 2)
-    fmt.Printf("before mock: add(5,2)=%d\n", before)
-    mock.Mock(add, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
-        a := args.GetField("a").Value().(int)
-        b := args.GetField("b").Value().(int)
-        res := a - b
-        results.GetFieldIndex(0).Set(res)
-        return nil
-    })
-    after := add(5, 2)
-    fmt.Printf("after mock: add(5,2)=%d\n", after)
-}
-
-func add(a int, b int) int {
-    return a + b
-}
-
-```
-
-Run with `go`:
-
-```sh
-go run ./
-# output:
-#  before mock: add(5,2)=7
-#  after mock: add(5,2)=7
-```
-
-Run with `xgo`:
-
-```sh
-xgo run ./
-# output:
-#  before mock: add(5,2)=7
-#  after mock: add(5,2)=3
-```
-
-Function mock example(2):
-```go
-func MyFunc() string {
-    return "my func"
-}
-func TestFuncMock(t *testing.T){
-    mock.Mock(MyFunc, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
-        results.GetFieldIndex(0).Set("mock func")
-        return nil
-    })
-    text := MyFunc()
-    if text!="mock func"{
-        t.Fatalf("expect MyFunc() to be 'mock func', actual: %s", text)
-    }
-}
-```
 
 Method mock example:
 ```go
@@ -363,7 +315,7 @@ func TestMethodMock(t *testing.T){
 }
 ```
 
-**Notice for mocking stdlib**: due to performance and security impact, only a few packages and functions of stdlib can be mocked, the list can be found at [runtime/mock/stdlib.md](./runtime/mock/stdlib.md). If you want to mock additional stdlib functions, please discussion in [Issue#6](https://github.com/xhd2015/xgo/issues/6)。
+**Notice for mocking stdlib**: due to performance and security impact, only a few packages and functions of stdlib can be mocked, the list can be found at [runtime/mock/stdlib.md](./runtime/mock/stdlib.md). If you want to mock additional stdlib functions, please discussion in [Issue#6](https://github.com/xhd2015/xgo/issues/6).
 
 ## Trace
 It is painful when debugging with a deep call stack.
@@ -439,6 +391,11 @@ By default, Trace will write traces to a temp directory under current working di
 - `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purepose,
 - `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
 - `XGO_TRACE_OUTPUT=off`: turn off trace.
+
+# Implementation Details
+> Working in progress...
+
+See [Issue#7](https://github.com/xhd2015/xgo/issues/7) for more details.
 
 # Why `xgo`?
 The reason is simple: **NO** interface.

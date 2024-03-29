@@ -14,7 +14,7 @@ import (
 
 func ifConstant(pos src.XPos, b bool, body []ir.Node, els []ir.Node) *ir.IfStmt {
 	return ir.NewIfStmt(pos,
-		NewBoolLit(pos, true),
+		NewBoolLit(pos, b),
 		body,
 		els,
 	)

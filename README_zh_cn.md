@@ -4,9 +4,11 @@
 
 允许对`go`的函数进行拦截, 并提供Mock和Trace等工具帮助开发者编写测试和快速调试。
 
-`xgo`通过拦截`go run`,`go build`,和`go test`来实现其功能, 在其底层原理上, 它是通过对go compiler进行拦截实现的。
+`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上。
 
-`xgo`的功能包括:
+`xgo`对源代码和IR(中间码)进行预处理之后, 再调用`go`进行后续的编译工作。通过这种方式, `xgo`实现了一些在`go`中缺乏的能力。
+
+这些能力包括:
 - [Trap](#trap)
 - [Mock](#mock)
 - [Trace](#trace).
@@ -230,8 +232,33 @@ func main(){
 ## Mock
 Mock简化了设置拦截器的步骤, 并允许仅对特定的函数进行拦截。
 
+> API更多细节: [runtime/mock/README.md](runtime/mock)
+
 Mock的API:
 - `Mock(fn, interceptor)`
+
+快速参考:
+```go
+// 包级别函数
+mock.Mock(SomeFunc, interceptor)
+
+// 实例方法
+// 只有实例`v`的方法会被mock
+// `v`可以是结构体或接口
+mock.Mock(v.Method, interceptor)
+
+// 参数类型级别的范型函数
+// 只有`int`参数的才会被mock
+mock.Mock(GenericFunc[int], interceptor)
+
+// 实例和参数级别的范型方法
+v := GenericStruct[int]
+mock.Mock(v.Method, interceptor)
+
+// 闭包
+// 虽然很少需要mock,但支持
+mock.Mock(closure, interceptor)
+```
 
 参数:
 - 如果`fn`是普通函数(即包级别的函数, 类型的函数或者匿名函数(是的, xgo支持Mock匿名函数)), 则所有对该函数的调用都将被Mock,
@@ -247,80 +274,6 @@ Mock的API:
 - 否则, 返回的其他错误, 会被设置为目标函数的error返回值, 目标函数不会被调用。
 
 Mock还有两个额外的API, 它们基于名称进行拦截, 更多细节，参见[runtime/mock/README.md](runtime/mock/README.md)。
-
-函数Mock示例(1):
-
-下面的代码展示了如何对一个函数设置Mock:
-- 函数`add(a,b)`将`a`和`b`进行累加, 结果是`a+b`,
-- 但是, 在调用`mock.Mock`之后, 其逻辑转换为`a-b`.
-
-(代码参见[test/testdata/mock_res/main.go](test/testdata/mock_res/main.go).)
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-
-    "github.com/xhd2015/xgo/runtime/core"
-    "github.com/xhd2015/xgo/runtime/mock"
-)
-
-func main() {
-    before := add(5, 2)
-    fmt.Printf("before mock: add(5,2)=%d\n", before)
-    mock.Mock(add, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
-        a := args.GetField("a").Value().(int)
-        b := args.GetField("b").Value().(int)
-        res := a - b
-        results.GetFieldIndex(0).Set(res)
-        return nil
-    })
-    after := add(5, 2)
-    fmt.Printf("after mock: add(5,2)=%d\n", after)
-}
-
-func add(a int, b int) int {
-    return a + b
-}
-
-```
-
-使用`go`运行:
-
-```sh
-go run ./
-# 输出:
-#  before mock: add(5,2)=7
-#  after mock: add(5,2)=7
-```
-
-使用`xgo`运行:
-
-```sh
-xgo run ./
-# 输出:
-#  before mock: add(5,2)=7
-#  after mock: add(5,2)=3
-```
-
-函数Mock示例(2):
-
-```go
-func MyFunc() string {
-    return "my func"
-}
-func TestFuncMock(t *testing.T){
-    mock.Mock(MyFunc, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
-        results.GetFieldIndex(0).Set("mock func")
-        return nil
-    })
-    text := MyFunc()
-    if text!="mock func"{
-        t.Fatalf("expect MyFunc() to be 'mock func', actual: %s", text)
-    }
-}
-```
 
 方法Mock示例:
 ```go
@@ -433,6 +386,11 @@ XGO_TRACE_OUTPUT=stdout xgo run ./
 - `XGO_TRACE_OUTPUT=<dir>`: 堆栈记录被写入到`<dir>`目录下,
 - `XGO_TRACE_OUTPUT=off`: 关闭堆栈记录收集。
 
+# 实现原理
+
+> 仍在整理中...
+
+参见[Issue#7](https://github.com/xhd2015/xgo/issues/7)
 
 # 为何使用`xgo`?
 原因很简单: **避免**interface.
