@@ -23,6 +23,7 @@ func init() {
 
 func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
 	debugSyntax(fileList)
+	patchVersions(fileList)
 	afterFilesParsed(fileList, addFile)
 }
 
@@ -153,7 +154,7 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	allDecls = funcDelcs
 
 	// std lib functions
-	rewriteStdDecls(funcDelcs, pkgPath)
+	rewriteStdAndGenericFuncs(funcDelcs, pkgPath)
 
 	// always generate a helper to aid IR
 	addFile("__xgo_autogen_register_func_helper.go", strings.NewReader(generateRegHelperCode(pkgName)))
@@ -187,6 +188,62 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 			// debug
 			os.WriteFile("/tmp/debug.go", []byte(fileCode), 0755)
 			panic("debug")
+		}
+	}
+}
+
+const XGO_TOOLCHAIN_VERSION = "XGO_TOOLCHAIN_VERSION"
+const XGO_TOOLCHAIN_REVISION = "XGO_TOOLCHAIN_REVISION"
+const XGO_TOOLCHAIN_VERSION_NUMBER = "XGO_TOOLCHAIN_VERSION_NUMBER"
+
+const XGO_VERSION = "XGO_VERSION"
+const XGO_REVISION = "XGO_REVISION"
+const XGO_NUMBER = "XGO_NUMBER"
+
+func patchVersions(fileList []*syntax.File) {
+	pkgPath := xgo_ctxt.GetPkgPath()
+	if pkgPath != xgo_ctxt.XgoRuntimeCorePkg {
+		return
+	}
+	version := os.Getenv(XGO_TOOLCHAIN_VERSION)
+	if version == "" {
+		return
+	}
+	revision := os.Getenv(XGO_TOOLCHAIN_REVISION)
+	if revision == "" {
+		return
+	}
+	versionNumEnv := os.Getenv(XGO_TOOLCHAIN_VERSION_NUMBER)
+	versionNum, err := strconv.ParseInt(versionNumEnv, 10, 64)
+	if err != nil || versionNum <= 0 {
+		return
+	}
+
+	var versionFile *syntax.File
+	for _, file := range fileList {
+		if strings.HasSuffix(file.Pos().RelFilename(), "version.go") {
+			versionFile = file
+			break
+		}
+	}
+	if versionFile == nil {
+		return
+	}
+	for _, decl := range versionFile.DeclList {
+		constDecl, ok := decl.(*syntax.ConstDecl)
+		if !ok {
+			continue
+		}
+
+		for _, name := range constDecl.NameList {
+			switch name.Value {
+			case XGO_VERSION:
+				constDecl.Values = newStringLit(version)
+			case XGO_REVISION:
+				constDecl.Values = newStringLit(revision)
+			case XGO_NUMBER:
+				constDecl.Values = newIntLit(int(versionNum))
+			}
 		}
 	}
 }

@@ -20,6 +20,7 @@ import (
 //  go run ./script/build-release
 //  go run ./script/build-release --local --local-name xgo_dev
 //  go run ./script/build-release --local --local-name xgo_dev --debug
+//  go run ./script/build-release --include-install-src
 
 func main() {
 	args := os.Args[1:]
@@ -27,6 +28,7 @@ func main() {
 	var installLocal bool
 	var localName string
 	var debug bool
+	var includeInstallSrc bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--local" {
@@ -42,6 +44,12 @@ func main() {
 			i++
 			continue
 		}
+		if arg == "--include-install-src" {
+			includeInstallSrc = true
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "unrecognized option: %s\n", arg)
+		os.Exit(1)
 	}
 	var archs []*osArch
 	if !installLocal {
@@ -62,7 +70,7 @@ func main() {
 		}
 	}
 
-	err := buildRelease("xgo-release", installLocal, localName, debug, archs)
+	err := buildRelease("xgo-release", installLocal, localName, debug, archs, includeInstallSrc)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -74,7 +82,7 @@ type osArch struct {
 	goarch string
 }
 
-func buildRelease(releaseDirName string, installLocal bool, localName string, debug bool, osArches []*osArch) error {
+func buildRelease(releaseDirName string, installLocal bool, localName string, debug bool, osArches []*osArch, includeInstallSrc bool) error {
 	if installLocal && len(osArches) != 1 {
 		return fmt.Errorf("--install-local requires only one target")
 	}
@@ -177,6 +185,12 @@ func buildRelease(releaseDirName string, installLocal bool, localName string, de
 		err = generateSums(dir, filepath.Join(dir, "SHASUMS256.txt"))
 		if err != nil {
 			return fmt.Errorf("sum sha256: %w", err)
+		}
+	}
+	if includeInstallSrc {
+		err := createInstallSRC(filepath.Join(dir, "install-src.zip"), filepath.Join(projectRoot, "script", "install"))
+		if err != nil {
+			return err
 		}
 	}
 	return nil

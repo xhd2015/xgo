@@ -11,7 +11,7 @@ import (
 
 const XgoLinkTrapForGenerated = "__xgo_link_trap_for_generated"
 
-func rewriteStdDecls(funcDecls []*DeclInfo, pkgPath string) {
+func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
 	for _, fn := range funcDecls {
 		if fn.Interface {
 			continue
@@ -20,22 +20,11 @@ func rewriteStdDecls(funcDecls []*DeclInfo, pkgPath string) {
 			continue
 		}
 
-		// if true {
-		// 	// debug
-		// 	continue
-		// }
-
 		// stdlib and generic
 		if !base.Flag.Std {
 			if !fn.Generic {
 				continue
 			}
-			// if xgo_ctxt.GenericImplIsClosure {
-			// 	// for go1.18 and go1.19 only
-			// 	// geneirc is implemented via
-			// 	// closure
-			// 	continue
-			// }
 		}
 
 		fnDecl := fn.FuncDecl

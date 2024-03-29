@@ -7,6 +7,7 @@ import (
 
 const XgoModule = "github.com/xhd2015/xgo"
 const XgoRuntimePkg = XgoModule + "/runtime"
+const XgoRuntimeCorePkg = XgoModule + "/runtime/core"
 
 func SkipPackageTrap() bool {
 	if base.Flag.Std {

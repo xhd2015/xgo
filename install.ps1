@@ -23,6 +23,6 @@ curl.exe "-#SfLo" "$ZipPath" "$URL"
 
 Expand-Archive "$ZipPath" "${XgoInstallSrc}" -Force
 
-cd "${XgoInstallSrc}/install"
+cd "${XgoInstallSrc}"
 
 go run "./"

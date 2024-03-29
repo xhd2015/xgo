@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/xhd2015/xgo/support/cmd"
@@ -386,6 +387,10 @@ func handleBuild(cmd string, args []string) error {
 	if !noInstrument {
 		execCmd.Env = append(execCmd.Env, "GOCACHE="+buildCacheDir)
 		execCmd.Env = append(execCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
+		// xgo versions
+		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_VERSION="+VERSION)
+		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_REVISION="+REVISION)
+		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_VERSION_NUMBER="+strconv.FormatInt(NUMBER, 10))
 		if dumpIR != "" {
 			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)
 			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_IR_FILE="+tmpIRFile)
