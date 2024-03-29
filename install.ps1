@@ -14,7 +14,7 @@ $XgoInstallSrc = mkdir -Force "${XgoRoot}\install-src"
 
 Remove-Item -Recurse -Force "${XgoInstallSrc}"
 
-$URL = "https://github.com/xhd2015/xgo/releases/download/v1.0.6/install-src.zip"
+$URL = "https://github.com/xhd2015/xgo/releases/download/v1.0.9/install-src.zip"
 $ZipPath = "${XgoBin}\install-src.zip"
 
 # curl.exe is faster than PowerShell 5's 'Invoke-WebRequest'
