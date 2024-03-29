@@ -11,7 +11,6 @@ func init() {
 }
 
 func generic[T any]() {
-
 }
 
 type List[T any] struct {

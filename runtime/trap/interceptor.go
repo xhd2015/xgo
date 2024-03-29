@@ -84,40 +84,59 @@ const methodSuffix = "-fm"
 // wrapper.
 // if f is a bound method, then guranteed that recvPtr cannot be nil
 func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
+	recvPtr, funcInfo, _, _ = InspectPC(f)
+	return
+}
+
+func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
 	fn := reflect.ValueOf(f)
 	if fn.Kind() != reflect.Func {
 		panic(fmt.Errorf("Inspect requires func, given: %s", fn.Kind().String()))
 	}
-	pc := fn.Pointer()
+	funcPC = fn.Pointer()
 
 	// funcs, closures and type functions can be found directly by PC
-	funcInfo = functab.InfoPC(pc)
+	var maybeClosureGeneric bool
+	funcInfo = functab.InfoPC(funcPC)
 	if funcInfo != nil {
-		return nil, funcInfo
+		if !funcInfo.Closure || !GenericImplIsClosure {
+			return nil, funcInfo, funcPC, 0
+		}
+		maybeClosureGeneric = true
 	}
 
-	origFullName := __xgo_link_get_pc_name(pc)
-	fullName := origFullName
+	// for go1.18, go1.19, generic implementation
+	// is implemented as closure, so we need to distinguish
+	// between true closure and generic function
+	var origFullName string
+	if !maybeClosureGeneric {
+		origFullName = __xgo_link_get_pc_name(funcPC)
+		fullName := origFullName
 
-	var isMethod bool
-	if strings.HasSuffix(fullName, methodSuffix) {
-		isMethod = true
-		fullName = fullName[:len(fullName)-len(methodSuffix)]
-	}
+		var isMethod bool
+		if strings.HasSuffix(fullName, methodSuffix) {
+			isMethod = true
+			fullName = fullName[:len(fullName)-len(methodSuffix)]
+		}
 
-	funcInfo = functab.GetFuncByFullName(fullName)
-	if funcInfo == nil {
-		return nil, nil
-	}
-	// plain function
-	if !isMethod {
-		return nil, funcInfo
+		funcInfo = functab.GetFuncByFullName(fullName)
+		if funcInfo == nil {
+			return nil, nil, funcPC, 0
+		}
+		// plain function(not method, not generic)
+		if !isMethod && !funcInfo.Generic {
+			return nil, funcInfo, funcPC, 0
+		}
 	}
 
 	WithInterceptor(&Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			trappingPC = GetTrappingPC()
 			funcInfo = f
-			recvPtr = args.GetFieldIndex(0).Ptr()
+			if !maybeClosureGeneric {
+				// closure cannot have receiver pointer
+				recvPtr = args.GetFieldIndex(0).Ptr()
+			}
 			return nil, ErrAbort
 		},
 	}, func() {
@@ -133,10 +152,13 @@ func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
 			fn.CallSlice(args)
 		}
 	})
-	if recvPtr == nil {
+	if !maybeClosureGeneric && recvPtr == nil {
+		if origFullName == "" {
+			origFullName = __xgo_link_get_pc_name(funcPC)
+		}
 		panic(fmt.Errorf("failed to retrieve instance pointer for method: %s", origFullName))
 	}
-	return recvPtr, funcInfo
+	return recvPtr, funcInfo, funcPC, trappingPC
 }
 
 func GetInterceptors() []*Interceptor {

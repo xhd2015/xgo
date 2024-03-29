@@ -192,8 +192,14 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 		if fn.OClosure == nil {
 			return false
 		}
+		if isClosureWrapperForGeneric(fn) {
+			// skip trap for generic closures,
+			// but register for info access
+			trappedClosures = append(trappedClosures, fn)
+			return false
+		}
 		isClosure = true
-	} else if decl.Interface {
+	} else if decl.Interface || decl.Generic {
 		// interface just name
 		return false
 	}
@@ -216,6 +222,7 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 	trap := typecheck.LookupRuntime("__xgo_trap")
 	fnPos := fn.Pos()
 	fnType := fn.Type()
+
 	afterV := typecheck.TempAt(fnPos, fn, NewSignature(types.LocalPkg, nil, nil, nil, nil))
 	stopV := typecheck.TempAt(fnPos, fn, types.Types[types.TBOOL])
 

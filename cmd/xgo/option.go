@@ -19,6 +19,7 @@ type options struct {
 	vscode     string
 	withGoroot string
 	dumpIR     string
+	dumpAST    string
 
 	logCompile bool
 
@@ -72,6 +73,7 @@ func parseOptions(args []string) (*options, error) {
 	var syncWithLink *bool
 	var withGoroot string
 	var dumpIR string
+	var dumpAST string
 
 	var logCompile bool
 	var logDebug *string
@@ -120,11 +122,14 @@ func parseOptions(args []string) (*options, error) {
 			Value: &dumpIR,
 		},
 		{
+			Flags: []string{"--dump-ast"},
+			Value: &dumpAST,
+		},
+		{
 			Flags: []string{"-gcflags"},
 			Value: &gcflags,
 		},
 		{
-
 			Flags:  []string{"--log-debug"},
 			Single: true,
 			Set: func(v string) {
@@ -269,6 +274,7 @@ func parseOptions(args []string) (*options, error) {
 		vscode:     vscode,
 		withGoroot: withGoroot,
 		dumpIR:     dumpIR,
+		dumpAST:    dumpAST,
 
 		logCompile: logCompile,
 		logDebug:   logDebug,

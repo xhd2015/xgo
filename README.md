@@ -474,6 +474,7 @@ In conclusion, `xgo` and monkey are compared as the following:
 |Unexpected Function Mock|Y|N|
 |Per-Instance Method Mock|Y|N|
 |Per-Goroutine Mock|Y|N|
+|Per-Generic Type Mock|Y|Y|
 |Closuer Mock|Y|Y|
 |Stack Trace|Y|N|
 |General Trap|Y|N|

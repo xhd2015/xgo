@@ -105,7 +105,7 @@ func GetFuncByFullName(fullName string) *core.FuncInfo {
 	if f != nil {
 		return f
 	}
-	return getInterfaceTypeByFullName(fullName)
+	return getInterfaceOrGenericByFullName(fullName)
 }
 
 func GetTypeMethods(typ reflect.Type) map[string]*core.FuncInfo {
@@ -113,15 +113,24 @@ func GetTypeMethods(typ reflect.Type) map[string]*core.FuncInfo {
 	return typeMethodMapping[typ]
 }
 
-func getInterfaceTypeByFullName(fullName string) *core.FuncInfo {
-	pkgPath, recvName, recvPtr, typeGeneric, funcGeneric, _ := core.ParseFuncName(fullName)
+func getInterfaceOrGenericByFullName(fullName string) *core.FuncInfo {
+	pkgPath, recvName, recvPtr, typeGeneric, funcGeneric, funcName := core.ParseFuncName(fullName)
 	if typeGeneric != "" || funcGeneric != "" {
-		return nil
+		// generic, currently does not solve generic interface
+		idName := funcName
+		if recvName != "" {
+			idName = recvName + "." + funcName
+		}
+		return GetFuncByPkg(pkgPath, idName)
 	}
-	if recvName == "" || recvPtr {
-		return nil
+	if recvName != "" && !recvPtr {
+		// if the recv is a pointer, it cannot be interface
+		intfMethod := interfaceMapping[pkgPath][recvName]
+		if intfMethod != nil {
+			return intfMethod
+		}
 	}
-	return interfaceMapping[pkgPath][recvName]
+	return nil
 }
 
 var mappingOnce sync.Once

@@ -123,3 +123,7 @@ func canInsertTrap(fn *ir.Func) bool {
 func NewNameAt(pos src.XPos, sym *types.Sym, typ *types.Type) *ir.Name {
 	return ir.NewNameAt(pos, sym, typ)
 }
+
+func isClosureWrapperForGeneric(fn *ir.Func) bool {
+	return false
+}

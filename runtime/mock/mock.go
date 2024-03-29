@@ -44,7 +44,7 @@ func MockByName(pkgPath string, funcName string, interceptor Interceptor) func()
 	if funcInfo == nil {
 		panic(fmt.Errorf("failed to setup mock for: %s.%s", pkgPath, funcName))
 	}
-	return mock(nil, funcInfo, interceptor)
+	return mock(nil, funcInfo, 0, 0, interceptor)
 }
 
 // Can instance be nil?
@@ -64,7 +64,7 @@ func MockMethodByName(instance interface{}, method string, interceptor Intercept
 
 	addr := reflect.New(t)
 	addr.Elem().Set(reflect.ValueOf(instance))
-	return mock(addr.Interface(), fn, interceptor)
+	return mock(addr.Interface(), fn, 0, 0, interceptor)
 }
 
 // Deprecated: use Mock instead
@@ -78,28 +78,37 @@ func AddFuncInterceptor(fn interface{}, interceptor Interceptor) func() {
 func mockByFunc(fn interface{}, interceptor Interceptor) func() {
 	// if the target function is a method, then a
 	// recv ptr must be given
-	recvPtr, fnInfo := trap.Inspect(fn)
+	recvPtr, fnInfo, funcPC, trappingPC := trap.InspectPC(fn)
 	if fnInfo == nil {
 		pc := reflect.ValueOf(fn).Pointer()
 		panic(fmt.Errorf("failed to setup mock for: %v", runtime.FuncForPC(pc).Name()))
 	}
-	return mock(recvPtr, fnInfo, interceptor)
+	return mock(recvPtr, fnInfo, funcPC, trappingPC, interceptor)
 }
 
 // if mockFnInfo is a function, mockRecvPtr is always nil
 // if mockFnInfo is a method,
 //   - if mockRecvPtr has a value, then only call to that instance will be mocked
 //   - if mockRecvPtr is nil, then all call to the function will be mocked
-func mock(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, interceptor Interceptor) func() {
+func mock(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr, interceptor Interceptor) func() {
 	return trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
 			if f.PC == 0 {
-				// no match, continue
-				return nil, nil
+				if !f.Generic {
+					return nil, nil
+				}
+				// may atch generic
 			}
 			if f != mockFnInfo {
 				// no match
 				return nil, nil
+			}
+			if f.Generic && f.RecvType == "" {
+				// generic function(not method) should distinguish different implementations
+				curTrappingPC := trap.GetTrappingPC()
+				if curTrappingPC != 0 && curTrappingPC != funcPC && curTrappingPC != trappingPC {
+					return nil, nil
+				}
 			}
 
 			if f.RecvType != "" && mockRecvPtr != nil {

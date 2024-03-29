@@ -106,8 +106,15 @@ func patchRuntimeTesting(goroot string) error {
 		return content, nil
 	})
 }
+func getInternalPatch(goroot string, subDirs ...string) string {
+	dir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
+	if len(subDirs) > 0 {
+		dir = filepath.Join(dir, filepath.Join(subDirs...))
+	}
+	return dir
+}
 func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, syncWithLink bool) error {
-	dstDir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
+	dstDir := getInternalPatch(goroot)
 	if isDevelopment {
 		symLink := syncWithLink
 		if osinfo.FORCE_COPY_UNSYM {
@@ -302,6 +309,22 @@ func replaceBuildIgnore(content []byte) ([]byte, error) {
 
 // addRuntimeFunctions always copy file
 func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) (updated bool, err error) {
+	if false {
+		// seems unnecessary
+		// TODO: needs to debug to see what will happen with auto generated files
+		// we need to skip when debugging
+
+		// add debug file
+		//   rational: when debugging, dlv will jump to __xgo_autogen_register_func_helper.go
+		// previousely this file does not exist, making the debugging blind
+		runtimeAutoGenFile := filepath.Join(goroot, "src", "runtime", "__xgo_autogen_register_func_helper.go")
+		srcAutoGen := getInternalPatch(goroot, "syntax", "helper_code.go")
+		err = filecopy.CopyFile(srcAutoGen, runtimeAutoGenFile)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	dstFile := filepath.Join(goroot, "src", "runtime", "xgo_trap.go")
 	content, err := readXgoSrc(xgoSrc, []string{"runtime", "trap_runtime", "xgo_trap.go"})
 	if err != nil {

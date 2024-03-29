@@ -35,3 +35,7 @@ func getFuncResultsType(funcType *types.Type) *types.Type {
 func canInsertTrap(fn *ir.Func) bool {
 	return true
 }
+
+func isClosureWrapperForGeneric(fn *ir.Func) bool {
+	return false
+}

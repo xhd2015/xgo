@@ -15,6 +15,8 @@ func getDebugEnv(xgoCompilerEnableEnv string) map[string]string {
 		"COMPILER_DEBUG_IR_DUMP_FUNCS":   os.Getenv("COMPILER_DEBUG_IR_DUMP_FUNCS"),
 		XGO_DEBUG_DUMP_IR:                os.Getenv(XGO_DEBUG_DUMP_IR),
 		XGO_DEBUG_DUMP_IR_FILE:           os.Getenv(XGO_DEBUG_DUMP_IR_FILE),
+		XGO_DEBUG_DUMP_AST:               os.Getenv(XGO_DEBUG_DUMP_AST),
+		XGO_DEBUG_DUMP_AST_FILE:          os.Getenv(XGO_DEBUG_DUMP_AST_FILE),
 		"GOCACHE":                        os.Getenv("GOCACHE"),
 		"GOROOT":                         "../..",
 		"PATH":                           "../../bin:${env:PATH}",

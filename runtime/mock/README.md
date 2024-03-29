@@ -170,3 +170,41 @@ func (c *client) getNameThroughHTTP() string {
     return "ok"
 }
 ```
+
+# Mock Generic Function
+In the following functions, `ToString[int]` gets mocked, while `ToString[string]` does not.
+```go
+package mock_generic
+
+import (
+	"context"
+	"fmt"
+	"testing"
+
+	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/mock"
+)
+
+func ToString[T any](v T) string {
+	return fmt.Sprint(v)
+}
+
+func TestMockGenericFunc(t *testing.T) {
+	mock.Mock(ToString[int], func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		results.GetFieldIndex(0).Set("hello world")
+		return nil
+	})
+	expect := "hello world"
+	output := ToString[int](0)
+	if expect != output {
+		t.Fatalf("expect ToString[int](0) to be %s, actual: %s", expect, output)
+	}
+
+	// per t param
+	expectStr := "my string"
+	outputStr := ToString[string](expectStr)
+	if expectStr != outputStr {
+		t.Fatalf("expect ToString[string](%q) not affected, actual: %q", expectStr, outputStr)
+	}
+}
+```

@@ -39,6 +39,7 @@ var runtimeTests = []string{
 	"trap",
 	"mock_closure",
 	"mock_stdlib",
+	"mock_generic",
 }
 
 func main() {

@@ -5,28 +5,39 @@ import (
 	"cmd/compile/internal/syntax"
 	"fmt"
 	"os"
+
 	"strconv"
 )
 
 const XgoLinkTrapForGenerated = "__xgo_link_trap_for_generated"
 
 func rewriteStdDecls(funcDecls []*DeclInfo, pkgPath string) {
-	if !base.Flag.Std {
-		return
-	}
 	for _, fn := range funcDecls {
-		if false {
-			syntax.Fdump(os.Stderr, fn.FuncDecl.Body)
-		}
 		if fn.Interface {
-			continue
-		}
-		if fn.Generic {
 			continue
 		}
 		if fn.Closure {
 			continue
 		}
+
+		// if true {
+		// 	// debug
+		// 	continue
+		// }
+
+		// stdlib and generic
+		if !base.Flag.Std {
+			if !fn.Generic {
+				continue
+			}
+			// if xgo_ctxt.GenericImplIsClosure {
+			// 	// for go1.18 and go1.19 only
+			// 	// geneirc is implemented via
+			// 	// closure
+			// 	continue
+			// }
+		}
+
 		fnDecl := fn.FuncDecl
 		pos := fn.FuncDecl.Pos()
 
@@ -70,7 +81,29 @@ func rewriteStdDecls(funcDecls []*DeclInfo, pkgPath string) {
 		} else {
 			recvRef = syntax.NewName(pos, "nil")
 			callOldFunc = syntax.NewName(pos, oldFnName)
+
+			// need TParams
+			tparams := newDecl.TParamList
+			if len(tparams) > 0 {
+				tparamExprs := make([]syntax.Expr, len(tparams))
+				for i, tparam := range tparams {
+					tparamExprs[i] = syntax.NewName(pos, tparam.Name.Value)
+				}
+				var indexExpr syntax.Expr
+				if len(tparamExprs) == 1 {
+					indexExpr = tparamExprs[0]
+				} else {
+					indexExpr = &syntax.ListExpr{
+						ElemList: tparamExprs,
+					}
+				}
+				callOldFunc = &syntax.IndexExpr{
+					X:     callOldFunc,
+					Index: indexExpr,
+				}
+			}
 		}
+
 		fnTypeCopy := newDecl.Type
 		argValues := getRefSlice(pos, fnTypeCopy.ParamList)
 		argAddrs := getRefAddrSlice(pos, fnTypeCopy.ParamList)
@@ -110,7 +143,7 @@ func rewriteStdDecls(funcDecls []*DeclInfo, pkgPath string) {
 						Fun: syntax.NewName(pos, XgoLinkTrapForGenerated),
 						ArgList: []syntax.Expr{
 							newStringLit(pkgPath),
-							newIntLit(0), // pc
+							newIntLit(0), // pc, filled by IR
 							newStringLit(idName),
 							syntax.NewName(pos, strconv.FormatBool(fn.Generic)),
 							recvRef,

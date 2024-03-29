@@ -1,4 +1,4 @@
-package mock_closuer
+package mock_stdlib
 
 import (
 	"context"
@@ -9,30 +9,6 @@ import (
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/mock"
 )
-
-type Time struct {
-	val int
-}
-
-func __xgo_link_generated_trap2(pkgPath string, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	// linked by compiler
-	return nil, false
-}
-
-func Now2() Time {
-	return Time{}
-}
-
-func DEBUG_SYNTAX2() (t Time) {
-	after, stop := __xgo_link_generated_trap2("A", "B", false, nil, nil, []interface{}{&t})
-	if after != nil {
-		defer after()
-	}
-	if stop {
-		return
-	}
-	return Now2()
-}
 
 // func TEST() {
 // 	panic("debug")

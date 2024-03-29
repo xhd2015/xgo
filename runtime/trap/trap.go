@@ -32,7 +32,17 @@ func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, gene
 // sense at compile time.
 func Skip() {}
 
+func GetTrappingPC() uintptr {
+	key := uintptr(__xgo_link_getcurg())
+	val, ok := trappingPC.Load(key)
+	if !ok {
+		return 0
+	}
+	return val.(uintptr)
+}
+
 var trappingMark sync.Map // <goroutine key> -> struct{}{}
+var trappingPC sync.Map   // <gorotuine key> -> PC
 
 // link to runtime
 // xgo:notrap
@@ -42,6 +52,11 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 		return nil, false
 	}
 	defer dispose()
+
+	// setup context
+	setTrappingPC(pc)
+	defer clearTrappingPC()
+
 	type intf struct {
 		_  uintptr
 		pc *uintptr
@@ -232,4 +247,14 @@ func setTrappingMark() func() {
 func clearTrappingMark() {
 	key := uintptr(__xgo_link_getcurg())
 	trappingMark.Delete(key)
+}
+
+func setTrappingPC(pc uintptr) {
+	key := uintptr(__xgo_link_getcurg())
+	trappingPC.Store(key, pc)
+}
+
+func clearTrappingPC() {
+	key := uintptr(__xgo_link_getcurg())
+	trappingPC.Delete(key)
 }

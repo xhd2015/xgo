@@ -139,6 +139,7 @@ func handleBuild(cmd string, args []string) error {
 	gcflags := opts.gcflags
 	withGoroot := opts.withGoroot
 	dumpIR := opts.dumpIR
+	dumpAST := opts.dumpAST
 
 	if cmdExec && len(remainArgs) == 0 {
 		return fmt.Errorf("exec requires command")
@@ -181,9 +182,13 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	var tmpIRFile string
+	var tmpASTFile string
 	if !noInstrument {
 		if dumpIR != "" {
 			tmpIRFile = filepath.Join(tmpDir, "dump-ir")
+		}
+		if dumpAST != "" {
+			tmpASTFile = filepath.Join(tmpDir, "dump-ast")
 		}
 	}
 
@@ -385,6 +390,10 @@ func handleBuild(cmd string, args []string) error {
 			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)
 			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_IR_FILE="+tmpIRFile)
 		}
+		if dumpAST != "" {
+			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_AST="+dumpAST)
+			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_AST_FILE="+tmpASTFile)
+		}
 		if vscodeDebugFile != "" {
 			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_VSCODE="+vscodeDebugFile+vscodeDebugFileSuffix)
 		}
@@ -408,7 +417,17 @@ func handleBuild(cmd string, args []string) error {
 		if err != nil {
 			// ir file not exists
 			if errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("dump ir not effective, use -a to trigger recompile")
+				return fmt.Errorf("--dump-ir not effective, use -a to trigger recompile or check if you package path matches")
+			}
+			return err
+		}
+	}
+	if tmpASTFile != "" {
+		err := copyToStdout(tmpASTFile)
+		if err != nil {
+			// ir file not exists
+			if errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("--dump-ast not effective, use -a to trigger recompile or check if you package path matches")
 			}
 			return err
 		}

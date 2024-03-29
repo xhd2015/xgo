@@ -22,6 +22,7 @@ func init() {
 }
 
 func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
+	debugSyntax(fileList)
 	afterFilesParsed(fileList, addFile)
 }
 
@@ -572,6 +573,10 @@ func generateRegHelperCode(pkgName string) string {
 		code = strings.ReplaceAll(code, "__PKG__", xgo_ctxt.GetPkgPath())
 	}
 	autoGenStmts := []string{
+		// padding for debug
+		"// padding",
+		"",
+		"",
 		"package " + pkgName,
 		code,
 	}

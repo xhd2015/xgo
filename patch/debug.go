@@ -56,7 +56,7 @@ func debugIR() {
 		// e.g.  A.B, (*A).C
 		// examples:
 		//   pkgPath.*, *.funcName, funcName
-		if !matchAnyPattern(xgo_ctxt.GetPkgPath(), pkgName, fn.Sym().Name, namePatterns) {
+		if !xgo_ctxt.MatchAnyPattern(xgo_ctxt.GetPkgPath(), pkgName, fn.Sym().Name, namePatterns) {
 			return true
 		}
 		if outFile == nil {
@@ -66,47 +66,6 @@ func debugIR() {
 		}
 		return true
 	})
-}
-
-func matchAnyPattern(pkgPath string, pkgName string, funcName string, patterns []string) bool {
-	for _, pattern := range patterns {
-		if matchPattern(pkgPath, pkgName, funcName, pattern) {
-			return true
-		}
-	}
-	return false
-}
-
-func matchPattern(pkgPath string, pkgName string, funcName string, pattern string) bool {
-	dotIdx := strings.Index(pattern, ".")
-	if dotIdx < 0 {
-		return funcName == pattern
-	}
-	pkgPattern := pattern[:dotIdx]
-	funcPattern := pattern[dotIdx+1:]
-
-	var pkgMatch bool
-	if pkgName != "" && pkgName == pkgPattern {
-		pkgMatch = true
-	} else {
-		var pkgPathSuffix bool
-		if strings.HasPrefix(pkgPattern, "*") {
-			pkgPattern = pkgPattern[1:]
-			pkgPathSuffix = true
-		}
-		if pkgPathSuffix {
-			pkgMatch = pkgPattern == "" || strings.HasSuffix(pkgPath, pkgPattern)
-		} else {
-			pkgMatch = pkgPath == pkgPattern
-		}
-	}
-	if !pkgMatch {
-		return false
-	}
-	if funcPattern == "*" || funcPattern == funcName {
-		return true
-	}
-	return false
 }
 
 func debugPrint(s string) *ir.CallExpr {
