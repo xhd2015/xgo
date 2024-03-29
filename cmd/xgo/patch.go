@@ -294,7 +294,7 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 
 func readXgoSrc(xgoSrc string, paths []string) ([]byte, error) {
 	if isDevelopment {
-		srcFile := filepath.Join(xgoSrc, filepath.Join(paths...))
+		srcFile := filepath.Join(xgoSrc, "runtime", filepath.Join(paths...))
 		return os.ReadFile(srcFile)
 	}
 	return patchEmbed.ReadFile("patch_compiler/" + strings.Join(paths, "/"))
@@ -326,7 +326,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	}
 
 	dstFile := filepath.Join(goroot, "src", "runtime", "xgo_trap.go")
-	content, err := readXgoSrc(xgoSrc, []string{"runtime", "trap_runtime", "xgo_trap.go"})
+	content, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_trap.go"})
 	if err != nil {
 		return false, err
 	}
@@ -365,7 +365,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 
 func addReflectFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) error {
 	dstFile := filepath.Join(goroot, "src", "reflect", "xgo_reflect.go")
-	content, err := readXgoSrc(xgoSrc, []string{"runtime", "trap_runtime", "xgo_reflect.go"})
+	content, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_reflect.go"})
 	if err != nil {
 		return err
 	}
