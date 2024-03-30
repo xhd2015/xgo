@@ -152,7 +152,7 @@ func main() {
 		begin := time.Now()
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
 		if resetInstrument {
-			err := cmd.Run("go", "run", "./cmd/xgo", "--reset-instrument", "--with-goroot", goroot, "--build-compiler")
+			err := cmd.Run("go", "run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot, "--build-compiler")
 			if err != nil {
 				if extErr, ok := err.(*exec.ExitError); ok {
 					fmt.Fprintf(os.Stderr, "%s\n", extErr.Stderr)

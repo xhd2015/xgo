@@ -127,3 +127,5 @@ func NewNameAt(pos src.XPos, sym *types.Sym, typ *types.Type) *ir.Name {
 	n.SetType(typ)
 	return n
 }
+
+const closureMayBeEleminatedDueToIfConst = true

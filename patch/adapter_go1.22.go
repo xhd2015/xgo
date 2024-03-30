@@ -18,6 +18,7 @@ const goMajor = 1
 const goMinor = 22
 
 const genericTrapNeedsWorkaround = true
+const closureMayBeEleminatedDueToIfConst = false
 
 func forEachFunc(callback func(fn *ir.Func) bool) {
 	for _, fn := range typecheck.Target.Funcs {

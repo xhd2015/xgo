@@ -171,18 +171,24 @@ func ensureMapping() {
 			var pc uintptr
 			var fullName string
 			if !generic && !interface_ {
-				if closure {
-					// TODO: move all ctx, err check logic here
-					ft := reflect.TypeOf(f)
-					if ft.NumIn() > 0 && ft.In(0).Implements(ctxType) {
-						firstArgCtx = true
+				if f != nil {
+					if closure {
+						// TODO: move all ctx, err check logic here
+						ft := reflect.TypeOf(f)
+						if ft.NumIn() > 0 && ft.In(0).Implements(ctxType) {
+							firstArgCtx = true
+						}
+						if ft.NumOut() > 0 && ft.Out(ft.NumOut()-1).Implements(errType) {
+							lastResErr = true
+						}
 					}
-					if ft.NumOut() > 0 && ft.Out(ft.NumOut()-1).Implements(errType) {
-						lastResErr = true
+					pc = getFuncPC(f)
+					fullName = __xgo_link_get_pc_name(pc)
+				} else {
+					if closure && identityName != "" {
+						fullName = pkgPath + "." + identityName
 					}
 				}
-				pc = getFuncPC(f)
-				fullName = __xgo_link_get_pc_name(pc)
 			}
 			recvName := rv.FieldByName("RecvName").String()
 			argNames := rv.FieldByName("ArgNames").Interface().([]string)

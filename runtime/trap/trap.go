@@ -85,11 +85,17 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 	var f *core.FuncInfo
 	if !generic {
 		f = functab.InfoPC(pc)
-	} else {
+	}
+	if f == nil {
+		// generic and closure under go1.22
 		f = functab.Info(pkgPath, identityName)
 	}
 	if f == nil {
 		//
+		return nil, false
+	}
+	if f.RecvType != "" && methodHasBeenTrapped && recv == nil {
+		// let go to the next interceptor
 		return nil, false
 	}
 

@@ -95,9 +95,12 @@ func mock(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, funcPC uintptr, tr
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
 			if f.PC == 0 {
 				if !f.Generic {
-					return nil, nil
+					if !f.Closure || trap.ClosureHasFunc {
+						return nil, nil
+					}
 				}
 				// may atch generic
+				// or closure without PC
 			}
 			if f != mockFnInfo {
 				// no match

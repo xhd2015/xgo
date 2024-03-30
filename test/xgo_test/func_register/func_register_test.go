@@ -48,7 +48,7 @@ func initFuncMapping() {
 	__xgo_link_retrieve_all_funcs_and_clear(func(fn interface{}) {
 		rv := reflect.ValueOf(fn)
 		pkgPath := rv.FieldByName("PkgPath").String()
-		idName := rv.FieldByName("IdentityName").String()
+		identityName := rv.FieldByName("IdentityName").String()
 
 		interface_ := rv.FieldByName("Interface").Bool()
 		generic := rv.FieldByName("Generic").Bool()
@@ -62,15 +62,19 @@ func initFuncMapping() {
 		var firstArgCtx bool
 		var lastResErr bool
 		if !generic && !interface_ {
-			ft := reflect.TypeOf(f)
-			if ft.NumIn() > 0 && ft.In(0).Implements(ctxType) {
-				firstArgCtx = true
+			if f != nil {
+				ft := reflect.TypeOf(f)
+				if ft.NumIn() > 0 && ft.In(0).Implements(ctxType) {
+					firstArgCtx = true
+				}
+				if ft.NumOut() > 0 && ft.Out(ft.NumOut()-1).Implements(errType) {
+					lastResErr = true
+				}
+				pc = getFuncPC(f)
+				fullName = __xgo_link_get_pc_name(pc)
+			} else if identityName != "" {
+				fullName = pkgPath + "." + identityName
 			}
-			if ft.NumOut() > 0 && ft.Out(ft.NumOut()-1).Implements(errType) {
-				lastResErr = true
-			}
-			pc = getFuncPC(f)
-			fullName = __xgo_link_get_pc_name(pc)
 		}
 		// debug
 		if false {
@@ -90,7 +94,7 @@ func initFuncMapping() {
 			PkgPath:      pkgPath,
 			ArgNames:     argNames,
 			ResNames:     resNames,
-			IdentityName: idName,
+			IdentityName: identityName,
 			FirstArgCtx:  firstArgCtx,
 			LastResErr:   lastResErr,
 		})
@@ -149,11 +153,17 @@ func TestFuncRegister(t *testing.T) {
 	if !closure1Fn.Closure {
 		t.Fatalf("expect clousre1 set Closure")
 	}
-	if !closure1Fn.FirstArgCtx {
-		t.Fatalf("expect clousre1 first arg ctx")
-	}
-	if !closure1Fn.LastResErr {
-		t.Fatalf("expect clousre1 last res error")
+	if closureHasFunc {
+		if !closure1Fn.FirstArgCtx {
+			t.Fatalf("expect clousre1 first arg ctx")
+		}
+		if !closure1Fn.LastResErr {
+			t.Fatalf("expect clousre1 last res error")
+		}
+	} else {
+		if closure1Fn.PC != 0 {
+			t.Fatalf("expect closure PC to be 0 under go1.22, actual: 0x%x", closure1Fn.PC)
+		}
 	}
 }
 

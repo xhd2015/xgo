@@ -49,8 +49,8 @@ func __xgo_link_generated_register_func(fn interface{}) {
 	panic("failed to link __xgo_link_generated_register_func")
 }
 
-func __xgo_local_register_func(pkgPath string, fn interface{}, closure bool, recvName string, argNames []string, resNames []string, file string, line int) {
-	__xgo_link_generated_register_func(__xgo_local_func_stub{PkgPath: pkgPath, Fn: fn, Closure: closure, RecvName: recvName, ArgNames: argNames, ResNames: resNames, File: file, Line: line})
+func __xgo_local_register_func(pkgPath string, identiyName string, fn interface{}, closure bool, recvName string, argNames []string, resNames []string, file string, line int) {
+	__xgo_link_generated_register_func(__xgo_local_func_stub{PkgPath: pkgPath, IdentityName: identiyName, Fn: fn, Closure: closure, RecvName: recvName, ArgNames: argNames, ResNames: resNames, File: file, Line: line})
 }
 
 // not used

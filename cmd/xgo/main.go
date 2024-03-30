@@ -254,8 +254,12 @@ func handleBuild(cmd string, args []string) error {
 
 	setupDone := make(chan struct{})
 	go func() {
+		d := 1 * time.Second
+		if isDevelopment {
+			d = 5 * time.Second
+		}
 		select {
-		case <-time.After(1 * time.Second):
+		case <-time.After(d):
 			fmt.Fprintf(os.Stderr, "xgo is taking a while to setup, please wait...\n")
 		case <-setupDone:
 		}
