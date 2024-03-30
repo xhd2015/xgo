@@ -57,6 +57,7 @@ func main() {
 	var xgoRuntimeTestOnly bool
 	var xgoDefaultTestOnly bool
 
+	var debug bool
 	var cover bool
 	var coverpkgs []string
 	var coverprofile string
@@ -119,6 +120,10 @@ func main() {
 		if arg == "-coverprofile" {
 			coverprofile = args[i+1]
 			i++
+			continue
+		}
+		if arg == "--debug" {
+			debug = true
 			continue
 		}
 		if arg == "--" {
@@ -199,7 +204,16 @@ func main() {
 		begin := time.Now()
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
 		if resetInstrument {
-			err := cmd.Run("go", "run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot, "--build-compiler")
+			if debug {
+				fmt.Printf("reseting instrument\n")
+			}
+			cmdArgs := []string{
+				"run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot, "--build-compiler",
+			}
+			if debug {
+				cmdArgs = append(cmdArgs, "--log-debug=stdout")
+			}
+			err := cmd.Run("go", cmdArgs...)
 			if err != nil {
 				if extErr, ok := err.(*exec.ExitError); ok {
 					fmt.Fprintf(os.Stderr, "%s\n", extErr.Stderr)
@@ -242,6 +256,9 @@ func main() {
 					prefix, suffix = coverprofile[:idx], coverprofile[idx:]
 				}
 				args = append(args, "-coverprofile", prefix+"-"+variant+suffix)
+			}
+			if debug && (variant == "xgo" || variant == "runtime") {
+				args = append(args, "--log-debug=stdout")
 			}
 			return args
 		}

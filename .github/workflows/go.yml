@@ -26,7 +26,7 @@ jobs:
       run: go build -v ./cmd/...
 
     - name: Test
-      run: go run ./script/run-test --reset-instrument -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out
+      run: go run ./script/run-test --reset-instrument --debug -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out
 
     - name: Print coverage
       run: cd runtime && go tool cover --func ../cover-runtime.out
