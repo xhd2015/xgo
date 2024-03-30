@@ -311,7 +311,7 @@ func handleBuild(cmd string, args []string) error {
 		}
 	}
 
-	if isDevelopment && (setupDev || buildCompiler) {
+	if isDevelopment && setupDev {
 		logDebug("setup dev dir: %s", instrumentGoroot)
 		err := setupDevDir(instrumentGoroot, setupDev)
 		if err != nil {
@@ -328,7 +328,7 @@ func handleBuild(cmd string, args []string) error {
 	var compilerChanged bool
 	var toolExecFlag string
 	if !noInstrument {
-		logDebug("setup dev dir: %s", instrumentGoroot)
+		logDebug("build instrument tools: %s", instrumentGoroot)
 		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug, logCompile, noSetup, debugWithDlv)
 		if err != nil {
 			return err
