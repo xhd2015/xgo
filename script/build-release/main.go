@@ -20,7 +20,7 @@ import (
 //  go run ./script/build-release
 //  go run ./script/build-release --local --local-name xgo_dev
 //  go run ./script/build-release --local --local-name xgo_dev --debug
-//  go run ./script/build-release --include-install-src
+//  go run ./script/build-release --include-install-src --include-local
 
 func main() {
 	args := os.Args[1:]
@@ -29,6 +29,7 @@ func main() {
 	var localName string
 	var debug bool
 	var includeInstallSrc bool
+	var includeLocal bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--local" {
@@ -46,6 +47,10 @@ func main() {
 		}
 		if arg == "--include-install-src" {
 			includeInstallSrc = true
+			continue
+		}
+		if arg == "--include-local" {
+			includeLocal = true
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "unrecognized option: %s\n", arg)
@@ -70,7 +75,7 @@ func main() {
 		}
 	}
 
-	err := buildRelease("xgo-release", installLocal, localName, debug, archs, includeInstallSrc)
+	err := buildRelease("xgo-release", installLocal, localName, debug, archs, includeInstallSrc, includeLocal)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -82,7 +87,7 @@ type osArch struct {
 	goarch string
 }
 
-func buildRelease(releaseDirName string, installLocal bool, localName string, debug bool, osArches []*osArch, includeInstallSrc bool) error {
+func buildRelease(releaseDirName string, installLocal bool, localName string, debug bool, osArches []*osArch, includeInstallSrc bool, includeLocal bool) error {
 	if installLocal && len(osArches) != 1 {
 		return fmt.Errorf("--install-local requires only one target")
 	}
@@ -176,7 +181,7 @@ func buildRelease(releaseDirName string, installLocal bool, localName string, de
 	}
 
 	for _, osArch := range osArches {
-		err := buildBinaryRelease(dir, tmpSrcDir, xgoVersionStr, osArch.goos, osArch.goarch, installLocal, localName, extraBuildFlags)
+		err := buildBinaryRelease(dir, tmpSrcDir, xgoVersionStr, osArch.goos, osArch.goarch, installLocal, includeLocal, localName, extraBuildFlags)
 		if err != nil {
 			return fmt.Errorf("GOOS=%s GOARCH=%s:%w", osArch.goos, osArch.goarch, err)
 		}
@@ -247,7 +252,7 @@ func generateSums(dir string, sumFile string) error {
 // c2876990b545be8396b7d13f0f9c3e23b38236de8f0c9e79afe04bcf1d03742e  xgo1.0.0-darwin-arm64.tar.gz
 // 6ae476cb4c3ab2c81a94d1661070e34833e4a8bda3d95211570391fb5e6a3cc0  xgo1.0.0-darwin-amd64.tar.gz
 
-func buildBinaryRelease(dir string, srcDir string, version string, goos string, goarch string, installLocal bool, localName string, extraBuildFlags []string) error {
+func buildBinaryRelease(dir string, srcDir string, version string, goos string, goarch string, installLocal bool, includeLocal bool, localName string, extraBuildFlags []string) error {
 	if version == "" {
 		return fmt.Errorf("requires version")
 	}
@@ -293,8 +298,16 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 			return err
 		}
 	}
-
+	var needInstall bool
 	if installLocal {
+		needInstall = true
+	} else if includeLocal {
+		if runtime.GOOS == goos && runtime.GOARCH == goarch {
+			needInstall = true
+		}
+	}
+
+	if needInstall {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return err
@@ -327,7 +340,9 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 		if lookPathErr != nil {
 			fmt.Printf("%s built successfully, you may need to add %s to your PATH variables\n", xgoExeName, binDir)
 		}
-		return nil
+		if installLocal {
+			return nil
+		}
 	}
 
 	// package it as a tar.gz
