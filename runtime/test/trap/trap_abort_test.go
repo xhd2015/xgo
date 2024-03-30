@@ -1,9 +1,4 @@
-// debug test is a convienent package
-// you can paste your minimal code your
-// to focus only the problemtic part of
-// failing code
-
-package debug
+package trap
 
 import (
 	"context"

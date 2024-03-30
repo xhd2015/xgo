@@ -18,6 +18,7 @@ import (
 //	go run ./script/run-test/ --include go1.19.13 -count=1
 //	go run ./script/run-test/ --include go1.19.13 -run TestHelloWorld -v
 //	go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
+//  go run ./script/run-test/ -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile covers/cover.out --include go1.21.8
 
 // runtime test:
 //     go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncList -v ./test/func_list
@@ -33,11 +34,13 @@ import (
 
 // TODO: remove duplicate test between xgo test and runtime test
 var runtimeTests = []string{
-	"mock_method",
 	"trace_panic_peek",
 	"func_list",
 	"trap_inspect_func",
 	"trap",
+	"mock_func",
+	"mock_method",
+	"mock_by_name",
 	"mock_closure",
 	"mock_stdlib",
 	"mock_generic",
@@ -57,6 +60,7 @@ func main() {
 	var xgoRuntimeTestOnly bool
 	var xgoDefaultTestOnly bool
 
+	var debug bool
 	var cover bool
 	var coverpkgs []string
 	var coverprofile string
@@ -119,6 +123,10 @@ func main() {
 		if arg == "-coverprofile" {
 			coverprofile = args[i+1]
 			i++
+			continue
+		}
+		if arg == "--debug" {
+			debug = true
 			continue
 		}
 		if arg == "--" {
@@ -199,7 +207,16 @@ func main() {
 		begin := time.Now()
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
 		if resetInstrument {
-			err := cmd.Run("go", "run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot, "--build-compiler")
+			if debug {
+				fmt.Printf("reseting instrument\n")
+			}
+			cmdArgs := []string{
+				"run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot, "--build-compiler",
+			}
+			if debug {
+				cmdArgs = append(cmdArgs, "--log-debug=stdout")
+			}
+			err := cmd.Run("go", cmdArgs...)
 			if err != nil {
 				if extErr, ok := err.(*exec.ExitError); ok {
 					fmt.Fprintf(os.Stderr, "%s\n", extErr.Stderr)
@@ -242,6 +259,9 @@ func main() {
 					prefix, suffix = coverprofile[:idx], coverprofile[idx:]
 				}
 				args = append(args, "-coverprofile", prefix+"-"+variant+suffix)
+			}
+			if debug && (variant == "xgo" || variant == "runtime") {
+				args = append(args, "--log-debug=stdout")
 			}
 			return args
 		}

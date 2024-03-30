@@ -1,4 +1,8 @@
 # xgo
+[![Go Reference](https://pkg.go.dev/badge/github.com/xhd2015/xgo.svg)](https://pkg.go.dev/github.com/xhd2015/xgo)
+[![Go Report Card](https://goreportcard.com/badge/github.com/xhd2015/xgo)](https://goreportcard.com/report/github.com/xhd2015/xgo)
+[![Go Coverage](https://img.shields.io/badge/Coverage-81.3%25-brightgreen)](https://github.com/xhd2015/xgo/actions)
+[![CI](https://github.com/xhd2015/xgo/workflows/Go/badge.svg)](https://github.com/xhd2015/xgo/actions)
 
 **[English](./README.md) | 简体中文**
 

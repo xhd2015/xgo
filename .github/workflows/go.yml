@@ -20,21 +20,22 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.20'
+        cache: false
 
     - name: Build
       run: go build -v ./cmd/...
 
     - name: Test
-      run: go run ./script/run-test -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out
+      run: go run ./script/run-test --reset-instrument --debug -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out
 
     - name: Print coverage
       run: cd runtime && go tool cover --func ../cover-runtime.out
 
     - name: Build Release
-      run: go run ./script/build-release
+      run: go run ./script/build-release --include-install-src --include-local
     
-    # - name: Check Version
-    #   run: ~/.xgo/bin/xgo revision
+    - name: Check Version
+      run: ~/.xgo/bin/xgo revision
 
-    # - name: Check Go Version
-    #   run: ~/.xgo/bin/xgo exec go version
+    - name: Check Go Version
+      run: ~/.xgo/bin/xgo exec go version

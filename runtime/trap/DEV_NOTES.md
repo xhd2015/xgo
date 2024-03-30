@@ -384,3 +384,74 @@ func addInit(){
 	typecheck.Target.Funcs = append(typecheck.Target.Funcs, regFuncs)
 }
 ```
+
+# About Method Receiver
+```go
+
+// this function checks if the given
+// `recvPtr` has the same value compared
+// to the given `methodValue`.
+// The `methodValue` should be passed as
+// `file.Write“.
+// Deprecated: left here only for reference purepose
+func isSameBoundMethod(recvPtr interface{}, methodValue interface{}) bool {
+	// can also be a constant
+	// size := unsafe.Sizeof(*(*large)(nil))
+	size := reflect.TypeOf(recvPtr).Elem().Size()
+	type _intfRecv struct {
+		_    uintptr // type word
+		data *byte   // data word
+	}
+
+	a := (*_intfRecv)(unsafe.Pointer(&recvPtr))
+	type _methodValue struct {
+		_    uintptr // pc
+		recv byte
+	}
+	type _intf struct {
+		_    uintptr // type word
+		data *_methodValue
+	}
+	ppb := (*_intf)(unsafe.Pointer(&methodValue))
+	pb := *ppb
+	b := unsafe.Pointer(&pb.data.recv)
+
+	return __xgo_link_mem_equal(unsafe.Pointer(a.data), b, size)
+}
+```
+
+# About function wrapper
+The following code does not work, because there are some wrapper around functions, so PC's are not always the same.
+```go
+// check if the calling func is an interceptor, if so, skip
+// UPDATE: don't do manual check
+for i := 0; i < n; i++ {
+	if interceptors[i].Pre == nil {
+		continue
+	}
+	ipc := (**uintptr)(unsafe.Pointer(&interceptors[i].Pre))
+	pcName := runtime.FuncForPC(**ipc).Name()
+	_ = pcName
+	if **ipc == pc {
+		return nil, false
+	}
+}
+```
+
+# A thinking on type safe mock
+```go
+OnFunc(hello, func(a string) {
+	if a == "" {
+		CallOld()
+		// be able to call old function
+	}
+
+	return
+})
+
+
+func OnFunc[T any](fn T, v T) {
+
+}
+
+```

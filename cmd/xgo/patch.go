@@ -907,9 +907,14 @@ func syncGoroot(goroot string, dstDir string, forceCopy bool) error {
 
 	// need copy, delete target dst dir first
 	// TODO: use git worktree add if .git exists
-	return filecopy.NewOptions().
+	err = filecopy.NewOptions().
 		Concurrent(10).
 		CopyReplaceDir(goroot, dstDir)
+	if err != nil {
+		return err
+	}
+	// change binary executable
+	return nil
 }
 
 func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool, noSetup bool, debugWithDlv bool) (compilerChanged bool, toolExecFlag string, err error) {

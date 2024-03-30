@@ -1,7 +1,6 @@
 package core
 
 import (
-	"reflect"
 	"strings"
 )
 
@@ -47,17 +46,6 @@ func (c *FuncInfo) DisplayName() string {
 		return c.RecvType + "." + c.Name
 	}
 	return c.Name
-}
-
-func (c *FuncInfo) IsFunc(fn interface{}) bool {
-	if c.PC == 0 || fn == nil {
-		return false
-	}
-	v := reflect.ValueOf(fn)
-	if v.Kind() != reflect.Func {
-		return false
-	}
-	return c.PC == v.Pointer()
 }
 
 // a/b/c.A
