@@ -40,6 +40,7 @@
 
 .trace-list-root {
     height: 100%;
+    overflow-y: scroll;
     border: 1px solid grey;
     list-style: none;
 }

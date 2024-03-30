@@ -26,7 +26,7 @@ func handleTool(tool string, args []string) error {
 	n := len(tools)
 	for i := n - 1; i >= 0; i-- {
 		var invoked bool
-		invoked,lastErr = tryHandleTool(tools[i], args)
+		invoked, lastErr = tryHandleTool(tools[i], args)
 		if invoked {
 			return lastErr
 		}
@@ -37,15 +37,15 @@ func handleTool(tool string, args []string) error {
 	return lastErr
 }
 
-func tryHandleTool(tool string, args []string) (invoked bool,err error) {
+func tryHandleTool(tool string, args []string) (invoked bool, err error) {
 	baseName := filepath.Base(tool)
 	if baseName != tool {
-		return false,fmt.Errorf("unknown tool: %s", tool)
+		return false, fmt.Errorf("unknown tool: %s", tool)
 	}
 	curName := filepath.Base(os.Args[0])
 	if baseName == curName {
 		// cannot invoke itself
-		return false,fmt.Errorf("unknown tool: %s", tool)
+		return false, fmt.Errorf("unknown tool: %s", tool)
 	}
 	dirName := filepath.Dir(os.Args[0])
 	toolExec := filepath.Join(dirName, tool)
@@ -54,7 +54,7 @@ func tryHandleTool(tool string, args []string) (invoked bool,err error) {
 	stat, statErr := os.Stat(toolExec)
 	if statErr != nil {
 		if !errors.Is(statErr, os.ErrNotExist) {
-			return false,fmt.Errorf("unknown tool: %s", tool)
+			return false, fmt.Errorf("unknown tool: %s", tool)
 		}
 		retryHome = true
 	} else if stat.IsDir() {
@@ -64,14 +64,14 @@ func tryHandleTool(tool string, args []string) (invoked bool,err error) {
 		// try ~/.xgo/bin/tool
 		home, homeErr := os.UserHomeDir()
 		if homeErr != nil {
-			return false,fmt.Errorf("unknown tool: %s", tool)
+			return false, fmt.Errorf("unknown tool: %s", tool)
 		}
 		toolExec = filepath.Join(home, ".xgo", "bin", tool)
 		stat, statErr := os.Stat(toolExec)
 		if statErr != nil || stat.IsDir() {
-			return false,fmt.Errorf("unknown tool: %s", tool)
+			return false, fmt.Errorf("unknown tool: %s", tool)
 		}
 	}
 
-	return true,cmd.Run(toolExec, args...)
+	return true, cmd.Run(toolExec, args...)
 }

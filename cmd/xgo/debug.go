@@ -19,13 +19,12 @@ func getVscodeDebugFile(tmpDir string, vscode string) (vscodeDebugFile string, s
 	} else if vscode == "stdout" || strings.HasPrefix(vscode, stdoutParamPrefix) {
 		vscodeDebugFile = filepath.Join(tmpDir, "vscode_launch.json")
 	} else {
-		f, err := os.Stat(vscode)
-		if err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				return "", "", fmt.Errorf("check vscode debug flag: %w", err)
+		f, statErr := os.Stat(vscode)
+		if statErr != nil {
+			if !errors.Is(statErr, os.ErrNotExist) {
+				return "", "", fmt.Errorf("check vscode debug flag: %w", statErr)
 
 			}
-			err = nil
 			// treat as file
 		}
 		if f != nil && f.IsDir() {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/trace"
@@ -28,10 +29,27 @@ func TestTracePanicPeek(t *testing.T) {
 		run(&buf)
 	})
 
-	s := buf.String()
-	t.Logf("buf: %s", s)
+	output := buf.String()
+	// t.Logf("output: %s", s)
+	expected := "call: main\ncall: Work\ncall: doWork\nmain panic: Work panic: doWork panic"
+	if output != expected {
+		t.Fatalf("expect program output: %s, actual: %q", expected, output)
+	}
 
-	t.Logf("traceData: %s", traceData)
+	// t.Logf("traceData: %s", traceData)
+	expectTraceSequence := []string{
+		"{",
+		`"Name":"run",`,
+		`"Name":"Work",`,
+		`"Name":"doWork",`,
+		`"Error":"panic: doWork panic",`,
+		`"Error":"Work panic: doWork panic",`,
+		"}",
+	}
+	err := CheckSequence(string(traceData), expectTraceSequence)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 }
 
 func run(w io.Writer) {
@@ -56,4 +74,35 @@ func Work(w io.Writer) {
 func doWork(w io.Writer) {
 	fmt.Fprintf(w, "call: doWork\n")
 	panic("doWork panic")
+}
+
+func indexSequence(s string, sequence []string, begin bool) (int, int) {
+	if len(sequence) == 0 {
+		return 0, 0
+	}
+	firstIdx := -1
+	base := 0
+	for i, seq := range sequence {
+		idx := strings.Index(s, seq)
+		if idx < 0 {
+			return i, -1
+		}
+		if firstIdx < 0 {
+			firstIdx = idx
+		}
+		s = s[idx+len(seq):]
+		base += idx + len(seq)
+	}
+	if begin {
+		return -1, firstIdx
+	}
+	return -1, base
+}
+
+func CheckSequence(output string, sequence []string) error {
+	missing, idx := indexSequence(output, sequence, false)
+	if idx < 0 {
+		return fmt.Errorf("sequence at %d: missing %q", missing, sequence[missing])
+	}
+	return nil
 }

@@ -1,4 +1,9 @@
+
 # xgo
+[![Go Reference](https://pkg.go.dev/badge/github.com/xhd2015/xgo.svg)](https://pkg.go.dev/github.com/xhd2015/xgo)
+[![Go Report Card](https://goreportcard.com/badge/github.com/xhd2015/xgo)](https://goreportcard.com/report/github.com/xhd2015/xgo)
+[![Go Coverage](https://img.shields.io/badge/Coverage-71.9%25-brightgreen)](https://github.com/xhd2015/xgo/actions)
+[![CI](https://github.com/xhd2015/xgo/workflows/Go/badge.svg)](https://github.com/xhd2015/xgo/actions)
 
 **English | [简体中文](./README_zh_cn.md)**
 
@@ -428,7 +433,7 @@ In conclusion, `xgo` and monkey are compared as the following:
 |-|-|-|
 |Technique|IR|ASM|
 |Function Mock|Y|Y|
-|Unexpected Function Mock|Y|N|
+|Unexported Function Mock|Y|N|
 |Per-Instance Method Mock|Y|N|
 |Per-Goroutine Mock|Y|N|
 |Per-Generic Type Mock|Y|Y|
