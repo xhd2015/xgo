@@ -34,7 +34,7 @@ func TestFuncList(t *testing.T) {
 	expectMainLines := []string{
 		"func:main example",
 		"func:main someInt.value",
-		// "func:main (*someInt).inc", // this output is replaced with a simplier display name
+		// "func:main (*someInt).inc", // this output is replaced with a simpler display name
 		"func:main someInt.inc",
 	}
 

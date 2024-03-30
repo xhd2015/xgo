@@ -26,7 +26,7 @@ type List[T any] struct {
 }
 
 func (l List[T]) CloneLen() int { return 1 }
-func (l *List[T]) Len() int { return 1 }
+func (l *List[T]) Len() int     { return 1 }
 
 // ERR: generic type cannot be alias
 // type List2[T any] = List[T]
@@ -50,5 +50,6 @@ func reverse[T any, V int64 | float64](s []T) []T {
 	}
 	return r
 }
+
 // cannot compile, at least one generic param
 // func noParam[]()

@@ -24,3 +24,7 @@
 # generated traces
 /runtime/test/**/*.json
 /test/**/*.json
+
+# coverage
+/covers
+cover*.out

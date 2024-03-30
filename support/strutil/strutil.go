@@ -1,24 +1,29 @@
 package strutil
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 func IndexSequenceAt(s string, sequence []string, begin bool) int {
-	return indexSequence(s, sequence, begin)
+	_, idx := indexSequence(s, sequence, begin)
+	return idx
 }
 
 func IndexSequence(s string, sequence []string) int {
-	return indexSequence(s, sequence, false)
+	_, idx := indexSequence(s, sequence, false)
+	return idx
 }
-func indexSequence(s string, sequence []string, begin bool) int {
+func indexSequence(s string, sequence []string, begin bool) (int, int) {
 	if len(sequence) == 0 {
-		return 0
+		return 0, 0
 	}
 	firstIdx := -1
 	base := 0
-	for _, seq := range sequence {
+	for i, seq := range sequence {
 		idx := strings.Index(s, seq)
 		if idx < 0 {
-			return -1
+			return i, -1
 		}
 		if firstIdx < 0 {
 			firstIdx = idx
@@ -27,7 +32,15 @@ func indexSequence(s string, sequence []string, begin bool) int {
 		base += idx + len(seq)
 	}
 	if begin {
-		return firstIdx
+		return -1, firstIdx
 	}
-	return base
+	return -1, base
+}
+
+func CheckSequence(output string, sequence []string) error {
+	missing, idx := indexSequence(output, sequence, false)
+	if idx < 0 {
+		return fmt.Errorf("sequence at %d: missing %q", missing, sequence[missing])
+	}
+	return nil
 }

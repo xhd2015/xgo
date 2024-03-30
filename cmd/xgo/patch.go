@@ -29,7 +29,7 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 		return fmt.Errorf("requires goroot")
 	}
 	if isDevelopment && xgoSrc == "" {
-		return fmt.Errorf("requries xgoSrc")
+		return fmt.Errorf("requires xgoSrc")
 	}
 	if !isDevelopment && !revisionChanged {
 		return nil
@@ -892,12 +892,11 @@ func syncGoroot(goroot string, dstDir string, forceCopy bool) error {
 			return fmt.Errorf("bad goroot: %s", goroot)
 		}
 
-		dstFile, err := os.Stat(dstGoBin)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return err
+		dstFile, statErr := os.Stat(dstGoBin)
+		if statErr != nil {
+			if !os.IsNotExist(statErr) {
+				return statErr
 			}
-			err = nil
 		}
 
 		if dstFile != nil && !dstFile.IsDir() && dstFile.Size() == srcFile.Size() {
@@ -965,7 +964,7 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 // but if that is not found, we can fallback to ~/.xgo/bin/exec_tool
 // because exec_tool changes rarely, so it is safe to use
 // an older version.
-// we may add version to check if exec_tool is compitable
+// we may add version to check if exec_tool is compatible
 func findBuiltExecTool() (string, error) {
 	dirName := filepath.Dir(os.Args[0])
 	absDirName, err := filepath.Abs(dirName)
@@ -1008,12 +1007,11 @@ func buildCompiler(goroot string, output string) error {
 }
 
 func compareAndUpdateCompilerID(compilerFile string, compilerIDFile string) (changed bool, err error) {
-	prevData, err := ioutil.ReadFile(compilerIDFile)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return false, err
+	prevData, statErr := ioutil.ReadFile(compilerIDFile)
+	if statErr != nil {
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return false, statErr
 		}
-		err = nil
 	}
 	prevID := string(prevData)
 	curID, err := getBuildID(compilerFile)

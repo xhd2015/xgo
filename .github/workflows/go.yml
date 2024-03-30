@@ -1,0 +1,40 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+
+    - name: Build
+      run: go build -v ./cmd/...
+
+    - name: Test
+      run: go run ./script/run-test -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out
+
+    - name: Print coverage
+      run: cd runtime && go tool cover --func ../cover-runtime.out
+
+    - name: Build Release
+      run: go run ./script/build-release
+    
+    # - name: Check Version
+    #   run: ~/.xgo/bin/xgo revision
+
+    # - name: Check Go Version
+    #   run: ~/.xgo/bin/xgo exec go version

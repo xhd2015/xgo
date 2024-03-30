@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -55,6 +56,10 @@ func main() {
 	var xgoTestOnly bool
 	var xgoRuntimeTestOnly bool
 	var xgoDefaultTestOnly bool
+
+	var cover bool
+	var coverpkgs []string
+	var coverprofile string
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--exclude" {
@@ -102,6 +107,20 @@ func main() {
 			xgoDefaultTestOnly = true
 			continue
 		}
+		if arg == "-cover" {
+			cover = true
+			continue
+		}
+		if arg == "-coverpkg" {
+			coverpkgs = append(coverpkgs, args[i+1])
+			i++
+			continue
+		}
+		if arg == "-coverprofile" {
+			coverprofile = args[i+1]
+			i++
+			continue
+		}
 		if arg == "--" {
 			if i+1 < n {
 				remainArgs = append(remainArgs, args[i+1:]...)
@@ -112,36 +131,64 @@ func main() {
 			remainTests = append(remainTests, arg)
 			continue
 		}
-		panic(fmt.Errorf("unknown flag: %s", arg))
+		fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
+		os.Exit(1)
+	}
+	if coverprofile != "" {
+		absProfile, err := filepath.Abs(coverprofile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		coverprofile = absProfile
 	}
 	goRelease := "go-release"
-	goroots, err := listGoroots(goRelease)
+	var goroots []string
+	_, err := os.Stat(goRelease)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-	if len(includes) > 0 && len(excludes) > 0 {
-		fmt.Fprintf(os.Stderr, "--exclude and --include cannot be used together\n")
-		os.Exit(1)
-	}
-	if len(includes) > 0 {
-		i := 0
-		for _, goroot := range goroots {
-			if listContains(includes, goroot) {
-				goroots[i] = goroot
-				i++
+		// use default GOROOT
+		goroot := runtime.GOROOT()
+		if goroot == "" {
+			goroot, err = cmd.Output("go", "env", "GOROOT")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "cannot get GOROOT: %v\n", err)
+				os.Exit(1)
+				return
 			}
 		}
-		goroots = goroots[:i]
-	} else if len(excludes) > 0 {
-		i := 0
-		for _, goroot := range goroots {
-			if !listContains(excludes, goroot) {
-				goroots[i] = goroot
-				i++
-			}
+		goroots = append(goroots, goroot)
+	} else {
+		goRootNames, err := listGoroots(goRelease)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
 		}
-		goroots = goroots[:i]
+		if len(includes) > 0 && len(excludes) > 0 {
+			fmt.Fprintf(os.Stderr, "--exclude and --include cannot be used together\n")
+			os.Exit(1)
+		}
+		if len(includes) > 0 {
+			i := 0
+			for _, goroot := range goRootNames {
+				if listContains(includes, goroot) {
+					goRootNames[i] = goroot
+					i++
+				}
+			}
+			goRootNames = goRootNames[:i]
+		} else if len(excludes) > 0 {
+			i := 0
+			for _, goroot := range goRootNames {
+				if !listContains(excludes, goroot) {
+					goRootNames[i] = goroot
+					i++
+				}
+			}
+			goRootNames = goRootNames[:i]
+		}
+		for _, goRootName := range goRootNames {
+			goroots = append(goroots, filepath.Join(goRelease, goRootName))
+		}
 	}
 
 	if len(goroots) == 0 {
@@ -178,8 +225,28 @@ func main() {
 			runXgoTestFlag = false
 			runDefault = true
 		}
+		addArgs := func(args []string, variant string) []string {
+			if cover {
+				args = append(args, "-cover")
+			}
+			for _, coverPkg := range coverpkgs {
+				args = append(args, "-coverpkg", coverPkg)
+			}
+			if coverprofile != "" {
+				var prefix string
+				var suffix string
+				idx := strings.LastIndex(coverprofile, ".")
+				if idx < 0 {
+					prefix = coverprofile
+				} else {
+					prefix, suffix = coverprofile[:idx], coverprofile[idx:]
+				}
+				args = append(args, "-coverprofile", prefix+"-"+variant+suffix)
+			}
+			return args
+		}
 		if runXgoTestFlag {
-			err := runXgoTest(filepath.Join(goRelease, goroot), remainArgs, remainTests)
+			err := runXgoTest(goroot, addArgs(remainArgs, "xgo"), remainTests)
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
 				os.Exit(1)
@@ -187,14 +254,14 @@ func main() {
 		}
 
 		if runRuntimeTestFlag {
-			err := runRuntimeTest(filepath.Join(goRelease, goroot), remainArgs, remainTests)
+			err := runRuntimeTest(goroot, addArgs(remainArgs, "runtime"), remainTests)
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
 				os.Exit(1)
 			}
 		}
 		if runDefault {
-			err := runDefaultTest(filepath.Join(goRelease, goroot), remainArgs, remainTests)
+			err := runDefaultTest(goroot, addArgs(remainArgs, "default"), remainTests)
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
 				os.Exit(1)

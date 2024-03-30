@@ -7,8 +7,8 @@ import (
 )
 
 const VERSION = "1.0.11"
-const REVISION = "b74c3b3830780e4793716b2b48505f22502528f2+1"
-const NUMBER = 125
+const REVISION = "1bc959ae70c34e189c36b8cb3f7b2e1a8665756c+1"
+const NUMBER = 136
 
 // these fields will be filled by compiler
 const XGO_VERSION = ""
@@ -40,7 +40,7 @@ func checkVersion() error {
 			return errors.New("newer xgo available, consider run 'xgo upgrade'")
 		}
 		// only one case is feasible: XGO_NUMBER >= runtime NUMBER
-		// because xgo can be compitable with older sdk
+		// because xgo can be compatible with older sdk
 		return nil
 	}
 	var updateCmd string
@@ -49,5 +49,5 @@ func checkVersion() error {
 	} else {
 		updateCmd = "go get github.com/xhd2015/xgo/runtime@latest"
 	}
-	return fmt.Errorf("xgo v%s maybe incompitable with xgo/runtime v%s, consider run '%s'", XGO_VERSION, VERSION, updateCmd)
+	return fmt.Errorf("xgo v%s maybe incompatible with xgo/runtime v%s, consider run '%s'", XGO_VERSION, VERSION, updateCmd)
 }

@@ -1,6 +1,7 @@
 package filecopy
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"fmt"
 )
 
 type Options struct {
@@ -48,7 +48,7 @@ func copyReplaceDir(srcDir string, targetDir string, opts *Options) error {
 	if srcDir == "" {
 		return fmt.Errorf("requires srcDir")
 	}
-	
+
 	// fmt.Printf("targetDir: %s\n",targetDir)
 
 	// delete safety check
