@@ -14,7 +14,8 @@ var hasCalledA bool
 var hasAbortB bool
 var hasCalledB bool
 
-func init() {
+// go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestTrap -v ./test/trap
+func TestTrap(t *testing.T) {
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 			trap.Skip()
@@ -29,10 +30,6 @@ func init() {
 			return nil, nil
 		},
 	})
-}
-
-// go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestTrap -v ./test/trap
-func TestTrap(t *testing.T) {
 	run()
 	if !hasCalledA {
 		t.Fatalf("expect hasCalledA, actually not called")
@@ -49,11 +46,11 @@ func TestTrap(t *testing.T) {
 }
 
 func run() {
-	A()
+	A(context.Background())
 	B()
 }
 
-func A() {
+func A(ctx context.Context) {
 	hasCalledA = true
 	fmt.Printf("A\n")
 }

@@ -6,27 +6,15 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
-	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
-// linked by compiler
-func __xgo_link_mem_equal(a, b unsafe.Pointer, size uintptr) bool {
-	return false
-}
-
 var ErrCallOld = errors.New("mock: call old")
 
 type Interceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error
-
-var interceptors []Interceptor
-
-func GetInterceptors() []Interceptor {
-	return interceptors
-}
 
 // Mock setup mock on given function `fn`.
 // `fn` can be a function or a method,
@@ -146,37 +134,6 @@ func mock(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, funcPC uintptr, tr
 func CallOld() {
 	// TODO: implement recover
 	panic(ErrCallOld)
-}
-
-// this function checks if the given
-// `recvPtr` has the same value compared
-// to the given `methodValue`.
-// The `methodValue` should be passed as
-// `file.Write“.
-// Deprecated: left here only for reference purepose
-func isSameBoundMethod(recvPtr interface{}, methodValue interface{}) bool {
-	// can also be a constant
-	// size := unsafe.Sizeof(*(*large)(nil))
-	size := reflect.TypeOf(recvPtr).Elem().Size()
-	type _intfRecv struct {
-		_    uintptr // type word
-		data *byte   // data word
-	}
-
-	a := (*_intfRecv)(unsafe.Pointer(&recvPtr))
-	type _methodValue struct {
-		_    uintptr // pc
-		recv byte
-	}
-	type _intf struct {
-		_    uintptr // type word
-		data *_methodValue
-	}
-	ppb := (*_intf)(unsafe.Pointer(&methodValue))
-	pb := *ppb
-	b := unsafe.Pointer(&pb.data.recv)
-
-	return __xgo_link_mem_equal(unsafe.Pointer(a.data), b, size)
 }
 
 // mock context

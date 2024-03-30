@@ -18,6 +18,7 @@ import (
 //	go run ./script/run-test/ --include go1.19.13 -count=1
 //	go run ./script/run-test/ --include go1.19.13 -run TestHelloWorld -v
 //	go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
+//  go run ./script/run-test/ -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile covers/cover.out --include go1.21.8
 
 // runtime test:
 //     go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncList -v ./test/func_list
@@ -33,11 +34,13 @@ import (
 
 // TODO: remove duplicate test between xgo test and runtime test
 var runtimeTests = []string{
-	"mock_method",
 	"trace_panic_peek",
 	"func_list",
 	"trap_inspect_func",
 	"trap",
+	"mock_func",
+	"mock_method",
+	"mock_by_name",
 	"mock_closure",
 	"mock_stdlib",
 	"mock_generic",

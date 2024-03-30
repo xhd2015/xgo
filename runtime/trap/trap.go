@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 	"sync"
-	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
@@ -65,21 +63,6 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 	n := len(interceptors)
 	if n == 0 {
 		return nil, false
-	}
-	if false {
-		// check if the calling func is an interceptor, if so, skip
-		// UPDATE: don't do manual check
-		for i := 0; i < n; i++ {
-			if interceptors[i].Pre == nil {
-				continue
-			}
-			ipc := (**uintptr)(unsafe.Pointer(&interceptors[i].Pre))
-			pcName := runtime.FuncForPC(**ipc).Name()
-			_ = pcName
-			if **ipc == pc {
-				return nil, false
-			}
-		}
 	}
 	// NOTE: this may return nil for generic template
 	var f *core.FuncInfo
