@@ -217,7 +217,7 @@ func copyFile(src string, dst string, mkdirs bool, buf []byte) error {
 		}
 	}
 
-	writer, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	writer, err := os.Create(dst)
 	if err != nil {
 		return err
 	}

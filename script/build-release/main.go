@@ -299,11 +299,13 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 		}
 	}
 	var needInstall bool
+	var installCopy bool
 	if installLocal {
 		needInstall = true
 	} else if includeLocal {
 		if runtime.GOOS == goos && runtime.GOARCH == goarch {
 			needInstall = true
+			installCopy = true
 		}
 	}
 
@@ -329,7 +331,12 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 				toBaseNameExe = localNameExe
 				xgoBaseNameExe = localNameExe
 			}
-			err := os.Rename(filepath.Join(tmpDir, baseNameExe), filepath.Join(binDir, toBaseNameExe))
+			var err error
+			if installCopy {
+				err = filecopy.CopyFile(filepath.Join(tmpDir, baseNameExe), filepath.Join(binDir, toBaseNameExe))
+			} else {
+				err = os.Rename(filepath.Join(tmpDir, baseNameExe), filepath.Join(binDir, toBaseNameExe))
+			}
 			if err != nil {
 				return err
 			}
