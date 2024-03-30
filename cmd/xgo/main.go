@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/osinfo"
@@ -251,6 +252,15 @@ func handleBuild(cmd string, args []string) error {
 		}
 	}
 
+	setupDone := make(chan struct{})
+	go func() {
+		select {
+		case <-time.After(1 * time.Second):
+			fmt.Fprintf(os.Stderr, "xgo is taking a while to setup, please wait...\n")
+		case <-setupDone:
+		}
+	}()
+
 	var revisionChanged bool
 	if !noInstrument && !noSetup {
 		err = ensureDirs(binDir, logDir, instrumentDir)
@@ -274,7 +284,7 @@ func handleBuild(cmd string, args []string) error {
 				return err
 			}
 		}
-		if isDevelopment || revisionChanged {
+		if isDevelopment || resetInstrument || revisionChanged {
 			logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
 			err = syncGoroot(goroot, instrumentGoroot, revisionChanged)
 			if err != nil {
@@ -288,7 +298,7 @@ func handleBuild(cmd string, args []string) error {
 			}
 		}
 
-		if revisionChanged {
+		if resetInstrument || revisionChanged {
 			logDebug("revision %s write to %s", revision, revisionFile)
 			err := os.WriteFile(revisionFile, []byte(revision), 0755)
 			if err != nil {
@@ -322,6 +332,8 @@ func handleBuild(cmd string, args []string) error {
 		logDebug("compiler changed: %v", compilerChanged)
 		logDebug("tool exec flags: %v", toolExecFlag)
 	}
+	close(setupDone)
+
 	if buildCompiler {
 		return nil
 	}
