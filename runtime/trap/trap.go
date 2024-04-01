@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 
 	"github.com/xhd2015/xgo/runtime/core"
@@ -82,6 +83,35 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 		return nil, false
 	}
 
+	// retrieve context
+	var ctx context.Context
+	if f.FirstArgCtx {
+		// TODO: is *HttpRequest a *Context?
+		ctx = reflect.ValueOf(args[0]).Elem().Interface().(context.Context)
+		// ctx = *(args[0].(*context.Context))
+	} else if f.Closure {
+		if len(args) > 0 {
+			argCtx, ok := reflect.ValueOf(args[0]).Elem().Interface().(context.Context)
+			if ok {
+				// modify on the fly
+				f.FirstArgCtx = true
+				ctx = argCtx
+			}
+		}
+	}
+	var perr *error
+	if f.LastResultErr {
+		perr = results[len(results)-1].(*error)
+	} else if f.Closure {
+		if len(results) > 0 {
+			resErr, ok := reflect.ValueOf(args[0]).Interface().(*error)
+			if ok {
+				f.LastResultErr = true
+				perr = resErr
+			}
+		}
+	}
+
 	// TODO: set FirstArgCtx and LastResultErr
 	req := make(object, 0, len(args))
 	result := make(object, 0, len(results))
@@ -130,18 +160,6 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 	// 	Results: results,
 	// }
 
-	// TODO: will results always have names?
-	var perr *error
-	if f.LastResultErr {
-		perr = results[len(results)-1].(*error)
-	}
-
-	// NOTE: ctx
-	var ctx context.Context
-	if f.FirstArgCtx {
-		// TODO: is *HttpRequest a *Context?
-		ctx = *(args[0].(*context.Context))
-	}
 	// NOTE: context.TODO() is a constant
 	if ctx == nil {
 		ctx = context.TODO()

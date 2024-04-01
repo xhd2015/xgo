@@ -476,11 +476,14 @@ func getFuncDeclInfo(fileIndex int, f *syntax.File, file string, fn *syntax.Func
 	}
 	var firstArgCtx bool
 	var lastResErr bool
-	if len(fn.Type.ParamList) > 0 && hasQualifiedName(fn.Type.ParamList[0].Type, "context", "Context") {
-		firstArgCtx = true
-	}
-	if len(fn.Type.ResultList) > 0 && isName(fn.Type.ResultList[len(fn.Type.ResultList)-1].Type, "error") {
-		lastResErr = true
+	if false {
+		// NOTE: these fields will be retrieved at runtime dynamically
+		if len(fn.Type.ParamList) > 0 && hasQualifiedName(fn.Type.ParamList[0].Type, "context", "Context") {
+			firstArgCtx = true
+		}
+		if len(fn.Type.ResultList) > 0 && isName(fn.Type.ResultList[len(fn.Type.ResultList)-1].Type, "error") {
+			lastResErr = true
+		}
 	}
 
 	return &DeclInfo{
