@@ -21,7 +21,7 @@ func TestProcessSpecial(t *testing.T) {
 	for _, testCase := range testCases {
 		res := processSpecial(testCase.Arg)
 		if res != testCase.Res {
-			t.Fatalf("exepct processSpecial(%q) = %q, actual: %q", testCase.Arg, testCase.Res, res)
+			t.Fatalf("expect processSpecial(%q) = %q, actual: %q", testCase.Arg, testCase.Res, res)
 		}
 	}
 }

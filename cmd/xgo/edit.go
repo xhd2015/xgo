@@ -29,7 +29,7 @@ func addCodeAfterImports(code string, beginMark string, endMark string, contents
 	if idx < 0 {
 		panic(fmt.Errorf("import not found"))
 	}
-	return insertConentNoDudplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
+	return insertContentNoDuplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
 }
 
 func addContentBefore(content string, beginMark string, endMark string, seq []string, addContent string) string {
@@ -45,7 +45,7 @@ func addContentAt(content string, beginMark string, endMark string, seq []string
 	if idx < 0 {
 		panic(fmt.Errorf("sequence not found: %v", seq))
 	}
-	return insertConentNoDudplicate(content, beginMark, endMark, idx, addContent)
+	return insertContentNoDuplicate(content, beginMark, endMark, idx, addContent)
 }
 
 func replaceContentAfter(content string, beginMark string, endMark string, seq []string, target string, replaceContent string) string {
@@ -72,7 +72,7 @@ func replaceContentAfter(content string, beginMark string, endMark string, seq [
 }
 
 // signature example: /*<begin ident>*/ {content} /*<end ident>*/
-func insertConentNoDudplicate(content string, beginMark string, endMark string, idx int, insertContent string) string {
+func insertContentNoDuplicate(content string, beginMark string, endMark string, idx int, insertContent string) string {
 	if insertContent == "" {
 		return content
 	}

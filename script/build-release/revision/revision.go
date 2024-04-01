@@ -25,7 +25,7 @@ func GetCommitHash(dir string, ref string) (string, error) {
 
 func ReplaceRevision(s string, revision string) (string, error) {
 	if strings.Contains(revision, `"`) {
-		return "", fmt.Errorf("revision connot have \": %s", revision)
+		return "", fmt.Errorf("revision cannot have \": %s", revision)
 	}
 	replaceLine := func(line string, index int) (string, error) {
 		qIdx := strings.Index(line[index+1:], `"`)

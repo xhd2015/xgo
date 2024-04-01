@@ -28,7 +28,7 @@ func TestClosureShouldRetrieveCtxInfoAtTrapTime(t *testing.T) {
 			t.Fatalf("expect trapCtx to be non nil, atcual nil")
 		}
 		if trapCtx != ctx {
-			t.Fatalf("expect trapCtx to be the same with ctx, actully different")
+			t.Fatalf("expect trapCtx to be the same with ctx, actually different")
 		}
 		return nil
 	})
@@ -47,7 +47,7 @@ func TestClosureUnnamedArgShouldRetrieveCtxInfo(t *testing.T) {
 			t.Fatalf("expect trapCtx to be non nil, atcual nil")
 		}
 		if trapCtx != ctx {
-			t.Fatalf("expect trapCtx to be the same with ctx, actully different")
+			t.Fatalf("expect trapCtx to be the same with ctx, actually different")
 		}
 		return nil
 	})

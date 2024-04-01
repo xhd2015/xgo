@@ -98,7 +98,7 @@ func gitListWorkingTreeChangedFiles(dir string) ([]string, error) {
 	//   -c cached
 	//   -d deleted
 	//   -m modified
-	//   -o untrached files
+	//   -o untracked files
 	//   --exclude-standard apply ignore rules
 	//
 	// example:

@@ -83,7 +83,7 @@ func handleCompile(cmd string, opts *options, args []string) error {
 		return nil
 	}
 	debugWithDlv := opts.debugWithDlv
-	// pkg path: the argment after the -p
+	// pkg path: the argument after the -p
 	pkgPath := findArgAfterFlag(args, "-p")
 	if pkgPath == "" {
 		return fmt.Errorf("compile missing -p package")

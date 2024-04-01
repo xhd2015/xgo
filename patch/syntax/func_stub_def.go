@@ -34,5 +34,5 @@ func init() {
 
 // helperCode: helps us(xgo) write IR more easily
 // NOTE: normal code should never define names starts with __xgo
-// TODO: if we encounter any of these name conflics, we skip this file or use a different name
+// TODO: if we encounter any of these name conflicts, we skip this file or use a different name
 const helperCode = helperCodeGen

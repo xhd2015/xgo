@@ -277,7 +277,7 @@ Arguments:
 
 Scope:
 - If `Mock` is called from `init`, then all goroutines will be mocked.
-- Otherwise, `Mock` is called after `init`, then the mock interceptor will only be effective for current gorotuine, other goroutines are not affected.
+- Otherwise, `Mock` is called after `init`, then the mock interceptor will only be effective for current goroutine, other goroutines are not affected.
 
 Interceptor Signature: `func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error`
 - If the interceptor returns `nil`, then the target function is mocked,
@@ -326,7 +326,7 @@ func TestMethodMock(t *testing.T){
 ## Trace
 It is painful when debugging with a deep call stack.
 
-Trace addresses this issue by collecting the hiearchical stack trace and stores it into file for later use. 
+Trace addresses this issue by collecting the hierarchical stack trace and stores it into file for later use.
 
 Needless to say, with Trace, debug becomes less usual:
 
@@ -385,7 +385,7 @@ XGO_TRACE_OUTPUT=stdout xgo run ./
 #            ]
 #        }
 #
-# NOTE: other fields are ommited for displaying key information.
+# NOTE: other fields are omitted for displaying key information.
 ```
 
 You can view the trace with:`xgo tool trace TestExample.json`
@@ -394,7 +394,7 @@ Output:
 ![trace html](cmd/trace/testdata/stack_trace.jpg "Trace")
 
 By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
-- `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purepose,
+- `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purpose,
 - `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
 - `XGO_TRACE_OUTPUT=off`: turn off trace.
 
@@ -410,7 +410,7 @@ Yes, no interface, just for mocking. If the only reason to abstract an interface
 
 Extracting interface just for mocking is never an option to me. To the domain of the problem, it's merely a workaround. It enforces the code to be written in one style, that's why we don't like it.
 
-Monkey patching simply does the right thing for the problem. But existing library are bad at compatiblility. 
+Monkey patching simply does the right thing for the problem. But existing library are bad at compatibility.
 
 So I created `xgo`, so I hope `xgo` will also take over other solutions to the mocking problem.
 
@@ -421,13 +421,13 @@ In short, it uses a low level assembly hack to replace function at runtime. Whic
 
 Then it was archived and no longer maintained by the author himself. However, two projects later take over the asm idea and add support for newer go versions and architectures like Apple M1.
 
-Still, the two does not solve the underlying compatiblility issues introduced by asm, including cross-platform support, the need to write to a read-only section of the execution code and lacking of general mock.
+Still, the two does not solve the underlying compatibility issues introduced by asm, including cross-platform support, the need to write to a read-only section of the execution code and lacking of general mock.
 
-So developers still get annoying breaked every now and then.
+So developers still get annoying failures every now and then.
 
-Xgo managed to solve these problems by avoiding low level hacking of the language itself. Instead, it relies on the IR representation employed by the go compiler. 
+Xgo managed to solve these problems by avoiding low level hacking of the language itself. Instead, it relies on the IR representation employed by the go compiler.
 
-It does a so-called `IR Rewritting` on the fly when the compiler compiles the source code. The IR(Intermediate Representation) is closer to the source code rather than the machine code. Thus it is much more stable than the monkey solution.
+It does a so-called `IR Rewriting` on the fly when the compiler compiles the source code. The IR(Intermediate Representation) is closer to the source code rather than the machine code. Thus it is much more stable than the monkey solution.
 
 In conclusion, `xgo` and monkey are compared as the following:
 ||xgo|monkey|

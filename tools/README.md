@@ -6,7 +6,7 @@ It modifies the compiler so that it inserts two extra print:
  - by modifying IR and inserting __x_trap to runtime: hello Trap
 
 ```sh
-$ ./debug.sh build-comipler
+$ ./debug.sh build-compiler
 $ ./debug.sh build
 $ ./main.bin 
 hello IR
@@ -39,9 +39,9 @@ go: parsing buildID from go tool compile -V=full: unexpected output:
 Emitted from `src/cmd/go/internal/work/buildid.go`.
 
 # Implement a mock framework
-With this techique it is trivil to implement a mock framework.
+With this technique it is trivial to implement a mock framework.
 
-Just use the `trap.AddInterceptor({Pre:..., Post:...})` to define pre to detect function point in interested, and return a `trap.ErrAbort` to skip the function.
+Just use the `trap.AddInterceptor({Pre:..., Post:...})` to define `Pre` to detect function point in interested, and return a `trap.ErrAbort` to skip the function.
 
 See [./test/test_trap/mock/mock.go](./test/test_trap/mock/mock.go):
 ```go
