@@ -38,7 +38,7 @@ func linkRuntimeAndTest(testDir string, goModOnly bool) (rootDir string, subDir 
 		return "", "", err
 	}
 
-	// windows no link
+	// Windows no link
 	if runtime.GOOS != "windows" {
 		// copy runtime to a tmp directory, and
 		// test under there

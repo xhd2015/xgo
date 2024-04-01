@@ -11,7 +11,7 @@ func TestProcessSpecial(t *testing.T) {
 		{"", ""},
 		{"/", ""},
 		{"/a", "a"},
-		{"C:/a", "Ca"}, // windows
+		{"C:/a", "Ca"}, // Windows
 		{"C:\\a", "Ca"},
 		{"/ab/c", "abc"},
 		{"/ab/c", "abc"},

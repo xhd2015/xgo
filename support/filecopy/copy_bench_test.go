@@ -36,7 +36,7 @@ func TestExampleCopy5g(t *testing.T) {
 // go test -run TestExampleCopy10g -v ./support/filecopy
 func TestExampleCopy10g(t *testing.T) {
 	checkSkip(t)
-	// on windows this took 4.79s
+	// on Windows this took 4.79s
 	testCopyDir(t, "go1.22.1", 10)
 }
 

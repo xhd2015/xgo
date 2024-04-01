@@ -64,7 +64,7 @@ Usage:
 ```sh
 ./with-go-devel ./debug.sh build -v -gcflags \"all=-N -l\" -o ./test_trap.bin ./test/test_trap
 ```
-Or just use the vscode launch config `Launch test_trap`.
+Or just use the VS Code launch config `Launch test_trap`.
 
 
 Example:

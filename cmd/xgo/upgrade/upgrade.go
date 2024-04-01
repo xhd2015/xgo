@@ -79,7 +79,7 @@ func Upgrade(installDir string) error {
 			return err
 		}
 	} else {
-		// windows
+		// Windows
 		tmpUnzip := filepath.Join(tmpDir, "unzip")
 		err = os.MkdirAll(tmpUnzip, 0755)
 		if err != nil {
