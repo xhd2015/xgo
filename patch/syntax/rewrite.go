@@ -361,6 +361,14 @@ func copyName(name *syntax.Name) *syntax.Name {
 	return &x
 }
 
+func copyExprs(exprs []syntax.Expr) []syntax.Expr {
+	copyExprs := make([]syntax.Expr, len(exprs))
+	for i, expr := range exprs {
+		copyExprs[i] = copyExpr(expr)
+	}
+	return copyExprs
+}
+
 func copyExpr(expr syntax.Expr) syntax.Expr {
 	if expr == nil {
 		return nil
@@ -420,6 +428,10 @@ func copyExpr(expr syntax.Expr) syntax.Expr {
 	case *syntax.InterfaceType:
 		x := *expr
 		x.MethodList = copyFields(expr.MethodList)
+		return &x
+	case *syntax.ListExpr:
+		x := *expr
+		x.ElemList = copyExprs(expr.ElemList)
 		return &x
 	default:
 		panic(fmt.Errorf("unrecognized expr while copying: %T", expr))
