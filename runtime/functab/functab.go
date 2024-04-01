@@ -166,21 +166,24 @@ func ensureMapping() {
 			generic := rv.FieldByName("Generic").Bool()
 			f := rv.FieldByName("Fn").Interface()
 
-			firstArgCtx := rv.FieldByName("FirstArgCtx").Bool()
-			lastResErr := rv.FieldByName("LastResErr").Bool()
+			var firstArgCtx bool
+			var lastResErr bool
 			var pc uintptr
 			var fullName string
 			if !generic && !interface_ {
 				if f != nil {
-					if closure {
-						// TODO: move all ctx, err check logic here
-						ft := reflect.TypeOf(f)
-						if ft.NumIn() > 0 && ft.In(0).Implements(ctxType) {
-							firstArgCtx = true
-						}
-						if ft.NumOut() > 0 && ft.Out(ft.NumOut()-1).Implements(errType) {
-							lastResErr = true
-						}
+					// TODO: move all ctx, err check logic here
+					ft := reflect.TypeOf(f)
+					off := 0
+					if recvTypeName != "" {
+						off = 1
+					}
+					if ft.NumIn() > off && ft.In(off).Implements(ctxType) {
+						firstArgCtx = true
+					}
+					// NOTE: use == instead of implements
+					if ft.NumOut() > 0 && ft.Out(ft.NumOut()-1) == errType {
+						lastResErr = true
 					}
 					pc = getFuncPC(f)
 					fullName = __xgo_link_get_pc_name(pc)
