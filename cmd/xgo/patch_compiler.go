@@ -135,7 +135,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		}
 
 		// turn off inline when there is rewrite(gcflags=-l)
-		// windows: also turn off optimization(gcflags=-N)
+		// Windows: also turn off optimization(gcflags=-N)
 		var flagNSwitch = ""
 		if runtime.GOOS == "windows" {
 			flagNSwitch = "\n" + "base.Flag.N = 1"
@@ -282,7 +282,7 @@ func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, s
 	if isDevelopment {
 		symLink := syncWithLink
 		if osinfo.FORCE_COPY_UNSYM {
-			// windows: A required privilege is not held by the client.
+			// Windows: A required privilege is not held by the client.
 			symLink = false
 		}
 		// copy compiler internal dependencies
@@ -325,7 +325,7 @@ func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, s
 		if path == "patch_compiler" {
 			return os.MkdirAll(dstDir, 0755)
 		}
-		// TODO: test on windows if "/" works
+		// TODO: test on Windows if "/" works
 		dstPath := filepath.Join(dstDir, strings.TrimPrefix(path, "patch_compiler/"))
 		if d.IsDir() {
 			return os.MkdirAll(dstPath, 0755)

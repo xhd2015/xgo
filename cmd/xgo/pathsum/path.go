@@ -37,7 +37,7 @@ func shortPath(path string, maxSeg int) string {
 		// seg = strings.ReplaceAll(seg, "?", "")
 		// seg = strings.ReplaceAll(seg, "$", "")
 		// seg = strings.ReplaceAll(seg, "&", "")
-		// seg = strings.ReplaceAll(seg, ":", "") // windows
+		// seg = strings.ReplaceAll(seg, ":", "") // Windows
 		// seg = strings.ReplaceAll(seg, ";", "")
 		// seg = strings.ReplaceAll(seg, "%", "")
 		// seg = strings.ReplaceAll(seg, "#", "")

@@ -222,7 +222,7 @@ func handleBuild(cmd string, args []string) error {
 	logDebug("instrument dir: %s", instrumentDir)
 
 	exeSuffix := osinfo.EXE_SUFFIX
-	// NOTE: on windows, go build -o xxx will always yield xxx.exe
+	// NOTE: on Windows, go build -o xxx will always yield xxx.exe
 	execToolBin := filepath.Join(binDir, "exec_tool"+exeSuffix)
 	compileLog := filepath.Join(logDir, "compile.log")
 	compilerBin := filepath.Join(instrumentDir, "compile"+exeSuffix)

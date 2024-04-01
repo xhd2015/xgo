@@ -192,7 +192,7 @@ func getAdjustedFile(f string) string {
 	if runtime.GOOS != "windows" {
 		return ""
 	}
-	// for windows, posFile has the form:
+	// for Windows, posFile has the form:
 	//    C:/a/b/c
 	// while syncDeclMapping's file has the form:
 	//    C:\a\b\c

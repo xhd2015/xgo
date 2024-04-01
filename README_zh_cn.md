@@ -25,7 +25,7 @@
 # macOS和Linux(包括 WSL)
 curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | bash
 
-# windows
+# Windows
 powershell -c "irm github.com/xhd2015/xgo/raw/master/install.ps1|iex"
 ```
 
@@ -56,7 +56,7 @@ xgo version
 对OS和Arch没有限制, `xgo`支持所有`go`支持的OS和Arch。
 
 OS:
-- MacOS
+- macOS
 - Linux
 - Windows (+WSL)
 - ...

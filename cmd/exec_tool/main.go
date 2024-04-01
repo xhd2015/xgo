@@ -59,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// on windows, cmd ends with .exe
+	// on Windows, cmd ends with .exe
 	baseName := filepath.Base(cmd)
 	isCompile := baseName == "compile"
 	if !isCompile && runtime.GOOS == "windows" {

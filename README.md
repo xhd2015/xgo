@@ -26,7 +26,7 @@ See [Quick Start](#quick-start) and [Documentation](./doc) for more details.
 # macOS and Linux (and WSL)
 curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | bash
 
-# windows
+# Windows
 powershell -c "irm github.com/xhd2015/xgo/raw/master/install.ps1|iex"
 ```
 
@@ -417,11 +417,11 @@ So I created `xgo`, so I hope `xgo` will also take over other solutions to the m
 # Comparing `xgo` with `monkey`
 The project [bouk/monkey](https://github.com/bouk/monkey), was initially created by bouk, as described in his blog https://bou.ke/blog/monkey-patching-in-go.
 
-In short, it uses a low level assembly hack to replace function at runtime. Which exposes lots of confusing problems to its users as it gets used more and more widely(especially on MacOS).
+In short, it uses a low level assembly hack to replace function at runtime. Which exposes lots of confusing problems to its users as it gets used more and more widely(especially on macOS).
 
-Then it was archived and no longer maintained by the author himself. However, two projects later take over the asm idea and add support for newer go versions and architectures like Apple M1.
+Then it was archived and no longer maintained by the author himself. However, two projects later take over the ASM idea and add support for newer go versions and architectures like Apple M1.
 
-Still, the two does not solve the underlying compatibility issues introduced by asm, including cross-platform support, the need to write to a read-only section of the execution code and lacking of general mock.
+Still, the two does not solve the underlying compatibility issues introduced by ASM, including cross-platform support, the need to write to a read-only section of the execution code and lacking of general mock.
 
 So developers still get annoying failures every now and then.
 
