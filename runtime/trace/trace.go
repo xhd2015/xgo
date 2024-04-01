@@ -21,7 +21,7 @@ const __XGO_SKIP_TRAP = true
 
 // hold goroutine stacks, keyed by goroutine ptr
 var stackMap sync.Map       // uintptr(goroutine) -> *Root
-var testInfoMaping sync.Map // uintptr(goroutine) -> *testInfo
+var testInfoMapping sync.Map // uintptr(goroutine) -> *testInfo
 
 type testInfo struct {
 	name string
@@ -34,13 +34,13 @@ func init() {
 			return
 		}
 		key := uintptr(__xgo_link_getcurg())
-		testInfoMaping.LoadOrStore(key, &testInfo{
+		testInfoMapping.LoadOrStore(key, &testInfo{
 			name: name,
 		})
 	})
 	__xgo_link_on_goexit(func() {
 		key := uintptr(__xgo_link_getcurg())
-		testInfoMaping.Delete(key)
+		testInfoMapping.Delete(key)
 		collectingMap.Delete(key)
 	})
 }
@@ -125,11 +125,11 @@ func setupInterceptor() func() {
 		Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 			key := uintptr(__xgo_link_getcurg())
 			localOptStack, ok := collectingMap.Load(key)
-			var locaOpts *collectOpts
+			var localOpts *collectOpts
 			if ok {
 				l := localOptStack.(*optStack)
 				if len(l.list) > 0 {
-					locaOpts = l.list[len(l.list)-1]
+					localOpts = l.list[len(l.list)-1]
 				}
 			}
 			stack := &Stack{
@@ -140,14 +140,14 @@ func setupInterceptor() func() {
 			var globalRoot interface{}
 			var localRoot *Root
 			var initial bool
-			if locaOpts == nil {
+			if localOpts == nil {
 				var globalLoaded bool
 				globalRoot, globalLoaded = stackMap.Load(key)
 				if !globalLoaded {
 					initial = true
 				}
 			} else {
-				localRoot = locaOpts.root
+				localRoot = localOpts.root
 				if localRoot == nil {
 					initial = true
 				}
@@ -162,16 +162,16 @@ func setupInterceptor() func() {
 					},
 				}
 				stack.Begin = int64(time.Since(root.Begin))
-				if locaOpts == nil {
+				if localOpts == nil {
 					stackMap.Store(key, root)
 				} else {
-					locaOpts.root = root
+					localOpts.root = root
 				}
 				// NOTE: for initial stack, the data is nil
 				return nil, nil
 			}
 			var root *Root
-			if locaOpts != nil {
+			if localOpts != nil {
 				root = localRoot
 			} else {
 				root = globalRoot.(*Root)
@@ -187,19 +187,19 @@ func setupInterceptor() func() {
 			key := uintptr(__xgo_link_getcurg())
 
 			localOptStack, ok := collectingMap.Load(key)
-			var locaOpts *collectOpts
+			var localOpts *collectOpts
 			if ok {
 				l := localOptStack.(*optStack)
 				if len(l.list) > 0 {
-					locaOpts = l.list[len(l.list)-1]
+					localOpts = l.list[len(l.list)-1]
 				}
 			}
 			var root *Root
-			if locaOpts != nil {
-				if locaOpts.root == nil {
+			if localOpts != nil {
+				if localOpts.root == nil {
 					panic(fmt.Errorf("unbalanced stack"))
 				}
-				root = locaOpts.root
+				root = localOpts.root
 			} else {
 				v, ok := stackMap.Load(key)
 				if !ok {
@@ -228,12 +228,12 @@ func setupInterceptor() func() {
 			root.Top.End = int64(time.Since(root.Begin))
 			if data == nil {
 				// stack finished
-				if locaOpts != nil {
-					if locaOpts.onComplete != nil {
-						locaOpts.onComplete(root)
+				if localOpts != nil {
+					if localOpts.onComplete != nil {
+						localOpts.onComplete(root)
 						return nil
 					}
-					err := emitTrace(locaOpts.name, root)
+					err := emitTrace(localOpts.name, root)
 					if err != nil {
 						return err
 					}
@@ -318,7 +318,7 @@ func fmtStack(root *Root) (data []byte, err error) {
 func emitTrace(name string, root *Root) error {
 	if name == "" {
 		key := uintptr(__xgo_link_getcurg())
-		tinfo, ok := testInfoMaping.Load(key)
+		tinfo, ok := testInfoMapping.Load(key)
 		if ok {
 			name = tinfo.(*testInfo).name
 		}

@@ -16,7 +16,7 @@ const methodSuffix = "-fm"
 // is bound method
 // It can be used to get the unwrapped innermost function of a method
 // wrapper.
-// if f is a bound method, then guranteed that recvPtr cannot be nil
+// if f is a bound method, then guaranteed that recvPtr cannot be nil
 func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
 	recvPtr, funcInfo, _, _ = InspectPC(f)
 	return

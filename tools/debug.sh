@@ -159,7 +159,7 @@ case "$cmd" in
         exit
      ;;
     *)
-      echo "unknow command: $cmd" >&2
+      echo "unknown command: $cmd" >&2
       exit 1
     ;;
 esac

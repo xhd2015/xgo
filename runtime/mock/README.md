@@ -6,7 +6,7 @@ Mock exposes 3 primary APIs to users:
 
 - `MockMethodByName(instance, name, interceptor)` - for **unexported** method
 
-Under 99% circumstances, developer should use `Mock` as long as possible because it does not invovle hard coded name or package path.
+Under 99% circumstances, developer should use `Mock` as long as possible because it does not involve hard coded name or package path.
 
 The later two, `MockByName` and `MockMethodByName` are used where the target method cannot be accessed due to unexported, so they must be referenced by hard coded strings.
 

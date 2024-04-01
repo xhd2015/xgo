@@ -128,4 +128,4 @@ func NewNameAt(pos src.XPos, sym *types.Sym, typ *types.Type) *ir.Name {
 	return n
 }
 
-const closureMayBeEleminatedDueToIfConst = true
+const closureMayBeEliminatedDueToIfConst = true

@@ -41,6 +41,7 @@ func __xgo_link_generate_init_regs_body() {
 	// no matther whether you have replaced it or not
 	// panic("failed to link __xgo_link_generate_init_regs_body")
 }
+
 func __xgo_link_trap_for_generated(pkgPath string, pc uintptr, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
 	// linked by compiler
 	return nil, false
@@ -51,8 +52,8 @@ func __xgo_link_generated_register_func(fn interface{}) {
 	panic("failed to link __xgo_link_generated_register_func")
 }
 
-func __xgo_local_register_func(pkgPath string, identiyName string, fn interface{}, closure bool, recvName string, argNames []string, resNames []string, file string, line int) {
-	__xgo_link_generated_register_func(__xgo_local_func_stub{PkgPath: pkgPath, IdentityName: identiyName, Fn: fn, Closure: closure, RecvName: recvName, ArgNames: argNames, ResNames: resNames, File: file, Line: line})
+func __xgo_local_register_func(pkgPath string, identityName string, fn interface{}, closure bool, recvName string, argNames []string, resNames []string, file string, line int) {
+	__xgo_link_generated_register_func(__xgo_local_func_stub{PkgPath: pkgPath, IdentityName: identityName, Fn: fn, Closure: closure, RecvName: recvName, ArgNames: argNames, ResNames: resNames, File: file, Line: line})
 }
 
 // not used

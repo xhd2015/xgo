@@ -23,18 +23,18 @@ func MockFuncTest(t *testing.T) {
 	}
 
 	// should fail on skip
-	var havePaniced bool
+	var havePanicked bool
 	func() {
 		defer func() {
 			if e := recover(); e != nil {
-				havePaniced = true
+				havePanicked = true
 			}
 		}()
 		mock.Mock(hello_skipped, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
 			return nil
 		})
 	}()
-	if !havePaniced {
+	if !havePanicked {
 		t.Fatalf("expect mock on hello_skipped should panic, actual not panic")
 	}
 }

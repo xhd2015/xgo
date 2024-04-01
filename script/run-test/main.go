@@ -30,7 +30,7 @@ import (
 //    go run ./script/run-test/ --include go1.18.10 --xgo-test-only -run TestFuncNames -v ./test/xgo_test/func_names
 
 // run specific test for all go versions
-//     go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1 --xgo-default-test-only -run TestFuncNameSliceShouldWorlWithDebug -v
+//     go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1 --xgo-default-test-only -run TestFuncNameSliceShouldWorkWithDebug -v
 
 // TODO: remove duplicate test between xgo test and runtime test
 var runtimeTests = []string{
@@ -210,7 +210,7 @@ func main() {
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
 		if resetInstrument {
 			if debug {
-				fmt.Printf("reseting instrument\n")
+				fmt.Printf("resetting instrument\n")
 			}
 			cmdArgs := []string{
 				"run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot, "--build-compiler",

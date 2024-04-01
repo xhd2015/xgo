@@ -36,7 +36,7 @@ func NewBoolLit(pos src.XPos, b bool) ir.Node {
 	return NewBasicLit(pos, types.Types[types.TBOOL], constant.MakeBool(b))
 }
 
-// how to delcare a new function?
+// how to declare a new function?
 // init names are usually init.0, init.1, ...
 //
 // NOTE: when there is already an init function, declare new init function

@@ -406,10 +406,10 @@ func initClosureRegs() {
 		resNames := getFieldNames(fn, fnType.Results())
 		// TODO: why fn.Name() always returns nil?
 		var fnRef ir.Node
-		if !closureMayBeEleminatedDueToIfConst {
+		if !closureMayBeEliminatedDueToIfConst {
 			fnRef = convToEFace(pos, fn.Nname, fn.Type(), false)
 		} else {
-			// closure may be elminated
+			// closure may be eliminated
 			fnRef = newNilInterface(pos)
 		}
 		if false {

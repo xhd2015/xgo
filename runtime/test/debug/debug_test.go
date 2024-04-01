@@ -1,4 +1,4 @@
-// debug test is a convienent package
+// debug test is a convenient package
 // you can paste your minimal code your
 // to focus only the problemtic part of
 // failing code

@@ -32,7 +32,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 
 		// add debug file
 		//   rational: when debugging, dlv will jump to __xgo_autogen_register_func_helper.go
-		// previousely this file does not exist, making the debugging blind
+		// previously this file does not exist, making the debugging blind
 		runtimeAutoGenFile := filepath.Join(goroot, "src", "runtime", "__xgo_autogen_register_func_helper.go")
 		srcAutoGen := getInternalPatch(goroot, "syntax", "helper_code.go")
 		err = filecopy.CopyFile(srcAutoGen, runtimeAutoGenFile)

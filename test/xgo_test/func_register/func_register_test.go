@@ -148,17 +148,17 @@ func TestFuncRegister(t *testing.T) {
 		t.Fatalf("expect has F, actual not found")
 	}
 	if !hasClosure1 {
-		t.Fatalf("expect has clousre1, actual not found")
+		t.Fatalf("expect has closure1, actual not found")
 	}
 	if !closure1Fn.Closure {
-		t.Fatalf("expect clousre1 set Closure")
+		t.Fatalf("expect closure1 set Closure")
 	}
 	if closureHasFunc {
 		if !closure1Fn.FirstArgCtx {
-			t.Fatalf("expect clousre1 first arg ctx")
+			t.Fatalf("expect closure1 first arg ctx")
 		}
 		if !closure1Fn.LastResErr {
-			t.Fatalf("expect clousre1 last res error")
+			t.Fatalf("expect closure1 last res error")
 		}
 	} else {
 		if closure1Fn.PC != 0 {
