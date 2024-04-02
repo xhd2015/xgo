@@ -6,5 +6,6 @@ package mock
 // TODO: what if `fn` is a Type function
 // instead of an instance method?
 func Patch[T any](fn T, replacer T) func() {
-	return Mock(fn, buildInterceptorFromPatch(replacer))
+	recvPtr, fnInfo, funcPC, trappingPC := getFunc(fn)
+	return mock(recvPtr, fnInfo, funcPC, trappingPC, buildInterceptorFromPatch(recvPtr, replacer))
 }

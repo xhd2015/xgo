@@ -9,14 +9,16 @@ import (
 )
 
 func PatchByName(pkgPath string, funcName string, replacer interface{}) func() {
-	return MockByName(pkgPath, funcName, buildInterceptorFromPatch(replacer))
+	recvPtr, funcInfo, funcPC, trappingPC := getFuncByName(pkgPath, funcName)
+	return mock(recvPtr, funcInfo, funcPC, trappingPC, buildInterceptorFromPatch(recvPtr, replacer))
 }
 
 func PatchMethodByName(instance interface{}, method string, replacer interface{}) func() {
-	return MockMethodByName(instance, method, buildInterceptorFromPatch(replacer))
+	recvPtr, funcInfo, funcPC, trappingPC := getMethodByName(instance, method)
+	return mock(recvPtr, funcInfo, funcPC, trappingPC, buildInterceptorFromPatch(recvPtr, replacer))
 }
 
-func buildInterceptorFromPatch(replacer interface{}) func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+func buildInterceptorFromPatch(recvPtr interface{}, replacer interface{}) func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
 	v := reflect.ValueOf(replacer)
 	t := v.Type()
 	if t.Kind() != reflect.Func {
@@ -26,12 +28,16 @@ func buildInterceptorFromPatch(replacer interface{}) func(ctx context.Context, f
 		panic("replacer is nil")
 	}
 	nIn := t.NumIn()
+
+	// first arg ctx: true => [recv,args[1:]...]
+	// first arg ctx: false => [recv, args[0:]...]
 	return func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
 		// assemble arguments
 		callArgs := make([]reflect.Value, nIn)
 		src := 0
 		dst := 0
-		if fn.RecvType != "" {
+		if fn.RecvType != "" && recvPtr != nil {
+			// patching an instance method
 			src++
 		}
 		if fn.FirstArgCtx {

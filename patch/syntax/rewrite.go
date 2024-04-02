@@ -353,10 +353,10 @@ func copyFields(fields []*syntax.Field) []*syntax.Field {
 	return c
 }
 
-func copyBasicLits(lits []*syntax.BasicLit) []*syntax.BasicLit {
-	c := make([]*syntax.BasicLit, len(lits))
-	for i := 0; i < len(lits); i++ {
-		c[i] = copyBasicLit(lits[i])
+func copyBasicLiterals(literals []*syntax.BasicLit) []*syntax.BasicLit {
+	c := make([]*syntax.BasicLit, len(literals))
+	for i := 0; i < len(literals); i++ {
+		c[i] = copyBasicLit(literals[i])
 	}
 	return c
 }
@@ -420,7 +420,7 @@ func copyExpr(expr syntax.Expr) syntax.Expr {
 	case *syntax.StructType:
 		x := *expr
 		x.FieldList = copyFields(expr.FieldList)
-		x.TagList = copyBasicLits(expr.TagList)
+		x.TagList = copyBasicLiterals(expr.TagList)
 		return &x
 	case *syntax.FuncType:
 		return copyFuncType(expr)
