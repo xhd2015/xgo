@@ -21,6 +21,11 @@ func __xgo_trap(pkgPath string, identityName string, generic bool, recv interfac
 	if __xgo_trap_impl == nil {
 		return nil, false
 	}
+	gp := getg()
+	if gp.m.curg != gp {
+		// go code on the system stack can't defer
+		return nil, false
+	}
 	pc := getcallerpc()
 	fn := findfunc(pc)
 	// TODO: what about inlined func?
@@ -32,6 +37,12 @@ func __xgo_trap_for_generated(pkgPath string, pc uintptr, identityName string, g
 	if __xgo_trap_impl == nil {
 		return nil, false
 	}
+	gp := getg()
+	if gp.m.curg != gp {
+		// go code on the system stack can't defer
+		return nil, false
+	}
+
 	fn := findfunc(pc)
 	// TODO: what about inlined func?
 	// funcName := fn.datap.funcName(fn.nameOff) // not necessary,because it is unsafe
