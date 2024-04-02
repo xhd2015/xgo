@@ -5,7 +5,7 @@ import (
 )
 
 func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
-	panic("WARNING: failed to link __xgo_link_set_trap.(xgo required)")
+	panic("WARNING: failed to link __xgo_link_set_trap(requires xgo).")
 }
 
 var haveCalledTrap bool

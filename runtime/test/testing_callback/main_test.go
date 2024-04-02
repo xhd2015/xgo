@@ -6,7 +6,7 @@ import (
 )
 
 func __xgo_link_on_test_start(fn func(t *testing.T, fn func(t *testing.T))) {
-	panic("WARNING: failed to link __xgo_link_on_test_start.(xgo required)")
+	panic("WARNING: failed to link __xgo_link_on_test_start(requires xgo).")
 	// link by compiler
 }
 func init() {

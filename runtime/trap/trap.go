@@ -18,9 +18,27 @@ func ensureTrapInstall() {
 		__xgo_link_set_trap(trapImpl)
 	})
 }
+func init() {
+	__xgo_link_on_gonewproc(func(g uintptr) {
+		interceptors := GetLocalInterceptors()
+		if len(interceptors) == 0 {
+			return
+		}
+		copyInterceptors := make([]*Interceptor, len(interceptors))
+		copy(copyInterceptors, interceptors)
+
+		// inherit interceptors
+		localInterceptors.Store(g, &interceptorList{
+			interceptors: copyInterceptors,
+		})
+	})
+}
 
 func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_set_trap.(xgo required)")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_set_trap(requires xgo).")
+}
+func __xgo_link_on_gonewproc(f func(g uintptr)) {
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_gonewproc(requires xgo).")
 }
 
 // Skip serves as mark to tell xgo not insert
@@ -30,15 +48,6 @@ func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, gene
 // as trap.Skip() is just a mark that makes
 // sense at compile time.
 func Skip() {}
-
-func GetTrappingPC() uintptr {
-	key := uintptr(__xgo_link_getcurg())
-	val, ok := trappingPC.Load(key)
-	if !ok {
-		return 0
-	}
-	return val.(uintptr)
-}
 
 var trappingMark sync.Map // <goroutine key> -> struct{}{}
 var trappingPC sync.Map   // <gorotuine key> -> PC
@@ -104,7 +113,7 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 		perr = results[len(results)-1].(*error)
 	} else if f.Closure {
 		if len(results) > 0 {
-			resErr, ok := reflect.ValueOf(args[0]).Interface().(*error)
+			resErr, ok := reflect.ValueOf(results[0]).Interface().(*error)
 			if ok {
 				f.LastResultErr = true
 				perr = resErr
@@ -240,6 +249,14 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 	}, false
 }
 
+func GetTrappingPC() uintptr {
+	key := uintptr(__xgo_link_getcurg())
+	val, ok := trappingPC.Load(key)
+	if !ok {
+		return 0
+	}
+	return val.(uintptr)
+}
 func setTrappingMark() func() {
 	key := uintptr(__xgo_link_getcurg())
 	_, trapping := trappingMark.LoadOrStore(key, struct{}{})

@@ -13,6 +13,7 @@ func __xgo_register_func(info interface{})
 func __xgo_retrieve_all_funcs_and_clear(f func(info interface{}))
 func __xgo_init_finished() bool
 func __xgo_on_init_finished(fn func())
+func __xgo_on_gonewproc(fn func(g uintptr))
 func __xgo_on_goexit(fn func())
 func __xgo_on_test_start(fn interface{})
 func __xgo_get_test_starts() []interface{}

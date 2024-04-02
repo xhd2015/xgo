@@ -135,11 +135,11 @@ go test -v ./
 
 输出:
 ```sh
-WARNING: failed to link __xgo_link_on_init_finished.(xgo required)
-WARNING: failed to link __xgo_link_on_goexit.(xgo required)
+WARNING: failed to link __xgo_link_on_init_finished(requires xgo).
+WARNING: failed to link __xgo_link_on_goexit(requires xgo).
 === RUN   TestFuncMock
-WARNING: failed to link __xgo_link_set_trap.(xgo required)
-WARNING: failed to link __xgo_link_init_finished.(xgo required)
+WARNING: failed to link __xgo_link_set_trap(requires xgo).
+WARNING: failed to link __xgo_link_init_finished(requires xgo).
     demo_test.go:21: expect MyFunc() to be 'mock func', actual: my func
 --- FAIL: TestFuncMock (0.00s)
 FAIL

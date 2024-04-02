@@ -16,9 +16,11 @@ const expected__xgo_stub_def = `struct {
 	ArgNames []string
 	ResNames []string
 
-	// can be retrieved at runtime
+	// Deprecated
+	// these two fields can be retrieved at runtime
 	FirstArgCtx bool // first argument is context.Context or sub type?
-	LastResErr  bool // last res is error or sub type?
+	// Deprecated
+	LastResErr bool // last res is error or sub type?
 
 	File string
 	Line int

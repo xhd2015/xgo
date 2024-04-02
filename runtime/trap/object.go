@@ -68,6 +68,13 @@ func (c field) Name() string {
 }
 
 func (c field) Set(val interface{}) {
+	// if val is nil, then reflect.ValueOf(val)
+	// is invalid
+	if val == nil {
+		// clear
+		reflect.ValueOf(c.valPtr).Elem().Set(reflect.Zero(reflect.TypeOf(c.valPtr).Elem()))
+		return
+	}
 	reflect.ValueOf(c.valPtr).Elem().Set(reflect.ValueOf(val))
 }
 func (c field) Ptr() interface{} {

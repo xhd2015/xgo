@@ -24,6 +24,7 @@ func init() {
 func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
 	debugSyntax(fileList)
 	patchVersions(fileList)
+	fillFuncArgResNames(fileList)
 	afterFilesParsed(fileList, addFile)
 }
 

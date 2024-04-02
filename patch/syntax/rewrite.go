@@ -11,6 +11,28 @@ import (
 
 const XgoLinkTrapForGenerated = "__xgo_link_trap_for_generated"
 
+func fillFuncArgResNames(fileList []*syntax.File) {
+	if base.Flag.Std {
+		return
+	}
+	for _, file := range fileList {
+		syntax.Inspect(file, func(n syntax.Node) bool {
+			if decl, ok := n.(*syntax.FuncDecl); ok {
+				if decl.Body == nil {
+					return true
+				}
+				preset := getPresetNames(decl)
+				fillNames(decl.Pos(), decl.Recv, decl.Type, preset)
+			} else if funcLit, ok := n.(*syntax.FuncLit); ok {
+				preset := getPresetNames(funcLit.Type)
+				fillNames(funcLit.Pos(), nil, funcLit.Type, preset)
+			}
+
+			return true
+		})
+	}
+}
+
 func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
 	for _, fn := range funcDecls {
 		if fn.Interface {
@@ -42,7 +64,7 @@ func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
 
 		preset := getPresetNames(newDecl)
 
-		fillNames(newDecl, preset)
+		fillNames(pos, newDecl.Recv, newDecl.Type, preset)
 		if preset[XgoLinkTrapForGenerated] {
 			// cannot trap
 			continue
@@ -216,12 +238,12 @@ func fillPos(pos syntax.Pos, node syntax.Node) {
 	})
 
 }
-func fillNames(decl *syntax.FuncDecl, preset map[string]bool) {
-	if decl.Recv != nil {
-		fillFieldNames([]*syntax.Field{decl.Recv}, preset, "_x")
+func fillNames(pos syntax.Pos, recv *syntax.Field, funcType *syntax.FuncType, preset map[string]bool) {
+	if recv != nil {
+		fillFieldNames(pos, []*syntax.Field{recv}, preset, "_x")
 	}
-	fillFieldNames(decl.Type.ParamList, preset, "_a")
-	fillFieldNames(decl.Type.ResultList, preset, "_r")
+	fillFieldNames(pos, funcType.ParamList, preset, "_a")
+	fillFieldNames(pos, funcType.ResultList, preset, "_r")
 }
 
 func getRefSlice(pos syntax.Pos, fields []*syntax.Field) []syntax.Expr {
@@ -254,10 +276,12 @@ func doGetRefAddrSlice(pos syntax.Pos, fields []*syntax.Field, addr bool) []synt
 }
 
 // _a0,_a1
-func fillFieldNames(fields []*syntax.Field, preset map[string]bool, prefix string) {
+func fillFieldNames(pos syntax.Pos, fields []*syntax.Field, preset map[string]bool, prefix string) {
 	for i, f := range fields {
 		if f.Name == nil {
-			f.Name = &syntax.Name{}
+			name := &syntax.Name{}
+			(ISetPos)(name).SetPos(pos)
+			f.Name = name
 		} else if f.Name.Value != "" && f.Name.Value != "_" {
 			continue
 		}
@@ -432,6 +456,11 @@ func copyExpr(expr syntax.Expr) syntax.Expr {
 	case *syntax.ListExpr:
 		x := *expr
 		x.ElemList = copyExprs(expr.ElemList)
+		return &x
+	case *syntax.MapType:
+		x := *expr
+		x.Key = copyExpr(expr.Key)
+		x.Value = copyExpr(expr.Value)
 		return &x
 	default:
 		panic(fmt.Errorf("unrecognized expr while copying: %T", expr))
