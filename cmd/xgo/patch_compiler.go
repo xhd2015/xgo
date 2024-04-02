@@ -163,7 +163,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		} else if go117 || go118 || go119 || go120 || go121 {
 			inlineCall := `inline.InlinePackage(profile)`
 			if go119AndUnder {
-				// go1.19 and under does not hae PGO
+				// go1.19 and under does not have PGO
 				inlineCall = `inline.InlinePackage()`
 			}
 			// go1.20 does not respect rewritten content when inlined

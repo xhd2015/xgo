@@ -12,31 +12,55 @@ import (
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
+// a marker to indicate the
+// original function should be called
 var ErrCallOld = errors.New("mock: call old")
 
 type Interceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error
 
 // Mock setup mock on given function `fn`.
 // `fn` can be a function or a method,
-// when `fn` is a method, only the bound
+// if `fn` is a method, only the bound
 // instance will be mocked, other instances
 // are not affected.
 // The returned function can be used to cancel
 // the passed interceptor.
 func Mock(fn interface{}, interceptor Interceptor) func() {
-	return mockByFunc(fn, interceptor)
+	recvPtr, fnInfo, funcPC, trappingPC := getFunc(fn)
+	return mock(recvPtr, fnInfo, funcPC, trappingPC, interceptor)
 }
 
 func MockByName(pkgPath string, funcName string, interceptor Interceptor) func() {
-	funcInfo := functab.GetFuncByPkg(pkgPath, funcName)
-	if funcInfo == nil {
-		panic(fmt.Errorf("failed to setup mock for: %s.%s", pkgPath, funcName))
-	}
-	return mock(nil, funcInfo, 0, 0, interceptor)
+	recv, fn, funcPC, trappingPC := getFuncByName(pkgPath, funcName)
+	return mock(recv, fn, funcPC, trappingPC, interceptor)
 }
 
 // Can instance be nil?
 func MockMethodByName(instance interface{}, method string, interceptor Interceptor) func() {
+	recvPtr, fn, funcPC, trappingPC := getMethodByName(instance, method)
+	return mock(recvPtr, fn, funcPC, trappingPC, interceptor)
+}
+
+func getFunc(fn interface{}) (recvPtr interface{}, fnInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
+	// if the target function is a method, then a
+	// recv ptr must be given
+	recvPtr, fnInfo, funcPC, trappingPC = trap.InspectPC(fn)
+	if fnInfo == nil {
+		pc := reflect.ValueOf(fn).Pointer()
+		panic(fmt.Errorf("failed to setup mock for: %v", runtime.FuncForPC(pc).Name()))
+	}
+	return recvPtr, fnInfo, funcPC, trappingPC
+}
+
+func getFuncByName(pkgPath string, funcName string) (recvPtr interface{}, fn *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
+	fn = functab.GetFuncByPkg(pkgPath, funcName)
+	if fn == nil {
+		panic(fmt.Errorf("failed to setup mock for: %s.%s", pkgPath, funcName))
+	}
+	return nil, fn, 0, 0
+}
+
+func getMethodByName(instance interface{}, method string) (recvPtr interface{}, fn *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
 	// extract instance's reflect.Type
 	// use that type to query for reflect mapping in functab:
 	//    reflectTypeMapping map[reflect.Type]map[string]*funcInfo
@@ -45,34 +69,25 @@ func MockMethodByName(instance interface{}, method string, interceptor Intercept
 	if funcMapping == nil {
 		panic(fmt.Errorf("failed to setup mock for type %T", instance))
 	}
-	fn := funcMapping[method]
+	fn = funcMapping[method]
 	if fn == nil {
 		panic(fmt.Errorf("failed to setup mock for: %T.%s", instance, method))
 	}
 
 	addr := reflect.New(t)
 	addr.Elem().Set(reflect.ValueOf(instance))
-	return mock(addr.Interface(), fn, 0, 0, interceptor)
+
+	return addr.Interface(), fn, 0, 0
 }
 
 // Deprecated: use Mock instead
 func AddFuncInterceptor(fn interface{}, interceptor Interceptor) func() {
-	return mockByFunc(fn, interceptor)
+	return Mock(fn, interceptor)
 }
 
 // TODO: ensure them run in last?
 // no abort, run mocks
 // mocks are special in that they on run in pre stage
-func mockByFunc(fn interface{}, interceptor Interceptor) func() {
-	// if the target function is a method, then a
-	// recv ptr must be given
-	recvPtr, fnInfo, funcPC, trappingPC := trap.InspectPC(fn)
-	if fnInfo == nil {
-		pc := reflect.ValueOf(fn).Pointer()
-		panic(fmt.Errorf("failed to setup mock for: %v", runtime.FuncForPC(pc).Name()))
-	}
-	return mock(recvPtr, fnInfo, funcPC, trappingPC, interceptor)
-}
 
 // if mockFnInfo is a function, mockRecvPtr is always nil
 // if mockFnInfo is a method,
@@ -109,10 +124,6 @@ func mock(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, funcPC uintptr, tr
 				// check they pointing to the same variable
 				re := reflect.ValueOf(recvPtr).Elem().Interface()
 				me := reflect.ValueOf(mockRecvPtr).Elem().Interface()
-				if f.RecvPtr {
-					// compare pointer
-					// unsafe.Pointer(&re)
-				}
 				if re != me {
 					// if *recvPtr != *mockRecvPtr {
 					return nil, nil

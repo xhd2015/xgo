@@ -39,3 +39,9 @@ jobs:
 
     - name: Check Go Version
       run: ~/.xgo/bin/xgo exec go version
+
+    - name: Check spelling of files
+      uses: crate-ci/typos@master
+      continue-on-error: true
+      with: 
+        files: ./

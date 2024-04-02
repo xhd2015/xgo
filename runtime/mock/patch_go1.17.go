@@ -4,5 +4,6 @@
 package mock
 
 func Patch(fn interface{}, replacer interface{}) func() {
-	return Mock(fn, buildInterceptorFromPatch(replacer))
+	recvPtr, fnInfo, funcPC, trappingPC := getFunc(fn)
+	return mock(recvPtr, fnInfo, funcPC, trappingPC, buildInterceptorFromPatch(recvPtr, replacer))
 }

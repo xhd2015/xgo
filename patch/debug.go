@@ -177,10 +177,10 @@ func debugReplaceBody(fn *ir.Func) {
 	// debug
 	if false {
 		str := NewStringLit(fn.Pos(), "debug")
-		nd := fn.Body[0]
-		ue := nd.(*ir.UnaryExpr)
-		ce := ue.X.(*ir.ConvExpr)
-		ce.X = str
+		fnBody := fn.Body[0]
+		unaryExpr := fnBody.(*ir.UnaryExpr)
+		convExpr := unaryExpr.X.(*ir.ConvExpr)
+		convExpr.X = str
 		xgo_record.SetRewrittenBody(fn, fn.Body)
 		return
 	}
