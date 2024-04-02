@@ -96,7 +96,12 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 	var ctx context.Context
 	if f.FirstArgCtx {
 		// TODO: is *HttpRequest a *Context?
-		ctx = reflect.ValueOf(args[0]).Elem().Interface().(context.Context)
+
+		// NOTE: ctx can be nil when doing InspectPC
+		argCtx := reflect.ValueOf(args[0]).Elem().Interface()
+		if argCtx != nil {
+			ctx = argCtx.(context.Context)
+		}
 		// ctx = *(args[0].(*context.Context))
 	} else if f.Closure {
 		if len(args) > 0 {
