@@ -7,7 +7,7 @@ import (
 )
 
 func __xgo_link_on_init_finished(f func()) {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_init_finished.(xgo required)")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_init_finished(requires xgo).")
 }
 
 var ran bool

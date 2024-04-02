@@ -52,18 +52,16 @@ func buildInterceptorFromPatch(replacer interface{}) func(ctx context.Context, f
 
 		// assign result
 		nOut := len(res)
-		for i := 0; i < nOut; i++ {
+		resLen := nOut
+		if fn.LastResultErr {
+			resLen--
+		}
+		for i := 0; i < resLen; i++ {
 			results.GetFieldIndex(i).Set(res[i].Interface())
 		}
 
-		// check error
-		if nOut > 0 {
-			last := res[nOut-1].Interface()
-			if last != nil {
-				if err, ok := last.(error); ok {
-					return err
-				}
-			}
+		if fn.LastResultErr {
+			results.(core.ObjectWithErr).GetErr().Set(res[nOut-1].Interface())
 		}
 
 		return nil

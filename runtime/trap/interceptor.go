@@ -17,17 +17,17 @@ var ErrAbort error = errors.New("abort trap interceptor")
 
 // link by compiler
 func __xgo_link_getcurg() unsafe.Pointer {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_getcurg.(xgo required)")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_getcurg(requires xgo).")
 	return nil
 }
 
 func __xgo_link_init_finished() bool {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_init_finished.(xgo required)")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_init_finished(requires xgo).")
 	return false
 }
 
 func __xgo_link_on_goexit(fn func()) {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_goexit.(xgo required)")
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_goexit(requires xgo).")
 }
 func __xgo_link_get_pc_name(pc uintptr) string {
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_get_pc_name(requires xgo)")
@@ -78,7 +78,7 @@ func GetInterceptors() []*Interceptor {
 }
 
 func GetLocalInterceptors() []*Interceptor {
-	key := __xgo_link_getcurg()
+	key := uintptr(__xgo_link_getcurg())
 	val, ok := localInterceptors.Load(key)
 	if !ok {
 		return nil
@@ -107,7 +107,7 @@ func GetAllInterceptors() []*Interceptor {
 // NOTE: if not called correctly,there might be memory leak
 func addLocalInterceptor(interceptor *Interceptor) func() {
 	ensureTrapInstall()
-	key := __xgo_link_getcurg()
+	key := uintptr(__xgo_link_getcurg())
 	list := &interceptorList{}
 	val, loaded := localInterceptors.LoadOrStore(key, list)
 	if loaded {
@@ -120,6 +120,10 @@ func addLocalInterceptor(interceptor *Interceptor) func() {
 	return func() {
 		if removed {
 			panic(fmt.Errorf("remove interceptor more than once"))
+		}
+		curKey := uintptr(__xgo_link_getcurg())
+		if key != curKey {
+			panic(fmt.Errorf("remove interceptor from another goroutine"))
 		}
 		removed = true
 		var idx int = -1
@@ -149,7 +153,7 @@ type interceptorList struct {
 }
 
 func clearLocalInterceptorsAndMark() {
-	key := __xgo_link_getcurg()
+	key := uintptr(__xgo_link_getcurg())
 	localInterceptors.Delete(key)
 
 	clearTrappingMark()

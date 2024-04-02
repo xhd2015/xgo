@@ -77,7 +77,13 @@ func __xgo_on_init_finished(fn func()) {
 	__xgo_on_init_finished_callbacks = append(__xgo_on_init_finished_callbacks, fn)
 }
 
+// goroutine creates and exits callbacks
+var __xgo_on_gonewproc_callbacks []func(g uintptr)
 var __xgo_on_goexits []func()
+
+func __xgo_on_gonewproc(fn func(g uintptr)) {
+	__xgo_on_gonewproc_callbacks = append(__xgo_on_gonewproc_callbacks, fn)
+}
 
 func __xgo_on_goexit(fn func()) {
 	__xgo_on_goexits = append(__xgo_on_goexits, fn)

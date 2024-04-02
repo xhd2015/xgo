@@ -29,6 +29,7 @@ var linkMap = map[string]string{
 	xgo_syntax.XgoLinkTrapForGenerated:        XgoTrapForGenerated,
 	"__xgo_link_init_finished":                "__xgo_init_finished",
 	"__xgo_link_on_init_finished":             "__xgo_on_init_finished",
+	"__xgo_link_on_gonewproc":                 "__xgo_on_gonewproc",
 	"__xgo_link_on_goexit":                    "__xgo_on_goexit",
 	"__xgo_link_on_test_start":                xgoOnTestStart,
 	"__xgo_link_get_test_starts":              "__xgo_get_test_starts",
