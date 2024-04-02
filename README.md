@@ -4,6 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/xhd2015/xgo)](https://goreportcard.com/report/github.com/xhd2015/xgo)
 [![Go Coverage](https://img.shields.io/badge/Coverage-81.3%25-brightgreen)](https://github.com/xhd2015/xgo/actions)
 [![CI](https://github.com/xhd2015/xgo/workflows/Go/badge.svg)](https://github.com/xhd2015/xgo/actions)
+[![Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
 
 **English | [简体中文](./README_zh_cn.md)**
 
