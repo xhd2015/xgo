@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -47,4 +48,19 @@ func hello_skipped(a string) string {
 	trap.Skip()
 
 	return fmt.Sprintf("hello %s skipped\n", a)
+}
+
+func neverErr() error {
+	return nil
+}
+
+func TestMockFuncErr(t *testing.T) {
+	mockErr := errors.New("mock err")
+	mock.Mock(neverErr, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		return mockErr
+	})
+	err := neverErr()
+	if err != mockErr {
+		t.Fatalf("expect mocked neverErr() to be %v, actual: %v", mockErr, err)
+	}
 }
