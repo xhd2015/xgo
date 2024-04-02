@@ -36,12 +36,19 @@ func buildInterceptorFromPatch(recvPtr interface{}, replacer interface{}) func(c
 		callArgs := make([]reflect.Value, nIn)
 		src := 0
 		dst := 0
-		if fn.RecvType != "" && recvPtr != nil {
-			// patching an instance method
-			src++
+		if fn.RecvType != "" {
+			if recvPtr != nil {
+				// patching an instance method
+				src++
+			} else {
+				// set receiver
+				callArgs[dst] = reflect.ValueOf(args.GetFieldIndex(0).Value())
+				dst++
+				src++
+			}
 		}
 		if fn.FirstArgCtx {
-			callArgs[0] = reflect.ValueOf(ctx)
+			callArgs[dst] = reflect.ValueOf(ctx)
 			dst++
 		}
 		for i := 0; i < nIn-dst; i++ {
