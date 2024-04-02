@@ -132,10 +132,14 @@ func mock(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, funcPC uintptr, tr
 
 			// TODO: add panic check
 			err = interceptor(ctx, f, args, result)
-			if err == ErrCallOld {
-				// continue
-				return nil, nil
+			if err != nil {
+				if err == ErrCallOld {
+					// continue
+					return nil, nil
+				}
+				return nil, err
 			}
+
 			// when match func, default to use mock
 			return nil, trap.ErrAbort
 		},
