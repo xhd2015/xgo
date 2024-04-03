@@ -54,8 +54,13 @@ var stdWhitelist = map[string]map[string]bool{
 		"ReadFile":  true,
 		"WriteFile": true,
 	},
-	"io/ioutil": map[string]bool{
+	"io": map[string]bool{
 		"ReadAll": true,
+	},
+	"io/ioutil": map[string]bool{
+		"ReadAll":  true,
+		"ReadFile": true,
+		"ReadDir":  true,
 	},
 	"time": map[string]bool{
 		"Now": true,

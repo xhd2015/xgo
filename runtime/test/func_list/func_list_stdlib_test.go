@@ -1,6 +1,8 @@
 package func_list
 
 import (
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os/exec"
@@ -14,6 +16,10 @@ var _ http.Request
 var _ net.Addr
 var _ time.Time
 var _ exec.Cmd
+var _ = ioutil.ReadAll
+var _ = ioutil.ReadFile
+var _ = ioutil.ReadDir
+var _ = io.ReadAll
 
 // go run ./cmd/xgo test --project-dir runtime -run TestListStdlib -v ./test/func_list
 func TestListStdlib(t *testing.T) {
@@ -27,8 +33,13 @@ func TestListStdlib(t *testing.T) {
 		"os.ReadFile":  true,
 		"os.WriteFile": true,
 
+		// io
+		"io.ReadAll": true,
+
 		// io/ioutl
-		"io/ioutil.ReadAll": true,
+		"io/ioutil.ReadAll":  true,
+		"io/ioutil.ReadFile": true,
+		"io/ioutil.ReadDir":  true,
 
 		// time
 		"time.Now":         true,
