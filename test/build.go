@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/osinfo"
 
 	"github.com/xhd2015/xgo/support/filecopy"
@@ -38,23 +39,26 @@ func linkRuntimeAndTest(testDir string, goModOnly bool) (rootDir string, subDir 
 		return "", "", err
 	}
 
-	// Windows no link
-	if runtime.GOOS != "windows" {
-		// copy runtime to a tmp directory, and
-		// test under there
-		if goModOnly {
-			err = filecopy.LinkFile(filepath.Join("..", "runtime", "go.mod"), filepath.Join(tmpDir, "go.mod"))
-		} else {
+	err = filecopy.CopyFile(filepath.Join("..", "runtime", "go.mod"), filepath.Join(tmpDir, "go.mod"))
+	if err != nil {
+		return "", "", err
+	}
+	// copy runtime to a tmp directory, and
+	// test under there
+	if !goModOnly {
+		if osinfo.FORCE_COPY_UNSYM {
 			err = filecopy.LinkFiles(filepath.Join("..", "runtime"), tmpDir)
-		}
-	} else {
-		if goModOnly {
-			err = filecopy.CopyFile(filepath.Join("..", "runtime", "go.mod"), filepath.Join(tmpDir, "go.mod"))
 		} else {
+			// Windows no link
 			err = filecopy.CopyReplaceDir(filepath.Join("..", "runtime"), tmpDir, false)
+		}
+		if err != nil {
+			return "", "", err
 		}
 	}
 
+	// set go.mod to go1.18
+	err = cmd.Dir(tmpDir).Run("go", "mod", "edit", "-go=1.18")
 	if err != nil {
 		return "", "", err
 	}
