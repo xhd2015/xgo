@@ -301,6 +301,11 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 		return linkName, false
 		// ir.Dump("after:", fn)
 	}
+	// disable all stdlib IR rewrite
+	if base.Flag.Std {
+		// NOTE: stdlib are rewritten by source
+		return "", false
+	}
 	if xgo_ctxt.SkipPackageTrap() {
 		return "", false
 	}
@@ -336,12 +341,6 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 
 	// check if function body's first statement is a call to 'trap.Skip()'
 	if isFirstStmtSkipTrap(fn.Body) {
-		return "", false
-	}
-
-	// disable part of stdlibs
-	if base.Flag.Std {
-		// NOTE: stdlib are rewritten by source
 		return "", false
 	}
 

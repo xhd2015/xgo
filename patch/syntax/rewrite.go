@@ -41,6 +41,10 @@ func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
 		if fn.Closure {
 			continue
 		}
+		if fn.FuncDecl.Body == nil {
+			// no body, may be linked
+			continue
+		}
 
 		// stdlib and generic
 		if !base.Flag.Std {
@@ -48,7 +52,6 @@ func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
 				continue
 			}
 		}
-
 		fnDecl := fn.FuncDecl
 		pos := fn.FuncDecl.Pos()
 

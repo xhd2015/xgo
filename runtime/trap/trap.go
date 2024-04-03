@@ -20,6 +20,9 @@ func ensureTrapInstall() {
 }
 func init() {
 	__xgo_link_on_gonewproc(func(g uintptr) {
+		if isByPassing() {
+			return
+		}
 		interceptors := GetLocalInterceptors()
 		if len(interceptors) == 0 {
 			return
@@ -55,6 +58,9 @@ var trappingPC sync.Map   // <gorotuine key> -> PC
 // link to runtime
 // xgo:notrap
 func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
+	if isByPassing() {
+		return nil, false
+	}
 	dispose := setTrappingMark()
 	if dispose == nil {
 		return nil, false

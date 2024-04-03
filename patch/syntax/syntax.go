@@ -255,7 +255,7 @@ func shouldTrap() bool {
 	}
 
 	pkgPath := xgo_ctxt.GetPkgPath()
-	if pkgPath == "" || pkgPath == "runtime" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") || isSkippableSpecialPkg() {
+	if pkgPath == "" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") || isSkippableSpecialPkg() {
 		// runtime/internal should not be rewritten
 		// internal/api has problem with the function register
 		return false

@@ -240,6 +240,8 @@ func main(){
 }
 ```
 
+Trap also have a helper function called `Direct(fn)`, which can be used to bypass any trap and mock interceptors, calling directly into the original function.
+
 ## Mock
 Mock simplifies the process of setting up Trap interceptors. 
 
@@ -271,7 +273,7 @@ mock.Mock(v.Method, interceptor)
 mock.Mock(closure, interceptor)
 ```
 
-Arguments:
+Parameters:
 - If `fn` is a simple function(i.e. a package level function, or a function owned by a type, or a closure(yes, we do support mocking closures)),then all call to that function will be intercepted, 
 - If `fn` is a method(i.e. `file.Read`),then only call to the instance will be intercepted, other instances will not be affected
 
@@ -322,6 +324,47 @@ func TestMethodMock(t *testing.T){
 ```
 
 **Notice for mocking stdlib**: due to performance and security impact, only a few packages and functions of stdlib can be mocked, the list can be found at [runtime/mock/stdlib.md](./runtime/mock/stdlib.md). If you want to mock additional stdlib functions, please discussion in [Issue#6](https://github.com/xhd2015/xgo/issues/6).
+
+## Patch
+The `runtime/mock` package also provides another api:
+- `Patch(fn,replacer) func()`
+
+Parameters:
+- `fn` same as described in [Mock](#mock) section
+- `replacer` another function that will replace `fn`
+
+NOTE: `fn` and `replacer` should have the same signature.
+
+Return:
+- a `func()` can be used to remove the replacer earlier before current goroutine exits
+
+Patch replaces the given `fn` with `replacer` in current goroutine. It will remove the replacer once current goroutine exits.
+
+Example:
+```go
+package patch_test
+
+import (
+	"testing"
+
+	"github.com/xhd2015/xgo/runtime/mock"
+)
+
+func greet(s string) string {
+	return "hello " + s
+}
+
+func TestPatchFunc(t *testing.T) {
+	mock.Patch(greet, func(s string) string {
+		return "mock " + s
+	})
+
+	res := greet("world")
+	if res != "mock world" {
+		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)
+	}
+}
+```
 
 ## Trace
 It is painful when debugging with a deep call stack.

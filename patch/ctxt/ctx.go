@@ -25,7 +25,7 @@ func SkipPackageTrap() bool {
 
 		// allow http
 		pkgPath := GetPkgPath()
-		if pkgPath == "net/http" || pkgPath == "net" || pkgPath == "time" || pkgPath == "os" || pkgPath == "os/exec" {
+		if _, ok := stdWhitelist[pkgPath]; ok {
 			return false
 		}
 		return true
@@ -45,11 +45,21 @@ func SkipPackageTrap() bool {
 }
 
 var stdWhitelist = map[string]map[string]bool{
+	// "runtime": map[string]bool{
+	// "timeSleep": true,
+	// },
 	"os": map[string]bool{
 		// starts with Get
+		"OpenFile": true,
 	},
 	"time": map[string]bool{
-		"Now":         true,
+		"Now": true,
+		// time.Sleep is special:
+		//  if trapped like normal functions
+		//    runtime/time.go:178:6: ns escapes to heap, not allowed in runtime
+		// there are special handling of this, see cmd/xgo/patch_runtime patchRuntimeTime
+		"Sleep":       true, // NOTE: time.Sleep links to runtime.timeSleep
+		"NewTicker":   true,
 		"Time.Format": true,
 	},
 	"os/exec": map[string]bool{
