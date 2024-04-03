@@ -33,7 +33,7 @@ import (
 //     go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1 --xgo-default-test-only -run TestFuncNameSliceShouldWorkWithDebug -v
 
 // TODO: remove duplicate test between xgo test and runtime test
-var runtimeTests = []string{
+var runtimeSubTests = []string{
 	"trace_panic_peek",
 	"func_list",
 	"trap_inspect_func",
@@ -231,16 +231,20 @@ func main() {
 		runDefault := true
 		runXgoTestFlag := true
 		runRuntimeTestFlag := true
+		runRuntimeSubTestFlag := true
 		if xgoTestOnly {
 			runRuntimeTestFlag = false
+			runRuntimeSubTestFlag = false
 			runXgoTestFlag = true
 			runDefault = false
 		} else if xgoRuntimeTestOnly {
 			runRuntimeTestFlag = true
+			runRuntimeSubTestFlag = true
 			runXgoTestFlag = false
 			runDefault = false
 		} else if xgoDefaultTestOnly {
 			runRuntimeTestFlag = false
+			runRuntimeSubTestFlag = false
 			runXgoTestFlag = false
 			runDefault = true
 		}
@@ -262,7 +266,7 @@ func main() {
 				}
 				args = append(args, "-coverprofile", prefix+"-"+variant+suffix)
 			}
-			if debug && (variant == "xgo" || variant == "runtime") {
+			if debug && (variant == "xgo" || variant == "runtime" || variant == "runtime-sub") {
 				args = append(args, "--log-debug=stdout")
 			}
 			return args
@@ -277,6 +281,13 @@ func main() {
 
 		if runRuntimeTestFlag {
 			err := runRuntimeTest(goroot, addArgs(remainArgs, "runtime"), remainTests)
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+				os.Exit(1)
+			}
+		}
+		if runRuntimeSubTestFlag {
+			err := runRuntimeSubTest(goroot, addArgs(remainArgs, "runtime-sub"), remainTests)
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
 				os.Exit(1)
@@ -331,13 +342,17 @@ func runXgoTest(goroot string, args []string, tests []string) error {
 func runRuntimeTest(goroot string, args []string, tests []string) error {
 	return doRunTest(goroot, testKind_runtimeTest, args, tests)
 }
+func runRuntimeSubTest(goroot string, args []string, tests []string) error {
+	return doRunTest(goroot, testKind_runtimeSubTest, args, tests)
+}
 
 type testKind string
 
 const (
-	testKind_default     testKind = ""
-	testKind_xgoTest     testKind = "xgo-test"
-	testKind_runtimeTest testKind = "runtime-test"
+	testKind_default        testKind = ""
+	testKind_xgoTest        testKind = "xgo-test"
+	testKind_runtimeTest    testKind = "runtime-test"
+	testKind_runtimeSubTest testKind = "runtime-sub-test"
 )
 
 func doRunTest(goroot string, kind testKind, args []string, tests []string) error {
@@ -371,9 +386,6 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)
 		} else {
-			for _, runtimeTest := range runtimeTests {
-				testArgs = append(testArgs, "./test/"+runtimeTest)
-			}
 			testArgs = append(testArgs,
 				"./core/...",
 				"./functab/...",
@@ -381,6 +393,16 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 				"./trap/...",
 				"./mock/...",
 			)
+		}
+	case testKind_runtimeSubTest:
+		testArgs = []string{"run", "./cmd/xgo", "test", "--project-dir", "runtime/test"}
+		testArgs = append(testArgs, args...)
+		if len(tests) > 0 {
+			testArgs = append(testArgs, tests...)
+		} else {
+			for _, runtimeTest := range runtimeSubTests {
+				testArgs = append(testArgs, "./"+runtimeTest+"/...")
+			}
 		}
 	}
 
