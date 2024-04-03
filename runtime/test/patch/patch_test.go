@@ -1,6 +1,7 @@
 package patch
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -57,4 +58,24 @@ func TestPatchMethod(t *testing.T) {
 	if res != "mock world" {
 		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)
 	}
+}
+
+func TestPatchNilArg(t *testing.T) {
+	var haveCalledMock bool
+	var argCtx context.Context
+	mock.Patch(nilCtx, func(a int, ctx context.Context) {
+		argCtx = ctx
+		haveCalledMock = true
+	})
+	nilCtx(0, nil)
+	if !haveCalledMock {
+		t.Fatalf("expect have called mock,actually not")
+	}
+	if argCtx != nil {
+		t.Fatalf("expect arg ctx to be nil, actual: %v", argCtx)
+	}
+}
+
+func nilCtx(a int, ctx context.Context) {
+	panic("nilCtx should be mocked")
 }

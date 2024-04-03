@@ -100,7 +100,7 @@ func buildInterceptorFromPatch(recvPtr interface{}, replacer interface{}) func(c
 			} else {
 				// set receiver
 				if nIn > 0 {
-					callArgs[dst] = reflect.ValueOf(args.GetFieldIndex(0).Value())
+					callArgs[dst] = reflect.ValueOf(args.GetFieldIndex(0).Ptr()).Elem()
 					dst++
 					src++
 				}
@@ -111,7 +111,10 @@ func buildInterceptorFromPatch(recvPtr interface{}, replacer interface{}) func(c
 			dst++
 		}
 		for i := 0; i < nIn-dst; i++ {
-			callArgs[dst+i] = reflect.ValueOf(args.GetFieldIndex(src + i).Value())
+			// fail if with the following setup:
+			//    reflect: Call using zero Value argument
+			// callArgs[dst+i] = reflect.ValueOf(args.GetFieldIndex(src + i).Value())
+			callArgs[dst+i] = reflect.ValueOf(args.GetFieldIndex(src + i).Ptr()).Elem()
 		}
 
 		// call the function
