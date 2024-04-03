@@ -20,7 +20,7 @@ import (
 const __XGO_SKIP_TRAP = true
 
 // hold goroutine stacks, keyed by goroutine ptr
-var stackMap sync.Map       // uintptr(goroutine) -> *Root
+var stackMap sync.Map        // uintptr(goroutine) -> *Root
 var testInfoMapping sync.Map // uintptr(goroutine) -> *testInfo
 
 type testInfo struct {
@@ -363,5 +363,5 @@ func emitTrace(name string, root *Root) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(subFile, traceOut, 0755)
+	return WriteFile(subFile, traceOut, 0755)
 }
