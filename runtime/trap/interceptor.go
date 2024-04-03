@@ -155,6 +155,7 @@ type interceptorList struct {
 func clearLocalInterceptorsAndMark() {
 	key := uintptr(__xgo_link_getcurg())
 	localInterceptors.Delete(key)
+	bypassMapping.Delete(key)
 
 	clearTrappingMark()
 }

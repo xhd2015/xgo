@@ -234,6 +234,8 @@ func main(){
 }
 ```
 
+Trap还提供了一个`Direct(fn)`的函数, 用于跳过拦截器, 直接调用到原始的函数。
+
 ## Mock
 Mock简化了设置拦截器的步骤, 并允许仅对特定的函数进行拦截。
 
@@ -317,6 +319,46 @@ func TestMethodMock(t *testing.T){
 
 **关于标准库Mock的注意事项**: 出于性能和安全考虑, 标准库中只有一部分包和函数能被Mock, 这个List可以在[runtime/mock/stdlib.md](./runtime/mock/stdlib.md)找到. 如果你需要Mock的标准库函数不在列表中, 可以在[Issue#6](https://github.com/xhd2015/xgo/issues/6)中进行评论。
 
+## Patch
+`runtime/mock`还提供了另一个API:
+- `Patch(fn,replacer) func()`
+
+参数:
+- `fn` 与[Mock](#mock)中的第一个参数相同
+- `replacer`一个用来替换`fn`的函数
+
+注意: `replacer`应当和`fn`具有同样的签名。
+
+返回值:
+- 一个`func()`, 用来提前移除`replacer`
+
+Patch将`fn`替换为`replacer`,这个替换仅对当前goroutine生效.在当前Goroutine退出后, `replacer`被自动移除。
+
+例子:
+```go
+package patch_test
+
+import (
+	"testing"
+
+	"github.com/xhd2015/xgo/runtime/mock"
+)
+
+func greet(s string) string {
+	return "hello " + s
+}
+
+func TestPatchFunc(t *testing.T) {
+	mock.Patch(greet, func(s string) string {
+		return "mock " + s
+	})
+
+	res := greet("world")
+	if res != "mock world" {
+		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)
+	}
+}
+```
 
 ## Trace
 在调试一个非常深的调用栈时, 通常会感觉非常痛苦, 并且效率低下。

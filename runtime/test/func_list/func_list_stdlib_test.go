@@ -21,11 +21,14 @@ func TestListStdlib(t *testing.T) {
 
 	stdPkgs := map[string]bool{
 		// os
-		"os.Getenv": true,
-		"os.Getwd":  true,
+		"os.Getenv":   true,
+		"os.Getwd":    true,
+		"os.OpenFile": true,
 
 		// time
 		"time.Now":         true,
+		"time.Sleep":       true,
+		"time.NewTicker":   true,
 		"time.Time.Format": true,
 
 		// exec

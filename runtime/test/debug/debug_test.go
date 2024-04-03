@@ -7,37 +7,34 @@ package debug
 
 import (
 	"context"
-	"fmt"
 	"testing"
+	"time"
 
 	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/trap"
+	"github.com/xhd2015/xgo/runtime/mock"
 )
 
-func TestNewGoroutineShouldInheritInterceptor(t *testing.T) {
-	trap.AddInterceptor(&trap.Interceptor{
-		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
-			if f.IdentityName == "greet" {
-				result.GetFieldIndex(0).Set("mock " + args.GetFieldIndex(0).Value().(string))
-				return nil, trap.ErrAbort
-			}
-			return
-		},
+func TestMockTimeSleep(t *testing.T) {
+	begin := time.Now()
+	sleepDur := 1 * time.Second
+	var haveCalledMock bool
+	var mockArg time.Duration
+	mock.Mock(time.Sleep, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		haveCalledMock = true
+		mockArg = args.GetFieldIndex(0).Value().(time.Duration)
+		return nil
 	})
+	time.Sleep(sleepDur)
 
-	done := make(chan struct{})
-	go func() {
-		s := greet("world")
-		if s != "mock world" {
-			panic(fmt.Errorf("expect greet returns %q, actual: %q", "mock world", s))
-		}
+	cost := time.Since(begin)
 
-		close(done)
-	}()
-
-	<-done
-}
-
-func greet(s string) string {
-	return "hello " + s
+	if !haveCalledMock {
+		t.Fatalf("expect haveCalledMock, actually not")
+	}
+	if mockArg != sleepDur {
+		t.Fatalf("expect mockArg to be %v, actual: %v", sleepDur, mockArg)
+	}
+	if cost > 100*time.Millisecond {
+		t.Fatalf("expect time.Sleep mocked, actual cost: %v", cost)
+	}
 }

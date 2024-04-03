@@ -12,7 +12,7 @@ import (
 
 const methodSuffix = "-fm"
 
-// Inspect make a call to f to capture its receiver pointer if is
+// Inspect make a call to f to capture its receiver pointer if it
 // is bound method
 // It can be used to get the unwrapped innermost function of a method
 // wrapper.

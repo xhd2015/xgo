@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
@@ -17,6 +18,10 @@ func patchRuntimeAndTesting(goroot string) error {
 		return err
 	}
 	err = patchRuntimeTesting(goroot)
+	if err != nil {
+		return err
+	}
+	err = patchRuntimeTime(goroot)
 	if err != nil {
 		return err
 	}
@@ -80,6 +85,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 }
 
 func patchRuntimeProc(goroot string) error {
+	procFile := filepath.Join(goroot, "src", "runtime", "proc.go")
 	anchors := []string{
 		"func main() {",
 		"doInit(", "runtime_inittask", ")", // first doInit for runtime
@@ -87,8 +93,7 @@ func patchRuntimeProc(goroot string) error {
 		"close(main_init_done)",
 		"\n",
 	}
-	procGo := filepath.Join(goroot, "src", "runtime", "proc.go")
-	err := editFile(procGo, func(content string) (string, error) {
+	err := editFile(procFile, func(content string) (string, error) {
 		content = addContentAfter(content, "/*<begin set_init_finished_mark>*/", "/*<end set_init_finished_mark>*/", anchors, patch.RuntimeProcPatch)
 
 		// goexit1() is called for every exited goroutine
@@ -131,4 +136,43 @@ func patchRuntimeTesting(goroot string) error {
 		)
 		return content, nil
 	})
+}
+
+// only required if need to mock time.Sleep
+func patchRuntimeTime(goroot string) error {
+	runtimeTimeFile := filepath.Join(goroot, "src", "runtime", "time.go")
+	timeSleepFile := filepath.Join(goroot, "src", "time", "sleep.go")
+
+	err := editFile(runtimeTimeFile, func(content string) (string, error) {
+		content = replaceContentAfter(content,
+			"/*<begin redirect_runtime_sleep>*/", "/*<end redirect_runtime_sleep>*/",
+			[]string{},
+			"//go:linkname timeSleep time.Sleep\nfunc timeSleep(ns int64) {",
+			"//go:linkname timeSleep time.runtimeSleep\nfunc timeSleep(ns int64) {",
+		)
+		return content, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	err = editFile(timeSleepFile, func(content string) (string, error) {
+		content = replaceContentAfter(content,
+			"/*<begin replace_sleep_with_runtimesleep>*/", "/*<end replace_sleep_with_runtimesleep>*/",
+			[]string{},
+			"func Sleep(d Duration)",
+			strings.Join([]string{
+				"func runtimeSleep(d Duration)",
+				"func Sleep(d Duration){",
+				"    runtimeSleep(d)",
+				"}",
+			}, "\n"),
+		)
+		return content, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

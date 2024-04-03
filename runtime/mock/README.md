@@ -1,21 +1,33 @@
 # API Summary
-Mock exposes 3 primary APIs to users:
+Mock exposes 3 `Mock` APIs to users:
 - `Mock(fn, interceptor)` - for **99%** scenarios
 
 - `MockByName(pkgPath, name, interceptor)` - for **unexported** function
 
 - `MockMethodByName(instance, name, interceptor)` - for **unexported** method
 
-Under 99% circumstances, developer should use `Mock` as long as possible because it does not involve hard coded name or package path.
+And another 3 `Patch` APIs:
+- `Patch(fn, replacer)` - for **99%** scenarios
+
+- `PatchByName(pkgPath, name, replacer)` - for **unexported** function
+
+- `PatchMethodByName(instance, name, replacer)` - for **unexported** method
+
+Under 99% circumstances, developer should use `Mock` or `Patch` as long as possible because it does not involve hard coded name or package path.
 
 The later two, `MockByName` and `MockMethodByName` are used where the target method cannot be accessed due to unexported, so they must be referenced by hard coded strings.
 
 All 3 mock APIs take in an `InterceptorFunc` as the last argument,  and returns a `func()`. The returned `func()` can be used to clear the passed in interceptor.
 
+# Difference between `Mock` and `Patch`
+The difference lies at their last parameter:
+- `Mock` accepts an `InterceptorFunc`
+- `Patch` accepts a function with the same signature as the first parameter
+
 # Scope
-Based on the timing when `Mock`,`MockByName` or `MockMethodByName` is called, the interceptor has different behaviors:
+Based on the timing when `Mock*`,or `Patch*` is called, the interceptor has different behaviors:
 - If called from `init`, then all goroutines will be mocked,
-- Otherwise, `Mock` is called after `init`, then the mock interceptor will only be effective for current gorotuine, other goroutines are not affected.
+- Otherwise, `Mock*` or `Patch*` is called after `init`, then the mock interceptor will only be effective for current gorotuine, other goroutines are not affected.
 
 # Interceptor
 Signature: `type InterceptorFunc func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error`
@@ -205,6 +217,32 @@ func TestMockGenericFunc(t *testing.T) {
 	outputStr := ToString[string](expectStr)
 	if expectStr != outputStr {
 		t.Fatalf("expect ToString[string](%q) not affected, actual: %q", expectStr, outputStr)
+	}
+}
+```
+
+# Patch
+```go
+package patch_test
+
+import (
+	"testing"
+
+	"github.com/xhd2015/xgo/runtime/mock"
+)
+
+func greet(s string) string {
+	return "hello " + s
+}
+
+func TestPatchFunc(t *testing.T) {
+	mock.Patch(greet, func(s string) string {
+		return "mock " + s
+	})
+
+	res := greet("world")
+	if res != "mock world" {
+		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)
 	}
 }
 ```

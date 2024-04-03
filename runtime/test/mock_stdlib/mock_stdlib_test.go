@@ -10,10 +10,6 @@ import (
 	"github.com/xhd2015/xgo/runtime/mock"
 )
 
-// func TEST() {
-// 	panic("debug")
-// }
-
 // go run ./cmd/xgo test --project-dir runtime -run TestMockTimeNow -v ./test/mock_stdlib
 // go run ./script/run-test/ --include go1.22.1 --xgo-runtime-test-only -run TestMockTimeNow -v ./test/mock_stdlib
 func TestMockTimeNow(t *testing.T) {
@@ -52,5 +48,38 @@ func TestMockHTTP(t *testing.T) {
 	http.DefaultClient.Do(nil)
 	if !haveMocked {
 		t.Fatalf("expect http.DefaultClient.Do to have been mocked, actually not mocked")
+	}
+}
+
+// execution log(NOTE the cost is not 1s):
+//
+// === RUN   TestMockTimeSleep
+// --- PASS: TestMockTimeSleep (0.00s)
+// PASS
+// ok      github.com/xhd2015/xgo/runtime/test/mock_stdlib 0.725s
+func TestMockTimeSleep(t *testing.T) {
+	begin := time.Now()
+	sleepDur := 1 * time.Second
+	var haveCalledMock bool
+	var mockArg time.Duration
+	mock.Mock(time.Sleep, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		haveCalledMock = true
+		mockArg = args.GetFieldIndex(0).Value().(time.Duration)
+		return nil
+	})
+	time.Sleep(sleepDur)
+
+	// 37.275µs
+	cost := time.Since(begin)
+
+	if !haveCalledMock {
+		t.Fatalf("expect haveCalledMock, actually not")
+	}
+	if mockArg != sleepDur {
+		t.Fatalf("expect mockArg to be %v, actual: %v", sleepDur, mockArg)
+	}
+	// t.Logf("cost: %v", cost)
+	if cost > 100*time.Millisecond {
+		t.Fatalf("expect time.Sleep mocked, actual cost: %v", cost)
 	}
 }
