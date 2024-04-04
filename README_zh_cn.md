@@ -9,7 +9,7 @@
 
 允许对`go`的函数进行拦截, 并提供Mock和Trace等工具帮助开发者编写测试和快速调试。
 
-`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上。
+`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec/))。
 
 `xgo`对源代码和IR(中间码)进行预处理之后, 再调用`go`进行后续的编译工作。通过这种方式, `xgo`实现了一些在`go`中缺乏的能力。
 

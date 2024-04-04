@@ -10,7 +10,7 @@
 
 Enable function Trap for `go`, and provide tools like Mock and Trace to help go developers write unit test and debug both easier and faster.
 
-`xgo` works as a preprocessor for `go run`,`go build`, and `go test`.
+`xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec/)).
 
 It **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, adding missing abilities to go program by cooperating with(or hacking) the go compiler.
 
