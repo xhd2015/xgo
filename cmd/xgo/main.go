@@ -14,6 +14,7 @@ import (
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/osinfo"
 
+	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
@@ -61,6 +62,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
+		return
+	}
+	if cmd == "exec_tool" {
+		exec_tool.Main(args)
 		return
 	}
 	if cmd == "tool" {
@@ -223,7 +228,6 @@ func handleBuild(cmd string, args []string) error {
 
 	exeSuffix := osinfo.EXE_SUFFIX
 	// NOTE: on Windows, go build -o xxx will always yield xxx.exe
-	execToolBin := filepath.Join(binDir, "exec_tool"+exeSuffix)
 	compileLog := filepath.Join(logDir, "compile.log")
 	compilerBin := filepath.Join(instrumentDir, "compile"+exeSuffix)
 	compilerBuildID := filepath.Join(instrumentDir, "compile.buildid.txt")
@@ -329,7 +333,8 @@ func handleBuild(cmd string, args []string) error {
 	var toolExecFlag string
 	if !noInstrument {
 		logDebug("build instrument tools: %s", instrumentGoroot)
-		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, execToolBin, debug, logCompile, noSetup, debugWithDlv)
+		xgoBin := os.Args[0]
+		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, "", xgoBin, debug, logCompile, noSetup, debugWithDlv)
 		if err != nil {
 			return err
 		}

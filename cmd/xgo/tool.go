@@ -8,10 +8,14 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/xhd2015/xgo/cmd/xgo/trace"
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
 func handleTool(tool string, args []string) error {
+	if tool == "trace" {
+		return trace.Main(args)
+	}
 	tools := []string{
 		tool,
 	}

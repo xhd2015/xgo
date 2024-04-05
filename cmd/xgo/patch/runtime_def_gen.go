@@ -2,7 +2,7 @@
 
 package patch
 
-//go:generate go run ../../../script/generate ../../..
+//go:generate go run ../../../script/generate runtime-def
 const RuntimeExtraDef = `
 // xgo
 func __xgo_getcurg() unsafe.Pointer

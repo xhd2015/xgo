@@ -1,4 +1,4 @@
-package main
+package exec_tool
 
 const XGO_COMPILER_BIN = "XGO_COMPILER_BIN"
 const XGO_COMPILER_ENABLE = "XGO_COMPILER_ENABLE"

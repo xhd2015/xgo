@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	cmd_exec "github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/osinfo"
 )
 
 // usage: list, download go1.20.0
@@ -147,7 +148,7 @@ func downloadGo(cmd string, version string) error {
 	return nil
 }
 func curlDownload(url string, file string) error {
-	return cmd_exec.Run("curl"+osinfo.EXE_SUFFIX, "-L", "-o", downloadFile, downloadLink)
+	return cmd_exec.Run("curl"+osinfo.EXE_SUFFIX, "-L", "-o", file, url)
 }
 
 type DownloadInfo struct {

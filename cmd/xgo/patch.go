@@ -52,14 +52,6 @@ func getInternalPatch(goroot string, subDirs ...string) string {
 	return dir
 }
 
-func readXgoSrc(xgoSrc string, paths []string) ([]byte, error) {
-	if isDevelopment {
-		srcFile := filepath.Join(xgoSrc, "runtime", filepath.Join(paths...))
-		return os.ReadFile(srcFile)
-	}
-	return patchEmbed.ReadFile("patch_compiler/" + strings.Join(paths, "/"))
-}
-
 func replaceBuildIgnore(content []byte) ([]byte, error) {
 	const buildIgnore = "//go:build ignore"
 
@@ -153,8 +145,8 @@ func syncGoroot(goroot string, dstDir string, forceCopy bool) error {
 	return nil
 }
 
-func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, debugPkg string, logCompile bool, noSetup bool, debugWithDlv bool) (compilerChanged bool, toolExecFlag string, err error) {
-	actualExecToolBin := execToolBin
+func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, xgoBin string, debugPkg string, logCompile bool, noSetup bool, debugWithDlv bool) (compilerChanged bool, toolExecFlag string, err error) {
+	var execToolCmd []string
 	if !noSetup {
 		// build the instrumented compiler
 		err = buildCompiler(goroot, compilerBin)
@@ -166,25 +158,31 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 			return false, "", err
 		}
 
-		if isDevelopment {
-			// build exec tool
-			buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
-			buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
-			buildExecToolCmd.Stdout = os.Stdout
-			buildExecToolCmd.Stderr = os.Stderr
-			err = buildExecToolCmd.Run()
-			if err != nil {
-				return false, "", err
+		if false {
+			actualExecToolBin := execToolBin
+			if isDevelopment {
+				// build exec tool
+				buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
+				buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
+				buildExecToolCmd.Stdout = os.Stdout
+				buildExecToolCmd.Stderr = os.Stderr
+				err = buildExecToolCmd.Run()
+				if err != nil {
+					return false, "", err
+				}
+			} else {
+				actualExecToolBin, err = findBuiltExecTool()
+				if err != nil {
+					return false, "", err
+				}
 			}
-		} else {
-			actualExecToolBin, err = findBuiltExecTool()
-			if err != nil {
-				return false, "", err
-			}
+			// unused any more
+			execToolCmd = []string{actualExecToolBin, "--enable"}
+			_ = execToolCmd
 		}
 	}
+	execToolCmd = []string{xgoBin, "exec_tool", "--enable"}
 
-	execToolCmd := []string{actualExecToolBin, "--enable"}
 	if logCompile {
 		execToolCmd = append(execToolCmd, "--log-compile")
 	}
@@ -206,6 +204,7 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 // because exec_tool changes rarely, so it is safe to use
 // an older version.
 // we may add version to check if exec_tool is compatible
+// Deprecated: xgo itself embed exec tool
 func findBuiltExecTool() (string, error) {
 	dirName := filepath.Dir(os.Args[0])
 	absDirName, err := filepath.Abs(dirName)

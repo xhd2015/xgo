@@ -1,10 +1,5 @@
-//go:build ignore
+//go:build !dev
 
 package main
 
-import "embed"
-
 const isDevelopment = false
-
-//go:embed patch_compiler
-var patchEmbed embed.FS

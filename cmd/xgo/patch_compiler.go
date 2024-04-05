@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/xhd2015/xgo"
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -277,6 +278,8 @@ func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
 	})
 }
 
+const patchCompilerName = "patch"
+
 func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, syncWithLink bool) error {
 	dstDir := getInternalPatch(goroot)
 	if isDevelopment {
@@ -317,21 +320,22 @@ func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, s
 		}
 	}
 
+	patchFS := xgo.PatchFS
 	// read from embed
-	err := fs.WalkDir(patchEmbed, "patch_compiler", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(patchFS, patchCompilerName, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if path == "patch_compiler" {
+		if path == patchCompilerName {
 			return os.MkdirAll(dstDir, 0755)
 		}
 		// TODO: test on Windows if "/" works
-		dstPath := filepath.Join(dstDir, strings.TrimPrefix(path, "patch_compiler/"))
+		dstPath := filepath.Join(dstDir, path[len(patchCompilerName)+len("/"):])
 		if d.IsDir() {
 			return os.MkdirAll(dstPath, 0755)
 		}
 
-		content, err := patchEmbed.ReadFile(path)
+		content, err := patchFS.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -342,6 +346,14 @@ func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, s
 	}
 
 	return nil
+}
+
+func readXgoSrc(xgoSrc string, paths []string) ([]byte, error) {
+	if isDevelopment {
+		srcFile := filepath.Join(xgoSrc, "patch", filepath.Join(paths...))
+		return os.ReadFile(srcFile)
+	}
+	return xgo.PatchFS.ReadFile(patchCompilerName + "/" + strings.Join(paths, "/"))
 }
 
 func patchRuntimeDef(origGoroot string, goroot string, goVersion *goinfo.GoVersion) error {
