@@ -22,25 +22,7 @@
 
 # 安装
 ```sh
-# macOS和Linux(包括 WSL)
-curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | bash
-
-# Windows
-powershell -c "irm github.com/xhd2015/xgo/raw/master/install.ps1|iex"
-```
-
-如果你已经安装了`xgo`, 可以通过下面的命令进行升级:
-
-```sh
-xgo upgrade
-```
-
-如果你想使用最新的版本或者本地构建, 可以使用下面的命令:
-
-```sh
-git clone https://github.com/xhd2015/xgo
-cd xgo
-go run ./script/build-release --local
+go install github.com/xhd2015/xgo/cmd/xgo@latest
 ```
 
 验证:
@@ -49,6 +31,8 @@ xgo version
 # 输出:
 #   1.0.x
 ```
+
+更多安装方式, 参考[doc/INSTALLATION.md](./doc/INSTALLATION.md).
 
 # 使用须知
 `xgo` 需要`go1.17`及以上的版本。
