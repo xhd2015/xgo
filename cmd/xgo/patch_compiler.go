@@ -17,6 +17,30 @@ import (
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 
+var xgoRewriteInternal = _FilePath{"src", "cmd", "compile", "internal", "xgo_rewrite_internal"}
+var xgoRewriteInternalPatch = append(xgoRewriteInternal, "patch")
+
+var xgoNodes = _FilePath{"src", "cmd", "compile", "internal", "syntax", "xgo_nodes.go"}
+var gcMain = _FilePath{"src", "cmd", "compile", "internal", "gc", "main.go"}
+var noderFile = _FilePath{"src", "cmd", "compile", "internal", "noder", "noder.go"}
+var noderFile16 = _FilePath{"src", "cmd", "compile", "internal", "gc", "noder.go"}
+var irgenFile = _FilePath{"src", "cmd", "compile", "internal", "noder", "irgen.go"}
+
+var compilerRuntimeDefFile = _FilePath{"src", "cmd", "compile", "internal", "typecheck", "_builtin", "runtime.go"}
+var compilerRuntimeDefFile18 = _FilePath{"src", "cmd", "compile", "internal", "typecheck", "builtin", "runtime.go"}
+var compilerRuntimeDefFile16 = _FilePath{"src", "cmd", "compile", "internal", "gc", "builtin", "runtime.go"}
+
+var compilerFiles = []_FilePath{
+	xgoNodes,
+	gcMain,
+	noderFile,
+	noderFile16,
+	irgenFile,
+	compilerRuntimeDefFile,
+	compilerRuntimeDefFile18,
+	compilerRuntimeDefFile16,
+}
+
 func patchCompiler(origGoroot string, goroot string, goVersion *goinfo.GoVersion, xgoSrc string, forceReset bool, syncWithLink bool) error {
 	// copy compiler internal dependencies
 	err := importCompileInternalPatch(goroot, xgoSrc, forceReset, syncWithLink)
@@ -50,6 +74,37 @@ func patchCompiler(origGoroot string, goroot string, goVersion *goinfo.GoVersion
 	return nil
 }
 
+func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
+	// src/cmd/compile/internal/noder/noder.go
+	err := patchCompilerNoder(goroot, goVersion)
+	if err != nil {
+		return fmt.Errorf("patching noder: %w", err)
+	}
+	if goVersion.Major == 1 && (goVersion.Minor == 18 || goVersion.Minor == 19) {
+		err := poatchIRGenericGen(goroot, goVersion)
+		if err != nil {
+			return fmt.Errorf("patching generic trap: %w", err)
+		}
+	}
+	err = patchSynatxNode(goroot, goVersion)
+	if err != nil {
+		return fmt.Errorf("patching syntax node:%w", err)
+	}
+	err = patchGcMain(goroot, goVersion)
+	if err != nil {
+		return fmt.Errorf("patching gc main:%w", err)
+	}
+	return nil
+}
+
+func getInternalPatch(goroot string, subDirs ...string) string {
+	dir := filepath.Join(goroot, filepath.Join(xgoRewriteInternalPatch...))
+	if len(subDirs) > 0 {
+		dir = filepath.Join(dir, filepath.Join(subDirs...))
+	}
+	return dir
+}
+
 func patchSynatxNode(goroot string, goVersion *goinfo.GoVersion) error {
 	if goVersion.Major > 1 || goVersion.Minor >= 22 {
 		return nil
@@ -67,12 +122,12 @@ func patchSynatxNode(goroot string, goVersion *goinfo.GoVersion) error {
 	if len(fragments) == 0 {
 		return nil
 	}
-	file := filepath.Join(goroot, "src", "cmd", "compile", "internal", "syntax", "xgo_nodes.go")
+	file := filepath.Join(goroot, filepath.Join(xgoNodes...))
 	return os.WriteFile(file, []byte("package syntax\n"+strings.Join(fragments, "\n")), 0755)
 }
 
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
-	file := filepath.Join(goroot, "src", "cmd", "compile", "internal", "gc", "main.go")
+	file := filepath.Join(goroot, filepath.Join(gcMain...))
 	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= 16
 	go117 := goVersion.Major == 1 && goVersion.Minor == 17
 	go118 := goVersion.Major == 1 && goVersion.Minor == 18
@@ -198,12 +253,12 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 }
 
 func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
-	files := []string{"src", "cmd", "compile", "internal", "noder", "noder.go"}
+	files := []string(noderFile)
 	var noderFiles string
 	if goVersion.Major == 1 {
 		minor := goVersion.Minor
 		if minor == 16 {
-			files = []string{"src", "cmd", "compile", "internal", "gc", "noder.go"}
+			files = []string(noderFile16)
 			noderFiles = patch.NoderFiles_1_17
 		} else if minor == 17 {
 			noderFiles = patch.NoderFiles_1_17
@@ -254,7 +309,7 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 }
 
 func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
-	file := filepath.Join(goroot, "src", "cmd", "compile", "internal", "noder", "irgen.go")
+	file := irgenFile.Join(goroot)
 	return editFile(file, func(content string) (string, error) {
 		imports := []string{
 			`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
@@ -387,15 +442,14 @@ func patchRuntimeDef(origGoroot string, goroot string, goVersion *goinfo.GoVersi
 
 	return nil
 }
-
 func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
-	runtimeDefFiles := []string{"src", "cmd", "compile", "internal", "typecheck", "_builtin", "runtime.go"}
+	runtimeDefFiles := []string(compilerRuntimeDefFile)
 	if goVersion.Major == 1 && goVersion.Minor <= 19 {
 		if goVersion.Minor > 16 {
 			// in go1.19 and below, builtin has no _ prefix
-			runtimeDefFiles = []string{"src", "cmd", "compile", "internal", "typecheck", "builtin", "runtime.go"}
+			runtimeDefFiles = []string(compilerRuntimeDefFile18)
 		} else {
-			runtimeDefFiles = []string{"src", "cmd", "compile", "internal", "gc", "builtin", "runtime.go"}
+			runtimeDefFiles = []string(compilerRuntimeDefFile16)
 		}
 	}
 	runtimeDefFile := filepath.Join(runtimeDefFiles...)
@@ -410,27 +464,4 @@ func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
 		)
 		return content, nil
 	})
-}
-
-func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
-	// src/cmd/compile/internal/noder/noder.go
-	err := patchCompilerNoder(goroot, goVersion)
-	if err != nil {
-		return fmt.Errorf("patching noder: %w", err)
-	}
-	if goVersion.Major == 1 && (goVersion.Minor == 18 || goVersion.Minor == 19) {
-		err := poatchIRGenericGen(goroot, goVersion)
-		if err != nil {
-			return fmt.Errorf("patching generic trap: %w", err)
-		}
-	}
-	err = patchSynatxNode(goroot, goVersion)
-	if err != nil {
-		return fmt.Errorf("patching syntax node:%w", err)
-	}
-	err = patchGcMain(goroot, goVersion)
-	if err != nil {
-		return fmt.Errorf("patching gc main:%w", err)
-	}
-	return nil
 }
