@@ -21,7 +21,7 @@ import (
 //  go run ./script/run-test/ -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile covers/cover.out --include go1.21.8
 
 // runtime test:
-//     go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncList -v ./test/func_list
+//    go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncList -v ./test/func_list
 
 // xgo default test:
 //    go run ./script/run-test/ --include go1.18.10 --xgo-default-test-only -run TestAtomicGenericPtr -v ./test
@@ -373,7 +373,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 			testArgs = append(testArgs, "./cmd/...")
 		}
 	case testKind_xgoTest:
-		testArgs = []string{"run", "./cmd/xgo", "test"}
+		testArgs = []string{"run", "./cmd/xgo", "test", "-tags", "dev"}
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)
@@ -381,7 +381,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 			testArgs = append(testArgs, "./test/xgo_test/...")
 		}
 	case testKind_runtimeTest:
-		testArgs = []string{"run", "./cmd/xgo", "test", "--project-dir", "runtime"}
+		testArgs = []string{"run", "./cmd/xgo", "test", "--project-dir", "runtime", "-tags", "dev"}
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)
@@ -395,7 +395,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 			)
 		}
 	case testKind_runtimeSubTest:
-		testArgs = []string{"run", "./cmd/xgo", "test", "--project-dir", "runtime/test"}
+		testArgs = []string{"run", "./cmd/xgo", "test", "--project-dir", "runtime/test", "-tags", "dev"}
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)

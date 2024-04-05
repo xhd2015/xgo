@@ -426,7 +426,7 @@ XGO_TRACE_OUTPUT=stdout xgo run ./
 使用`xgo`自带的可视化工具查看Trace: `xgo tool trace TestExample.json`
 
 输出:
-![trace html](cmd/trace/testdata/stack_trace.jpg "Trace")
+![trace html](cmd/xgo/trace/testdata/stack_trace.jpg "Trace")
 
 默认情况下, Trace会在当前目录下写入堆栈记录, 可通过环境变量`XGO_TRACE_OUTPUT`进行控制:
 - `XGO_TRACE_OUTPUT=stdout`: 堆栈记录会被输出到stdout, 方便debug,

@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-func createInstallSRC(zipFile string, upgradeDir string) error {
+func createInstallSRC(zipFile string, projectRoot string) error {
+	upgradeDir := filepath.Join(projectRoot, "script", "install")
 	return createZip(zipFile, upgradeDir)
 }
 

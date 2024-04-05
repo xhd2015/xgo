@@ -13,8 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/xhd2015/xgo/support/cmd"
 )
 
 const latestURL = "https://github.com/xhd2015/xgo/releases/latest"
@@ -133,11 +131,20 @@ func Upgrade(installDir string) error {
 
 // if xgo not found, return can be empty
 func cmdXgoVersion() (string, error) {
-	version, err := cmd.Output("xgo", "version")
+	version, err := cmdOutput("xgo", "version")
 	if err != nil && !errors.Is(err, exec.ErrNotFound) {
 		return "", err
 	}
 	return version, nil
+}
+
+func cmdOutput(cmd string, args ...string) (string, error) {
+	exeCmd := exec.Command(cmd, args...)
+	out, err := exeCmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(string(out), "\n"), nil
 }
 
 func GetLatestVersion(ctx context.Context, timeout time.Duration, url string) (string, error) {

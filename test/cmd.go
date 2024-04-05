@@ -52,7 +52,7 @@ func runXgo(args []string, opts *options) (string, error) {
 			fmt.Printf("build xgo binary: output=%v\n", xgoBinary)
 		}
 		// build the xgo binary
-		err := cmd.Run("go", "build", "-o", xgoBinary, "../cmd/xgo")
+		err := cmd.Run("go", "build", "-tags", "dev", "-o", xgoBinary, "../cmd/xgo")
 		if err != nil {
 			return "", err
 		}

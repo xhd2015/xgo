@@ -434,7 +434,7 @@ XGO_TRACE_OUTPUT=stdout xgo run ./
 You can view the trace with:`xgo tool trace TestExample.json`
 
 Output:
-![trace html](cmd/trace/testdata/stack_trace.jpg "Trace")
+![trace html](cmd/xgo/trace/testdata/stack_trace.jpg "Trace")
 
 By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
 - `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purpose,
