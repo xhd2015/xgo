@@ -241,6 +241,7 @@ func handleBuild(cmd string, args []string) error {
 	}
 	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
 	revisionFile := filepath.Join(instrumentDir, "xgo-revision.txt")
+	fullSyncRecord := filepath.Join(instrumentDir, "full-sync-record.txt")
 
 	var realXgoSrc string
 	if isDevelopment {
@@ -294,7 +295,7 @@ func handleBuild(cmd string, args []string) error {
 		}
 		if isDevelopment || resetInstrument || revisionChanged {
 			logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
-			err = syncGoroot(goroot, instrumentGoroot, revisionChanged)
+			err = syncGoroot(goroot, instrumentGoroot, fullSyncRecord)
 			if err != nil {
 				return err
 			}

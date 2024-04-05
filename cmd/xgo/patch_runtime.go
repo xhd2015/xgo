@@ -12,6 +12,22 @@ import (
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
+var xgoAutoGenRegisterFuncHelper = _FilePath{"src", "runtime", "__xgo_autogen_register_func_helper.go"}
+var xgoTrap = _FilePath{"src", "runtime", "xgo_trap.go"}
+var runtimeProc = _FilePath{"src", "runtime", "proc.go"}
+var testingFile = _FilePath{"src", "testing", "testing.go"}
+var runtimeTime _FilePath = _FilePath{"src", "runtime", "time.go"}
+var timeSleep _FilePath = _FilePath{"src", "time", "sleep.go"}
+
+var runtimeFiles = []_FilePath{
+	xgoAutoGenRegisterFuncHelper,
+	xgoTrap,
+	runtimeProc,
+	testingFile,
+	runtimeTime,
+	timeSleep,
+}
+
 func patchRuntimeAndTesting(goroot string) error {
 	err := patchRuntimeProc(goroot)
 	if err != nil {
@@ -38,7 +54,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		// add debug file
 		//   rational: when debugging, dlv will jump to __xgo_autogen_register_func_helper.go
 		// previously this file does not exist, making the debugging blind
-		runtimeAutoGenFile := filepath.Join(goroot, "src", "runtime", "__xgo_autogen_register_func_helper.go")
+		runtimeAutoGenFile := filepath.Join(goroot, filepath.Join(xgoAutoGenRegisterFuncHelper...))
 		srcAutoGen := getInternalPatch(goroot, "syntax", "helper_code.go")
 		err = filecopy.CopyFile(srcAutoGen, runtimeAutoGenFile)
 		if err != nil {
@@ -46,7 +62,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		}
 	}
 
-	dstFile := filepath.Join(goroot, "src", "runtime", "xgo_trap.go")
+	dstFile := filepath.Join(goroot, filepath.Join(xgoTrap...))
 	content, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_trap.go"})
 	if err != nil {
 		return false, err
@@ -85,7 +101,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 }
 
 func patchRuntimeProc(goroot string) error {
-	procFile := filepath.Join(goroot, "src", "runtime", "proc.go")
+	procFile := filepath.Join(goroot, filepath.Join(runtimeProc...))
 	anchors := []string{
 		"func main() {",
 		"doInit(", "runtime_inittask", ")", // first doInit for runtime
@@ -120,7 +136,7 @@ func patchRuntimeProc(goroot string) error {
 }
 
 func patchRuntimeTesting(goroot string) error {
-	testingFile := filepath.Join(goroot, "src", "testing", "testing.go")
+	testingFile := filepath.Join(goroot, filepath.Join(testingFile...))
 	return editFile(testingFile, func(content string) (string, error) {
 		// func tRunner(t *T, fn func(t *T)) {
 		anchor := []string{"func tRunner(t *T", "{", "\n"}
@@ -140,8 +156,8 @@ func patchRuntimeTesting(goroot string) error {
 
 // only required if need to mock time.Sleep
 func patchRuntimeTime(goroot string) error {
-	runtimeTimeFile := filepath.Join(goroot, "src", "runtime", "time.go")
-	timeSleepFile := filepath.Join(goroot, "src", "time", "sleep.go")
+	runtimeTimeFile := filepath.Join(goroot, filepath.Join(runtimeTime...))
+	timeSleepFile := filepath.Join(goroot, filepath.Join(timeSleep...))
 
 	err := editFile(runtimeTimeFile, func(content string) (string, error) {
 		content = replaceContentAfter(content,

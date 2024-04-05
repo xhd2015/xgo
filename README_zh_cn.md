@@ -9,7 +9,7 @@
 
 允许对`go`的函数进行拦截, 并提供Mock和Trace等工具帮助开发者编写测试和快速调试。
 
-`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec/))。
+`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec/))。
 
 `xgo`对源代码和IR(中间码)进行预处理之后, 再调用`go`进行后续的编译工作。通过这种方式, `xgo`实现了一些在`go`中缺乏的能力。
 
@@ -39,17 +39,12 @@ xgo version
 
 对OS和Arch没有限制, `xgo`支持所有`go`支持的OS和Arch。
 
-OS:
-- macOS
-- Linux
-- Windows (+WSL)
-- ...
-
-Arch:
-- x86
-- x86_64(amd64)
-- arm64
-- ...
+|         | x86_64    | ARM64     | 任何其他架构...     |
+|---------|-----------|-----------|-----------|
+| Linux   | Y | Y | Y|
+| Windows | Y | Y | Y|
+| macOS   | Y | Y | Y|
+| 任何其他OS...   | Y | Y | Y|
 
 # 快速开始
 我们基于`xgo`编写一个单元测试:

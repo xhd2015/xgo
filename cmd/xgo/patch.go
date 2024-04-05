@@ -9,11 +9,33 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
+
+// the _FilePath declared at toplevel
+// serves as an item list where
+// the runtime and compiler maybe
+// affected.
+// NOTE: do not remove files, always add files,
+// these old files may exists in older version
+// so can be cleared by newer xgo
+type _FilePath []string
+
+func (c _FilePath) Join(s ...string) string {
+	return filepath.Join(filepath.Join(s...), filepath.Join(c...))
+}
+
+var affectedFiles []_FilePath
+
+func init() {
+	affectedFiles = append(affectedFiles, compilerFiles...)
+	affectedFiles = append(affectedFiles, runtimeFiles...)
+	affectedFiles = append(affectedFiles, reflectFiles...)
+}
 
 // assume go 1.20
 // the patch should be idempotent
@@ -42,14 +64,6 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 	}
 
 	return nil
-}
-
-func getInternalPatch(goroot string, subDirs ...string) string {
-	dir := filepath.Join(goroot, "src", "cmd", "compile", "internal", "xgo_rewrite_internal", "patch")
-	if len(subDirs) > 0 {
-		dir = filepath.Join(dir, filepath.Join(subDirs...))
-	}
-	return dir
 }
 
 func replaceBuildIgnore(content []byte) ([]byte, error) {
@@ -101,50 +115,104 @@ func readOrEmpty(file string) (string, error) {
 }
 
 // NOTE: flagA never cause goroot to reset
-func syncGoroot(goroot string, dstDir string, forceCopy bool) error {
+func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile string) error {
 	// check if src goroot has src/runtime
 	srcRuntimeDir := filepath.Join(goroot, "src", "runtime")
 	err := assertDir(srcRuntimeDir)
 	if err != nil {
 		return err
 	}
-	if !forceCopy {
-		srcGoBin := filepath.Join(goroot, "bin", "go")
-		dstGoBin := filepath.Join(dstDir, "bin", "go")
+	var goBinaryChanged bool = true
+	srcGoBin := filepath.Join(goroot, "bin", "go")
+	dstGoBin := filepath.Join(instrumentGoroot, "bin", "go")
 
-		srcFile, err := os.Stat(srcGoBin)
-		if err != nil {
-			return nil
-		}
-		if srcFile.IsDir() {
-			return fmt.Errorf("bad goroot: %s", goroot)
-		}
+	srcFile, err := os.Stat(srcGoBin)
+	if err != nil {
+		return nil
+	}
+	if srcFile.IsDir() {
+		return fmt.Errorf("bad goroot: %s", goroot)
+	}
 
-		dstFile, statErr := os.Stat(dstGoBin)
-		if statErr != nil {
-			if !os.IsNotExist(statErr) {
-				return statErr
-			}
-		}
-
-		if dstFile != nil && !dstFile.IsDir() && dstFile.Size() == srcFile.Size() {
-			// already copied
-			return nil
+	dstFile, statErr := os.Stat(dstGoBin)
+	if statErr != nil {
+		if !os.IsNotExist(statErr) {
+			return statErr
 		}
 	}
 
-	// need copy, delete target dst dir first
-	// TODO: use git worktree add if .git exists
-	err = filecopy.NewOptions().
-		Concurrent(10).
-		CopyReplaceDir(goroot, dstDir)
-	if err != nil {
-		return err
+	if dstFile != nil && !dstFile.IsDir() && dstFile.Size() == srcFile.Size() {
+		goBinaryChanged = false
+	}
+
+	var doPartialCopy bool
+	if !goBinaryChanged && statNoErr(fullSyncRecordFile) {
+		// full sync record does not yet exist
+		doPartialCopy = true
+	}
+	if doPartialCopy {
+		// do partial copy
+		err := partialCopy(goroot, instrumentGoroot)
+		if err != nil {
+			return err
+		}
+	} else {
+		rmErr := os.Remove(fullSyncRecordFile)
+		if rmErr != nil {
+			if !errors.Is(rmErr, os.ErrNotExist) {
+				return rmErr
+			}
+		}
+
+		// need copy, delete target dst dir first
+		// TODO: use git worktree add if .git exists
+		err = filecopy.NewOptions().
+			Concurrent(10).
+			CopyReplaceDir(goroot, instrumentGoroot)
+		if err != nil {
+			return err
+		}
+
+		// record this full sync
+		copyTime := time.Now().Format("2006-01-02T15:04:05Z07:00")
+		err = os.WriteFile(fullSyncRecordFile, []byte(copyTime), 0755)
+		if err != nil {
+			return err
+		}
 	}
 	// change binary executable
 	return nil
 }
 
+func partialCopy(goroot string, instrumentGoroot string) error {
+	err := os.RemoveAll(xgoRewriteInternal.Join(instrumentGoroot))
+	if err != nil {
+		return err
+	}
+	for _, affectedFile := range affectedFiles {
+		srcFile := affectedFile.Join(goroot)
+		dstFile := affectedFile.Join(instrumentGoroot)
+
+		err := filecopy.CopyFileAll(srcFile, dstFile)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			// delete dstFile
+			err := os.RemoveAll(dstFile)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+	}
+	return nil
+}
+
+func statNoErr(f string) bool {
+	_, err := os.Stat(f)
+	return err == nil
+}
 func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, xgoBin string, debugPkg string, logCompile bool, noSetup bool, debugWithDlv bool) (compilerChanged bool, toolExecFlag string, err error) {
 	var execToolCmd []string
 	if !noSetup {

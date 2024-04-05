@@ -8,7 +8,7 @@
 
 **English | [简体中文](./README_zh_cn.md)**
 
-Enable function Trap for `go`, and provide tools like Mock and Trace to help go developers write unit test and debug both easier and faster.
+Enable function Trap in `go`, provide tools like Mock and Trace to help go developers write unit test and debug both easier and faster.
 
 `xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec/)).
 
@@ -41,18 +41,12 @@ There are other options,see [doc/INSTALLATION.md](./doc/INSTALLATION.md).
 There is no specific limitation on OS and Architecture. 
 
 **All OS and Architectures** are supported by `xgo` as long as they are supported by `go`.
-
-OS:
-- MacOS
-- Linux
-- Windows (+WSL)
-- ...
-
-Architecture:
-- x86
-- x86_64(amd64)
-- arm64
-- ...
+|         | x86_64    | ARM64     | Any Other Arch...     |
+|---------|-----------|-----------|-----------|
+| Linux   | Y | Y | Y|
+| Windows | Y | Y | Y|
+| macOS   | Y | Y | Y|
+| Any Other OS...   | Y | Y | Y|
 
 # Quick Start
 Let's write a unit test with `xgo`:

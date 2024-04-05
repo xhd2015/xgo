@@ -16,8 +16,18 @@ import (
 	"github.com/xhd2015/xgo/support/transform"
 )
 
+var xgoReflectFile = _FilePath{"src", "reflect", "xgo_reflect.go"}
+var reflectValueFile = _FilePath{"src", "reflect", "value.go"}
+var reflectTypeFile = _FilePath{"src", "reflect", "type.go"}
+
+var reflectFiles = []_FilePath{
+	xgoReflectFile,
+	reflectValueFile,
+	reflectTypeFile,
+}
+
 func addReflectFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) error {
-	dstFile := filepath.Join(goroot, "src", "reflect", "xgo_reflect.go")
+	dstFile := filepath.Join(goroot, filepath.Join(xgoReflectFile...))
 	content, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_reflect.go"})
 	if err != nil {
 		return err
@@ -28,11 +38,11 @@ func addReflectFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		return fmt.Errorf("file %s: %w", filepath.Base(dstFile), err)
 	}
 
-	valCode, err := transformReflectValue(filepath.Join(goroot, "src", "reflect", "value.go"))
+	valCode, err := transformReflectValue(filepath.Join(goroot, filepath.Join(reflectValueFile...)))
 	if err != nil {
 		return fmt.Errorf("transforming reflect/value.go: %w", err)
 	}
-	typeCode, err := transformReflectType(filepath.Join(goroot, "src", "reflect", "type.go"))
+	typeCode, err := transformReflectType(filepath.Join(goroot, filepath.Join(reflectTypeFile...)))
 	if err != nil {
 		return fmt.Errorf("transforming reflect/type.go: %w", err)
 	}
