@@ -23,25 +23,7 @@ See [Quick Start](#quick-start) and [Documentation](./doc) for more details.
 
 # Installation
 ```sh
-# macOS and Linux (and WSL)
-curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | bash
-
-# Windows
-powershell -c "irm github.com/xhd2015/xgo/raw/master/install.ps1|iex"
-```
-
-If you've already installed `xgo`, you can upgrade it with:
-
-```sh
-xgo upgrade
-```
-
-If you want to build from source, run with:
-
-```sh
-git clone https://github.com/xhd2015/xgo
-cd xgo
-go run ./script/build-release --local
+go install github.com/xhd2015/xgo/cmd/xgo@latest
 ```
 
 Verify the installation:
@@ -50,6 +32,8 @@ xgo version
 # output:
 #   1.0.x
 ```
+
+There are other options,see [doc/INSTALLATION.md](./doc/INSTALLATION.md).
 
 # Requirement
 `xgo` requires at least `go1.17` to compile.
