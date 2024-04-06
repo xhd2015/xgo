@@ -46,16 +46,6 @@ func collectVarDecls(declKind DeclKind, names []*syntax.Name, typ syntax.Expr) [
 	return decls
 }
 
-type vis struct {
-}
-
-var _ syntax.Visitor = (*vis)(nil)
-
-// Visit implements syntax.Visitor.
-func (c *vis) Visit(node syntax.Node) (w syntax.Visitor) {
-	return nil
-}
-
 func trapVariables(pkgPath string, fileList []*syntax.File, funcDelcs []*DeclInfo) {
 	names := make(map[string]*DeclInfo, len(funcDelcs))
 	varNames := make(map[string]bool)
@@ -198,7 +188,7 @@ func (ctx *BlockContext) traverseStmt(node syntax.Stmt, globaleNames map[string]
 		return ctx.traverseBlockStmt(node, globaleNames, imports)
 	case *syntax.CallStmt:
 		// defer, go
-		node.Call = ctx.traverseExpr(node.Call, globaleNames, imports)
+		node.Call = ctx.traverseCallExpr(node.Call, globaleNames, imports)
 		return node
 	case *syntax.IfStmt:
 		node.Init = ctx.traverseSimpleStmt(node.Init, globaleNames, imports)

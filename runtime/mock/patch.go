@@ -28,7 +28,7 @@ func Patch(fn interface{}, replacer interface{}) func() {
 		if fnType != reflect.TypeOf(replacer) {
 			panic(fmt.Errorf("replacer should have type: %T, actual: %T", fn, replacer))
 		}
-	} else if fnKind == reflect.Pointer {
+	} else if fnKind == reflect.Ptr {
 		replacerType := reflect.TypeOf(replacer)
 		wantType := reflect.FuncOf(nil, []reflect.Type{fnType.Elem()}, false)
 		var targetTypeStr string

@@ -60,7 +60,7 @@ func InfoFunc(fn interface{}) *core.FuncInfo {
 func InfoVar(addr interface{}) *core.FuncInfo {
 	ensureMapping()
 	v := reflect.ValueOf(addr)
-	if v.Kind() != reflect.Pointer {
+	if v.Kind() != reflect.Ptr {
 		panic(fmt.Errorf("given type is not a pointer: %T", addr))
 	}
 	ptr := v.Pointer()
