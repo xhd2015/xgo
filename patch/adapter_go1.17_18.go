@@ -36,8 +36,5 @@ func wrapListType(expr *ir.CompLitExpr) *ir.CompLitExpr {
 }
 
 func canInsertTrap(fn *ir.Func) bool {
-	if isSkippableSpecialPkg() {
-		return false
-	}
 	return true
 }

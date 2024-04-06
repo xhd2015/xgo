@@ -10,6 +10,7 @@ func main() {
 	args := os.Args[1:]
 	execArgs := []string{
 		"run",
+		"-tags", "dev",
 		"./cmd/xgo",
 		"build",
 		"--xgo-src",

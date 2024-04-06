@@ -353,8 +353,17 @@ func handleBuild(cmd string, args []string) error {
 		go tailLog(compileLog)
 	}
 
+	execCmdEnv := os.Environ()
 	var execCmd *exec.Cmd
 	if !cmdExec {
+		mainModule, err := goinfo.ResolveMainModule(projectDir, remainArgs)
+		if err != nil {
+			if !errors.Is(err, goinfo.ErrGoModNotFound) && !errors.Is(err, goinfo.ErrGoModDoesNotHaveModule) {
+				return err
+			}
+		}
+		logDebug("resolved main module: %s", mainModule)
+		execCmdEnv = append(execCmdEnv, "XGO_MAIN_MODULE="+mainModule)
 		// GOCACHE="$shdir/build-cache" PATH=$goroot/bin:$PATH GOROOT=$goroot DEBUG_PKG=$debug go build -toolexec="$shdir/exce_tool $cmd" "${build_flags[@]}" "$@"
 		buildCmdArgs := []string{cmd}
 		if toolExecFlag != "" {
@@ -401,7 +410,7 @@ func handleBuild(cmd string, args []string) error {
 		logDebug("command: %v", remainArgs)
 		execCmd = exec.Command(remainArgs[0], remainArgs[1:]...)
 	}
-	execCmd.Env = os.Environ()
+	execCmd.Env = execCmdEnv
 	execCmd.Env, err = patchEnvWithGoroot(execCmd.Env, instrumentGoroot)
 	if err != nil {
 		return err

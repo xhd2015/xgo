@@ -34,9 +34,6 @@ func canInsertTrap(fn *ir.Func) bool {
 	if curPkgPath != fnPkgPath {
 		return false
 	}
-	if isSkippableSpecialPkg() {
-		return false
-	}
 	// fnName := fn.Sym().Name
 	// if strings.Contains(fnName, "[") && strings.Contains(fnName, "]") {
 	// 	return false

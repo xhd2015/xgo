@@ -8,7 +8,9 @@ const RuntimeExtraDef = `
 func __xgo_getcurg() unsafe.Pointer
 func __xgo_trap(pkgPath string, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
 func __xgo_trap_for_generated(pkgPath string, pc uintptr, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
+func __xgo_trap_var_for_generated(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool)
 func __xgo_set_trap(trap func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool))
+func __xgo_set_trap_var(trap func(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool))
 func __xgo_register_func(info interface{})
 func __xgo_retrieve_all_funcs_and_clear(f func(info interface{}))
 func __xgo_init_finished() bool

@@ -1,9 +1,4 @@
-// debug test is a convenient package
-// you can paste your minimal code your
-// to focus only the problemtic part of
-// failing code
-
-package debug
+package main
 
 import (
 	"context"
@@ -13,6 +8,23 @@ import (
 	"github.com/xhd2015/xgo/runtime/mock"
 	"github.com/xhd2015/xgo/runtime/test/mock_var/sub"
 )
+
+var a int = 123
+
+// TODO: support xgo:notrap
+// xgo:notrap
+var b int
+
+func TestMockVarTest(t *testing.T) {
+	mock.Mock(&a, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		results.GetFieldIndex(0).Set(456)
+		return nil
+	})
+	b := a
+	if b != 456 {
+		t.Fatalf("expect b to be %d, actual: %d", 456, b)
+	}
+}
 
 func TestMockVarInOtherPkg(t *testing.T) {
 	mock.Mock(&sub.A, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {

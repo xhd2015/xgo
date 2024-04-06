@@ -2,6 +2,7 @@ package ctxt
 
 import (
 	"cmd/compile/internal/base"
+	"os"
 	"strings"
 )
 
@@ -9,7 +10,16 @@ const XgoModule = "github.com/xhd2015/xgo"
 const XgoRuntimePkg = XgoModule + "/runtime"
 const XgoRuntimeCorePkg = XgoModule + "/runtime/core"
 
+var XgoMainModule = os.Getenv("XGO_MAIN_MODULE")
+
 func SkipPackageTrap() bool {
+	pkgPath := GetPkgPath()
+	if pkgPath == "" {
+		return true
+	}
+	if strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") {
+		return true
+	}
 	if base.Flag.Std {
 		// skip std lib, especially skip:
 		//    runtime, runtime/internal, runtime/*, reflect, unsafe, syscall, sync, sync/atomic,  internal/*
@@ -24,14 +34,15 @@ func SkipPackageTrap() bool {
 		// func may be a foreigner.
 
 		// allow http
-		pkgPath := GetPkgPath()
 		if _, ok := stdWhitelist[pkgPath]; ok {
 			return false
 		}
 		return true
 	}
+	if isSkippableSpecialPkg(pkgPath) {
+		return true
+	}
 
-	pkgPath := GetPkgPath()
 	if IsPkgXgoSkipTrap(pkgPath) {
 		return true
 	}
@@ -111,6 +122,7 @@ func AllowPkgFuncTrap(pkgPath string, isStd bool, funcName string) bool {
 	return true
 }
 
+// skip all packages for xgo,except test
 func IsPkgXgoSkipTrap(pkg string) bool {
 	suffix, ok := cutPkgPrefix(pkg, XgoModule)
 	if !ok {
@@ -119,7 +131,7 @@ func IsPkgXgoSkipTrap(pkg string) bool {
 	if suffix == "" {
 		return true
 	}
-	// check if the package is test, runtime/test
+	// check if the package is test or runtime/test
 	_, ok = cutPkgPrefix(suffix, "test")
 	if ok {
 		return false

@@ -24,6 +24,12 @@ func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
 
 func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
 	fn := reflect.ValueOf(f)
+	// try as a variable
+	if fn.Kind() == reflect.Ptr {
+		// a variable
+		funcInfo = functab.InfoVar(f)
+		return nil, funcInfo, 0, 0
+	}
 	if fn.Kind() != reflect.Func {
 		panic(fmt.Errorf("Inspect requires func, given: %s", fn.Kind().String()))
 	}
