@@ -29,7 +29,7 @@ func ResolveMainModule(dir string, args []string) (string, error) {
 
 	return modPath, nil
 
-	// // has quailified name: not starting with ./ or ../
+	// // has qualified name: not starting with ./ or ../
 	// var qualifieldNames []string
 	// for _, arg := range args {
 	// 	if !isRelative(arg) {
