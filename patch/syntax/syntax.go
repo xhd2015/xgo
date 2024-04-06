@@ -170,7 +170,7 @@ func registerFuncs(fileList []*syntax.File, addFile func(name string, r io.Reade
 	rewriteStdAndGenericFuncs(funcDelcs, pkgPath)
 
 	if varTrap {
-		trapVariables(fileList, funcDelcs)
+		trapVariables(pkgPath, fileList, funcDelcs)
 		// debug
 		// fmt.Fprintf(os.Stderr, "ast:")
 		// syntax.Fdump(os.Stderr, fileList[0])

@@ -4,6 +4,7 @@ import (
 	"cmd/compile/internal/base"
 	"cmd/compile/internal/syntax"
 	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
+	"cmd/compile/internal/xgo_rewrite_internal/patch/pkgdata"
 	"fmt"
 	"os"
 	"strconv"
@@ -55,10 +56,25 @@ func (c *vis) Visit(node syntax.Node) (w syntax.Visitor) {
 	return nil
 }
 
-func trapVariables(fileList []*syntax.File, funcDelcs []*DeclInfo) {
+func trapVariables(pkgPath string, fileList []*syntax.File, funcDelcs []*DeclInfo) {
 	names := make(map[string]*DeclInfo, len(funcDelcs))
+	varNames := make(map[string]bool)
+	constNames := make(map[string]bool)
 	for _, funcDecl := range funcDelcs {
-		names[funcDecl.IdentityName()] = funcDecl
+		identityName := funcDecl.IdentityName()
+		names[identityName] = funcDecl
+		if funcDecl.Kind == Kind_Var || funcDecl.Kind == Kind_VarPtr {
+			varNames[identityName] = true
+		} else if funcDecl.Kind == Kind_Const {
+			constNames[identityName] = true
+		}
+	}
+	err := pkgdata.WritePkgData(pkgPath, &pkgdata.PackageData{
+		Consts: constNames,
+		Vars:   varNames,
+	})
+	if err != nil {
+		base.Fatalf("write pkg data: %v", err)
 	}
 	// iterate each file, find variable reference,
 	for _, file := range fileList {
@@ -72,7 +88,7 @@ func trapVariables(fileList []*syntax.File, funcDelcs []*DeclInfo) {
 				continue
 			}
 			ctx := &BlockContext{}
-			ctx.traverseNode(fnDecl.Body, names, imports)
+			fnDecl.Body = ctx.traverseBlockStmt(fnDecl.Body, names, imports)
 		}
 	}
 }
@@ -114,6 +130,8 @@ type BlockContext struct {
 	Children []*BlockContext
 
 	Names map[string]bool
+
+	OperationParent map[syntax.Node]*syntax.Operation
 
 	// to be inserted
 	InsertList []syntax.Stmt
@@ -338,7 +356,13 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 	case *syntax.ParenExpr:
 		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
 	case *syntax.SelectorExpr:
-		return ctx.trapSelector(node, node, false, globaleNames, imports)
+		newNode, selIsName := ctx.trapSelector(node, node, false, globaleNames, imports)
+		if newNode != nil {
+			return newNode
+		}
+		if !selIsName {
+			node.X = ctx.traverseExpr(node.X, globaleNames, imports)
+		}
 	case *syntax.IndexExpr:
 		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
 		node.Index = ctx.traverseExpr(node.Index, globaleNames, imports)
@@ -357,21 +381,32 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 		return res
 	case *syntax.Operation:
 		// take addr?
-		if node.Op != syntax.And || node.Y != nil {
-			node.X = ctx.traverseExpr(node.X, globaleNames, imports)
-			node.Y = ctx.traverseExpr(node.Y, globaleNames, imports)
-			return node
+		if node.Op == syntax.And && node.Y == nil {
+			// &a,
+			switch x := node.X.(type) {
+			case *syntax.Name:
+				return ctx.trapAddrNode(node, x, globaleNames)
+			case *syntax.SelectorExpr:
+				newNode, selIsName := ctx.trapSelector(node, x, true, globaleNames, imports)
+				if newNode != nil {
+					return newNode
+				}
+				if selIsName {
+					return node
+				}
+			}
 		}
-		// &a,
-		switch x := node.X.(type) {
-		case *syntax.Name:
-			return ctx.trapAddrNode(node, x, globaleNames)
-		case *syntax.SelectorExpr:
-			return ctx.trapSelector(node, x, true, globaleNames, imports)
-		default:
-			node.X = ctx.traverseExpr(node.X, globaleNames, imports)
-			node.Y = ctx.traverseExpr(node.Y, globaleNames, imports)
+		if node.X != nil && node.Y != nil {
+			if ctx.OperationParent == nil {
+				ctx.OperationParent = make(map[syntax.Node]*syntax.Operation)
+			}
+			ctx.OperationParent[node.X] = node
+			ctx.OperationParent[node.Y] = node
 		}
+		// x op y
+		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
+		node.Y = ctx.traverseExpr(node.Y, globaleNames, imports)
+		return node
 	case *syntax.CallExpr:
 		// NOTE: we skip capturing a name as a function
 		// node.Fun = ctx.traverseExpr(node.Fun, globaleNames, imports)
@@ -426,7 +461,17 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 	}
 	// TODO: what about dot import?
 	decl := globaleNames[name]
-	if decl == nil || !decl.Kind.IsVarOrConst() {
+	if decl == nil {
+		return node
+	}
+	if decl.Kind == Kind_Var || decl.Kind == Kind_VarPtr {
+		// good to go
+	} else if decl.Kind == Kind_Const {
+		if _, ok := c.OperationParent[node]; ok {
+			// directly inside an operation
+			return node
+		}
+	} else {
 		return node
 	}
 	preStmts, tmpVarName := trapVar(node, syntax.NewName(node.Pos(), XgoLocalPkgName), node.Value, false)
@@ -434,31 +479,36 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 	return syntax.NewName(node.Pos(), tmpVarName)
 }
 
-func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr, takeAddr bool, globaleNames map[string]*DeclInfo, imports map[string]string) syntax.Expr {
+func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr, takeAddr bool, globaleNames map[string]*DeclInfo, imports map[string]string) (newExpr syntax.Expr, selIsName bool) {
 	// form: pkg.var
 	nameNode, ok := sel.X.(*syntax.Name)
 	if !ok {
-		sel.X = ctx.traverseExpr(sel.X, globaleNames, imports)
-		return node
+		return nil, false
 	}
 	name := nameNode.Value
 	if ctx.Has(name) {
 		// local name
-		sel.X = ctx.traverseExpr(sel.X, globaleNames, imports)
-		return node
+		return nil, true
 	}
 	// import path
 	pkgPath := imports[name]
 	if pkgPath == "" {
 		sel.X = ctx.trapValueNode(nameNode, globaleNames)
-		return node
+		return nil, true
 	}
 	if !allowPkgVarTrap(pkgPath) {
-		return node
+		return nil, true
+	}
+	pkgData := pkgdata.GetPkgData(pkgPath)
+	if pkgData.Consts[sel.Sel.Value] {
+		// is const and inside operation
+		if _, ok := ctx.OperationParent[node]; ok {
+			return nil, true
+		}
 	}
 	preStmts, tmpVarName := trapVar(node, newStringLit(pkgPath), sel.Sel.Value, takeAddr)
 	ctx.InsertList = append(ctx.InsertList, preStmts...)
-	return syntax.NewName(node.Pos(), tmpVarName)
+	return syntax.NewName(node.Pos(), tmpVarName), true
 }
 
 func (c *BlockContext) trapAddrNode(node *syntax.Operation, nameNode *syntax.Name, globaleNames map[string]*DeclInfo) syntax.Expr {
