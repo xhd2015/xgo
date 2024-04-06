@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/functab"
 )
 
 // Patch replaces `fn` with `replacer` in current goroutine,
@@ -28,10 +29,19 @@ func Patch(fn interface{}, replacer interface{}) func() {
 			panic(fmt.Errorf("replacer should have type: %T, actual: %T", fn, replacer))
 		}
 	} else if fnKind == reflect.Pointer {
+		replacerType := reflect.TypeOf(replacer)
+		wantType := reflect.FuncOf(nil, []reflect.Type{fnType.Elem()}, false)
+		var targetTypeStr string
+		var replacerTypeStr string
+		var match bool
 		if reflect.TypeOf(replacer).Kind() != reflect.Func {
-			// TODO: validate return value
-			t := fnType.Elem().String()
-			panic(fmt.Errorf("replacer should be a func()%s or func()*%s, actual: %T", t, t, replacer))
+			targetTypeStr = wantType.String()
+			replacerTypeStr = replacerType.String()
+		} else {
+			targetTypeStr, replacerTypeStr, match = checkFuncTypeMatch(wantType, replacerType, false)
+		}
+		if !match {
+			panic(fmt.Errorf("replacer should have type: %s, actual: %s", targetTypeStr, replacerTypeStr))
 		}
 	} else {
 		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
@@ -52,12 +62,52 @@ func PatchByName(pkgPath string, funcName string, replacer interface{}) func() {
 
 	// check type
 	recvPtr, funcInfo, funcPC, trappingPC := getFuncByName(pkgPath, funcName)
-	if funcInfo.Func != nil {
-		calledType, replacerType, match := checkFuncTypeMatch(reflect.TypeOf(funcInfo.Func), t, recvPtr != nil)
-		if !match {
-			panic(fmt.Errorf("replacer should have type: %s, actual: %s", calledType, replacerType))
+	if funcInfo.Kind == core.Kind_Func {
+		if funcInfo.Func != nil {
+			calledType, replacerType, match := checkFuncTypeMatch(reflect.TypeOf(funcInfo.Func), t, recvPtr != nil)
+			if !match {
+				panic(fmt.Errorf("replacer should have type: %s, actual: %s", calledType, replacerType))
+			}
 		}
+	} else if funcInfo.Kind == core.Kind_Var || funcInfo.Kind == core.Kind_VarPtr || funcInfo.Kind == core.Kind_Const {
+		varPtrType := reflect.TypeOf(funcInfo.Var)
+		var wantValueType reflect.Type
+		if funcInfo.Kind == core.Kind_Var {
+			wantValueType = reflect.FuncOf(nil, []reflect.Type{varPtrType.Elem()}, false)
+		} else {
+			// const: type is not pointer
+			wantValueType = reflect.FuncOf(nil, []reflect.Type{varPtrType}, false)
+		}
+
+		var targetTypeStr string
+		var replacerTypeStr string
+		var match bool
+
+		var matchPtr bool
+		replacerType := reflect.TypeOf(replacer)
+		if replacerType.Kind() != reflect.Func {
+			targetTypeStr = wantValueType.String()
+			replacerTypeStr = replacerType.String()
+		} else {
+			targetTypeStr, replacerTypeStr, match = checkFuncTypeMatch(wantValueType, replacerType, false)
+			if !match && funcInfo.Kind != core.Kind_VarPtr {
+				_, replacerTypeStr, match = checkFuncTypeMatch(reflect.FuncOf(nil, []reflect.Type{varPtrType}, false), replacerType, false)
+				matchPtr = true
+			}
+		}
+		if !match {
+			panic(fmt.Errorf("replacer should have type: %s, actual: %s", targetTypeStr, replacerTypeStr))
+		}
+		if matchPtr {
+			funcInfo = functab.Info(pkgPath, "*"+funcName)
+			if funcInfo == nil {
+				panic(fmt.Errorf("failed to patch: %s *%s", pkgPath, funcName))
+			}
+		}
+	} else {
+		panic(fmt.Errorf("unrecognized func type: %s", funcInfo.Kind.String()))
 	}
+
 	return mock(recvPtr, funcInfo, funcPC, trappingPC, buildInterceptorFromPatch(recvPtr, replacer))
 }
 
@@ -151,6 +201,7 @@ func buildInterceptorFromPatch(recvPtr interface{}, replacer interface{}) func(c
 	}
 }
 
+// a,b must be func type
 func checkFuncTypeMatch(a reflect.Type, b reflect.Type, skipAFirst bool) (atype string, btype string, match bool) {
 	na := a.NumIn()
 	nb := b.NumIn()
@@ -185,10 +236,6 @@ func checkFuncTypeMatch(a reflect.Type, b reflect.Type, skipAFirst bool) (atype 
 	}
 	return "", "", true
 }
-
-// func func(fn reflect.Type, in []reflect.Type, out []reflect.Type, vardaric bool, skipAFirst bool) (atype string, btype string, match bool) {
-
-// }
 
 func formatFuncType(f reflect.Type, skipFirst bool) string {
 	n := f.NumIn()
