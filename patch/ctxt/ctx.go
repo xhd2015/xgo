@@ -11,6 +11,7 @@ const XgoRuntimePkg = XgoModule + "/runtime"
 const XgoRuntimeCorePkg = XgoModule + "/runtime/core"
 
 var XgoMainModule = os.Getenv("XGO_MAIN_MODULE")
+var XgoCompilePkgDataDir = os.Getenv("XGO_COMPILE_PKG_DATA_DIR")
 
 func SkipPackageTrap() bool {
 	pkgPath := GetPkgPath()

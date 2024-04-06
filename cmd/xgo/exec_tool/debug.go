@@ -19,6 +19,7 @@ func getDebugEnv(xgoCompilerEnableEnv string) map[string]string {
 		XGO_DEBUG_DUMP_AST_FILE:          os.Getenv(XGO_DEBUG_DUMP_AST_FILE),
 		"GOCACHE":                        os.Getenv("GOCACHE"),
 		XGO_MAIN_MODULE:                  os.Getenv(XGO_MAIN_MODULE),
+		XGO_COMPILE_PKG_DATA_DIR:         os.Getenv(XGO_COMPILE_PKG_DATA_DIR),
 		"GOROOT":                         "../..",
 		"PATH":                           "../../bin:${env:PATH}",
 		"XGO_COMPILER_ENABLE":            xgoCompilerEnableEnv,

@@ -232,6 +232,7 @@ func handleBuild(cmd string, args []string) error {
 	compilerBin := filepath.Join(instrumentDir, "compile"+exeSuffix)
 	compilerBuildID := filepath.Join(instrumentDir, "compile.buildid.txt")
 	instrumentGoroot := filepath.Join(instrumentDir, goVersionName)
+	packageDataDir := filepath.Join(instrumentDir, "pkgdata")
 
 	// gcflags can cause the build cache to invalidate
 	// so separate them with normal one
@@ -272,7 +273,7 @@ func handleBuild(cmd string, args []string) error {
 
 	var revisionChanged bool
 	if !noInstrument && !noSetup {
-		err = ensureDirs(binDir, logDir, instrumentDir)
+		err = ensureDirs(binDir, logDir, instrumentDir, packageDataDir)
 		if err != nil {
 			return err
 		}
@@ -363,7 +364,7 @@ func handleBuild(cmd string, args []string) error {
 			}
 		}
 		logDebug("resolved main module: %s", mainModule)
-		execCmdEnv = append(execCmdEnv, "XGO_MAIN_MODULE="+mainModule)
+		execCmdEnv = append(execCmdEnv, exec_tool.XGO_MAIN_MODULE+"="+mainModule)
 		// GOCACHE="$shdir/build-cache" PATH=$goroot/bin:$PATH GOROOT=$goroot DEBUG_PKG=$debug go build -toolexec="$shdir/exce_tool $cmd" "${build_flags[@]}" "$@"
 		buildCmdArgs := []string{cmd}
 		if toolExecFlag != "" {
@@ -418,6 +419,7 @@ func handleBuild(cmd string, args []string) error {
 	if !noInstrument {
 		execCmd.Env = append(execCmd.Env, "GOCACHE="+buildCacheDir)
 		execCmd.Env = append(execCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
+		execCmd.Env = append(execCmd.Env, exec_tool.XGO_COMPILE_PKG_DATA_DIR+"="+packageDataDir)
 		// xgo versions
 		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_VERSION="+VERSION)
 		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_REVISION="+REVISION)
@@ -570,7 +572,7 @@ func checkGoroot(goroot string) (string, error) {
 	return "", err
 }
 
-func ensureDirs(binDir string, logDir string, instrumentDir string) error {
+func ensureDirs(binDir string, logDir string, instrumentDir string, packageDataDir string) error {
 	err := os.MkdirAll(binDir, 0755)
 	if err != nil {
 		return fmt.Errorf("create ~/.xgo/bin: %w", err)
@@ -581,7 +583,11 @@ func ensureDirs(binDir string, logDir string, instrumentDir string) error {
 	}
 	err = os.MkdirAll(instrumentDir, 0755)
 	if err != nil {
-		return fmt.Errorf("create ~/.xgo/%s: %w", filepath.Base(instrumentDir), err)
+		return fmt.Errorf("create %s: %w", filepath.Base(instrumentDir), err)
+	}
+	err = os.MkdirAll(packageDataDir, 0755)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", filepath.Base(packageDataDir), err)
 	}
 	return nil
 }
