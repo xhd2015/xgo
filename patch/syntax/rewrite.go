@@ -11,6 +11,7 @@ import (
 
 const XgoLinkTrapForGenerated = "__xgo_link_trap_for_generated"
 
+// for closure
 func fillFuncArgResNames(fileList []*syntax.File) {
 	if base.Flag.Std {
 		return
@@ -35,6 +36,9 @@ func fillFuncArgResNames(fileList []*syntax.File) {
 
 func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
 	for _, fn := range funcDecls {
+		if !fn.Kind.IsFunc() {
+			continue
+		}
 		if fn.Interface {
 			continue
 		}
@@ -491,11 +495,25 @@ func newStringLit(s string) *syntax.BasicLit {
 		Kind:  syntax.StringLit,
 	}
 }
+func takeNameAddr(pos syntax.Pos, name string) *syntax.Operation {
+	return takeExprAddr(syntax.NewName(pos, name))
+}
+
+func takeExprAddr(expr syntax.Expr) *syntax.Operation {
+	return &syntax.Operation{
+		Op: syntax.And,
+		X:  expr,
+	}
+}
+
 func newIntLit(i int) *syntax.BasicLit {
 	return &syntax.BasicLit{
 		Value: strconv.FormatInt(int64(i), 10),
 		Kind:  syntax.IntLit,
 	}
+}
+func newBool(pos syntax.Pos, b bool) *syntax.Name {
+	return syntax.NewName(pos, strconv.FormatBool(b))
 }
 
 // func newBoolLit(b bool) *syntax.BasicLit {

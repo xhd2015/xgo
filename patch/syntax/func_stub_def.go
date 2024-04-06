@@ -2,8 +2,10 @@ package syntax
 
 const expected__xgo_stub_def = `struct {
 	PkgPath      string
+	Kind         int // 0 = func, 1 = var, 2=var_ptr 3 = const
 	Fn           interface{}
-	PC           uintptr // filled later
+	Var          interface{} // pointer to a variable if this is a declare variable
+	PC           uintptr     // filled later
 	Interface    bool
 	Generic      bool
 	Closure      bool // is the given function a closure

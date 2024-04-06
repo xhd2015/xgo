@@ -41,12 +41,12 @@ There are other options,see [doc/INSTALLATION.md](./doc/INSTALLATION.md).
 There is no specific limitation on OS and Architecture. 
 
 **All OS and Architectures** are supported by `xgo` as long as they are supported by `go`.
-|         | x86_64    | ARM64     | Any Other Arch...     |
-|---------|-----------|-----------|-----------|
-| Linux   | Y | Y | Y|
-| Windows | Y | Y | Y|
-| macOS   | Y | Y | Y|
-| Any Other OS...   | Y | Y | Y|
+|         | x86 | x86_64 (amd64)  | arm64     | any other Arch...     |
+|:---------|:-----------:|:-----------:|:-----------:|:-----------:|
+| Linux   | Y | Y | Y | Y |
+| Windows | Y | Y | Y | Y |
+| macOS   | Y | Y | Y | Y |
+| any other OS... | Y | Y | Y | Y|
 
 # Quick Start
 Let's write a unit test with `xgo`:

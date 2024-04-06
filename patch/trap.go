@@ -192,6 +192,8 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 		if fn.OClosure == nil {
 			return false
 		}
+
+		// register closure
 		if isClosureWrapperForGeneric(fn) {
 			// skip trap for generic closures,
 			// but register for info access
@@ -199,7 +201,7 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 			return false
 		}
 		isClosure = true
-	} else if decl.Interface || decl.Generic {
+	} else if decl.Interface || decl.Generic || !decl.Kind.IsFunc() {
 		// interface just name
 		return false
 	}
@@ -329,14 +331,6 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 	if fn.Body == nil {
 		// in go, function can have name without body
 		return "", false
-	}
-
-	// skip all packages for xgo,except test
-	if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) {
-		remain := pkgPath[len(xgoRuntimePkgPrefix):]
-		if !strings.HasPrefix(remain, "test/") && !strings.HasPrefix(remain, "runtime/test/") {
-			return "", false
-		}
 	}
 
 	// check if function body's first statement is a call to 'trap.Skip()'

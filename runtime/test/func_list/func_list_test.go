@@ -11,9 +11,9 @@ const testPkgPath = "github.com/xhd2015/xgo/runtime/test/func_list"
 
 var addExtraPkgsAssert func(m map[string]bool)
 
-// go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncList -v ./test/func_list
-// go run ./cmd/xgo test --project-dir runtime -run TestFuncList -v ./test/func_list
-func TestFuncList(t *testing.T) {
+// go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncListFn -v ./test/func_list
+// go run ./cmd/xgo test --project-dir runtime -run TestFuncListFn -v ./test/func_list
+func TestFuncListFn(t *testing.T) {
 	funcs := functab.GetFuncs()
 
 	missingPkgs := map[string]bool{

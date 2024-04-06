@@ -49,6 +49,15 @@ func __xgo_trap_for_generated(pkgPath string, pc uintptr, identityName string, g
 	return __xgo_trap_impl(pkgPath, identityName, generic, fn.entry() /*>=go1.18*/, recv, args, results)
 }
 
+var __xgo_trap_var_impl func(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool)
+
+func __xgo_trap_var_for_generated(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool) {
+	if __xgo_trap_var_impl == nil {
+		return
+	}
+	__xgo_trap_var_impl(pkgPath, name, tmpVarAddr, takeAddr)
+}
+
 func __xgo_set_trap(trap func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	if __xgo_trap_impl != nil {
 		panic("trap already set by other packages")
@@ -56,6 +65,15 @@ func __xgo_set_trap(trap func(pkgPath string, identityName string, generic bool,
 	// ensure this init is called before main
 	// we do not care init here, we try our best
 	__xgo_trap_impl = trap
+}
+
+func __xgo_set_trap_var(trap func(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool)) {
+	if __xgo_trap_var_impl != nil {
+		panic("trap var already set by other packages")
+	}
+	// ensure this init is called before main
+	// we do not care init here, we try our best
+	__xgo_trap_var_impl = trap
 }
 
 // NOTE: runtime has problem when using slice

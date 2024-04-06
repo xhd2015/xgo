@@ -22,11 +22,19 @@ func Patch(fn interface{}, replacer interface{}) func() {
 		panic("replacer cannot be nil")
 	}
 	fnType := reflect.TypeOf(fn)
-	if fnType.Kind() != reflect.Func {
-		panic(fmt.Errorf("fn should be func, actual: %T", fn))
-	}
-	if fnType != reflect.TypeOf(replacer) {
-		panic(fmt.Errorf("replacer should have type: %T, actual: %T", fn, replacer))
+	fnKind := fnType.Kind()
+	if fnKind == reflect.Func {
+		if fnType != reflect.TypeOf(replacer) {
+			panic(fmt.Errorf("replacer should have type: %T, actual: %T", fn, replacer))
+		}
+	} else if fnKind == reflect.Pointer {
+		if reflect.TypeOf(replacer).Kind() != reflect.Func {
+			// TODO: validate return value
+			t := fnType.Elem().String()
+			panic(fmt.Errorf("replacer should be a func()%s or func()*%s, actual: %T", t, t, replacer))
+		}
+	} else {
+		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
 	}
 
 	recvPtr, fnInfo, funcPC, trappingPC := getFunc(fn)
@@ -177,6 +185,10 @@ func checkFuncTypeMatch(a reflect.Type, b reflect.Type, skipAFirst bool) (atype 
 	}
 	return "", "", true
 }
+
+// func func(fn reflect.Type, in []reflect.Type, out []reflect.Type, vardaric bool, skipAFirst bool) (atype string, btype string, match bool) {
+
+// }
 
 func formatFuncType(f reflect.Type, skipFirst bool) string {
 	n := f.NumIn()

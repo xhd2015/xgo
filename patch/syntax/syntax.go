@@ -13,6 +13,21 @@ import (
 	xgo_func_name "cmd/compile/internal/xgo_rewrite_internal/patch/func_name"
 )
 
+const XGO_TOOLCHAIN_VERSION = "XGO_TOOLCHAIN_VERSION"
+const XGO_TOOLCHAIN_REVISION = "XGO_TOOLCHAIN_REVISION"
+const XGO_TOOLCHAIN_VERSION_NUMBER = "XGO_TOOLCHAIN_VERSION_NUMBER"
+
+const XGO_VERSION = "XGO_VERSION"
+const XGO_REVISION = "XGO_REVISION"
+const XGO_NUMBER = "XGO_NUMBER"
+
+// this link function is considered safe as we do not allow user
+// to define such one,there will no abuse
+const XgoLinkGeneratedRegisterFunc = "__xgo_link_generated_register_func"
+const XgoRegisterFuncs = "__xgo_register_funcs"
+const XgoLocalFuncStub = "__xgo_local_func_stub"
+const XgoLocalPkgName = "__xgo_local_pkg_name"
+
 const sig_expected__xgo_register_func = `func(info interface{})`
 
 func init() {
@@ -21,11 +36,11 @@ func init() {
 	}
 }
 
-func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
+func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader) *syntax.File) {
 	debugSyntax(fileList)
 	patchVersions(fileList)
 	fillFuncArgResNames(fileList)
-	afterFilesParsed(fileList, addFile)
+	registerFuncs(fileList, addFile)
 }
 
 func GetSyntaxDeclMapping() map[string]map[LineCol]*DeclInfo {
@@ -67,6 +82,9 @@ func getSyntaxDeclMapping() map[string]map[LineCol]*DeclInfo {
 	syntaxDeclMapping = make(map[string]map[LineCol]*DeclInfo)
 	for _, syntaxDecl := range allDecls {
 		if syntaxDecl.Interface {
+			continue
+		}
+		if !syntaxDecl.Kind.IsFunc() {
 			continue
 		}
 		file := syntaxDecl.File
@@ -111,17 +129,9 @@ func ClearSyntaxDeclMapping() {
 	syntaxDeclMapping = nil
 }
 
-const xgoRuntimePkgPrefix = "github.com/xhd2015/xgo/runtime/"
-
-// this link function is considered safe as we do not allow user
-// to define such one,there will no abuse
-const XgoLinkGeneratedRegisterFunc = "__xgo_link_generated_register_func"
-const XgoRegisterFuncs = "__xgo_register_funcs"
-const XgoLocalFuncStub = "__xgo_local_func_stub"
-
-func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader)) {
+func registerFuncs(fileList []*syntax.File, addFile func(name string, r io.Reader) *syntax.File) {
 	allFiles = fileList
-	if !shouldTrap() {
+	if xgo_ctxt.SkipPackageTrap() {
 		return
 	}
 	var pkgName string
@@ -141,7 +151,9 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	// complexity, and runtime can be compiled or cached, we cannot locate
 	// where its _pkg_.a is.
 
-	funcDelcs := getFuncDecls(fileList)
+	varTrap := allowVarTrap()
+
+	funcDelcs := getFuncDecls(fileList, varTrap)
 	for _, funcDecl := range funcDelcs {
 		if funcDecl.RecvTypeName == "" && funcDecl.Name == XgoLinkGeneratedRegisterFunc {
 			// ensure we are safe
@@ -157,9 +169,23 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	// std lib functions
 	rewriteStdAndGenericFuncs(funcDelcs, pkgPath)
 
-	// always generate a helper to aid IR
-	addFile("__xgo_autogen_register_func_helper.go", strings.NewReader(generateRegHelperCode(pkgName)))
+	if varTrap {
+		trapVariables(fileList, funcDelcs)
+		// debug
+		// fmt.Fprintf(os.Stderr, "ast:")
+		// syntax.Fdump(os.Stderr, fileList[0])
+	}
 
+	// always generate a helper to aid IR
+	helperFile := addFile("__xgo_autogen_register_func_helper.go", strings.NewReader(generateRegHelperCode(pkgName)))
+
+	// change __xgo_local_pkg_name
+	for _, decl := range helperFile.DeclList {
+		if constDecl, ok := decl.(*syntax.ConstDecl); ok && constDecl.NameList[0].Value == XgoLocalPkgName {
+			constDecl.Values.(*syntax.BasicLit).Value = strconv.Quote(pkgPath)
+			break
+		}
+	}
 	// split fileDecls to a list of batch
 	// when statements gets large, it will
 	// exceeds the compiler's threshold, causing
@@ -192,14 +218,6 @@ func afterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 		}
 	}
 }
-
-const XGO_TOOLCHAIN_VERSION = "XGO_TOOLCHAIN_VERSION"
-const XGO_TOOLCHAIN_REVISION = "XGO_TOOLCHAIN_REVISION"
-const XGO_TOOLCHAIN_VERSION_NUMBER = "XGO_TOOLCHAIN_VERSION_NUMBER"
-
-const XGO_VERSION = "XGO_VERSION"
-const XGO_REVISION = "XGO_REVISION"
-const XGO_NUMBER = "XGO_NUMBER"
 
 func patchVersions(fileList []*syntax.File) {
 	pkgPath := xgo_ctxt.GetPkgPath()
@@ -249,26 +267,6 @@ func patchVersions(fileList []*syntax.File) {
 	}
 }
 
-func shouldTrap() bool {
-	if xgo_ctxt.SkipPackageTrap() {
-		return false
-	}
-
-	pkgPath := xgo_ctxt.GetPkgPath()
-	if pkgPath == "" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") || isSkippableSpecialPkg() {
-		// runtime/internal should not be rewritten
-		// internal/api has problem with the function register
-		return false
-	}
-	if strings.HasPrefix(pkgPath, xgoRuntimePkgPrefix) {
-		// skip all xgo runtime pkgs except test
-		if !strings.HasPrefix(pkgPath[len(xgoRuntimePkgPrefix):], "test/") {
-			return false
-		}
-	}
-	return true
-}
-
 func getFileIndexMapping(files []*syntax.File) map[*syntax.File]int {
 	m := make(map[*syntax.File]int, len(files))
 	for i, file := range files {
@@ -302,9 +300,31 @@ type FileDecl struct {
 	File  *syntax.File
 	Funcs []*DeclInfo
 }
+type DeclKind int
+
+const (
+	Kind_Func   DeclKind = 0
+	Kind_Var    DeclKind = 1
+	Kind_VarPtr DeclKind = 2
+	Kind_Const  DeclKind = 3
+
+	// TODO
+	// Kind_Interface VarKind = 4
+)
+
+func (c DeclKind) IsFunc() bool {
+	return c == Kind_Func
+}
+
+func (c DeclKind) IsVarOrConst() bool {
+	return c == Kind_Var || c == Kind_VarPtr || c == Kind_Const
+}
 
 type DeclInfo struct {
 	FuncDecl     *syntax.FuncDecl
+	VarDecl      *syntax.VarDecl
+	ConstDecl    *syntax.ConstDecl
+	Kind         DeclKind
 	Name         string
 	RecvTypeName string
 	RecvPtr      bool
@@ -334,6 +354,9 @@ func (c *DeclInfo) RefName() string {
 		return "nil"
 	}
 	// if c.Generic, then the ref name is for generic
+	if !c.Kind.IsFunc() {
+		return c.Name
+	}
 	return xgo_func_name.FormatFuncRefName(c.RecvTypeName, c.RecvPtr, c.Name)
 }
 
@@ -347,6 +370,12 @@ func (c *DeclInfo) GenericName() string {
 func (c *DeclInfo) IdentityName() string {
 	if c.Interface {
 		return c.RecvTypeName
+	}
+	if !c.Kind.IsFunc() {
+		if c.Kind == Kind_VarPtr {
+			return "*" + c.Name
+		}
+		return c.Name
 	}
 	return xgo_func_name.FormatFuncRefName(c.RecvTypeName, c.RecvPtr, c.Name)
 }
@@ -374,13 +403,13 @@ func fillName(field *syntax.Field, namePrefix string) {
 // collect funcs from files, register each of them by
 // calling to __xgo_reg_func with names and func pointer
 
-func getFuncDecls(files []*syntax.File) []*DeclInfo {
+func getFuncDecls(files []*syntax.File, varTrap bool) []*DeclInfo {
 	// fileInfos := make([]*FileDecl, 0, len(files))
 	var declFuncs []*DeclInfo
 	for i, f := range files {
 		file := f.Pos().RelFilename()
 		for _, decl := range f.DeclList {
-			fnDecls := extractFuncDecls(i, f, file, decl)
+			fnDecls := extractFuncDecls(i, f, file, decl, varTrap)
 			declFuncs = append(declFuncs, fnDecls...)
 		}
 	}
@@ -399,7 +428,7 @@ func filterFuncDecls(funcDecls []*DeclInfo, pkgPath string) []*DeclInfo {
 	return filtered
 }
 
-func extractFuncDecls(fileIndex int, f *syntax.File, file string, decl syntax.Decl) []*DeclInfo {
+func extractFuncDecls(fileIndex int, f *syntax.File, file string, decl syntax.Decl, varTrap bool) []*DeclInfo {
 	switch decl := decl.(type) {
 	case *syntax.FuncDecl:
 		info := getFuncDeclInfo(fileIndex, f, file, decl)
@@ -407,6 +436,32 @@ func extractFuncDecls(fileIndex int, f *syntax.File, file string, decl syntax.De
 			return nil
 		}
 		return []*DeclInfo{info}
+	case *syntax.VarDecl:
+		if !varTrap {
+			return nil
+		}
+		varDecls := collectVarDecls(Kind_Var, decl.NameList, decl.Type)
+		for _, varDecl := range varDecls {
+			varDecl.VarDecl = decl
+
+			varDecl.FileSyntax = f
+			varDecl.FileIndex = fileIndex
+			varDecl.File = file
+		}
+		return varDecls
+	case *syntax.ConstDecl:
+		if !varTrap {
+			return nil
+		}
+		constDecls := collectVarDecls(Kind_Const, decl.NameList, decl.Type)
+		for _, constDecl := range constDecls {
+			constDecl.ConstDecl = decl
+
+			constDecl.FileSyntax = f
+			constDecl.FileIndex = fileIndex
+			constDecl.File = file
+		}
+		return constDecls
 	case *syntax.TypeDecl:
 		if decl.Alias {
 			return nil
@@ -538,36 +593,52 @@ func generateFuncRegBody(funcDecls []*DeclInfo, xgoRegFunc string, xgoLocalFuncS
 			// there are function with name "_"
 			continue
 		}
-		var refName string = "nil"
-		if !funcDecl.Generic {
-			refName = funcDecl.RefName()
+		var fnRefName string = "nil"
+		var varRefName string = "nil"
+		if funcDecl.Kind.IsFunc() {
+			if !funcDecl.Generic {
+				fnRefName = funcDecl.RefName()
+			}
+		} else if funcDecl.Kind == Kind_Var {
+			varRefName = "&" + funcDecl.RefName()
+		} else if funcDecl.Kind == Kind_Const {
+			varRefName = funcDecl.RefName()
 		}
 		fileIdx := funcDecl.FileIndex
 		fileRef := getFileRef(fileIdx)
 		// func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool, file string, line int)
 
 		// check __xgo_local_func_stub for correctness
-		fieldList := []string{
-			"__xgo_regPkgPath",                        // PkgPath
-			refName,                                   // Fn
-			"0",                                       // PC, filled later
-			strconv.FormatBool(funcDecl.Interface),    // Interface
-			strconv.FormatBool(funcDecl.Generic),      // Generic
-			strconv.FormatBool(funcDecl.Closure),      // Closure
-			strconv.Quote(funcDecl.RecvTypeName),      // RecvTypeName
-			strconv.FormatBool(funcDecl.RecvPtr),      // RecvPtr
-			strconv.Quote(funcDecl.Name),              // Name
-			strconv.Quote(funcDecl.IdentityName()),    // IdentityName
-			strconv.Quote(funcDecl.RecvName),          // RecvName
-			quoteNamesExpr(funcDecl.ArgNames),         // ArgNames
-			quoteNamesExpr(funcDecl.ResNames),         // ResNames
-			strconv.FormatBool(funcDecl.FirstArgCtx),  // FirstArgCtx
-			strconv.FormatBool(funcDecl.LastResError), // LastResErr
-			fileRef, /* declFunc.FileRef */ // File
-			strconv.FormatInt(int64(funcDecl.Line), 10), // Line
+		regKind := func(kind DeclKind, identityName string) {
+			fieldList := []string{
+				XgoLocalPkgName,                           // PkgPath
+				strconv.FormatInt(int64(kind), 10),        // Kind
+				fnRefName,                                 // Fn
+				varRefName,                                // Var
+				"0",                                       // PC, filled later
+				strconv.FormatBool(funcDecl.Interface),    // Interface
+				strconv.FormatBool(funcDecl.Generic),      // Generic
+				strconv.FormatBool(funcDecl.Closure),      // Closure
+				strconv.Quote(funcDecl.RecvTypeName),      // RecvTypeName
+				strconv.FormatBool(funcDecl.RecvPtr),      // RecvPtr
+				strconv.Quote(funcDecl.Name),              // Name
+				strconv.Quote(identityName),               // IdentityName
+				strconv.Quote(funcDecl.RecvName),          // RecvName
+				quoteNamesExpr(funcDecl.ArgNames),         // ArgNames
+				quoteNamesExpr(funcDecl.ResNames),         // ResNames
+				strconv.FormatBool(funcDecl.FirstArgCtx),  // FirstArgCtx
+				strconv.FormatBool(funcDecl.LastResError), // LastResErr
+				fileRef, /* declFunc.FileRef */ // File
+				strconv.FormatInt(int64(funcDecl.Line), 10), // Line
+			}
+			fields := strings.Join(fieldList, ",")
+			stmts = append(stmts, fmt.Sprintf("%s(%s{%s})", xgoRegFunc, xgoLocalFuncStub, fields))
 		}
-		fields := strings.Join(fieldList, ",")
-		stmts = append(stmts, fmt.Sprintf("%s(%s{%s})", xgoRegFunc, xgoLocalFuncStub, fields))
+		identityName := funcDecl.IdentityName()
+		regKind(funcDecl.Kind, identityName)
+		if funcDecl.Kind == Kind_Var {
+			regKind(Kind_VarPtr, "*"+identityName)
+		}
 
 		// add files
 		if !fileDeclaredMapping[fileIdx] {
@@ -581,14 +652,13 @@ func generateFuncRegBody(funcDecls []*DeclInfo, xgoRegFunc string, xgoLocalFuncS
 		return ""
 	}
 	allStmts := make([]string, 0, 2+len(fileDefs)+len(stmts))
-	allStmts = append(allStmts, `__xgo_regPkgPath := `+strconv.Quote(xgo_ctxt.GetPkgPath()))
 	if false {
 		// debug
 		allStmts = append(allStmts, `__xgo_reg_func_old:=__xgo_reg_func; __xgo_reg_func = func(info interface{}){
-			fmt.Print("reg:"+__xgo_regPkgPath+"\n")
+			fmt.Print("reg:"+`+XgoLocalPkgName+`+"\n")
 			v := reflect.ValueOf(info)
 			if v.Kind() != reflect.Struct {
-				panic("non struct:"+__xgo_regPkgPath)
+				panic("non struct:"+`+XgoLocalPkgName+`)
 			}
 			__xgo_reg_func_old(info)
 		}`)

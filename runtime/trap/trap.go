@@ -15,7 +15,8 @@ var setupOnce sync.Once
 
 func ensureTrapInstall() {
 	setupOnce.Do(func() {
-		__xgo_link_set_trap(trapImpl)
+		__xgo_link_set_trap(trapFunc)
+		__xgo_link_set_trap_var(trapVar)
 	})
 }
 func init() {
@@ -40,6 +41,10 @@ func init() {
 func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_set_trap(requires xgo).")
 }
+
+func __xgo_link_set_trap_var(trap func(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool)) {
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_set_trap_var(requires xgo).")
+}
 func __xgo_link_on_gonewproc(f func(g uintptr)) {
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_gonewproc(requires xgo).")
 }
@@ -57,29 +62,16 @@ var trappingPC sync.Map   // <gorotuine key> -> PC
 
 // link to runtime
 // xgo:notrap
-func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	if isByPassing() {
-		return nil, false
-	}
-	dispose := setTrappingMark()
-	if dispose == nil {
-		return nil, false
-	}
-	defer dispose()
-
-	// setup context
-	setTrappingPC(pc)
-	defer clearTrappingPC()
-
-	type intf struct {
-		_  uintptr
-		pc *uintptr
-	}
+func trapFunc(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
 	interceptors := GetAllInterceptors()
 	n := len(interceptors)
 	if n == 0 {
 		return nil, false
 	}
+	// setup context
+	setTrappingPC(pc)
+	defer clearTrappingPC()
+
 	// NOTE: this may return nil for generic template
 	var f *core.FuncInfo
 	if !generic {
@@ -90,13 +82,51 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 		f = functab.Info(pkgPath, identityName)
 	}
 	if f == nil {
-		//
+		// no func found
 		return nil, false
 	}
 	if f.RecvType != "" && methodHasBeenTrapped && recv == nil {
+		// method
 		// let go to the next interceptor
 		return nil, false
 	}
+	return trap(f, interceptors, recv, args, results)
+}
+
+func trapVar(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool) {
+	interceptors := GetAllInterceptors()
+	n := len(interceptors)
+	if n == 0 {
+		return
+	}
+	identityName := name
+	if takeAddr {
+		identityName = "*" + name
+	}
+	fnInfo := functab.Info(pkgPath, identityName)
+	if fnInfo == nil {
+		return
+	}
+	if fnInfo.Kind != core.Kind_Var && fnInfo.Kind != core.Kind_VarPtr && fnInfo.Kind != core.Kind_Const {
+		return
+	}
+	// NOTE: stop always ignored because this is a simple get
+	post, _ := trap(fnInfo, interceptors, nil, nil, []interface{}{tmpVarAddr})
+	if post != nil {
+		// NOTE: must in defer, because in post we
+		// may capture panic
+		defer post()
+	}
+}
+func trap(f *core.FuncInfo, interceptors []*Interceptor, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
+	if isByPassing() {
+		return nil, false
+	}
+	dispose := setTrappingMark()
+	if dispose == nil {
+		return nil, false
+	}
+	defer dispose()
 
 	// retrieve context
 	var ctx context.Context
@@ -186,6 +216,7 @@ func trapImpl(pkgPath string, identityName string, generic bool, pc uintptr, rec
 	}
 
 	abortIdx := -1
+	n := len(interceptors)
 	dataList := make([]interface{}, n)
 	for i := n - 1; i >= 0; i-- {
 		interceptor := interceptors[i]

@@ -1,14 +1,40 @@
 package core
 
 import (
+	"fmt"
 	"strings"
 )
 
 const __XGO_SKIP_TRAP = true
 
+type Kind int
+
+const (
+	Kind_Func   Kind = 0
+	Kind_Var    Kind = 1
+	Kind_VarPtr Kind = 2
+	Kind_Const  Kind = 3
+)
+
+func (c Kind) String() string {
+	switch c {
+	case Kind_Func:
+		return "func"
+	case Kind_Var:
+		return "var"
+	case Kind_VarPtr:
+		return "var_ptr"
+	case Kind_Const:
+		return "const"
+	default:
+		return fmt.Sprintf("kind_%d", int(c))
+	}
+}
+
 type FuncInfo struct {
 	// full name, format: {pkgPath}.{receiver}.{funcName}
 	// example:  github.com/xhd2015/xgo/runtime/core.(*FuncInfo).IsFunc
+	Kind         Kind
 	FullName     string
 	Pkg          string
 	IdentityName string
@@ -29,8 +55,10 @@ type FuncInfo struct {
 	File string
 	Line int
 
-	PC       uintptr     `json:"-"`
-	Func     interface{} `json:"-"`
+	PC   uintptr     `json:"-"`
+	Func interface{} `json:"-"`
+	Var  interface{} `json:"-"` // var address
+
 	RecvName string
 	ArgNames []string
 	ResNames []string

@@ -37,6 +37,7 @@ func __xgo_link_get_pc_name(pc uintptr) string {
 var funcInfos []*core.FuncInfo
 var funcInfoMapping map[string]map[string]*core.FuncInfo         // pkg -> identifyName -> FuncInfo
 var funcPCMapping map[uintptr]*core.FuncInfo                     // pc->FuncInfo
+var varAddrMapping map[uintptr]*core.FuncInfo                    // addr->FuncInfo
 var funcFullNameMapping map[string]*core.FuncInfo                // fullName -> FuncInfo
 var interfaceMapping map[string]map[string]*core.FuncInfo        // pkg -> interfaceName -> FuncInfo
 var typeMethodMapping map[reflect.Type]map[string]*core.FuncInfo // reflect.Type -> interfaceName -> FuncInfo
@@ -55,6 +56,15 @@ func InfoFunc(fn interface{}) *core.FuncInfo {
 	// deref to pc
 	pc := v.Pointer()
 	return funcPCMapping[pc]
+}
+func InfoVar(addr interface{}) *core.FuncInfo {
+	ensureMapping()
+	v := reflect.ValueOf(addr)
+	if v.Kind() != reflect.Pointer {
+		panic(fmt.Errorf("given type is not a pointer: %T", addr))
+	}
+	ptr := v.Pointer()
+	return varAddrMapping[ptr]
 }
 
 // maybe rename to FuncForPC
@@ -144,6 +154,7 @@ func ensureMapping() {
 		funcInfoMapping = make(map[string]map[string]*core.FuncInfo)
 		funcFullNameMapping = make(map[string]*core.FuncInfo)
 		interfaceMapping = make(map[string]map[string]*core.FuncInfo)
+		varAddrMapping = make(map[uintptr]*core.FuncInfo)
 		__xgo_link_retrieve_all_funcs_and_clear(func(fnInfo interface{}) {
 			rv := reflect.ValueOf(fnInfo)
 			if rv.Kind() != reflect.Struct {
@@ -157,7 +168,12 @@ func ensureMapping() {
 				}
 				// 	fmt.Fprintf(os.Stderr, "empty name\n",pkgPath)
 			}
-
+			var fnKind core.Kind
+			fnKindV := rv.FieldByName("Kind")
+			if fnKindV.IsValid() {
+				fnKind = core.Kind(fnKindV.Int())
+			}
+			varField := rv.FieldByName("Var")
 			pkgPath := rv.FieldByName("PkgPath").String()
 			recvTypeName := rv.FieldByName("RecvTypeName").String()
 			recvPtr := rv.FieldByName("RecvPtr").Bool()
@@ -188,7 +204,7 @@ func ensureMapping() {
 					pc = getFuncPC(f)
 					fullName = __xgo_link_get_pc_name(pc)
 				} else {
-					if closure && identityName != "" {
+					if (closure || fnKind == core.Kind_Var || fnKind == core.Kind_VarPtr || fnKind == core.Kind_Const) && identityName != "" {
 						fullName = pkgPath + "." + identityName
 					}
 				}
@@ -206,6 +222,7 @@ func ensureMapping() {
 			// }
 			// _, recvTypeName, recvPtr, name := core.ParseFuncName(identityName, false)
 			info := &core.FuncInfo{
+				Kind:         fnKind,
 				FullName:     fullName,
 				Pkg:          pkgPath,
 				IdentityName: identityName,
@@ -232,8 +249,11 @@ func ensureMapping() {
 				FirstArgCtx:   firstArgCtx,
 				LastResultErr: lastResErr,
 			}
+			if varField.IsValid() {
+				info.Var = varField.Interface()
+			}
 			funcInfos = append(funcInfos, info)
-			if !generic {
+			if !generic && info.PC != 0 {
 				funcPCMapping[info.PC] = info
 			}
 			if identityName != "" {
@@ -251,6 +271,12 @@ func ensureMapping() {
 					interfaceMapping[pkgPath] = pkgMapping
 				}
 				pkgMapping[recvTypeName] = info
+			}
+			if fnKind == core.Kind_Var {
+				if varField.IsValid() {
+					varAddr := varField.Elem().Pointer()
+					varAddrMapping[varAddr] = info
+				}
 			}
 			if fullName != "" {
 				funcFullNameMapping[fullName] = info

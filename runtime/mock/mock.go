@@ -47,7 +47,11 @@ func getFunc(fn interface{}) (recvPtr interface{}, fnInfo *core.FuncInfo, funcPC
 	recvPtr, fnInfo, funcPC, trappingPC = trap.InspectPC(fn)
 	if fnInfo == nil {
 		pc := reflect.ValueOf(fn).Pointer()
-		panic(fmt.Errorf("failed to setup mock for: %v", runtime.FuncForPC(pc).Name()))
+		fn := runtime.FuncForPC(pc)
+		if fn == nil {
+			panic(fmt.Errorf("failed to setup mock for variable: 0x%x", pc))
+		}
+		panic(fmt.Errorf("failed to setup mock for: %v", fn.Name()))
 	}
 	return recvPtr, fnInfo, funcPC, trappingPC
 }
@@ -96,7 +100,7 @@ func AddFuncInterceptor(fn interface{}, interceptor Interceptor) func() {
 func mock(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr, interceptor Interceptor) func() {
 	return trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
-			if f.PC == 0 {
+			if f.Kind == core.Kind_Func && f.PC == 0 {
 				if !f.Generic {
 					if !f.Closure || trap.ClosureHasFunc {
 						return nil, nil

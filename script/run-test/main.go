@@ -44,6 +44,7 @@ var runtimeSubTests = []string{
 	"mock_closure",
 	"mock_stdlib",
 	"mock_generic",
+	"mock_var",
 	"trap_args",
 	"patch",
 }
@@ -373,7 +374,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 			testArgs = append(testArgs, "./cmd/...")
 		}
 	case testKind_xgoTest:
-		testArgs = []string{"run", "./cmd/xgo", "test", "-tags", "dev"}
+		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test"}
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)
@@ -381,7 +382,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 			testArgs = append(testArgs, "./test/xgo_test/...")
 		}
 	case testKind_runtimeTest:
-		testArgs = []string{"run", "./cmd/xgo", "test", "--project-dir", "runtime", "-tags", "dev"}
+		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test", "--project-dir", "runtime"}
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)

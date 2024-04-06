@@ -79,7 +79,7 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 	for _, n := range noders {
 		files = append(files, n.file)
 	}
-	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) {
+	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) *syntax.File {
 		p := &noder{
 			err: make(chan syntax.Error),
 		}
@@ -88,10 +88,11 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 		if err != nil {
 			e := err.(syntax.Error)
 			p.error(e)
-			return
+			return nil
 		}
 		p.file = file
 		noders = append(noders, p)
+		return file
 	})
 }
 `
@@ -102,17 +103,18 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 	for _, n := range noders {
 		files = append(files, n.file)
 	}
-	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) {
+	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) *syntax.File {
 		p := &noder{}
 		fbase := syntax.NewFileBase(name)
 		file, err := syntax.Parse(fbase, r, nil, p.pragma, syntax.CheckBranches)
 		if err != nil {
 			e := err.(syntax.Error)
 			base.ErrorfAt(p.makeXPos(e.Pos), "%s", e.Msg)
-			return
+			return nil
 		}
 		p.file = file
 		noders = append(noders, p)
+		return file
 	})
 }
 `
@@ -123,17 +125,18 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 	for _, n := range noders {
 		files = append(files, n.file)
 	}
-	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) {
+	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) *syntax.File {
 		p := &noder{}
 		fbase := syntax.NewFileBase(name)
 		file, err := syntax.Parse(fbase, r, nil, p.pragma, syntax.CheckBranches)
 		if err != nil {
 			e := err.(syntax.Error)
 			base.ErrorfAt(m.makeXPos(e.Pos), 0,"%s", e.Msg)
-			return
+			return nil
 		}
 		p.file = file
 		noders = append(noders, p)
+		return file
 	})
 }
 `
