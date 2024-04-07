@@ -595,8 +595,11 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 		// good to go
 	} else if decl.Kind == Kind_Const {
 		// untyped const(most cases) should only be used in
-		// serveral cases because runtime type is unknown
+		// several cases because runtime type is unknown
 		if decl.ConstDecl.Type == nil {
+			if !xgo_ctxt.EnableTrapUntypedConst {
+				return node
+			}
 			untypedConstType = getConstDeclValueType(decl.ConstDecl.Values)
 			var ok bool
 			explicitType, ok = c.isConstOKToTrap(node)
@@ -680,6 +683,9 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 	var untypedConstType string
 	if constInfo, ok := pkgData.Consts[sel.Sel.Value]; ok {
 		if constInfo.Untyped {
+			if !xgo_ctxt.EnableTrapUntypedConst {
+				return nil, true
+			}
 			untypedConstType = constInfo.Type
 			var ok bool
 			explicitType, ok = ctx.isConstOKToTrap(node)

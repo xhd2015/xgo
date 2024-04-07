@@ -3,7 +3,6 @@ package patch
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/mock"
@@ -90,23 +89,6 @@ func toJSONRaw(v interface{}) (json.RawMessage, error) {
 		return json.RawMessage([]byte(v)), nil
 	default:
 		return json.Marshal(v)
-	}
-}
-
-const a3 = 4
-
-func TestPatchInElseShouldWork(t *testing.T) {
-	if os.Getenv("nothing") == "nothing" {
-		t.Fatalf("should go else")
-	} else {
-		mock.PatchByName(pkgPath, "a3", func() int {
-			return 5
-		})
-		b := a3
-
-		if b != 5 {
-			t.Fatalf("expect b to be %d,actual: %d", 5, b)
-		}
 	}
 }
 

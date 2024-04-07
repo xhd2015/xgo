@@ -14,7 +14,7 @@ func IndexSequenceAt(s string, sequence []string, begin bool) int {
 	return off
 }
 
-func SeqenceOffset(s string, sequence []string, i int, begin bool) (offset int, endOffset int) {
+func SequenceOffset(s string, sequence []string, i int, begin bool) (offset int, endOffset int) {
 	return indexSequence(s, sequence, i, begin)
 }
 

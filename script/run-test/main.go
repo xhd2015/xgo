@@ -47,6 +47,7 @@ var runtimeSubTests = []string{
 	"mock_var",
 	"trap_args",
 	"patch",
+	"patch_const",
 }
 
 func main() {

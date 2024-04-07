@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/xhd2015/xgo/support/goinfo"
+)
 
 type FilePatch struct {
 	FilePath _FilePath
@@ -17,9 +21,11 @@ type Patch struct {
 	Anchors []string
 
 	Content string
+
+	CheckGoVersion func(goVersion *goinfo.GoVersion) bool
 }
 
-func (c *FilePatch) Apply(goroot string) error {
+func (c *FilePatch) Apply(goroot string, goVersion *goinfo.GoVersion) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
@@ -52,6 +58,9 @@ func (c *FilePatch) Apply(goroot string) error {
 
 	return editFile(file, func(content string) (string, error) {
 		for _, patch := range c.Patches {
+			if patch.CheckGoVersion != nil && !patch.CheckGoVersion(goVersion) {
+				continue
+			}
 			beginMark := fmt.Sprintf("/*<begin %s>*/", patch.Mark)
 			endMark := fmt.Sprintf("/*<end %s>*/", patch.Mark)
 			content = addContentAtIndex(content, beginMark, endMark, patch.Anchors, patch.InsertIndex, patch.InsertBefore, patch.Content)

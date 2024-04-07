@@ -339,6 +339,8 @@ func TestPatchFunc(t *testing.T) {
 }
 ```
 
+注意: `Mock`和`Patch`也支持对包级别的变量和常量进行mock, 见[runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
+
 ## Trace
 在调试一个非常深的调用栈时, 通常会感觉非常痛苦, 并且效率低下。
 
@@ -451,6 +453,8 @@ Xgo通过在IR(Intermediate Representation)重写来成功地避开了这些问�
 |实例级别方法Mock|Y|N|
 |Goroutine级别Mock|Y|N|
 |范型特定实例Mock|Y|Y|
+|变量Mock|Y|N|
+|常量Mock|Y|N|
 |闭包/匿名函数Mock|Y|Y|
 |堆栈收集|Y|N|
 |通用拦截器|Y|N|

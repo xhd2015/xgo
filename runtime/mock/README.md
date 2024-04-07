@@ -1,4 +1,6 @@
 # API Summary
+> This document describes `Mock` and `Patch` for functions. For variables and consts, see [MOCK_VAR_CONST.md](./MOCK_VAR_CONST.md).
+
 Mock exposes 3 `Mock` APIs to users:
 - `Mock(fn, interceptor)` - for **99%** scenarios
 

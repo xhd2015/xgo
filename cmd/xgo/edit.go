@@ -49,11 +49,11 @@ func addContentAt(content string, beginMark string, endMark string, seq []string
 }
 
 func addContentAtIndex(content string, beginMark string, endMark string, seq []string, i int, before bool, addContent string) string {
-	offset, endOffset := strutil.SeqenceOffset(content, seq, i, before)
+	offset, endOffset := strutil.SequenceOffset(content, seq, i, before)
 	if offset < 0 {
 		panic(fmt.Errorf("sequence missing: %v", seq))
 	}
-	anotherOff, _ := strutil.SeqenceOffset(content[endOffset:], seq, i, false)
+	anotherOff, _ := strutil.SequenceOffset(content[endOffset:], seq, i, false)
 	if anotherOff >= 0 {
 		panic(fmt.Errorf("sequence duplicate: %v", seq))
 	}

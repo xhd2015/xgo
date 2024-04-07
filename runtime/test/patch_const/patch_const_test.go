@@ -1,4 +1,7 @@
-package patch
+//go:build go1.20
+// +build go1.20
+
+package patch_const
 
 import (
 	"fmt"
@@ -7,10 +10,29 @@ import (
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/patch/sub"
+	"github.com/xhd2015/xgo/runtime/test/patch_const/sub"
 )
 
+const pkgPath = "github.com/xhd2015/xgo/runtime/test/patch_const"
+const subPkgPath = "github.com/xhd2015/xgo/runtime/test/patch_const/sub"
 const testVersion = "1.0"
+
+const N = 50
+
+func TestPatchInElseShouldWork(t *testing.T) {
+	if os.Getenv("nothing") == "nothing" {
+		t.Fatalf("should go else")
+	} else {
+		mock.PatchByName(pkgPath, "N", func() int {
+			return 5
+		})
+		b := N
+
+		if b != 5 {
+			t.Fatalf("expect b to be %d,actual: %d", 5, b)
+		}
+	}
+}
 
 func TestPatchConstByNamePtrTest(t *testing.T) {
 	mock.PatchByName(pkgPath, "testVersion", func() string {
@@ -28,7 +50,7 @@ func TestPatchConstByNameWrongTypeShouldFail(t *testing.T) {
 		defer func() {
 			pe = recover()
 		}()
-		mock.PatchByName(pkgPath, "a", func() string {
+		mock.PatchByName(pkgPath, "N", func() string {
 			return "1.5"
 		})
 	}()
@@ -41,8 +63,6 @@ func TestPatchConstByNameWrongTypeShouldFail(t *testing.T) {
 		t.Fatalf("expect err %q, actual: %q", expectMsg, msg)
 	}
 }
-
-const N = 50
 
 func TestPatchConstOperationShouldCompileAndSkipMock(t *testing.T) {
 	// should have effect
@@ -158,7 +178,7 @@ func TestCaseConstShouldSkip(t *testing.T) {
 	switch n {
 	case N:
 	case N + 1:
-		t.Fatalf("should not faill to N+1")
+		t.Fatalf("should not fail to N+1")
 	default:
 		t.Fatalf("should not fall to default")
 	}
