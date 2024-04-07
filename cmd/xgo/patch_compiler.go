@@ -39,6 +39,12 @@ var compilerFiles = []_FilePath{
 	compilerRuntimeDefFile,
 	compilerRuntimeDefFile18,
 	compilerRuntimeDefFile16,
+
+	type2ExprPatch.FilePath,
+	type2AssignmentsPatch.FilePath,
+	syntaxWalkPatch.FilePath,
+	noderWriterPatch.FilePath,
+	syntaxExtra,
 }
 
 func patchCompiler(origGoroot string, goroot string, goVersion *goinfo.GoVersion, xgoSrc string, forceReset bool, syncWithLink bool) error {
@@ -93,6 +99,10 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 	err = patchGcMain(goroot, goVersion)
 	if err != nil {
 		return fmt.Errorf("patching gc main:%w", err)
+	}
+	err = patchCompilerAstTypeCheck(goroot)
+	if err != nil {
+		return fmt.Errorf("patch ast type check:%w", err)
 	}
 	return nil
 }

@@ -5,6 +5,6 @@ package syntax
 
 import "cmd/compile/internal/syntax"
 
-func (ctx *BlockContext) traverseCallExpr(node syntax.Expr, globaleNames map[string]*DeclInfo, imports map[string]string) syntax.Expr {
+func (ctx *BlockContext) traverseCallStmtCallExpr(node syntax.Expr, globaleNames map[string]*DeclInfo, imports map[string]string) syntax.Expr {
 	return ctx.traverseExpr(node, globaleNames, imports)
 }
