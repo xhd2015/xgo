@@ -6,41 +6,57 @@ import (
 )
 
 func IndexSequenceAt(s string, sequence []string, begin bool) int {
-	_, idx := indexSequence(s, sequence, begin)
-	return idx
+	idx := 0
+	if !begin {
+		idx = -1
+	}
+	off, _ := indexSequence(s, sequence, idx, begin)
+	return off
+}
+
+func SeqenceOffset(s string, sequence []string, i int, begin bool) (offset int, endOffset int) {
+	return indexSequence(s, sequence, i, begin)
 }
 
 func IndexSequence(s string, sequence []string) int {
-	_, idx := indexSequence(s, sequence, false)
-	return idx
+	off, _ := indexSequence(s, sequence, -1, false)
+	return off
 }
-func indexSequence(s string, sequence []string, begin bool) (int, int) {
+
+// [a,b,c]
+// before ->
+func indexSequence(s string, sequence []string, seqIdx int, begin bool) (offset int, endOffset int) {
 	if len(sequence) == 0 {
 		return 0, 0
 	}
-	firstIdx := -1
-	base := 0
+	if seqIdx == -1 {
+		seqIdx = len(sequence) - 1
+	} else if seqIdx < 0 || seqIdx >= len(sequence) {
+		return -1, -1
+	}
+	var recordOff int
+	cursor := 0
 	for i, seq := range sequence {
 		idx := strings.Index(s, seq)
 		if idx < 0 {
-			return i, -1
-		}
-		if firstIdx < 0 {
-			firstIdx = idx
+			return -1, -1
 		}
 		s = s[idx+len(seq):]
-		base += idx + len(seq)
+		cursor += idx + len(seq)
+		if i == seqIdx {
+			recordOff = cursor
+			if begin {
+				recordOff -= len(seq)
+			}
+		}
 	}
-	if begin {
-		return -1, firstIdx
-	}
-	return -1, base
+	return recordOff, cursor
 }
 
 func CheckSequence(output string, sequence []string) error {
-	missing, idx := indexSequence(output, sequence, false)
+	idx, _ := indexSequence(output, sequence, -1, false)
 	if idx < 0 {
-		return fmt.Errorf("sequence at %d: missing %q", missing, sequence[missing])
+		return fmt.Errorf("sequence %q missing from %q", sequence, output)
 	}
 	return nil
 }

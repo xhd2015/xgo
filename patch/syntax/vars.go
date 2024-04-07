@@ -49,14 +49,21 @@ func collectVarDecls(declKind DeclKind, names []*syntax.Name, typ syntax.Expr) [
 func trapVariables(pkgPath string, fileList []*syntax.File, funcDelcs []*DeclInfo) {
 	names := make(map[string]*DeclInfo, len(funcDelcs))
 	varNames := make(map[string]bool)
-	constNames := make(map[string]bool)
+	constNames := make(map[string]*pkgdata.ConstInfo)
 	for _, funcDecl := range funcDelcs {
 		identityName := funcDecl.IdentityName()
 		names[identityName] = funcDecl
 		if funcDecl.Kind == Kind_Var || funcDecl.Kind == Kind_VarPtr {
 			varNames[identityName] = true
 		} else if funcDecl.Kind == Kind_Const {
-			constNames[identityName] = true
+			constDecl := funcDecl.ConstDecl
+			constInfo := &pkgdata.ConstInfo{Untyped: true}
+			if constDecl.Type != nil {
+				constInfo.Untyped = false
+			} else {
+				constInfo.Type = getConstDeclValueType(constDecl.Values)
+			}
+			constNames[identityName] = constInfo
 		}
 	}
 	err := pkgdata.WritePkgData(pkgPath, &pkgdata.PackageData{
@@ -121,12 +128,25 @@ type BlockContext struct {
 
 	Names map[string]bool
 
-	OperationParent map[syntax.Node]*syntax.Operation
+	// node appears as RHS of var decl
+	ListExprParent       map[syntax.Node]*syntax.ListExpr
+	RHSVarDeclParent     map[syntax.Node]*syntax.VarDecl
+	OperationParent      map[syntax.Node]*syntax.Operation
+	ArgCallExprParent    map[syntax.Node]*syntax.CallExpr
+	RHSAssignNoDefParent map[syntax.Node]*syntax.AssignStmt
+	CaseClauseParent     map[syntax.Node]*syntax.CaseClause
+	ReturnStmtParent     map[syntax.Node]*syntax.ReturnStmt
+
+	// const info
+	ConstInfo map[syntax.Node]*ConstInfo
 
 	// to be inserted
 	InsertList []syntax.Stmt
 
 	TrapNames []*NameAndDecl
+}
+type ConstInfo struct {
+	Type string
 }
 
 type NameAndDecl struct {
@@ -151,6 +171,9 @@ func (c *BlockContext) Has(name string) bool {
 	}
 	return c.Parent.Has(name)
 }
+
+// avoid unused warning
+var _ = (*BlockContext).traverseNode
 
 // imports: name -> pkgPath
 func (ctx *BlockContext) traverseNode(node syntax.Node, globaleNames map[string]*DeclInfo, imports map[string]string) syntax.Node {
@@ -188,7 +211,7 @@ func (ctx *BlockContext) traverseStmt(node syntax.Stmt, globaleNames map[string]
 		return ctx.traverseBlockStmt(node, globaleNames, imports)
 	case *syntax.CallStmt:
 		// defer, go
-		node.Call = ctx.traverseCallExpr(node.Call, globaleNames, imports)
+		node.Call = ctx.traverseCallStmtCallExpr(node.Call, globaleNames, imports)
 		return node
 	case *syntax.IfStmt:
 		node.Init = ctx.traverseSimpleStmt(node.Init, globaleNames, imports)
@@ -220,6 +243,12 @@ func (ctx *BlockContext) traverseStmt(node syntax.Stmt, globaleNames map[string]
 	case *syntax.BranchStmt:
 		// ignore continue or continue label
 	case *syntax.ReturnStmt:
+		if node.Results != nil {
+			if ctx.ReturnStmtParent == nil {
+				ctx.ReturnStmtParent = make(map[syntax.Node]*syntax.ReturnStmt, 1)
+			}
+			ctx.ReturnStmtParent[node.Results] = node
+		}
 		node.Results = ctx.traverseExpr(node.Results, globaleNames, imports)
 	default:
 		// unknown
@@ -253,6 +282,11 @@ func (ctx *BlockContext) traverseSimpleStmt(node syntax.SimpleStmt, globaleNames
 					}
 				}
 			}
+		} else {
+			if ctx.RHSAssignNoDefParent == nil {
+				ctx.RHSAssignNoDefParent = make(map[syntax.Node]*syntax.AssignStmt, 1)
+			}
+			ctx.RHSAssignNoDefParent[node.Rhs] = node
 		}
 		node.Rhs = ctx.traverseExpr(node.Rhs, globaleNames, imports)
 	case *syntax.RangeClause:
@@ -280,6 +314,7 @@ func (ctx *BlockContext) traverseBlockStmt(node *syntax.BlockStmt, globaleNames 
 		return nil
 	}
 	n := len(node.List)
+	base := len(ctx.Children)
 	for i := 0; i < n; i++ {
 		subCtx := &BlockContext{
 			Parent: ctx,
@@ -290,7 +325,7 @@ func (ctx *BlockContext) traverseBlockStmt(node *syntax.BlockStmt, globaleNames 
 		node.List[i] = subCtx.traverseStmt(node.List[i], globaleNames, imports)
 	}
 	for i := n - 1; i >= 0; i-- {
-		node.List = insertBefore(node.List, i, ctx.Children[i].InsertList)
+		node.List = insertBefore(node.List, i, ctx.Children[i+base].InsertList)
 	}
 	return node
 }
@@ -299,6 +334,13 @@ func (ctx *BlockContext) traverseCaseClause(node *syntax.CaseClause, globaleName
 	if node == nil {
 		return nil
 	}
+	if node.Cases != nil {
+		if ctx.CaseClauseParent == nil {
+			ctx.CaseClauseParent = make(map[syntax.Node]*syntax.CaseClause, 1)
+		}
+		ctx.CaseClauseParent[node.Cases] = node
+	}
+
 	node.Cases = ctx.traverseExpr(node.Cases, globaleNames, imports)
 	fakeBlock := &syntax.BlockStmt{
 		List: node.Body,
@@ -345,6 +387,17 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 		return node
 	case *syntax.ParenExpr:
 		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
+		if xgoConv, ok := node.X.(*syntax.XgoSimpleConvert); ok {
+			constType := getConstType(xgoConv)
+			newNode := &syntax.XgoSimpleConvert{
+				X: &syntax.CallExpr{
+					Fun:     syntax.NewName(node.Pos(), constType),
+					ArgList: []syntax.Expr{node},
+				},
+			}
+			ctx.recordConstType(newNode, constType)
+			return newNode
+		}
 	case *syntax.SelectorExpr:
 		newNode, selIsName := ctx.trapSelector(node, node, false, globaleNames, imports)
 		if newNode != nil {
@@ -364,11 +417,10 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 	case *syntax.AssertExpr:
 		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
 	case *syntax.TypeSwitchGuard:
-		res := ctx.traverseExpr(node.X, globaleNames, imports)
+		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
 		if node.Lhs != nil {
 			ctx.Add(node.Lhs.Value)
 		}
-		return res
 	case *syntax.Operation:
 		// take addr?
 		if node.Op == syntax.And && node.Y == nil {
@@ -396,14 +448,41 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 		// x op y
 		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
 		node.Y = ctx.traverseExpr(node.Y, globaleNames, imports)
+		// if both side are const, then the operation should also
+		// be wrapped in a const
+		if node.X != nil && node.Y != nil {
+			xConst := ctx.ConstInfo[node.X]
+			yConst := ctx.ConstInfo[node.Y]
+			if xConst != nil && yConst != nil {
+				newNode := &syntax.XgoSimpleConvert{
+					X: &syntax.CallExpr{
+						Fun:     syntax.NewName(node.Pos(), xConst.Type),
+						ArgList: []syntax.Expr{node},
+					},
+				}
+				ctx.recordConstType(newNode, xConst.Type)
+				return newNode
+			}
+		} else if node.Y == nil && (node.Op == syntax.Add || node.Op == syntax.Sub) {
+			if xgoConv, ok := node.X.(*syntax.XgoSimpleConvert); ok {
+				constType := getConstType(xgoConv)
+				newNode := createConv(node, constType)
+				ctx.recordConstType(newNode, constType)
+				return newNode
+			}
+		}
 		return node
 	case *syntax.CallExpr:
-		// NOTE: we skip capturing a name as a function
-		// node.Fun = ctx.traverseExpr(node.Fun, globaleNames, imports)
-		for i, arg := range node.ArgList {
-			node.ArgList[i] = ctx.traverseExpr(arg, globaleNames, imports)
-		}
+		return ctx.traverseCallExpr(node, globaleNames, imports)
 	case *syntax.ListExpr:
+		if len(node.ElemList) > 0 {
+			if ctx.ListExprParent == nil {
+				ctx.ListExprParent = make(map[syntax.Node]*syntax.ListExpr, len(node.ElemList))
+			}
+			for _, elem := range node.ElemList {
+				ctx.ListExprParent[elem] = node
+			}
+		}
 		for i, elem := range node.ElemList {
 			node.ElemList[i] = ctx.traverseExpr(elem, globaleNames, imports)
 		}
@@ -417,12 +496,58 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 	case *syntax.ChanType:
 	case *syntax.MapType:
 	case *syntax.BasicLit:
+		constType := getBasicLitConstType(node.Kind)
+		if constType != "" {
+			if ctx.ConstInfo == nil {
+				ctx.ConstInfo = make(map[syntax.Node]*ConstInfo, 1)
+			}
+			ctx.ConstInfo[node] = &ConstInfo{Type: constType}
+		}
 	case *syntax.BadExpr:
 	default:
 		// unknown
 		if os.Getenv("XGO_DEBUG_VAR_TRAP_LOOSE") != "true" {
 			panic(fmt.Errorf("unrecognized expr: %T", node))
 		}
+	}
+	return node
+}
+
+func getConstType(xgoConv *syntax.XgoSimpleConvert) string {
+	return xgoConv.X.(*syntax.CallExpr).Fun.(*syntax.Name).Value
+}
+
+func createConv(node syntax.Expr, constType string) *syntax.XgoSimpleConvert {
+	return &syntax.XgoSimpleConvert{
+		X: &syntax.CallExpr{
+			Fun:     syntax.NewName(node.Pos(), constType),
+			ArgList: []syntax.Expr{node},
+		},
+	}
+}
+
+func (ctx *BlockContext) recordConstType(node syntax.Node, constType string) {
+	if ctx.ConstInfo == nil {
+		ctx.ConstInfo = make(map[syntax.Node]*ConstInfo, 1)
+	}
+	ctx.ConstInfo[node] = &ConstInfo{Type: constType}
+}
+
+func (ctx *BlockContext) traverseCallExpr(node *syntax.CallExpr, globaleNames map[string]*DeclInfo, imports map[string]string) *syntax.CallExpr {
+	if node == nil {
+		return nil
+	}
+	if ctx.ArgCallExprParent == nil {
+		ctx.ArgCallExprParent = make(map[syntax.Node]*syntax.CallExpr, len(node.ArgList))
+		for _, arg := range node.ArgList {
+			ctx.ArgCallExprParent[arg] = node
+		}
+	}
+
+	// NOTE: we skip capturing a name as a function
+	// node.Fun = ctx.traverseExpr(node.Fun, globaleNames, imports)
+	for i, arg := range node.ArgList {
+		node.ArgList[i] = ctx.traverseExpr(arg, globaleNames, imports)
 	}
 	return node
 }
@@ -435,6 +560,14 @@ func (ctx *BlockContext) traverseDecl(node syntax.Decl, globaleNames map[string]
 	case *syntax.ConstDecl:
 	case *syntax.TypeDecl:
 	case *syntax.VarDecl:
+		// var a int64 = N
+		if node.Values != nil {
+			if ctx.RHSVarDeclParent == nil {
+				ctx.RHSVarDeclParent = make(map[syntax.Node]*syntax.VarDecl, 1)
+			}
+			ctx.RHSVarDeclParent[node.Values] = node
+			node.Values = ctx.traverseExpr(node.Values, globaleNames, imports)
+		}
 	default:
 		// unknown
 		if os.Getenv("XGO_DEBUG_VAR_TRAP_LOOSE") != "true" {
@@ -454,19 +587,71 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 	if decl == nil {
 		return node
 	}
+	var explicitType syntax.Expr
+	var rhsAssign *syntax.AssignStmt
+	var isCallArg bool
+	var untypedConstType string
 	if decl.Kind == Kind_Var || decl.Kind == Kind_VarPtr {
 		// good to go
 	} else if decl.Kind == Kind_Const {
-		if _, ok := c.OperationParent[node]; ok {
-			// directly inside an operation
-			return node
+		// untyped const(most cases) should only be used in
+		// serveral cases because runtime type is unknown
+		if decl.ConstDecl.Type == nil {
+			untypedConstType = getConstDeclValueType(decl.ConstDecl.Values)
+			var ok bool
+			explicitType, ok = c.isConstOKToTrap(node)
+			if !ok {
+				// debug
+				if _, ok := c.ArgCallExprParent[node]; ok {
+					isCallArg = true
+				}
+				if !isCallArg {
+					return node
+				}
+			}
 		}
 	} else {
 		return node
 	}
-	preStmts, tmpVarName := trapVar(node, syntax.NewName(node.Pos(), XgoLocalPkgName), node.Value, false)
+	preStmts, varDefStmt, tmpVarName := trapVar(node, syntax.NewName(node.Pos(), XgoLocalPkgName), node.Value, false)
+	if rhsAssign != nil {
+		varDefStmt.Op = 0
+		preStmts = append([]syntax.Stmt{
+			&syntax.AssignStmt{
+				Op:  syntax.Def,
+				Lhs: syntax.NewName(node.Pos(), tmpVarName),
+				Rhs: rhsAssign.Lhs,
+			},
+		}, preStmts...)
+	}
+
 	c.InsertList = append(c.InsertList, preStmts...)
-	return syntax.NewName(node.Pos(), tmpVarName)
+	newName := syntax.NewName(node.Pos(), tmpVarName)
+	if explicitType != nil {
+		return &syntax.CallExpr{
+			Fun: explicitType,
+			ArgList: []syntax.Expr{
+				newName,
+			},
+		}
+	}
+	if untypedConstType != "" {
+		newNode := &syntax.XgoSimpleConvert{
+			X: &syntax.CallExpr{
+				Fun: syntax.NewName(node.Pos(), untypedConstType),
+				ArgList: []syntax.Expr{
+					newName,
+				},
+			},
+		}
+		if c.ConstInfo == nil {
+			c.ConstInfo = make(map[syntax.Node]*ConstInfo, 1)
+		}
+		c.ConstInfo[node] = &ConstInfo{Type: untypedConstType}
+		c.ConstInfo[newNode] = &ConstInfo{Type: untypedConstType}
+		return newNode
+	}
+	return newName
 }
 
 func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr, takeAddr bool, globaleNames map[string]*DeclInfo, imports map[string]string) (newExpr syntax.Expr, selIsName bool) {
@@ -489,16 +674,123 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 	if !allowPkgVarTrap(pkgPath) {
 		return nil, true
 	}
+	var explicitType syntax.Expr
 	pkgData := pkgdata.GetPkgData(pkgPath)
-	if pkgData.Consts[sel.Sel.Value] {
-		// is const and inside operation
-		if _, ok := ctx.OperationParent[node]; ok {
-			return nil, true
+	var isCallArg bool
+	var untypedConstType string
+	if constInfo, ok := pkgData.Consts[sel.Sel.Value]; ok {
+		if constInfo.Untyped {
+			untypedConstType = constInfo.Type
+			var ok bool
+			explicitType, ok = ctx.isConstOKToTrap(node)
+			if !ok {
+				// debug
+				if _, ok := ctx.ArgCallExprParent[node]; ok {
+					isCallArg = true
+				}
+				if !isCallArg {
+					return nil, true
+				}
+
+			}
 		}
+	} else if pkgData.Vars[sel.Sel.Value] {
+		// ok to go
+	} else {
+		return nil, true
 	}
-	preStmts, tmpVarName := trapVar(node, newStringLit(pkgPath), sel.Sel.Value, takeAddr)
+	preStmts, _, tmpVarName := trapVar(node, newStringLit(pkgPath), sel.Sel.Value, takeAddr)
 	ctx.InsertList = append(ctx.InsertList, preStmts...)
-	return syntax.NewName(node.Pos(), tmpVarName), true
+	newName := syntax.NewName(node.Pos(), tmpVarName)
+	if explicitType != nil {
+		return &syntax.CallExpr{
+			Fun: explicitType,
+			ArgList: []syntax.Expr{
+				newName,
+			},
+		}, true
+	}
+	if untypedConstType != "" {
+		newNode := &syntax.XgoSimpleConvert{
+			X: &syntax.CallExpr{
+				Fun: syntax.NewName(node.Pos(), untypedConstType),
+				ArgList: []syntax.Expr{
+					newName,
+				},
+			},
+		}
+		if ctx.ConstInfo == nil {
+			ctx.ConstInfo = make(map[syntax.Node]*ConstInfo, 1)
+		}
+		ctx.ConstInfo[sel] = &ConstInfo{Type: untypedConstType}
+		ctx.ConstInfo[node] = &ConstInfo{Type: untypedConstType}
+		return newNode, true
+	}
+	return newName, true
+}
+
+func (ctx *BlockContext) isConstOKToTrap(node syntax.Node) (explicitType syntax.Expr, ok bool) {
+	if true {
+		return nil, true
+	}
+	// is const and inside operation
+	if _, ok := ctx.OperationParent[node]; ok {
+		return nil, false
+	}
+
+	// NOTE: will this: int64(a) not work? maybe we
+	// can make it work
+	if _, ok := ctx.ArgCallExprParent[node]; ok {
+		// directly as argument to a call
+		return nil, false
+	}
+	if _, ok := ctx.CaseClauseParent[node]; ok {
+		return nil, false
+	}
+	if _, ok := ctx.ReturnStmtParent[node]; ok {
+		return nil, false
+	}
+	if varDecl, ok := ctx.RHSVarDeclParent[node]; ok {
+		return varDecl.Type, true
+	}
+
+	if _, ok := ctx.RHSAssignNoDefParent[node]; ok {
+		// a=CONST -> tmp:=CONST,a=tmp
+		// not working
+		// rhsAssign = assign
+		return nil, false
+	}
+	listExprParent, ok := ctx.ListExprParent[node]
+	if !ok {
+		return nil, true
+	}
+	return ctx.isConstOKToTrap(listExprParent)
+}
+
+func getConstDeclValueType(expr syntax.Expr) string {
+	switch expr := expr.(type) {
+	case *syntax.BasicLit:
+		return getBasicLitConstType(expr.Kind)
+	case *syntax.Name:
+		if expr.Value == "true" || expr.Value == "false" {
+			return "bool"
+		}
+		// NOTE: nil is not a constant
+	}
+	return ""
+}
+func getBasicLitConstType(kind syntax.LitKind) string {
+	switch kind {
+	case syntax.IntLit:
+		return "int"
+	case syntax.StringLit:
+		return "string"
+	case syntax.RuneLit:
+		return "rune"
+	case syntax.FloatLit:
+		return "float64"
+	}
+	return ""
 }
 
 func (c *BlockContext) trapAddrNode(node *syntax.Operation, nameNode *syntax.Name, globaleNames map[string]*DeclInfo) syntax.Expr {
@@ -511,12 +803,12 @@ func (c *BlockContext) trapAddrNode(node *syntax.Operation, nameNode *syntax.Nam
 	if decl == nil || !decl.Kind.IsVarOrConst() {
 		return node
 	}
-	preStmts, tmpVarName := trapVar(node, syntax.NewName(nameNode.Pos(), XgoLocalPkgName), name, true)
+	preStmts, _, tmpVarName := trapVar(node, syntax.NewName(nameNode.Pos(), XgoLocalPkgName), name, true)
 	c.InsertList = append(c.InsertList, preStmts...)
 	return syntax.NewName(node.Pos(), tmpVarName)
 }
 
-func trapVar(expr syntax.Expr, pkgRef syntax.Expr, name string, takeAddr bool) (preStmts []syntax.Stmt, tmpVarName string) {
+func trapVar(expr syntax.Expr, pkgRef syntax.Expr, name string, takeAddr bool) (preStmts []syntax.Stmt, varDefStmt *syntax.AssignStmt, tmpVarName string) {
 	pos := expr.Pos()
 	line := pos.Line()
 	col := pos.Col()
@@ -530,12 +822,14 @@ func trapVar(expr syntax.Expr, pkgRef syntax.Expr, name string, takeAddr bool) (
 	//  &a -> __m
 	varName := fmt.Sprintf("__xgo_%s_%d_%d", name, line, col)
 	// a:
-
-	preStmts = append(preStmts, &syntax.AssignStmt{
+	varDefStmt = &syntax.AssignStmt{
 		Op:  syntax.Def,
 		Lhs: syntax.NewName(pos, varName),
 		Rhs: expr,
-	},
+	}
+
+	preStmts = append(preStmts,
+		varDefStmt,
 		&syntax.ExprStmt{
 			X: &syntax.CallExpr{
 				Fun: syntax.NewName(pos, "__xgo_link_trap_var_for_generated"),
@@ -563,10 +857,13 @@ func trapVar(expr syntax.Expr, pkgRef syntax.Expr, name string, takeAddr bool) (
 	for _, preStmt := range preStmts {
 		fillPos(pos, preStmt)
 	}
-	return preStmts, varName
+	return preStmts, varDefStmt, varName
 
 }
 
 func insertBefore(list []syntax.Stmt, i int, add []syntax.Stmt) []syntax.Stmt {
+	if len(add) == 0 {
+		return list
+	}
 	return append(append(list[:i:i], add...), list[i:]...)
 }

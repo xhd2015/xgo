@@ -48,6 +48,18 @@ func addContentAt(content string, beginMark string, endMark string, seq []string
 	return insertContentNoDuplicate(content, beginMark, endMark, idx, addContent)
 }
 
+func addContentAtIndex(content string, beginMark string, endMark string, seq []string, i int, before bool, addContent string) string {
+	offset, endOffset := strutil.SeqenceOffset(content, seq, i, before)
+	if offset < 0 {
+		panic(fmt.Errorf("sequence missing: %v", seq))
+	}
+	anotherOff, _ := strutil.SeqenceOffset(content[endOffset:], seq, i, false)
+	if anotherOff >= 0 {
+		panic(fmt.Errorf("sequence duplicate: %v", seq))
+	}
+	return insertContentNoDuplicate(content, beginMark, endMark, offset, addContent)
+}
+
 func replaceContentAfter(content string, beginMark string, endMark string, seq []string, target string, replaceContent string) string {
 	if replaceContent == "" {
 		return content
@@ -72,6 +84,7 @@ func replaceContentAfter(content string, beginMark string, endMark string, seq [
 }
 
 // signature example: /*<begin ident>*/ {content} /*<end ident>*/
+// insert content at index
 func insertContentNoDuplicate(content string, beginMark string, endMark string, idx int, insertContent string) string {
 	if insertContent == "" {
 		return content
