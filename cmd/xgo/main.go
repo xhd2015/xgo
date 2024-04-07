@@ -160,7 +160,7 @@ func handleBuild(cmd string, args []string) error {
 		logStartup()
 	}
 
-	goroot, err := checkGoroot(withGoroot)
+	goroot, err := checkGoroot(projectDir, withGoroot)
 	if err != nil {
 		return err
 	}
@@ -526,29 +526,46 @@ func getXgoHome(xgoHome string) (string, error) {
 	return absHome, nil
 }
 
-func checkGoroot(goroot string) (string, error) {
+func getGoEnvRoot(dir string) (string, error) {
+	goroot, err := cmd.Dir(dir).Output("go", "env", "GOROOT")
+	if err != nil {
+		return "", err
+	}
+	// remove special characters from output
+	goroot = strings.ReplaceAll(goroot, "\n", "")
+	goroot = strings.ReplaceAll(goroot, "\r", "")
+	return goroot, nil
+}
+
+func checkGoroot(dir string, goroot string) (string, error) {
 	if goroot == "" {
+		// use env first because dir will affect the actual
+		// go version used
+		// because with new go toolchain mechanism, even with:
+		//    which go -> /Users/xhd2015/installed/go1.21.7/bin/go
+		// the actual go still points to go1.22.0
+		//    go version ->
+		// go tool chain: https://go.dev/doc/toolchain
+		// GOTOOLCHAIN=auto
+		envGoroot, envErr := getGoEnvRoot(dir)
+		if envErr == nil && envGoroot != "" {
+			return envGoroot, nil
+		}
 		goroot = runtime.GOROOT()
-		if goroot == "" {
-			envGoroot, err := cmd.Output("go", "env", "GOROOT")
-			if err != nil {
-				var errMsg string
-				if e, ok := err.(*exec.ExitError); ok {
-					errMsg = string(e.Stderr)
-				} else {
-					errMsg = err.Error()
-				}
-				return "", fmt.Errorf("requires GOROOT or --with-goroot: go env GOROOT: %v", errMsg)
+		if goroot != "" {
+			return goroot, nil
+		}
+
+		if envErr != nil {
+			var errMsg string
+			if e, ok := envErr.(*exec.ExitError); ok {
+				errMsg = string(e.Stderr)
+			} else {
+				errMsg = envErr.Error()
 			}
-			// remove special characters from output
-			envGoroot = strings.ReplaceAll(envGoroot, "\n", "")
-			envGoroot = strings.ReplaceAll(envGoroot, "\r", "")
-			goroot = envGoroot
+			return "", fmt.Errorf("requires GOROOT or --with-goroot: go env GOROOT: %v", errMsg)
 		}
-		if goroot == "" {
-			return "", fmt.Errorf("requires GOROOT or --with-goroot")
-		}
-		return goroot, nil
+		return "", fmt.Errorf("requires GOROOT or --with-goroot")
 	}
 	_, err := os.Stat(goroot)
 	if err == nil {

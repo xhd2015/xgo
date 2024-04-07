@@ -102,7 +102,7 @@ func (c *VscodeDebugConfig) ToMap() (map[string]interface{}, error) {
 }
 
 const vscodeRemoteDebug = `{
-  "name": "dlv remoe localhost:2345",
+  "name": "dlv remote localhost:2345",
   "type": "go",
   "request": "attach",
   "mode": "remote",

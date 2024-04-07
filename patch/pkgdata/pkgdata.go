@@ -12,8 +12,13 @@ import (
 
 type PackageData struct {
 	Vars   map[string]bool
-	Consts map[string]bool
+	Consts map[string]*ConstInfo
 	Funcs  map[string]bool
+}
+
+type ConstInfo struct {
+	Type    string // t=xx
+	Untyped bool   // no 'e='(explicit) flag
 }
 
 var pkgDataMapping map[string]*PackageData
@@ -47,11 +52,35 @@ func WritePkgData(pkgPath string, pkgData *PackageData) error {
 	}
 	defer w.Close()
 
-	writeSection := func(section string, m map[string]bool) error {
-		if len(m) == 0 {
-			return nil
-		}
-		_, err := io.WriteString(w, section)
+	err = writeConstSection(w, "[const]", pkgData.Consts)
+	if err != nil {
+		return err
+	}
+	writeSection(w, "[var]", pkgData.Vars)
+	if err != nil {
+		return err
+	}
+	writeSection(w, "[func]", pkgData.Funcs)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+func writeSection(w io.Writer, section string, m map[string]bool) error {
+	if len(m) == 0 {
+		return nil
+	}
+	_, err := io.WriteString(w, section)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, "\n")
+	if err != nil {
+		return err
+	}
+	for k := range m {
+		_, err := io.WriteString(w, k)
 		if err != nil {
 			return err
 		}
@@ -59,29 +88,62 @@ func WritePkgData(pkgPath string, pkgData *PackageData) error {
 		if err != nil {
 			return err
 		}
-		for k := range m {
-			_, err := io.WriteString(w, k)
-			if err != nil {
-				return err
-			}
-			_, err = io.WriteString(w, "\n")
-			if err != nil {
-				return err
-			}
-		}
+	}
+	return nil
+}
+
+func writeConstSection(w io.Writer, section string, m map[string]*ConstInfo) error {
+	if len(m) == 0 {
 		return nil
 	}
-	err = writeSection("[const]", pkgData.Consts)
+	_, err := io.WriteString(w, section)
 	if err != nil {
 		return err
 	}
-	writeSection("[var]", pkgData.Vars)
+	_, err = io.WriteString(w, "\n")
 	if err != nil {
 		return err
 	}
-	writeSection("[func]", pkgData.Funcs)
-	if err != nil {
-		return err
+	for k, v := range m {
+		_, err := io.WriteString(w, k)
+		if err != nil {
+			return err
+		}
+		err = writeConst(w, v)
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, "\n")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func writeConst(w io.Writer, info *ConstInfo) error {
+	if !info.Untyped {
+		_, err := io.WriteString(w, " ")
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, "e")
+		if err != nil {
+			return err
+		}
+	} else {
+		// only untyped requires type info
+		_, err := io.WriteString(w, " ")
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, "t=")
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, info.Type)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -144,6 +206,7 @@ func parsePkgData(content string) (*PackageData, error) {
 			if idx >= 0 {
 				name = line[:idx]
 			}
+			extra := line[idx+1:]
 			if name == "" {
 				break
 			}
@@ -160,9 +223,20 @@ func parsePkgData(content string) (*PackageData, error) {
 				p.Vars[name] = true
 			case Section_Const:
 				if p.Consts == nil {
-					p.Consts = make(map[string]bool, 1)
+					p.Consts = make(map[string]*ConstInfo, 1)
 				}
-				p.Consts[name] = true
+				constInfo := &ConstInfo{Untyped: true}
+				kvs := strings.Split(extra, " ")
+				for _, v := range kvs {
+					if v == "e" {
+						constInfo.Untyped = false
+						continue
+					}
+					if strings.HasPrefix(v, "t=") {
+						constInfo.Type = v[len("t="):]
+					}
+				}
+				p.Consts[name] = constInfo
 			default:
 				// ignore others
 			}

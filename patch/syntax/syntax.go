@@ -43,6 +43,55 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	registerFuncs(fileList, addFile)
 }
 
+// typeinfo not used
+// func AfterSyntaxTypeCheck(pkgPath string, files []*syntax.File, info *types2.Info) {
+// 	if pkgPath != "github.com/xhd2015/xgo/runtime/test/debug" {
+// 		return
+// 	}
+// 	if true {
+// 		return
+// 	}
+// 	stmt := files[0].DeclList[2].(*syntax.FuncDecl).Body.List[0]
+// 	call := stmt.(*syntax.ExprStmt).X.(*syntax.CallExpr)
+// 	name := call.ArgList[0].(*syntax.Name)
+// 	if false {
+// 		v := &syntax.BasicLit{Value: "11", Kind: syntax.IntLit}
+// 		t := syntax.TypeAndValue{
+// 			Type:  name.GetTypeInfo().Type,
+// 			Value: constant.MakeInt64(11),
+// 		}
+// 		t.SetIsValue()
+// 		v.SetTypeInfo(t)
+// 		call.ArgList[0] = v
+// 	}
+
+// 	_ = name
+// }
+
+func debugPkgSyntax(files []*syntax.File) {
+	if false {
+		return
+	}
+	pkgPath := xgo_ctxt.GetPkgPath()
+	if pkgPath != "github.com/xhd2015/xgo/runtime/test/debug" {
+		return
+	}
+
+	stmt := files[0].DeclList[2].(*syntax.FuncDecl).Body.List[1]
+	call := stmt.(*syntax.ExprStmt).X.(*syntax.CallExpr)
+	name := call.ArgList[0].(*syntax.Name)
+	// if false {
+	call.ArgList[0] = &syntax.XgoSimpleConvert{
+		X: &syntax.CallExpr{
+			Fun: syntax.NewName(name.Pos(), "int"),
+			ArgList: []syntax.Expr{
+				name,
+			},
+		},
+	}
+	// }
+}
+
 func GetSyntaxDeclMapping() map[string]map[LineCol]*DeclInfo {
 	return getSyntaxDeclMapping()
 }
@@ -139,6 +188,8 @@ func registerFuncs(fileList []*syntax.File, addFile func(name string, r io.Reade
 	if len(fileList) > 0 {
 		pkgName = fileList[0].PkgName.Value
 	}
+
+	// debugPkgSyntax(fileList)
 	// if true {
 	// 	return
 	// }
