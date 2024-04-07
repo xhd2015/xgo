@@ -100,7 +100,7 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 	if err != nil {
 		return fmt.Errorf("patching gc main:%w", err)
 	}
-	err = patchCompilerAstTypeCheck(goroot)
+	err = patchCompilerAstTypeCheck(goroot, goVersion)
 	if err != nil {
 		return fmt.Errorf("patch ast type check:%w", err)
 	}

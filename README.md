@@ -344,6 +344,8 @@ func TestPatchFunc(t *testing.T) {
 }
 ```
 
+NOTE: `Mock` and `Patch` supports top-level variables and consts, see [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
+
 ## Trace
 It is painful when debugging with a deep call stack.
 
@@ -459,7 +461,9 @@ In conclusion, `xgo` and monkey are compared as the following:
 |Per-Instance Method Mock|Y|N|
 |Per-Goroutine Mock|Y|N|
 |Per-Generic Type Mock|Y|Y|
-|Closuer Mock|Y|Y|
+|Var Mock|Y|N|
+|Const Mock|Y|N|
+|Closure Mock|Y|Y|
 |Stack Trace|Y|N|
 |General Trap|Y|N|
 |Compatiblility|NO LIMIT|limited to amd64 and arm64|

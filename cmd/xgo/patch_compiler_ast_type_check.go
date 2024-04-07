@@ -1,6 +1,10 @@
 package main
 
-import "os"
+import (
+	"os"
+
+	"github.com/xhd2015/xgo/support/goinfo"
+)
 
 const convertXY = `
 if xgoConv, ok := x.expr.(*syntax.XgoSimpleConvert); ok {
@@ -57,29 +61,39 @@ if xgoConv, ok := x.expr.(*syntax.XgoSimpleConvert); ok {
 }
 `
 
+func getExprInternalPatch(mark string, rawCall string, checkGoVersion func(goVersion *goinfo.GoVersion) bool) *Patch {
+	return &Patch{
+		Mark:         mark,
+		InsertIndex:  5,
+		InsertBefore: true,
+		Anchors: []string{
+			`(check *Checker) exprInternal`,
+			"\n",
+			`default:`,
+			`case *syntax.Operation:`,
+			`case *syntax.KeyValueExpr:`,
+			`default:`,
+			"\n",
+		},
+		Content: `
+case *syntax.XgoSimpleConvert:
+kind := check.` + rawCall + `
+x.expr = e
+return kind
+`,
+		CheckGoVersion: checkGoVersion,
+	}
+}
+
 var type2ExprPatch = &FilePatch{
 	FilePath: _FilePath{"src", "cmd", "compile", "internal", "types2", "expr.go"},
 	Patches: []*Patch{
-		{
-			Mark:         "type2_check_xgo_simple_convert",
-			InsertIndex:  5,
-			InsertBefore: true,
-			Anchors: []string{
-				`(check *Checker) exprInternal`,
-				"\n",
-				`default:`,
-				`case *syntax.Operation:`,
-				`case *syntax.KeyValueExpr:`,
-				`default:`,
-				"\n",
-			},
-			Content: `
-case *syntax.XgoSimpleConvert:
-	kind := check.rawExpr(nil, x, e.X, nil, false)
-	x.expr = e
-	return kind
-`,
-		},
+		getExprInternalPatch("type2_check_xgo_simple_convert", `rawExpr(nil, x, e.X, nil, false)`, func(goVersion *goinfo.GoVersion) bool {
+			return goVersion.Major > 1 || goVersion.Minor >= 21
+		}),
+		getExprInternalPatch("type2_check_xgo_simple_convert_no_target", `rawExpr(x, e.X, nil, false)`, func(goVersion *goinfo.GoVersion) bool {
+			return goVersion.Major == 1 && goVersion.Minor < 21
+		}),
 		{
 			Mark:        "type2_match_type_xgo_simple_convert",
 			InsertIndex: 1,
@@ -88,6 +102,41 @@ case *syntax.XgoSimpleConvert:
 				"\n",
 			},
 			Content: convertXY,
+			CheckGoVersion: func(goVersion *goinfo.GoVersion) bool {
+				return goVersion.Major > 1 || goVersion.Minor >= 21
+			},
+		},
+		{
+			Mark:         "type2_binary_convert_type_xgo_simple_convert",
+			InsertIndex:  2,
+			InsertBefore: true,
+			Anchors: []string{
+				`func (check *Checker) binary(x *operand`,
+				"\n",
+				`mayConvert := func(x, y *operand) bool {`,
+			},
+			Content: `
+			(func(x, y *operand){` + convertXY + `})(x,&y)
+			`,
+			CheckGoVersion: func(goVersion *goinfo.GoVersion) bool {
+				return goVersion.Major == 1 && goVersion.Minor >= 20 && goVersion.Minor < 21
+			},
+		},
+		{
+			Mark:         "type2_binary_convert_type_xgo_simple_convert_can_mix",
+			InsertIndex:  2,
+			InsertBefore: true,
+			Anchors: []string{
+				`func (check *Checker) binary(x *operand`,
+				"\n",
+				`canMix := func(x, y *operand) bool {`,
+			},
+			Content: `
+			(func(x, y *operand){` + convertXY + `})(x,&y)
+			`,
+			CheckGoVersion: func(goVersion *goinfo.GoVersion) bool {
+				return goVersion.Major == 1 && goVersion.Minor < 20
+			},
 		},
 		{
 			Mark:        "type2_comparison_xgo_simple_convert",
@@ -192,25 +241,30 @@ type XgoSimpleConvert struct {
 }
 `
 
-func patchCompilerAstTypeCheck(goroot string) error {
-	err := type2ExprPatch.Apply(goroot)
-	if err != nil {
-		return err
-	}
-	err = type2AssignmentsPatch.Apply(goroot)
-	if err != nil {
-		return err
-	}
-	err = syntaxWalkPatch.Apply(goroot)
-	if err != nil {
-		return err
-	}
-	err = noderWriterPatch.Apply(goroot)
-	if err != nil {
-		return err
-	}
+func patchCompilerAstTypeCheck(goroot string, goVersion *goinfo.GoVersion) error {
+	// always generate xgo_extra file
 	syntaxExtraFile := syntaxExtra.Join(goroot)
-	err = os.WriteFile(syntaxExtraFile, []byte(syntaxExtraPatch), 0755)
+	err := os.WriteFile(syntaxExtraFile, []byte(syntaxExtraPatch), 0755)
+	if err != nil {
+		return err
+	}
+	if goVersion.Major == 1 && goVersion.Minor < 20 {
+		// only go1.20 and above supports const mock
+		return nil
+	}
+	err = type2ExprPatch.Apply(goroot, goVersion)
+	if err != nil {
+		return err
+	}
+	err = type2AssignmentsPatch.Apply(goroot, goVersion)
+	if err != nil {
+		return err
+	}
+	err = syntaxWalkPatch.Apply(goroot, goVersion)
+	if err != nil {
+		return err
+	}
+	err = noderWriterPatch.Apply(goroot, goVersion)
 	if err != nil {
 		return err
 	}
