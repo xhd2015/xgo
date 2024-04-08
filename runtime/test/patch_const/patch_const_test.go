@@ -249,3 +249,63 @@ func TestPatchOtherPackageConstInTypeConvertArgShouldWork(t *testing.T) {
 		t.Fatalf("expect a to be %d, actual: %d\n", 10, a)
 	}
 }
+
+const x = "123"
+
+func TestPatchConstOverlappingNameShouldSkip(t *testing.T) {
+	x := make([]int, 0, 10)
+	x = append(x, 10)
+	if x[0] != 10 {
+		t.Fatalf("expect x[0] to be %d, actual: %d", 10, x[0])
+	}
+}
+
+func exampleSprintf(args ...interface{}) string {
+	return fmt.Sprintf("%v", args...)
+}
+func TestPatchLitPlusLitShouldCompile(t *testing.T) {
+	s := "should "
+	a := exampleSprintf(s + "compile")
+	b := exampleSprintf("should " + "compile") // this skips from wrapping
+	if a != b {
+		t.Fatalf("expect exampleSprintf result to be %q, actual: %q", b, a)
+	}
+}
+
+type Label string
+
+func convertLabel(label Label) string {
+	return string(label)
+}
+func TestPatchOtherPkgConst(t *testing.T) {
+	label := convertLabel(sub.LabelPrefix + "v2")
+	if label != "label:v2" {
+		t.Fatalf("bad label: %s", label)
+	}
+}
+
+const good = 2
+const reason = "test"
+
+func TestNameConflictWithArgShouldSkip(t *testing.T) {
+	reasons := getReasons("good")
+	if len(reasons) != 2 || reasons[0] != "ok" || reasons[1] != "good" {
+		t.Fatalf("bad reason: %v", reasons)
+	}
+
+	getReasons2 := func(good string) (reason []string) {
+		reason = append(reason, "ok")
+		reason = append(reason, good)
+		return
+	}
+	reasons2 := getReasons2("good")
+	if len(reasons2) != 2 || reasons2[0] != "ok" || reasons2[1] != "good" {
+		t.Fatalf("bad reason2: %v", reasons2)
+	}
+}
+
+func getReasons(good string) (reason []string) {
+	reason = append(reason, "ok")
+	reason = append(reason, good)
+	return
+}

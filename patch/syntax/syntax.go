@@ -765,16 +765,18 @@ func generateRegHelperCode(pkgName string) string {
 	return strings.Join(autoGenStmts, "\n")
 }
 
-func getFieldNames(x []*syntax.Field) []string {
-	names := make([]string, 0, len(x))
-	for _, p := range x {
-		var name string
-		if p.Name != nil {
-			name = p.Name.Value
-		}
-		names = append(names, name)
+func getFieldNames(fields []*syntax.Field) []string {
+	names := make([]string, 0, len(fields))
+	for _, field := range fields {
+		names = append(names, getFieldName(field))
 	}
 	return names
+}
+func getFieldName(f *syntax.Field) string {
+	if f == nil || f.Name == nil {
+		return ""
+	}
+	return f.Name.Value
 }
 
 func quoteNamesExpr(names []string) string {

@@ -5,7 +5,7 @@ Thanks for helping, this document helps you get started.
 First, clone this repository:
 ```sh
 git clone https://github.com/xhd2015/xgo
-cd cgo
+cd xgo
 ```
 
 Then, setup git hooks:
@@ -19,11 +19,13 @@ chmod +x .git/hooks/post-commit
 All are set, now start to development, try:
 ```sh
 # help
-go run ./cmd/xgo help
+go -tags dev run ./cmd/xgo help
 
 # run Hello world test
-go test -run TestHelloWorld -v ./test
+go -tags dev test -run TestHelloWorld -v ./test
 ```
+
+NOTE: when developing, always add `-tags dev` to tell go that we building with dev mode.
 
 If you want to check instrumented GOROOT, run:
 ```sh
