@@ -32,7 +32,7 @@ func TestPatchVarTest(t *testing.T) {
 
 ```
 
-Check [../test/patch_const/patch_var_test.go](../test/patch_const/patch_var_test.go) for more cases.
+Check [../test/patch/patch_var_test.go](../test/patch/patch_var_test.go) for more cases.
 
 ## `PatchByName` on constant
 ```go
@@ -46,7 +46,7 @@ import (
 
 const N = 50
 
-func TestPatchInElseShouldWork(t *testing.T) {
+func TestPatchConst(t *testing.T) {
     mock.PatchByName("github.com/xhd2015/xgo/runtime/test/patch_const", "N", func() int {
         return 5
     })

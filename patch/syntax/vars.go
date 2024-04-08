@@ -192,12 +192,16 @@ func (ctx *BlockContext) traverseNode(node syntax.Node, globaleNames map[string]
 	case *syntax.Field:
 		// ignore
 	default:
-		// unknown
-		if os.Getenv("XGO_DEBUG_VAR_TRAP_LOOSE") != "true" {
-			panic(fmt.Errorf("unrecognized node: %T", node))
-		}
+		errorUnknown("node", node)
+
 	}
 	return node
+}
+func errorUnknown(expectType string, node syntax.Node) {
+	// unknown
+	if os.Getenv("XGO_DEBUG_VAR_TRAP_STRICT") == "true" {
+		panic(fmt.Errorf("unrecognized %s: %T", expectType, node))
+	}
 }
 
 func (ctx *BlockContext) traverseStmt(node syntax.Stmt, globaleNames map[string]*DeclInfo, imports map[string]string) syntax.Stmt {
@@ -251,10 +255,7 @@ func (ctx *BlockContext) traverseStmt(node syntax.Stmt, globaleNames map[string]
 		}
 		node.Results = ctx.traverseExpr(node.Results, globaleNames, imports)
 	default:
-		// unknown
-		if os.Getenv("XGO_DEBUG_VAR_TRAP_LOOSE") != "true" {
-			panic(fmt.Errorf("unrecognized stmt: %T", node))
-		}
+		errorUnknown("stmt", node)
 	}
 	return node
 }
@@ -301,10 +302,7 @@ func (ctx *BlockContext) traverseSimpleStmt(node syntax.SimpleStmt, globaleNames
 	case *syntax.EmptyStmt:
 		// nothing
 	default:
-		// unknown
-		if os.Getenv("XGO_DEBUG_VAR_TRAP_LOOSE") != "true" {
-			panic(fmt.Errorf("unrecognized simple stmt: %T", node))
-		}
+		errorUnknown("simple stmt", node)
 	}
 	return node
 }
@@ -505,10 +503,7 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 		}
 	case *syntax.BadExpr:
 	default:
-		// unknown
-		if os.Getenv("XGO_DEBUG_VAR_TRAP_LOOSE") != "true" {
-			panic(fmt.Errorf("unrecognized expr: %T", node))
-		}
+		errorUnknown("expr", node)
 	}
 	return node
 }
@@ -569,10 +564,7 @@ func (ctx *BlockContext) traverseDecl(node syntax.Decl, globaleNames map[string]
 			node.Values = ctx.traverseExpr(node.Values, globaleNames, imports)
 		}
 	default:
-		// unknown
-		if os.Getenv("XGO_DEBUG_VAR_TRAP_LOOSE") != "true" {
-			panic(fmt.Errorf("unrecognized stmt: %T", node))
-		}
+		errorUnknown("stmt", node)
 	}
 	return node
 }
