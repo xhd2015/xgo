@@ -7,25 +7,30 @@ package debug
 
 import (
 	"testing"
-
-	"github.com/xhd2015/xgo/runtime/mock"
 )
 
-const N = 50
-const M = 20
+const good = 2
+const reason = "test"
 
 func TestPatchConstOperationShouldCompileAndSkipMock(t *testing.T) {
-	// should have no effect
-	mock.PatchByName("github.com/xhd2015/xgo/runtime/test/debug", "N", func() int {
-		return 10
-	})
-	// because N is used inside an operation
-	// it's type is not yet determined, so
-	// should not rewrite it
-	var size int64 = M + N
-	t.Logf("size=%d", size)
-	// size := (N + 1) * unsafe.Sizeof(int(0))
-	if size != 11 {
-		t.Fatalf("expect N not patched and size to be %d, actual: %d\n", 11, size)
+	reasons := getReasons("good")
+	if len(reasons) != 2 || reasons[0] != "ok" || reasons[1] != "good" {
+		t.Fatalf("bad reason: %v", reasons)
 	}
+
+	getReasons2 := func(good string) (reason []string) {
+		reason = append(reason, "ok")
+		reason = append(reason, good)
+		return
+	}
+	reasons2 := getReasons2("good")
+	if len(reasons2) != 2 || reasons2[0] != "ok" || reasons2[1] != "good" {
+		t.Fatalf("bad reason2: %v", reasons2)
+	}
+}
+
+func getReasons(good string) (reason []string) {
+	reason = append(reason, "ok")
+	reason = append(reason, good)
+	return
 }

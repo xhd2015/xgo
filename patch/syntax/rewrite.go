@@ -252,7 +252,30 @@ func fillNames(pos syntax.Pos, recv *syntax.Field, funcType *syntax.FuncType, pr
 	fillFieldNames(pos, funcType.ParamList, preset, "_a")
 	fillFieldNames(pos, funcType.ResultList, preset, "_r")
 }
+func getFuncDeclNamesNoBlank(recv *syntax.Field, funcType *syntax.FuncType) []string {
+	var names []string
+	recvName := getFieldName(recv)
+	if !isBlankName(recvName) {
+		names = append(names, recvName)
+	}
+	paramNames := getFieldNames(funcType.ParamList)
+	for _, name := range paramNames {
+		if !isBlankName(name) {
+			names = append(names, name)
+		}
+	}
+	resultNames := getFieldNames(funcType.ResultList)
+	for _, name := range resultNames {
+		if !isBlankName(name) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
 
+func isBlankName(name string) bool {
+	return name == "" || name == "_"
+}
 func getRefSlice(pos syntax.Pos, fields []*syntax.Field) []syntax.Expr {
 	return doGetRefAddrSlice(pos, fields, false)
 }

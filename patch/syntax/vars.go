@@ -84,7 +84,14 @@ func trapVariables(pkgPath string, fileList []*syntax.File, funcDelcs []*DeclInf
 			if fnDecl.Body == nil {
 				continue
 			}
-			ctx := &BlockContext{}
+			// each function is a
+			ctx := &BlockContext{
+				Names: make(map[string]bool),
+			}
+			argNames := getFuncDeclNamesNoBlank(fnDecl.Recv, fnDecl.Type)
+			for _, argName := range argNames {
+				ctx.Names[argName] = true
+			}
 			fnDecl.Body = ctx.traverseBlockStmt(fnDecl.Body, names, imports)
 		}
 	}
@@ -119,12 +126,10 @@ func getImports(file *syntax.File) map[string]string {
 	return imports
 }
 
+// a BlockContext provides a point where stmts can be prepended or inserted
 type BlockContext struct {
 	Parent *BlockContext
 	Block  *syntax.BlockStmt
-	Index  int
-
-	Children []*BlockContext
 
 	Names map[string]bool
 
@@ -141,10 +146,16 @@ type BlockContext struct {
 	ConstInfo map[syntax.Node]*ConstInfo
 
 	// to be inserted
-	InsertList []syntax.Stmt
+	ChildrenInsertList [][]syntax.Stmt
 
 	TrapNames []*NameAndDecl
 }
+
+func (c *BlockContext) PrependStmtBeforeLastChild(stmt []syntax.Stmt) {
+	n := len(c.ChildrenInsertList)
+	c.ChildrenInsertList[n-1] = append(c.ChildrenInsertList[n-1], stmt...)
+}
+
 type ConstInfo struct {
 	Type string
 }
@@ -311,19 +322,16 @@ func (ctx *BlockContext) traverseBlockStmt(node *syntax.BlockStmt, globaleNames 
 	if node == nil {
 		return nil
 	}
+	subCtx := &BlockContext{
+		Parent: ctx,
+	}
 	n := len(node.List)
-	base := len(ctx.Children)
 	for i := 0; i < n; i++ {
-		subCtx := &BlockContext{
-			Parent: ctx,
-			Block:  node,
-			Index:  i,
-		}
-		ctx.Children = append(ctx.Children, subCtx)
+		subCtx.ChildrenInsertList = append(subCtx.ChildrenInsertList, nil)
 		node.List[i] = subCtx.traverseStmt(node.List[i], globaleNames, imports)
 	}
 	for i := n - 1; i >= 0; i-- {
-		node.List = insertBefore(node.List, i, ctx.Children[i+base].InsertList)
+		node.List = insertBefore(node.List, i, subCtx.ChildrenInsertList[i])
 	}
 	return node
 }
@@ -376,12 +384,16 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 	case *syntax.KeyValueExpr:
 		node.Value = ctx.traverseExpr(node.Value, globaleNames, imports)
 	case *syntax.FuncLit:
-		subCtx := &BlockContext{
+		// add names of function declares
+		funcCtx := &BlockContext{
 			Parent: ctx,
+			Names:  make(map[string]bool),
 		}
-		// TODO: add names of types
-		ctx.Children = append(ctx.Children, subCtx)
-		node.Body = subCtx.traverseBlockStmt(node.Body, globaleNames, imports)
+		argNames := getFuncDeclNamesNoBlank(nil, node.Type)
+		for _, argName := range argNames {
+			funcCtx.Names[argName] = true
+		}
+		node.Body = funcCtx.traverseBlockStmt(node.Body, globaleNames, imports)
 		return node
 	case *syntax.ParenExpr:
 		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
@@ -451,20 +463,20 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 		if node.X != nil && node.Y != nil {
 			xConst := ctx.ConstInfo[node.X]
 			yConst := ctx.ConstInfo[node.Y]
-			if xConst != nil && yConst != nil {
-				newNode := &syntax.XgoSimpleConvert{
-					X: &syntax.CallExpr{
-						Fun:     syntax.NewName(node.Pos(), xConst.Type),
-						ArgList: []syntax.Expr{node},
-					},
-				}
+			isXgoConv := func(node syntax.Expr) bool {
+				_, ok := node.(*syntax.XgoSimpleConvert)
+				return ok
+			}
+			// if both are constant,skip wrapping
+			if xConst != nil && yConst != nil && (isXgoConv(node.X) || isXgoConv(node.Y)) {
+				newNode := newConv(node, xConst.Type)
 				ctx.recordConstType(newNode, xConst.Type)
 				return newNode
 			}
 		} else if node.Y == nil && (node.Op == syntax.Add || node.Op == syntax.Sub) {
 			if xgoConv, ok := node.X.(*syntax.XgoSimpleConvert); ok {
 				constType := getConstType(xgoConv)
-				newNode := createConv(node, constType)
+				newNode := newConv(node, constType)
 				ctx.recordConstType(newNode, constType)
 				return newNode
 			}
@@ -512,7 +524,7 @@ func getConstType(xgoConv *syntax.XgoSimpleConvert) string {
 	return xgoConv.X.(*syntax.CallExpr).Fun.(*syntax.Name).Value
 }
 
-func createConv(node syntax.Expr, constType string) *syntax.XgoSimpleConvert {
+func newConv(node syntax.Expr, constType string) *syntax.XgoSimpleConvert {
 	return &syntax.XgoSimpleConvert{
 		X: &syntax.CallExpr{
 			Fun:     syntax.NewName(node.Pos(), constType),
@@ -593,6 +605,9 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 				return node
 			}
 			untypedConstType = getConstDeclValueType(decl.ConstDecl.Values)
+			if untypedConstType == "" {
+				return node
+			}
 			var ok bool
 			explicitType, ok = c.isConstOKToTrap(node)
 			if !ok {
@@ -620,7 +635,7 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 		}, preStmts...)
 	}
 
-	c.InsertList = append(c.InsertList, preStmts...)
+	c.PrependStmtBeforeLastChild(preStmts)
 	newName := syntax.NewName(node.Pos(), tmpVarName)
 	if explicitType != nil {
 		return &syntax.CallExpr{
@@ -631,18 +646,8 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 		}
 	}
 	if untypedConstType != "" {
-		newNode := &syntax.XgoSimpleConvert{
-			X: &syntax.CallExpr{
-				Fun: syntax.NewName(node.Pos(), untypedConstType),
-				ArgList: []syntax.Expr{
-					newName,
-				},
-			},
-		}
-		if c.ConstInfo == nil {
-			c.ConstInfo = make(map[syntax.Node]*ConstInfo, 1)
-		}
-		c.ConstInfo[node] = &ConstInfo{Type: untypedConstType}
+		newNode := newConv(newName, untypedConstType)
+		c.recordConstType(newNode, untypedConstType)
 		c.ConstInfo[newNode] = &ConstInfo{Type: untypedConstType}
 		return newNode
 	}
@@ -679,6 +684,9 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 				return nil, true
 			}
 			untypedConstType = constInfo.Type
+			if untypedConstType == "" {
+				return nil, true
+			}
 			var ok bool
 			explicitType, ok = ctx.isConstOKToTrap(node)
 			if !ok {
@@ -698,7 +706,7 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 		return nil, true
 	}
 	preStmts, _, tmpVarName := trapVar(node, newStringLit(pkgPath), sel.Sel.Value, takeAddr)
-	ctx.InsertList = append(ctx.InsertList, preStmts...)
+	ctx.PrependStmtBeforeLastChild(preStmts)
 	newName := syntax.NewName(node.Pos(), tmpVarName)
 	if explicitType != nil {
 		return &syntax.CallExpr{
@@ -709,19 +717,8 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 		}, true
 	}
 	if untypedConstType != "" {
-		newNode := &syntax.XgoSimpleConvert{
-			X: &syntax.CallExpr{
-				Fun: syntax.NewName(node.Pos(), untypedConstType),
-				ArgList: []syntax.Expr{
-					newName,
-				},
-			},
-		}
-		if ctx.ConstInfo == nil {
-			ctx.ConstInfo = make(map[syntax.Node]*ConstInfo, 1)
-		}
-		ctx.ConstInfo[sel] = &ConstInfo{Type: untypedConstType}
-		ctx.ConstInfo[node] = &ConstInfo{Type: untypedConstType}
+		newNode := newConv(newName, untypedConstType)
+		ctx.recordConstType(newNode, untypedConstType)
 		return newNode, true
 	}
 	return newName, true
@@ -802,7 +799,7 @@ func (c *BlockContext) trapAddrNode(node *syntax.Operation, nameNode *syntax.Nam
 		return node
 	}
 	preStmts, _, tmpVarName := trapVar(node, syntax.NewName(nameNode.Pos(), XgoLocalPkgName), name, true)
-	c.InsertList = append(c.InsertList, preStmts...)
+	c.PrependStmtBeforeLastChild(preStmts)
 	return syntax.NewName(node.Pos(), tmpVarName)
 }
 

@@ -9,10 +9,15 @@ import (
 const convertXY = `
 if xgoConv, ok := x.expr.(*syntax.XgoSimpleConvert); ok {
 	var isConst bool
-	switch y.expr.(type) {
-	    case *syntax.XgoSimpleConvert,*syntax.BasicLit:
-			isConst=true
+	if isUntyped(y.typ) {
+		isConst = true
+	} else {
+		switch y.expr.(type) {
+		case *syntax.XgoSimpleConvert, *syntax.BasicLit:
+			isConst = true
+		}
 	}
+
 	if !isConst{
 		t := y.typ
 
@@ -35,9 +40,13 @@ if xgoConv, ok := x.expr.(*syntax.XgoSimpleConvert); ok {
 	}
 }else if xgoConv,ok := y.expr.(*syntax.XgoSimpleConvert);ok {
 	var isConst bool
-	switch x.expr.(type) {
-	    case *syntax.XgoSimpleConvert,*syntax.BasicLit:
-			isConst=true
+	if isUntyped(x.typ) {
+		isConst = true
+	} else {
+		switch x.expr.(type) {
+		case *syntax.XgoSimpleConvert, *syntax.BasicLit:
+			isConst = true
+		}
 	}
 	if !isConst{
 		t := x.typ
@@ -228,6 +237,51 @@ var noderWriterPatch = &FilePatch{
 		},
 	},
 }
+
+var noderExprPatch = &FilePatch{
+	FilePath: _FilePath{"src", "cmd", "compile", "internal", "noder", "expr.go"},
+	Patches: []*Patch{
+		{
+			Mark:         "noder_expr_const_expr_op_xgo_simple_convert",
+			InsertIndex:  1,
+			InsertBefore: true,
+			Anchors: []string{
+				`func constExprOp(expr syntax.Expr) ir.Op {`,
+				`case *syntax.BasicLit:`,
+			},
+			Content: `
+		case *syntax.XgoSimpleConvert:
+			return constExprOp(expr.X)
+			`,
+			CheckGoVersion: func(goVersion *goinfo.GoVersion) bool {
+				return goVersion.Major == 1 && goVersion.Minor <= 21
+			},
+		},
+	},
+}
+
+var syntaxPrinterPatch = &FilePatch{
+	FilePath: _FilePath{"src", "cmd", "compile", "internal", "syntax", "printer.go"},
+	Patches: []*Patch{
+		{
+			Mark:         "noder_syntax_print_xgo_simple_convert",
+			InsertIndex:  1,
+			InsertBefore: true,
+			Anchors: []string{
+				`func (p *printer) printRawNode(n Node) {`,
+				`case *BasicLit:`,
+			},
+			Content: `
+		case *XgoSimpleConvert:
+			p.printRawNode(n.X)
+			`,
+			CheckGoVersion: func(goVersion *goinfo.GoVersion) bool {
+				return goVersion.Major == 1 && goVersion.Minor <= 21
+			},
+		},
+	},
+}
+
 var syntaxExtra = _FilePath{"src", "cmd", "compile", "internal", "syntax", "xgo_extra.go"}
 
 const syntaxExtraPatch = `
@@ -267,6 +321,16 @@ func patchCompilerAstTypeCheck(goroot string, goVersion *goinfo.GoVersion) error
 	err = noderWriterPatch.Apply(goroot, goVersion)
 	if err != nil {
 		return err
+	}
+	if goVersion.Major == 1 && goVersion.Minor <= 21 {
+		err = noderExprPatch.Apply(goroot, goVersion)
+		if err != nil {
+			return err
+		}
+		err = syntaxPrinterPatch.Apply(goroot, goVersion)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

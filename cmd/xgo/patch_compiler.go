@@ -44,6 +44,8 @@ var compilerFiles = []_FilePath{
 	type2AssignmentsPatch.FilePath,
 	syntaxWalkPatch.FilePath,
 	noderWriterPatch.FilePath,
+	noderExprPatch.FilePath,
+	syntaxPrinterPatch.FilePath,
 	syntaxExtra,
 }
 
