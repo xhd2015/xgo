@@ -15,15 +15,44 @@ import (
 var xgoAutoGenRegisterFuncHelper = _FilePath{"src", "runtime", "__xgo_autogen_register_func_helper.go"}
 var xgoTrap = _FilePath{"src", "runtime", "xgo_trap.go"}
 var runtimeProc = _FilePath{"src", "runtime", "proc.go"}
-var testingFile = _FilePath{"src", "testing", "testing.go"}
 var runtimeTime _FilePath = _FilePath{"src", "runtime", "time.go"}
 var timeSleep _FilePath = _FilePath{"src", "time", "sleep.go"}
+
+var testingFilePatch = &FilePatch{
+	FilePath: _FilePath{"src", "testing", "testing.go"},
+	Patches: []*Patch{
+		{
+			Mark:         "declare_testing_callback_v2",
+			InsertIndex:  0,
+			InsertBefore: true,
+			Anchors: []string{
+				"func tRunner(t *T, fn func",
+				"{",
+				"\n",
+			},
+			Content: patch.TestingCallbackDeclarations,
+		},
+		{
+			Mark:         "call_testing_callback_v2",
+			InsertIndex:  4,
+			InsertBefore: true,
+			Anchors: []string{
+				"func tRunner(t *T, fn func",
+				"{",
+				"\n",
+				`t.start = time.Now()`,
+				"fn(t",
+			},
+			Content: patch.TestingStart,
+		},
+	},
+}
 
 var runtimeFiles = []_FilePath{
 	xgoAutoGenRegisterFuncHelper,
 	xgoTrap,
 	runtimeProc,
-	testingFile,
+	testingFilePatch.FilePath,
 	runtimeTime,
 	timeSleep,
 }
@@ -136,22 +165,7 @@ func patchRuntimeProc(goroot string) error {
 }
 
 func patchRuntimeTesting(goroot string) error {
-	testingFile := filepath.Join(goroot, filepath.Join(testingFile...))
-	return editFile(testingFile, func(content string) (string, error) {
-		// func tRunner(t *T, fn func(t *T)) {
-		anchor := []string{"func tRunner(t *T", "{", "\n"}
-		content = addContentBefore(content,
-			"/*<begin declare_testing_callback>*/", "/*<end declare_testing_callback>*/",
-			anchor,
-			patch.TestingCallbackDeclarations,
-		)
-		content = addContentAfter(content,
-			"/*<begin call_testing_callback>*/", "/*<end call_testing_callback>*/",
-			anchor,
-			patch.TestingStart,
-		)
-		return content, nil
-	})
+	return testingFilePatch.Apply(goroot, nil)
 }
 
 // only required if need to mock time.Sleep

@@ -9,7 +9,7 @@
 
 允许对`go`的函数进行拦截, 并提供Mock和Trace等工具帮助开发者编写测试和快速调试。
 
-`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec/))。
+`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec))。
 
 `xgo`对源代码和IR(中间码)进行预处理之后, 再调用`go`进行后续的编译工作。通过这种方式, `xgo`实现了一些在`go`中缺乏的能力。
 
@@ -19,6 +19,8 @@
 - [Trace](#trace).
 
 更多细节, 参见[快速开始](#快速开始)和[文档](./doc)。
+
+> *顺便说一下, 我可以向你保证这是一个有趣的项目。*
 
 # 安装
 ```sh
@@ -150,7 +152,6 @@ import (
 func init() {
     trap.AddInterceptor(&trap.Interceptor{
         Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
-            trap.Skip()
             if f.Name == "A" {
                 fmt.Printf("trap A\n")
                 return nil, nil
@@ -414,11 +415,22 @@ XGO_TRACE_OUTPUT=stdout xgo run ./
 - `XGO_TRACE_OUTPUT=<dir>`: 堆栈记录被写入到`<dir>`目录下,
 - `XGO_TRACE_OUTPUT=off`: 关闭堆栈记录收集。
 
+# 并发安全
+我知道大部分人认为Monkey Patching不是并发安全的，但那是现有的库的实现方式决定的。
+
+我可以向你保证，在xgo中进行Monkey Patching是并发安全的，也就意味着，你可以同时并行跑所有的测试用例。
+
+为什么? 因为当你设置mock时，只有当前的goroutine受影响，并且在goroutine退出后清除，不管当前测试失败还是成功。
+
+想知道真正的原因吗? 我们正在整理内部实现的文档，尽请期待。
+
 # 实现原理
 
 > 仍在整理中...
 
 参见[Issue#7](https://github.com/xhd2015/xgo/issues/7)
+
+这个博客作了一些简单的解释: https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec
 
 # 为何使用`xgo`?
 原因很简单: **避免**interface.

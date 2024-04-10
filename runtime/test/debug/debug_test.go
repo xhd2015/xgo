@@ -6,31 +6,18 @@
 package debug
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/xhd2015/xgo/runtime/trap"
 )
 
-const good = 2
-const reason = "test"
-
-func TestPatchConstOperationShouldCompileAndSkipMock(t *testing.T) {
-	reasons := getReasons("good")
-	if len(reasons) != 2 || reasons[0] != "ok" || reasons[1] != "good" {
-		t.Fatalf("bad reason: %v", reasons)
-	}
-
-	getReasons2 := func(good string) (reason []string) {
-		reason = append(reason, "ok")
-		reason = append(reason, good)
-		return
-	}
-	reasons2 := getReasons2("good")
-	if len(reasons2) != 2 || reasons2[0] != "ok" || reasons2[1] != "good" {
-		t.Fatalf("bad reason2: %v", reasons2)
-	}
+func ToString[T any](v T) string {
+	return fmt.Sprint(v)
 }
 
-func getReasons(good string) (reason []string) {
-	reason = append(reason, "ok")
-	reason = append(reason, good)
-	return
+func TestNakedTrapShouldAvoidRecursive(t *testing.T) {
+	trap.InspectPC(ToString[int])
+	// _, fnInfo, funcPC, trappingPC := trap.InspectPC(ToString[int])
+	// _, fnInfoStr, funcPCStr, trappingPCStr := trap.InspectPC(ToString[string])
 }

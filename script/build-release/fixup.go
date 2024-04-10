@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 
 	"github.com/xhd2015/xgo/script/build-release/revision"
@@ -8,22 +9,46 @@ import (
 )
 
 // fixup src dir to prepare for release build
-func fixupSrcDir(targetDir string, rev string) error {
-	err := updateRevisions(targetDir, false, rev)
+func fixupSrcDir(targetDir string, rev string) (restore func() error, err error) {
+	restore, err = updateRevisions(targetDir, false, rev)
 	if err != nil {
-		return err
+		return restore, err
 	}
-	return nil
+	return restore, nil
 }
 
-func updateRevisions(targetDir string, unlink bool, rev string) error {
+func stageFile(file string) (restore func() error, err error) {
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	return func() error {
+		return os.WriteFile(file, content, 0755)
+	}, nil
+}
+
+func updateRevisions(targetDir string, unlink bool, rev string) (restore func() error, err error) {
 	// unlink files because all files are symlink
 	files := revision.GetVersionFiles(targetDir)
+	var restoreFiles []func() error
+	for _, file := range files {
+		r, err := stageFile(file)
+		if err != nil {
+			return nil, err
+		}
+		restoreFiles = append(restoreFiles, r)
+	}
+	restore = func() error {
+		for _, r := range restoreFiles {
+			r()
+		}
+		return nil
+	}
 	if unlink {
 		for _, file := range files {
 			err := unlinkFile(file)
 			if err != nil {
-				return err
+				return restore, err
 			}
 		}
 	}
@@ -31,10 +56,10 @@ func updateRevisions(targetDir string, unlink bool, rev string) error {
 	for _, file := range files {
 		err := revision.PatchVersionFile(file, rev, false)
 		if err != nil {
-			return err
+			return restore, err
 		}
 	}
-	return nil
+	return restore, nil
 }
 
 func gitListWorkingTreeChangedFiles(dir string) ([]string, error) {

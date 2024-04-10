@@ -1,5 +1,6 @@
 
 # xgo
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/xhd2015/xgo.svg)](https://pkg.go.dev/github.com/xhd2015/xgo)
 [![Go Report Card](https://goreportcard.com/badge/github.com/xhd2015/xgo)](https://goreportcard.com/report/github.com/xhd2015/xgo)
 [![Go Coverage](https://img.shields.io/badge/Coverage-82.6%25-brightgreen)](https://github.com/xhd2015/xgo/actions)
@@ -10,7 +11,7 @@
 
 Enable function Trap in `go`, provide tools like Mock and Trace to help go developers write unit test and debug both easier and faster.
 
-`xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec/)).
+`xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec)).
 
 It **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, adding missing abilities to go program by cooperating with(or hacking) the go compiler.
 
@@ -20,6 +21,8 @@ These abilities include:
 - [Trace](#trace)
 
 See [Quick Start](#quick-start) and [Documentation](./doc) for more details.
+
+> *By the way, I promise you this is an interesting project.*
 
 # Installation
 ```sh
@@ -155,7 +158,6 @@ import (
 func init() {
     trap.AddInterceptor(&trap.Interceptor{
         Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
-            trap.Skip()
             if f.Name == "A" {
                 fmt.Printf("trap A\n")
                 return nil, nil
@@ -421,10 +423,21 @@ By default, Trace will write traces to a temp directory under current working di
 - `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
 - `XGO_TRACE_OUTPUT=off`: turn off trace.
 
+# Concurrent safety
+I know you guys from other monkey patching library suffer from the unsafety implied by these frameworks.
+
+But I guarantee you mocking in xgo is builtin concurrent safe. That means, you can run multiple tests concurrently as long as you like.
+
+Why? when you run a test, you setup some mock, these mocks will only affect the goroutine test running the test. And these mocks get cleared when the goroutine ends, no matter the test passed or failed.
+
+Want to know why? Stay tuned, we are working on internal documentation.
+
 # Implementation Details
 > Working in progress...
 
 See [Issue#7](https://github.com/xhd2015/xgo/issues/7) for more details.
+
+This blog has a basic explanation: https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec
 
 # Why `xgo`?
 The reason is simple: **NO** interface.
@@ -435,7 +448,7 @@ Extracting interface just for mocking is never an option to me. To the domain of
 
 Monkey patching simply does the right thing for the problem. But existing library are bad at compatibility.
 
-So I created `xgo`, so I hope `xgo` will also take over other solutions to the mocking problem.
+So I created `xgo`, and hope it will finally take over other solutions to the mocking problem.
 
 # Comparing `xgo` with `monkey`
 The project [bouk/monkey](https://github.com/bouk/monkey), was initially created by bouk, as described in his blog https://bou.ke/blog/monkey-patching-in-go.

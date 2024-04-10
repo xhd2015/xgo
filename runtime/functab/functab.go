@@ -12,10 +12,9 @@ import (
 	"github.com/xhd2015/xgo/runtime/core"
 )
 
-const __XGO_SKIP_TRAP = true
-
 func init() {
 	__xgo_link_on_init_finished(ensureMapping)
+	__xgo_link_on_init_finished(ensureTypeMapping)
 }
 
 // rewrite at compile time by compiler, the body will be replaced with
@@ -27,6 +26,11 @@ func __xgo_link_retrieve_all_funcs_and_clear(f func(fn interface{})) {
 
 func __xgo_link_on_init_finished(f func()) {
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_init_finished(requires xgo).")
+}
+
+func __xgo_link_init_finished() bool {
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_init_finished(requires xgo).")
+	return false
 }
 
 func __xgo_link_get_pc_name(pc uintptr) string {
@@ -43,12 +47,10 @@ var interfaceMapping map[string]map[string]*core.FuncInfo        // pkg -> inter
 var typeMethodMapping map[reflect.Type]map[string]*core.FuncInfo // reflect.Type -> interfaceName -> FuncInfo
 
 func GetFuncs() []*core.FuncInfo {
-	ensureMapping()
 	return funcInfos
 }
 
 func InfoFunc(fn interface{}) *core.FuncInfo {
-	ensureMapping()
 	v := reflect.ValueOf(fn)
 	if v.Kind() != reflect.Func {
 		panic(fmt.Errorf("given type is not a func: %T", fn))
@@ -58,7 +60,6 @@ func InfoFunc(fn interface{}) *core.FuncInfo {
 	return funcPCMapping[pc]
 }
 func InfoVar(addr interface{}) *core.FuncInfo {
-	ensureMapping()
 	v := reflect.ValueOf(addr)
 	if v.Kind() != reflect.Ptr {
 		panic(fmt.Errorf("given type is not a pointer: %T", addr))
@@ -69,7 +70,6 @@ func InfoVar(addr interface{}) *core.FuncInfo {
 
 // maybe rename to FuncForPC
 func InfoPC(pc uintptr) *core.FuncInfo {
-	ensureMapping()
 	return funcPCMapping[pc]
 }
 
@@ -119,7 +119,6 @@ func GetFuncByFullName(fullName string) *core.FuncInfo {
 }
 
 func GetTypeMethods(typ reflect.Type) map[string]*core.FuncInfo {
-	ensureTypeMapping()
 	return typeMethodMapping[typ]
 }
 
@@ -288,7 +287,6 @@ func ensureMapping() {
 var mappingTypeOnce sync.Once
 
 func ensureTypeMapping() {
-	ensureMapping()
 	mappingTypeOnce.Do(func() {
 		typeMethodMapping = make(map[reflect.Type]map[string]*core.FuncInfo)
 		for _, funcInfo := range funcInfos {

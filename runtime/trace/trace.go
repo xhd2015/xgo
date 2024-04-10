@@ -2,7 +2,6 @@ package trace
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,8 +15,6 @@ import (
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/trap"
 )
-
-const __XGO_SKIP_TRAP = true
 
 // hold goroutine stacks, keyed by goroutine ptr
 var stackMap sync.Map        // uintptr(goroutine) -> *Root
@@ -70,19 +67,27 @@ func __xgo_link_peek_panic() interface{} {
 	return nil
 }
 
-var enabledGlobal int32
+var enabledGlobally bool
+var interceptorSet int32
 
-func Enable() {
-	if getTraceOutput() == "off" {
-		return
-	}
+// Enable setup the trace interceptor
+// if called from init, the interceptor is enabled
+// globally. Otherwise locally
+func Enable() func() {
 	if __xgo_link_init_finished() {
-		panic("Enable must be called from init")
+		var name string
+		key := uintptr(__xgo_link_getcurg())
+		tinfo, ok := testInfoMapping.Load(key)
+		if ok {
+			name = tinfo.(*testInfo).name
+		}
+		return enableLocal(&collectOpts{name: name})
 	}
-	if !atomic.CompareAndSwapInt32(&enabledGlobal, 0, 1) {
-		return
-	}
+	enabledGlobally = true
 	setupInterceptor()
+	return func() {
+		panic("global trace cannot be turned off")
+	}
 }
 
 // executes f and collect its trace
@@ -119,9 +124,12 @@ func (c *collectOpts) Collect(f func()) {
 	collect(f, c)
 }
 
-func setupInterceptor() func() {
+func setupInterceptor() {
+	if !atomic.CompareAndSwapInt32(&interceptorSet, 0, 1) {
+		return
+	}
 	// collect trace
-	return trap.AddInterceptor(&trap.Interceptor{
+	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 			key := uintptr(__xgo_link_getcurg())
 			localOptStack, ok := collectingMap.Load(key)
@@ -131,6 +139,8 @@ func setupInterceptor() func() {
 				if len(l.list) > 0 {
 					localOpts = l.list[len(l.list)-1]
 				}
+			} else if !enabledGlobally {
+				return nil, nil
 			}
 			stack := &Stack{
 				FuncInfo: f,
@@ -168,6 +178,7 @@ func setupInterceptor() func() {
 					localOpts.root = root
 				}
 				// NOTE: for initial stack, the data is nil
+				// this will signal Post to emit a trace
 				return nil, nil
 			}
 			var root *Root
@@ -183,7 +194,6 @@ func setupInterceptor() func() {
 			return prevTop, nil
 		},
 		Post: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object, data interface{}) error {
-			trap.Skip()
 			key := uintptr(__xgo_link_getcurg())
 
 			localOptStack, ok := collectingMap.Load(key)
@@ -193,6 +203,8 @@ func setupInterceptor() func() {
 				if len(l.list) > 0 {
 					localOpts = l.list[len(l.list)-1]
 				}
+			} else if !enabledGlobally {
+				return nil
 			}
 			var root *Root
 			if localOpts != nil {
@@ -227,25 +239,16 @@ func setupInterceptor() func() {
 			}
 			root.Top.End = int64(time.Since(root.Begin))
 			if data == nil {
+				root.Top = nil
 				// stack finished
 				if localOpts != nil {
-					if localOpts.onComplete != nil {
-						localOpts.onComplete(root)
-						return nil
-					}
-					err := emitTrace(localOpts.name, root)
-					if err != nil {
-						return err
-					}
+					// handled by local options
 					return nil
 				}
 
 				// global
 				stackMap.Delete(key)
-				err := emitTrace("", root)
-				if err != nil {
-					return err
-				}
+				emitTraceNoErr("", root)
 				return nil
 			}
 			// pop stack
@@ -262,28 +265,51 @@ type optStack struct {
 }
 
 func collect(f func(), collOpts *collectOpts) {
-	if atomic.LoadInt32(&enabledGlobal) == 0 {
-		cancel := setupInterceptor()
-		defer cancel()
+	cancel := enableLocal(collOpts)
+	defer cancel()
+	f()
+}
+
+func enableLocal(collOpts *collectOpts) func() {
+	if collOpts == nil {
+		collOpts = &collectOpts{}
 	}
+	setupInterceptor()
 	key := uintptr(__xgo_link_getcurg())
 	if collOpts.name == "" {
 		collOpts.name = fmt.Sprintf("g_%x", uint(key))
 	}
+	if collOpts.root == nil {
+		collOpts.root = &Root{
+			Top:   &Stack{},
+			Begin: time.Now(),
+		}
+	}
+	top := collOpts.root.Top
 
 	act, _ := collectingMap.LoadOrStore(key, &optStack{})
 	opts := act.(*optStack)
 
 	// push
 	opts.list = append(opts.list, collOpts)
-	defer func() {
+	return func() {
 		// pop
 		opts.list = opts.list[:len(opts.list)-1]
 		if len(opts.list) == 0 {
 			collectingMap.Delete(key)
 		}
-	}()
-	f()
+
+		root := collOpts.root
+		root.Children = top.Children
+		root.Top = nil
+		// root.Children =
+		// call complete
+		if collOpts.onComplete != nil {
+			collOpts.onComplete(root)
+		} else {
+			emitTraceNoErr(collOpts.name, root)
+		}
+	}
 }
 
 func getTraceOutput() string {
@@ -310,21 +336,20 @@ func fmtStack(root *Root) (data []byte, err error) {
 	if marshalStack != nil {
 		return marshalStack(root)
 	}
-	return json.Marshal(root.Export())
+	return MarshalAnyJSON(root.Export())
+}
+
+func emitTraceNoErr(name string, root *Root) {
+	emitTrace(name, root)
 }
 
 // this should also be marked as trap.Skip()
 // TODO: may add callback for this
 func emitTrace(name string, root *Root) error {
-	if name == "" {
-		key := uintptr(__xgo_link_getcurg())
-		tinfo, ok := testInfoMapping.Load(key)
-		if ok {
-			name = tinfo.(*testInfo).name
-		}
-	}
-
 	xgoTraceOutput := getTraceOutput()
+	if xgoTraceOutput == "off" {
+		return nil
+	}
 	useStdout := xgoTraceOutput == "stdout"
 	subName := name
 	if name == "" {

@@ -173,7 +173,10 @@ func buildRelease(releaseDirName string, installLocal bool, localName string, de
 		rev += fmt.Sprintf("_DEV_%s", time.Now().UTC().Format("2006-01-02T15:04:05Z"))
 	}
 
-	err = fixupSrcDir(tmpSrcDir, rev)
+	restore, err := fixupSrcDir(tmpSrcDir, rev)
+	if restore != nil {
+		defer restore()
+	}
 	if err != nil {
 		return err
 	}

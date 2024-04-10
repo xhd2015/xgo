@@ -11,7 +11,7 @@ import (
 func main() {
 	before := add(5, 2)
 	fmt.Printf("before mock: add(5,2)=%d\n", before)
-	mock.AddFuncInterceptor(add, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
+	mock.Mock(add, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
 		a := args.GetField("a").Value().(int)
 		b := args.GetField("b").Value().(int)
 		res := a - b
