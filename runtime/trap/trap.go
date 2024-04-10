@@ -34,17 +34,14 @@ func init() {
 		if isByPassing() {
 			return
 		}
-		interceptors := GetLocalInterceptors()
-		if len(interceptors) == 0 {
+		local := getLocalInterceptorList()
+		if local == nil || (len(local.head) == 0 && len(local.tail) == 0) {
 			return
 		}
-		copyInterceptors := make([]*Interceptor, len(interceptors))
-		copy(copyInterceptors, interceptors)
-
 		// inherit interceptors of last group
 		localInterceptors.Store(g, &interceptorGroup{
 			groups: []*interceptorList{{
-				list: copyInterceptors,
+				list: local.copy(),
 			}},
 		})
 	})

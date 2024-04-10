@@ -129,7 +129,7 @@ func setupInterceptor() {
 		return
 	}
 	// collect trace
-	trap.AddInterceptor(&trap.Interceptor{
+	trap.AddInterceptorHead(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 			key := uintptr(__xgo_link_getcurg())
 			localOptStack, ok := collectingMap.Load(key)

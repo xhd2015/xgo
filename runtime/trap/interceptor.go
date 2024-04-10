@@ -43,16 +43,46 @@ type Interceptor struct {
 	Post func(ctx context.Context, f *core.FuncInfo, args core.Object, result core.Object, data interface{}) error
 }
 
-var interceptors []*Interceptor
+type interceptorManager struct {
+	head []*Interceptor
+	tail []*Interceptor
+}
+
+func (c *interceptorManager) copy() *interceptorManager {
+	if c == nil {
+		return nil
+	}
+	head := make([]*Interceptor, len(c.head))
+	tail := make([]*Interceptor, len(c.tail))
+	copy(head, c.head)
+	copy(tail, c.tail)
+	return &interceptorManager{
+		head: head,
+		tail: tail,
+	}
+}
+
+var interceptors = &interceptorManager{}
 var localInterceptors sync.Map // goroutine ptr -> *interceptorGroup
 
 func AddInterceptor(interceptor *Interceptor) func() {
+	return addInterceptor(interceptor, false)
+}
+
+func AddInterceptorHead(interceptor *Interceptor) func() {
+	return addInterceptor(interceptor, true)
+}
+func addInterceptor(interceptor *Interceptor, head bool) func() {
 	ensureTrapInstall()
 	if __xgo_link_init_finished() {
-		dispose, _ := addLocalInterceptor(interceptor, false)
+		dispose, _ := addLocalInterceptor(interceptor, false, head)
 		return dispose
 	}
-	interceptors = append(interceptors, interceptor)
+	if head {
+		interceptors.head = append(interceptors.head, interceptor)
+	} else {
+		interceptors.tail = append(interceptors.tail, interceptor)
+	}
 	return func() {
 		panic("global interceptor cannot be cancelled, if you want to cancel a global interceptor, use WithInterceptor")
 	}
@@ -69,7 +99,7 @@ func AddInterceptor(interceptor *Interceptor) func() {
 // even from init because it will be soon cleared
 // without causing concurrent issues.
 func WithInterceptor(interceptor *Interceptor, f func()) {
-	dispose, _ := addLocalInterceptor(interceptor, false)
+	dispose, _ := addLocalInterceptor(interceptor, false, false)
 	defer dispose()
 	f()
 }
@@ -78,16 +108,39 @@ func WithInterceptor(interceptor *Interceptor, f func()) {
 // in current goroutine temporarily, it returns a function
 // that can be used to cancel the override.
 func WithOverride(interceptor *Interceptor, f func()) {
-	_, disposeGroup := addLocalInterceptor(interceptor, true)
+	_, disposeGroup := addLocalInterceptor(interceptor, true, false)
 	defer disposeGroup()
 	f()
 }
 
 func GetInterceptors() []*Interceptor {
-	return interceptors
+	return interceptors.getInterceptors()
+}
+
+func (c *interceptorManager) getInterceptors() []*Interceptor {
+	return mergeInterceptors(c.tail, c.head)
+}
+
+func mergeInterceptors(groups ...[]*Interceptor) []*Interceptor {
+	n := 0
+	for _, g := range groups {
+		n += len(g)
+	}
+	list := make([]*Interceptor, 0, n)
+	for _, g := range groups {
+		list = append(list, g...)
+	}
+	return list
 }
 
 func GetLocalInterceptors() []*Interceptor {
+	g := getLocalInterceptorList()
+	if g == nil {
+		return nil
+	}
+	return g.getInterceptors()
+}
+func getLocalInterceptorList() *interceptorManager {
 	group := getLocalInterceptorGroup()
 	if group == nil {
 		return nil
@@ -118,32 +171,30 @@ func GetAllInterceptors() []*Interceptor {
 
 func getAllInterceptors() ([]*Interceptor, int) {
 	group := getLocalInterceptorGroup()
-	var locals []*Interceptor
+	var localHead []*Interceptor
+	var localTail []*Interceptor
 	var g int
 	if group != nil {
 		gi := group.currentGroupInterceptors()
 		if gi != nil {
 			g = group.currentGroup()
 			if gi.override {
-				return gi.list, g
+				return gi.list.getInterceptors(), g
 			}
-			locals = gi.list
+			localHead = gi.list.head
+			localTail = gi.list.tail
 		}
 	}
-	global := GetInterceptors()
-	if len(locals) == 0 {
-		return global, g
-	}
-	if len(global) == 0 {
-		return locals, g
-	}
+	globalHead := interceptors.head
+	globalTail := interceptors.tail
+
 	// run locals first(in reversed order)
-	return append(global[:len(global):len(global)], locals...), g
+	return mergeInterceptors(globalTail, localTail, globalHead, localHead), g
 }
 
 // returns a function to dispose the key
 // NOTE: if not called correctly,there might be memory leak
-func addLocalInterceptor(interceptor *Interceptor, override bool) (removeInterceptor func(), removeGroup func()) {
+func addLocalInterceptor(interceptor *Interceptor, override bool, head bool) (removeInterceptor func(), removeGroup func()) {
 	ensureTrapInstall()
 	key := uintptr(__xgo_link_getcurg())
 	list := &interceptorGroup{}
@@ -156,7 +207,7 @@ func addLocalInterceptor(interceptor *Interceptor, override bool) (removeInterce
 		list.enterNewGroup(override)
 	}
 	g := list.currentGroup()
-	list.appendToCurrentGroup(interceptor)
+	list.appendToCurrentGroup(interceptor, head)
 
 	removedInterceptor := false
 	// used to remove the local interceptor
@@ -172,7 +223,12 @@ func addLocalInterceptor(interceptor *Interceptor, override bool) (removeInterce
 		if curG != g {
 			panic(fmt.Errorf("interceptor group changed: previous=%d, current=%d", g, curG))
 		}
-		interceptors := list.groups[g].list
+		manager := list.groups[g].list
+
+		interceptors := manager.tail
+		if head {
+			interceptors = manager.head
+		}
 		removedInterceptor = true
 		var idx int = -1
 		for i, intc := range interceptors {
@@ -189,7 +245,11 @@ func addLocalInterceptor(interceptor *Interceptor, override bool) (removeInterce
 			interceptors[i] = interceptors[i+1]
 		}
 		interceptors = interceptors[:n-1]
-		list.groups[g].list = interceptors
+		if head {
+			manager.head = interceptors
+		} else {
+			manager.tail = interceptors
+		}
 	}
 
 	removedGroup := false
@@ -218,16 +278,20 @@ type interceptorGroup struct {
 
 type interceptorList struct {
 	override bool
-	list     []*Interceptor
+	list     *interceptorManager
 }
 
-func (c *interceptorList) append(interceptor *Interceptor) {
-	c.list = append(c.list, interceptor)
+func (c *interceptorList) append(interceptor *Interceptor, head bool) {
+	if head {
+		c.list.head = append(c.list.head, interceptor)
+	} else {
+		c.list.tail = append(c.list.tail, interceptor)
+	}
 }
 
-func (c *interceptorGroup) appendToCurrentGroup(interceptor *Interceptor) {
+func (c *interceptorGroup) appendToCurrentGroup(interceptor *Interceptor, head bool) {
 	g := c.currentGroup()
-	c.groups[g].append(interceptor)
+	c.groups[g].append(interceptor, head)
 }
 
 func (c *interceptorGroup) groupsEmpty() bool {
@@ -248,7 +312,7 @@ func (c *interceptorGroup) currentGroupInterceptors() *interceptorList {
 func (c *interceptorGroup) enterNewGroup(override bool) {
 	c.groups = append(c.groups, &interceptorList{
 		override: override,
-		list:     make([]*Interceptor, 0, 1),
+		list:     &interceptorManager{},
 	})
 }
 func (c *interceptorGroup) exitGroup() {

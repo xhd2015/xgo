@@ -6,9 +6,9 @@ import (
 	"os"
 )
 
-const VERSION = "1.0.21"
-const REVISION = "60d0e314753d95e7d630a307ef991ac7bc21807e+1"
-const NUMBER = 173
+const VERSION = "1.0.22"
+const REVISION = "f34bf4ca38af8b5adcf36b67de5ea6fb853e4823+1"
+const NUMBER = 174
 
 // these fields will be filled by compiler
 const XGO_VERSION = ""
@@ -24,7 +24,7 @@ func init() {
 	}
 	err := checkVersion()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: xgo toolchain: %v\nnote: this message can be turned off by setting %s=true\n", err, XGO_CHECK_TOOLCHAIN_VERSION)
+		fmt.Fprintf(os.Stderr, "WARNING: xgo toolchain: %v\nnote: this message can be turned off by setting %s=false\n", err, XGO_CHECK_TOOLCHAIN_VERSION)
 	}
 }
 
