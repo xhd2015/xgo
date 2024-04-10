@@ -16,7 +16,7 @@ func TestTraceJSONOutput(t *testing.T) {
 		t.Fatal(getErrMsg(err))
 	}
 
-	// t.Logf("%s", output)
+	t.Logf("%s", output)
 	expectLines := []string{
 		// output
 		"A\nB\nC\nC\n",
@@ -53,7 +53,7 @@ func TestTracePanicCapture(t *testing.T) {
 		t.Fatal(getErrMsg(err))
 	}
 
-	// t.Logf("%s", output)
+	t.Logf("%s", output)
 
 	// output
 	expectOutputLines := []string{

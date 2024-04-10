@@ -1,6 +1,7 @@
 package func_list
 
 import (
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net"
@@ -20,6 +21,7 @@ var _ = ioutil.ReadAll
 var _ = ioutil.ReadFile
 var _ = ioutil.ReadDir
 var _ = io.ReadAll
+var _ json.Encoder
 
 // go run ./cmd/xgo test --project-dir runtime -run TestListStdlib -v ./test/func_list
 func TestListStdlib(t *testing.T) {
@@ -71,6 +73,9 @@ func TestListStdlib(t *testing.T) {
 		"net.DialUDP":     true,
 		"net.DialUnix":    true,
 		"net.DialTimeout": true,
+
+		//json
+		"encoding/json.newTypeEncoder": true,
 	}
 	found, missing := getMissing(funcs, stdPkgs, false)
 	if len(missing) > 0 {

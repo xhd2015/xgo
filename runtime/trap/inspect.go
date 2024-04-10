@@ -1,7 +1,6 @@
 package trap
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -21,6 +20,8 @@ func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
 	recvPtr, funcInfo, _, _ = InspectPC(f)
 	return
 }
+
+type inspectingFunc func(f *core.FuncInfo, recv interface{}, pc uintptr)
 
 func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
 	fn := reflect.ValueOf(f)
@@ -49,13 +50,13 @@ func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, fun
 	// is implemented as closure, so we need to distinguish
 	// between true closure and generic function
 	var origFullName string
+	var needRecv bool
 	if !maybeClosureGeneric {
 		origFullName = __xgo_link_get_pc_name(funcPC)
 		fullName := origFullName
 
-		var isMethod bool
 		if strings.HasSuffix(fullName, methodSuffix) {
-			isMethod = true
+			needRecv = true
 			fullName = fullName[:len(fullName)-len(methodSuffix)]
 		}
 
@@ -66,23 +67,24 @@ func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, fun
 		if funcInfo.Closure && GenericImplIsClosure {
 			// maybe closure generic
 			maybeClosureGeneric = true
-		} else if !isMethod && !funcInfo.Generic {
+		} else if !needRecv && !funcInfo.Generic {
 			// plain function(not method, not generic)
 			return nil, funcInfo, funcPC, 0
 		}
 	}
 
-	WithInterceptor(&Interceptor{
-		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
-			trappingPC = GetTrappingPC()
-			funcInfo = f
-			if !maybeClosureGeneric {
-				// closure cannot have receiver pointer
-				recvPtr = args.GetFieldIndex(0).Ptr()
-			}
-			return nil, ErrAbort
-		},
-	}, func() {
+	key := uintptr(__xgo_link_getcurg())
+	ensureTrapInstall()
+	inspectingMap.Store(key, inspectingFunc(func(f *core.FuncInfo, recv interface{}, pc uintptr) {
+		trappingPC = pc
+		funcInfo = f
+		if needRecv {
+			// closure cannot have receiver pointer
+			recvPtr = recv
+		}
+	}))
+	defer inspectingMap.Delete(key)
+	callFn := func() {
 		fnType := fn.Type()
 		nargs := fnType.NumIn()
 		args := make([]reflect.Value, nargs)
@@ -94,8 +96,9 @@ func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, fun
 		} else {
 			fn.CallSlice(args)
 		}
-	})
-	if !maybeClosureGeneric && recvPtr == nil {
+	}
+	callFn()
+	if needRecv && recvPtr == nil {
 		if origFullName == "" {
 			origFullName = __xgo_link_get_pc_name(funcPC)
 		}

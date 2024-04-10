@@ -84,11 +84,6 @@ func getMethodByName(instance interface{}, method string) (recvPtr interface{}, 
 	return addr.Interface(), fn, 0, 0
 }
 
-// Deprecated: use Mock instead
-func AddFuncInterceptor(fn interface{}, interceptor Interceptor) func() {
-	return Mock(fn, interceptor)
-}
-
 // TODO: ensure them run in last?
 // no abort, run mocks
 // mocks are special in that they on run in pre stage

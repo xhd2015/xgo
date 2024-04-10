@@ -15,10 +15,20 @@ var setupOnce sync.Once
 
 func ensureTrapInstall() {
 	setupOnce.Do(func() {
-		__xgo_link_set_trap(trapFunc)
-		__xgo_link_set_trap_var(trapVar)
+		// do not capture trap before init finished
+		if __xgo_link_init_finished() {
+			__xgo_link_set_trap(trapFunc)
+			__xgo_link_set_trap_var(trapVar)
+		} else {
+			// deferred
+			__xgo_link_on_init_finished(func() {
+				__xgo_link_set_trap(trapFunc)
+				__xgo_link_set_trap_var(trapVar)
+			})
+		}
 	})
 }
+
 func init() {
 	__xgo_link_on_gonewproc(func(g uintptr) {
 		if isByPassing() {
@@ -31,9 +41,11 @@ func init() {
 		copyInterceptors := make([]*Interceptor, len(interceptors))
 		copy(copyInterceptors, interceptors)
 
-		// inherit interceptors
-		localInterceptors.Store(g, &interceptorList{
-			interceptors: copyInterceptors,
+		// inherit interceptors of last group
+		localInterceptors.Store(g, &interceptorGroup{
+			groups: []*interceptorList{{
+				list: copyInterceptors,
+			}},
 		})
 	})
 }
@@ -48,6 +60,9 @@ func __xgo_link_set_trap_var(trap func(pkgPath string, name string, tmpVarAddr i
 func __xgo_link_on_gonewproc(f func(g uintptr)) {
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_gonewproc(requires xgo).")
 }
+func __xgo_link_on_init_finished(f func()) {
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_init_finished(requires xgo).")
+}
 
 // Skip serves as mark to tell xgo not insert
 // trap instructions for the function that
@@ -60,17 +75,26 @@ func Skip() {}
 var trappingMark sync.Map // <goroutine key> -> struct{}{}
 var trappingPC sync.Map   // <gorotuine key> -> PC
 
+var inspectingMap sync.Map // <goroutine key> -> interceptor
+
 // link to runtime
 // xgo:notrap
 func trapFunc(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	interceptors := GetAllInterceptors()
-	n := len(interceptors)
-	if n == 0 {
+	if isByPassing() {
 		return nil, false
 	}
-	// setup context
-	setTrappingPC(pc)
-	defer clearTrappingPC()
+	inspectingFn, inspecting := inspectingMap.Load(uintptr(__xgo_link_getcurg()))
+	var interceptors []*Interceptor
+	var group int
+	var n int
+	if !inspecting {
+		// never trap any function from runtime
+		interceptors, group = getAllInterceptors()
+		n = len(interceptors)
+		if n == 0 {
+			return nil, false
+		}
+	}
 
 	// NOTE: this may return nil for generic template
 	var f *core.FuncInfo
@@ -90,11 +114,23 @@ func trapFunc(pkgPath string, identityName string, generic bool, pc uintptr, rec
 		// let go to the next interceptor
 		return nil, false
 	}
-	return trap(f, interceptors, recv, args, results)
+	if inspecting {
+		inspectingFn.(inspectingFunc)(f, recv, pc)
+		// abort,never really call the target
+		return nil, true
+	}
+
+	// setup context
+	setTrappingPC(pc)
+	defer clearTrappingPC()
+	return trap(f, interceptors, group, recv, args, results)
 }
 
 func trapVar(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool) {
-	interceptors := GetAllInterceptors()
+	if isByPassing() {
+		return
+	}
+	interceptors, group := getAllInterceptors()
 	n := len(interceptors)
 	if n == 0 {
 		return
@@ -111,18 +147,15 @@ func trapVar(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool)
 		return
 	}
 	// NOTE: stop always ignored because this is a simple get
-	post, _ := trap(fnInfo, interceptors, nil, nil, []interface{}{tmpVarAddr})
+	post, _ := trap(fnInfo, interceptors, group, nil, nil, []interface{}{tmpVarAddr})
 	if post != nil {
 		// NOTE: must in defer, because in post we
 		// may capture panic
 		defer post()
 	}
 }
-func trap(f *core.FuncInfo, interceptors []*Interceptor, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	if isByPassing() {
-		return nil, false
-	}
-	dispose := setTrappingMark()
+func trap(f *core.FuncInfo, interceptors []*Interceptor, group int, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
+	dispose := setTrappingMark(group)
 	if dispose == nil {
 		return nil, false
 	}
@@ -215,6 +248,8 @@ func trap(f *core.FuncInfo, interceptors []*Interceptor, recv interface{}, args 
 		ctx = context.TODO()
 	}
 
+	var firstPreErr error
+
 	abortIdx := -1
 	n := len(interceptors)
 	dataList := make([]interface{}, n)
@@ -227,50 +262,31 @@ func trap(f *core.FuncInfo, interceptors []*Interceptor, recv interface{}, args 
 		data, err := interceptor.Pre(ctx, f, req, resObject)
 		dataList[i] = data
 		if err != nil {
-			if err == ErrAbort {
-				abortIdx = i
-				// aborted
-				break
-			}
-			// handle error gracefully
-			if perr != nil {
-				*perr = err
-				return nil, true
-			} else {
-				panic(err)
-			}
+			// always break on error
+			firstPreErr = err
+			abortIdx = i
+			break
 		}
-	}
-	if abortIdx >= 0 {
-		// run Post immediately
-		for i := abortIdx; i < n; i++ {
-			interceptor := interceptors[i]
-			if interceptor.Post == nil {
-				continue
-			}
-			err := interceptor.Post(ctx, f, req, resObject, dataList[i])
-			if err != nil {
-				if err == ErrAbort {
-					return nil, true
-				}
-				if perr != nil {
-					*perr = err
-					return nil, true
-				} else {
-					panic(err)
-				}
-			}
-		}
-		return nil, true
 	}
 
+	// not really an error
+	if firstPreErr == ErrAbort {
+		firstPreErr = nil
+	}
+	// always run post in defer
 	return func() {
-		dispose := setTrappingMark()
+		dispose := setTrappingMark(group)
 		if dispose == nil {
 			return
 		}
 		defer dispose()
-		for i := 0; i < n; i++ {
+
+		var lastPostErr error = firstPreErr
+		idx := 0
+		if abortIdx != -1 {
+			idx = abortIdx
+		}
+		for i := idx; i < n; i++ {
 			interceptor := interceptors[i]
 			if interceptor.Post == nil {
 				continue
@@ -280,15 +296,17 @@ func trap(f *core.FuncInfo, interceptors []*Interceptor, recv interface{}, args 
 				if err == ErrAbort {
 					return
 				}
-				if perr != nil {
-					*perr = err
-					return
-				} else {
-					panic(err)
-				}
+				lastPostErr = err
 			}
 		}
-	}, false
+		if lastPostErr != nil {
+			if perr != nil {
+				*perr = lastPostErr
+			} else {
+				panic(lastPostErr)
+			}
+		}
+	}, abortIdx != -1
 }
 
 func GetTrappingPC() uintptr {
@@ -299,18 +317,30 @@ func GetTrappingPC() uintptr {
 	}
 	return val.(uintptr)
 }
-func setTrappingMark() func() {
+
+type trappingGroup struct {
+	m map[int]bool
+}
+
+func setTrappingMark(group int) func() {
 	key := uintptr(__xgo_link_getcurg())
-	_, trapping := trappingMark.LoadOrStore(key, struct{}{})
-	if trapping {
-		return nil
+	g := &trappingGroup{}
+	v, loaded := trappingMark.LoadOrStore(key, g)
+	if loaded {
+		g = v.(*trappingGroup)
+		if g.m[group] {
+			return nil
+		}
+	} else {
+		g.m = make(map[int]bool, 1)
 	}
+	g.m[group] = true
 	return func() {
-		trappingMark.Delete(key)
+		g.m[group] = false
 	}
 }
 
-func clearTrappingMark() {
+func clearTrappingMarkAllGroup() {
 	key := uintptr(__xgo_link_getcurg())
 	trappingMark.Delete(key)
 }

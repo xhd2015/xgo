@@ -167,7 +167,7 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 		// need copy, delete target dst dir first
 		// TODO: use git worktree add if .git exists
 		err = filecopy.NewOptions().
-			Concurrent(10).
+			Concurrent(2). // 10 is too much
 			CopyReplaceDir(goroot, instrumentGoroot)
 		if err != nil {
 			return err

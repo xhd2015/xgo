@@ -98,13 +98,6 @@ func trapOrLink(fn *ir.Func) {
 
 	typeCheckBody(fn)
 	xgo_record.SetRewrittenBody(fn, fn.Body)
-
-	// debug
-	if false {
-		if fnName == "Now" {
-			ir.Dump("after:", fn)
-		}
-	}
 }
 
 /*
@@ -266,17 +259,16 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 	}, nil)
 
 	origBody := fn.Body
-	newBody := make([]ir.Node, 1+len(origBody))
-	newBody[0] = callAfter
+	newBody := make([]ir.Node, len(origBody))
 	for i := 0; i < len(origBody); i++ {
-		newBody[i+1] = origBody[i]
+		newBody[i] = origBody[i]
 	}
 	ifStmt := ir.NewIfStmt(fnPos, stopV, nil, newBody)
 
 	if isClosure {
 		trappedClosures = append(trappedClosures, fn)
 	}
-	fn.Body = []ir.Node{assignStmt, ifStmt}
+	fn.Body = []ir.Node{assignStmt, callAfter, ifStmt}
 	return true
 }
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -21,7 +20,7 @@ func TestTracePanicPeek(t *testing.T) {
 	var traceData []byte
 	trace.Options().OnComplete(func(root *trace.Root) {
 		var err error
-		traceData, err = json.Marshal(root.Export())
+		traceData, err = trace.MarshalAnyJSON(root.Export())
 		if err != nil {
 			t.Fatal(err)
 		}

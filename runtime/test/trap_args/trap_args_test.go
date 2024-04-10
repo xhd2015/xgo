@@ -98,7 +98,7 @@ func callAndCheck(fn func(), check func(trapCtx context.Context, f *core.FuncInf
 	fn()
 
 	if callCount != 2 {
-		fmt.Errorf("expect call trap twice, actual: %d", callCount)
+		return fmt.Errorf("expect call trap twice, actual: %d", callCount)
 	}
 	return nil
 }

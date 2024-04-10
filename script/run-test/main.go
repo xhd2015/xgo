@@ -15,9 +15,9 @@ import (
 // usage:
 //
 //	go run ./script/run-test/ --include go1.19.13
-//	go run ./script/run-test/ --include go1.19.13 -count=1
+//	go run ./script/run-test/ -count=1 --include go1.19.13
 //	go run ./script/run-test/ --include go1.19.13 -run TestHelloWorld -v
-//	go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
+//	go run ./script/run-test/ -count=1 --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.2
 //  go run ./script/run-test/ -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile covers/cover.out --include go1.21.8
 
 // runtime test:
@@ -34,10 +34,13 @@ import (
 
 // TODO: remove duplicate test between xgo test and runtime test
 var runtimeSubTests = []string{
-	"trace_panic_peek",
 	"func_list",
-	"trap_inspect_func",
 	"trap",
+	"trap_inspect_func",
+	"trap_args",
+	"trace",
+	"trace_marshal",
+	"trace_panic_peek",
 	"mock_func",
 	"mock_method",
 	"mock_by_name",
@@ -45,7 +48,6 @@ var runtimeSubTests = []string{
 	"mock_stdlib",
 	"mock_generic",
 	"mock_var",
-	"trap_args",
 	"patch",
 	"patch_const",
 }
@@ -397,7 +399,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 			)
 		}
 	case testKind_runtimeSubTest:
-		testArgs = []string{"run", "./cmd/xgo", "test", "--project-dir", "runtime/test", "-tags", "dev"}
+		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test", "--project-dir", "runtime/test"}
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)

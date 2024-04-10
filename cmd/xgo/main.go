@@ -287,7 +287,7 @@ func handleBuild(cmd string, args []string) error {
 			return err
 		}
 
-		if resetInstrument || revisionChanged {
+		if resetInstrument {
 			logDebug("revision changed, reset %s", instrumentDir)
 			err := os.RemoveAll(instrumentDir)
 			if err != nil {
