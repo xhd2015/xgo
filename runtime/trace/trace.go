@@ -75,13 +75,7 @@ var interceptorSet int32
 // globally. Otherwise locally
 func Enable() func() {
 	if __xgo_link_init_finished() {
-		var name string
-		key := uintptr(__xgo_link_getcurg())
-		tinfo, ok := testInfoMapping.Load(key)
-		if ok {
-			name = tinfo.(*testInfo).name
-		}
-		return enableLocal(&collectOpts{name: name})
+		return enableLocal(nil)
 	}
 	enabledGlobally = true
 	setupInterceptor()
@@ -100,10 +94,18 @@ func Collect(f func()) {
 	collect(f, &collectOpts{})
 }
 
+func Begin(f func()) func() {
+	if !__xgo_link_init_finished() {
+		panic("Begin cannot be called from init")
+	}
+	return enableLocal(&collectOpts{})
+}
+
 type collectOpts struct {
-	name       string
-	onComplete func(root *Root)
-	root       *Root
+	name          string
+	onComplete    func(root *Root)
+	root          *Root
+	exportOptions *ExportOptions
 }
 
 func Options() *collectOpts {
@@ -120,8 +122,17 @@ func (c *collectOpts) OnComplete(f func(root *Root)) *collectOpts {
 	return c
 }
 
+func (c *collectOpts) WithExport(expOpts *ExportOptions) *collectOpts {
+	c.exportOptions = expOpts
+	return c
+}
+
 func (c *collectOpts) Collect(f func()) {
 	collect(f, c)
+}
+
+func (c *collectOpts) Begin() func() {
+	return enableLocal(c)
 }
 
 func setupInterceptor() {
@@ -252,7 +263,7 @@ func setupInterceptor() {
 
 				// global
 				stackMap.Delete(key)
-				emitTraceNoErr("", root)
+				emitTraceNoErr("", root, nil)
 				return nil
 			}
 			// pop stack
@@ -269,8 +280,8 @@ type optStack struct {
 }
 
 func collect(f func(), collOpts *collectOpts) {
-	cancel := enableLocal(collOpts)
-	defer cancel()
+	finish := enableLocal(collOpts)
+	defer finish()
 	f()
 }
 
@@ -281,7 +292,16 @@ func enableLocal(collOpts *collectOpts) func() {
 	setupInterceptor()
 	key := uintptr(__xgo_link_getcurg())
 	if collOpts.name == "" {
-		collOpts.name = fmt.Sprintf("g_%x", uint(key))
+		var name string
+		key := uintptr(__xgo_link_getcurg())
+		tinfo, ok := testInfoMapping.Load(key)
+		if ok {
+			name = tinfo.(*testInfo).name
+		}
+		if name == "" {
+			name = fmt.Sprintf("g_%x", uint(key))
+		}
+		collOpts.name = name
 	}
 	if collOpts.root == nil {
 		collOpts.root = &Root{
@@ -311,7 +331,7 @@ func enableLocal(collOpts *collectOpts) func() {
 		if collOpts.onComplete != nil {
 			collOpts.onComplete(root)
 		} else {
-			emitTraceNoErr(collOpts.name, root)
+			emitTraceNoErr(collOpts.name, root, collOpts.exportOptions)
 		}
 	}
 }
@@ -328,7 +348,7 @@ func SetMarshalStack(fn func(root *Root) ([]byte, error)) {
 	marshalStack = fn
 }
 
-func fmtStack(root *Root) (data []byte, err error) {
+func fmtStack(root *Root, opts *ExportOptions) (data []byte, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			if pe, ok := e.(error); ok {
@@ -342,11 +362,11 @@ func fmtStack(root *Root) (data []byte, err error) {
 	if marshalStack != nil {
 		return marshalStack(root)
 	}
-	return MarshalAnyJSON(root.Export())
+	return MarshalAnyJSON(root.Export(opts))
 }
 
-func emitTraceNoErr(name string, root *Root) {
-	emitTrace(name, root)
+func emitTraceNoErr(name string, root *Root, opts *ExportOptions) {
+	emitTrace(name, root, opts)
 }
 
 func getNow() (now time.Time) {
@@ -364,7 +384,7 @@ func formatTime(t time.Time, layout string) (output string) {
 
 // this should also be marked as trap.Skip()
 // TODO: may add callback for this
-func emitTrace(name string, root *Root) error {
+func emitTrace(name string, root *Root, opts *ExportOptions) error {
 	xgoTraceOutput := getTraceOutput()
 	if xgoTraceOutput == "off" {
 		return nil
@@ -389,7 +409,7 @@ func emitTrace(name string, root *Root) error {
 		fmt.Printf("%s: ", subName)
 	}
 	var traceOut []byte
-	trace, stackErr := fmtStack(root)
+	trace, stackErr := fmtStack(root, opts)
 	if stackErr != nil {
 		traceOut = []byte("error:" + stackErr.Error())
 	} else {
