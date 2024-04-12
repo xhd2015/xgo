@@ -67,6 +67,28 @@ func TestMarshalAnyJSON(t *testing.T) {
 	}
 }
 
+type cyclic struct {
+	Self *cyclic
+	Name string
+}
+
+func TestMarshalCyclicJSON(t *testing.T) {
+	c := &cyclic{
+		Name: "cyclic",
+	}
+	c.Self = c
+
+	res, err := trace.MarshalAnyJSON(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resStr := string(res)
+	expect := `{"Self":null,"Name":"cyclic"}`
+	if resStr != expect {
+		t.Fatalf("expect res to be %q, actual: %q", expect, resStr)
+	}
+}
+
 func exampleReturnFunc() context.CancelFunc {
 	_, f := context.WithTimeout(context.TODO(), 10*time.Millisecond)
 	return f

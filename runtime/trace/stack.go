@@ -19,40 +19,49 @@ type Stack struct {
 	Begin int64 // us
 	End   int64 // us
 
-	Args    core.Object
-	Results core.Object
-	Panic   bool
-	Error   error
-	// Recv     interface{}
-	// Args     []interface{}
-	// Results  []interface{}
+	Args     core.Object
+	Results  core.Object
+	Panic    bool
+	Error    error
 	Children []*Stack
 }
 
-func (c *Root) Export() *RootExport {
+// allow skip some packages
+//
+//	for example: google.golang.org/protobuf/internal/order
+type ExportOptions struct {
+	FilterStack func(stack *StackExport) *StackExport
+}
+
+func (c *Root) Export(opts *ExportOptions) *RootExport {
 	if c == nil {
 		return nil
 	}
 	return &RootExport{
 		Begin:    c.Begin,
-		Children: (stacks)(c.Children).Export(),
+		Children: (stacks)(c.Children).Export(opts),
 	}
 }
 
 type stacks []*Stack
 
-func (c stacks) Export() []*StackExport {
+func (c stacks) Export(opts *ExportOptions) []*StackExport {
 	if c == nil {
 		return nil
 	}
-	list := make([]*StackExport, len(c))
+	list := make([]*StackExport, 0, len(c))
 	for i := 0; i < len(c); i++ {
-		list[i] = c[i].Export()
+		stackPoint := c[i]
+		exportStack := stackPoint.Export(opts)
+		if exportStack == nil {
+			continue
+		}
+		list = append(list, exportStack)
 	}
 	return list
 }
 
-func (c *Stack) Export() *StackExport {
+func (c *Stack) Export(opts *ExportOptions) *StackExport {
 	if c == nil {
 		return nil
 	}
@@ -60,19 +69,24 @@ func (c *Stack) Export() *StackExport {
 	if c.Error != nil {
 		errMsg = c.Error.Error()
 	}
-	return &StackExport{
-		FuncInfo: ExportFuncInfo(c.FuncInfo),
+	stack := &StackExport{
+		FuncInfo: ExportFuncInfo(c.FuncInfo, opts),
 		Begin:    c.Begin,
 		End:      c.End,
 		Args:     c.Args,
 		Results:  c.Results,
 		Panic:    c.Panic,
 		Error:    errMsg,
-		Children: (stacks)(c.Children).Export(),
+		Children: ((stacks)(c.Children)).Export(opts),
 	}
+
+	if opts != nil && opts.FilterStack != nil {
+		return opts.FilterStack(stack)
+	}
+	return stack
 }
 
-func ExportFuncInfo(c *core.FuncInfo) *FuncInfoExport {
+func ExportFuncInfo(c *core.FuncInfo, opts *ExportOptions) *FuncInfoExport {
 	if c == nil {
 		return nil
 	}
