@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-
-	"github.com/xhd2015/xgo/runtime/trace"
 )
 
 type _struct struct {
@@ -16,7 +14,7 @@ func TestDecyclicUnexported(t *testing.T) {
 	s := &_struct{}
 	s.self = s
 
-	vs := trace.Decyclic(s)
+	vs := Decyclic(s)
 	if vs.(*_struct).self != nil {
 		t.Fatalf("expect vs.self to be nil")
 	}
@@ -37,22 +35,22 @@ func TestDecyclicMapValue(t *testing.T) {
 		t.Fatalf("expect v1.m['self'] to be non nil")
 	}
 
-	vs := trace.Decyclic(s)
+	vs := Decyclic(s)
 	if vs.(*_structMap).m["self"] != nil {
 		t.Fatalf("expect vs.m['self'] to be nil")
 	}
 }
 
-type _interface struct {
+type _structWithIntf struct {
 	self interface{}
 }
 
 func TestDecyclicInterface(t *testing.T) {
-	s := &_interface{}
+	s := &_structWithIntf{}
 	s.self = s
 
-	vs := trace.Decyclic(s)
-	if vs.(*_interface).self != nil {
+	vs := Decyclic(s)
+	if vs.(*_structWithIntf).self != nil {
 		t.Fatalf("expect vs.self to be nil")
 	}
 }
@@ -66,7 +64,7 @@ func TestDecyclicValueStruct(t *testing.T) {
 		A: 123,
 	}
 
-	vs := trace.Decyclic(s)
+	vs := Decyclic(s)
 	vsA := vs.(_valueStruct).A
 	if vsA != 123 {
 		t.Fatalf("vs.A: %v", vsA)
@@ -77,9 +75,26 @@ func TestDecyclicMapInterface(t *testing.T) {
 	m := make(map[string]interface{})
 	m["A"] = 123
 
-	vs := trace.Decyclic(m)
+	vs := Decyclic(m)
 	vsA := vs.(map[string]interface{})["A"]
 	if fmt.Sprint(vsA) != "123" {
 		t.Fatalf("vs.A: %v", vsA)
+	}
+}
+
+type byteSliceHolder struct {
+	slice []byte
+}
+
+func TestDecyclicLargeByteSlice(t *testing.T) {
+	s := &byteSliceHolder{
+		slice: make([]byte, 10*1024+1),
+	}
+	vs := Decyclic(s)
+	vslice := vs.(*byteSliceHolder).slice
+
+	// 16 + ... + 16
+	if len(vslice) != 35 {
+		t.Logf("expect len to be %d, actual: %v", 35, len(vslice))
 	}
 }
