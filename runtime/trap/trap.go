@@ -15,17 +15,20 @@ var setupOnce sync.Once
 
 func ensureTrapInstall() {
 	setupOnce.Do(func() {
-		// do not capture trap before init finished
-		if __xgo_link_init_finished() {
-			__xgo_link_set_trap(trapFunc)
-			__xgo_link_set_trap_var(trapVar)
-		} else {
-			// deferred
-			__xgo_link_on_init_finished(func() {
-				__xgo_link_set_trap(trapFunc)
-				__xgo_link_set_trap_var(trapVar)
-			})
-		}
+		// set trap once needed, no matter it
+		// is inside init or not
+		__xgo_link_set_trap(trapFunc)
+		__xgo_link_set_trap_var(trapVar)
+
+		// // do not capture trap before init finished
+		// if __xgo_link_init_finished() {
+		// } else {
+		// 	// deferred
+		// 	__xgo_link_on_init_finished(func() {
+		// 		__xgo_link_set_trap(trapFunc)
+		// 		__xgo_link_set_trap_var(trapVar)
+		// 	})
+		// }
 	})
 }
 
@@ -69,10 +72,29 @@ func __xgo_link_on_init_finished(f func()) {
 // sense at compile time.
 func Skip() {}
 
-var trappingMark sync.Map // <goroutine key> -> struct{}{}
-var trappingPC sync.Map   // <gorotuine key> -> PC
+var stackMapping sync.Map // <goroutine key> -> root
 
 var inspectingMap sync.Map // <goroutine key> -> interceptor
+
+type root struct {
+	top          *stack
+	intercepting bool // is executing intercepting? to avoid re-entrance
+}
+
+type stack struct {
+	parent   *stack
+	funcInfo *core.FuncInfo
+	stage    stage
+	pc       uintptr // the actual pc
+}
+
+type stage int
+
+const (
+	stage_pre     stage = 0
+	stage_execute stage = 1
+	stage_post    stage = 2
+)
 
 // link to runtime
 // xgo:notrap
@@ -81,17 +103,6 @@ func trapFunc(pkgPath string, identityName string, generic bool, pc uintptr, rec
 		return nil, false
 	}
 	inspectingFn, inspecting := inspectingMap.Load(uintptr(__xgo_link_getcurg()))
-	var interceptors []*Interceptor
-	var group int
-	var n int
-	if !inspecting {
-		// never trap any function from runtime
-		interceptors, group = getAllInterceptors()
-		n = len(interceptors)
-		if n == 0 {
-			return nil, false
-		}
-	}
 
 	// NOTE: this may return nil for generic template
 	var f *core.FuncInfo
@@ -116,20 +127,16 @@ func trapFunc(pkgPath string, identityName string, generic bool, pc uintptr, rec
 		// abort,never really call the target
 		return nil, true
 	}
+	// f is an interceptor or ignored by user
+	if funcIgnored(f) {
+		return nil, false
+	}
 
-	// setup context
-	setTrappingPC(pc)
-	defer clearTrappingPC()
-	return trap(f, interceptors, group, recv, args, results)
+	return trap(f, pc, recv, args, results)
 }
 
 func trapVar(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool) {
 	if isByPassing() {
-		return
-	}
-	interceptors, group := getAllInterceptors()
-	n := len(interceptors)
-	if n == 0 {
 		return
 	}
 	identityName := name
@@ -144,19 +151,50 @@ func trapVar(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool)
 		return
 	}
 	// NOTE: stop always ignored because this is a simple get
-	post, _ := trap(fnInfo, interceptors, group, nil, nil, []interface{}{tmpVarAddr})
+	post, _ := trap(fnInfo, 0, nil, nil, []interface{}{tmpVarAddr})
 	if post != nil {
 		// NOTE: must in defer, because in post we
 		// may capture panic
 		defer post()
 	}
 }
-func trap(f *core.FuncInfo, interceptors []*Interceptor, group int, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	dispose := setTrappingMark(group)
-	if dispose == nil {
+func trap(f *core.FuncInfo, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
+	// never trap any function from runtime
+	key := uintptr(__xgo_link_getcurg())
+	r := &root{}
+	rv, loaded := stackMapping.LoadOrStore(key, r)
+	if loaded {
+		r = rv.(*root)
+	}
+	// fmt.Printf("trap: %s.%s intercepting=%v\n", f.Pkg, f.IdentityName, r.intercepting)
+	interceptors, _ := getAllInterceptors(f, !r.intercepting)
+	n := len(interceptors)
+	if n == 0 {
 		return nil, false
 	}
-	defer dispose()
+
+	var resetFlag bool
+	parent := r.top
+	if !r.intercepting {
+		resetFlag = true
+		r.intercepting = true
+		defer func() {
+			r.intercepting = false
+		}()
+	}
+	stack := &stack{
+		parent:   parent,
+		funcInfo: f,
+		stage:    stage_pre,
+		pc:       pc,
+	}
+	r.top = stack
+
+	// dispose := setTrappingMark(group, f)
+	// if dispose == nil {
+	// 	return nil, false
+	// }
+	// defer dispose()
 
 	// retrieve context
 	var ctx context.Context
@@ -248,8 +286,8 @@ func trap(f *core.FuncInfo, interceptors []*Interceptor, group int, recv interfa
 	var firstPreErr error
 
 	abortIdx := -1
-	n := len(interceptors)
 	dataList := make([]interface{}, n)
+	skipIndex := make([]bool, n)
 	for i := n - 1; i >= 0; i-- {
 		interceptor := interceptors[i]
 		if interceptor.Pre == nil {
@@ -259,6 +297,10 @@ func trap(f *core.FuncInfo, interceptors []*Interceptor, group int, recv interfa
 		data, err := interceptor.Pre(ctx, f, req, resObject)
 		dataList[i] = data
 		if err != nil {
+			if err == ErrSkip {
+				skipIndex[i] = true
+				continue
+			}
 			// always break on error
 			firstPreErr = err
 			abortIdx = i
@@ -270,13 +312,20 @@ func trap(f *core.FuncInfo, interceptors []*Interceptor, group int, recv interfa
 	if firstPreErr == ErrAbort {
 		firstPreErr = nil
 	}
+	stack.stage = stage_execute
 	// always run post in defer
 	return func() {
-		dispose := setTrappingMark(group)
-		if dispose == nil {
-			return
+		stack.stage = stage_post
+		defer func() {
+			r.top = parent
+		}()
+
+		if resetFlag {
+			r.intercepting = true
+			defer func() {
+				r.intercepting = false
+			}()
 		}
-		defer dispose()
 
 		var lastPostErr error = firstPreErr
 		idx := 0
@@ -286,6 +335,9 @@ func trap(f *core.FuncInfo, interceptors []*Interceptor, group int, recv interfa
 		for i := idx; i < n; i++ {
 			interceptor := interceptors[i]
 			if interceptor.Post == nil {
+				continue
+			}
+			if skipIndex[i] {
 				continue
 			}
 			err := interceptor.Post(ctx, f, req, resObject, dataList[i])
@@ -308,46 +360,21 @@ func trap(f *core.FuncInfo, interceptors []*Interceptor, group int, recv interfa
 
 func GetTrappingPC() uintptr {
 	key := uintptr(__xgo_link_getcurg())
-	val, ok := trappingPC.Load(key)
+	val, ok := stackMapping.Load(key)
 	if !ok {
 		return 0
 	}
-	return val.(uintptr)
-}
-
-type trappingGroup struct {
-	m map[int]bool
-}
-
-func setTrappingMark(group int) func() {
-	key := uintptr(__xgo_link_getcurg())
-	g := &trappingGroup{}
-	v, loaded := trappingMark.LoadOrStore(key, g)
-	if loaded {
-		g = v.(*trappingGroup)
-		if g.m[group] {
-			return nil
-		}
-	} else {
-		g.m = make(map[int]bool, 1)
+	top := val.(*root).top
+	if top == nil {
+		return 0
 	}
-	g.m[group] = true
-	return func() {
-		g.m[group] = false
-	}
+	return top.pc
 }
 
-func clearTrappingMarkAllGroup() {
+func clearLocalInterceptorsAndMark() {
 	key := uintptr(__xgo_link_getcurg())
-	trappingMark.Delete(key)
-}
+	localInterceptors.Delete(key)
+	bypassMapping.Delete(key)
 
-func setTrappingPC(pc uintptr) {
-	key := uintptr(__xgo_link_getcurg())
-	trappingPC.Store(key, pc)
-}
-
-func clearTrappingPC() {
-	key := uintptr(__xgo_link_getcurg())
-	trappingPC.Delete(key)
+	stackMapping.Delete(key)
 }

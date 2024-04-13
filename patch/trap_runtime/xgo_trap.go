@@ -78,20 +78,29 @@ func __xgo_set_trap_var(trap func(pkgPath string, name string, tmpVarAddr interf
 
 // NOTE: runtime has problem when using slice
 var __xgo_registered_func_infos []interface{}
+var __xgo_register_func_callback func(info interface{})
 
 // a function cannot have too many params, so use a struct to wrap them
 // the client should use reflect to retrieve these fields respectively
 
 func __xgo_register_func(info interface{}) {
+	if __xgo_register_func_callback != nil {
+		__xgo_register_func_callback(info)
+		return
+	}
 	__xgo_registered_func_infos = append(__xgo_registered_func_infos, info)
 }
 
 func __xgo_retrieve_all_funcs_and_clear(f func(info interface{})) {
-	for _, fn := range __xgo_registered_func_infos {
+	if __xgo_register_func_callback != nil {
+		panic("__xgo_register_func_callback already set")
+	}
+	__xgo_register_func_callback = f
+	funcInfos := __xgo_registered_func_infos
+	__xgo_registered_func_infos = nil // clear
+	for _, fn := range funcInfos {
 		f(fn)
 	}
-	// clear
-	__xgo_registered_func_infos = nil
 }
 
 var __xgo_is_init_finished bool

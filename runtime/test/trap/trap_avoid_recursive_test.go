@@ -13,7 +13,7 @@ import (
 
 // prints: pre->call_f->post
 // no repeation
-func TestNakedTrapShouldAvoidRecursive(t *testing.T) {
+func TestNakedTrapShouldAvoidRecursiveInterceptor(t *testing.T) {
 	var recurseBuf bytes.Buffer
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {

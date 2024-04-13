@@ -143,8 +143,11 @@ func convToEFace(pos src.XPos, x ir.Node, t *types.Type, ptr bool) *ir.ConvExpr 
 
 func isFirstStmtSkipTrap(nodes ir.Nodes) bool {
 	// NOTE: for performance reason, only check the first
-	if len(nodes) > 0 && isCallTo(nodes[0], xgoRuntimeTrapPkg, "Skip") {
-		return true
+	if len(nodes) > 0 {
+		firstNode := nodes[0]
+		if isCallTo(firstNode, xgoRuntimeTrapPkg, "Skip") || isCallToName(firstNode, "__xgo_trap_skip") {
+			return true
+		}
 	}
 	if false {
 		for _, node := range nodes {
@@ -157,6 +160,12 @@ func isFirstStmtSkipTrap(nodes ir.Nodes) bool {
 }
 
 func isCallTo(node ir.Node, pkgPath string, name string) bool {
+	return checkCall(node, pkgPath, name, true)
+}
+func isCallToName(node ir.Node, name string) bool {
+	return checkCall(node, "", name, false)
+}
+func checkCall(node ir.Node, pkgPath string, name string, checkPkg bool) bool {
 	callNode, ok := node.(*ir.CallExpr)
 	if !ok {
 		return false
@@ -169,7 +178,16 @@ func isCallTo(node ir.Node, pkgPath string, name string) bool {
 	if sym == nil {
 		return false
 	}
-	return sym.Pkg != nil && sym.Name == name && sym.Pkg.Path == pkgPath
+	if sym.Name != name {
+		return false
+	}
+	if !checkPkg {
+		return true
+	}
+	if sym.Pkg != nil && sym.Pkg.Path == pkgPath {
+		return true
+	}
+	return false
 }
 
 func newNilInterface(pos src.XPos) ir.Expr {

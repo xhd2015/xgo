@@ -2,7 +2,6 @@ package trap
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/core"
@@ -52,10 +51,8 @@ func run() {
 
 func A(ctx context.Context) {
 	hasCalledA = true
-	fmt.Printf("A\n")
 }
 
 func B() {
 	hasCalledB = true
-	fmt.Printf("B\n")
 }

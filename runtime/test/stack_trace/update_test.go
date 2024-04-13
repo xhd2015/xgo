@@ -7,6 +7,9 @@ import (
 )
 
 func init() {
+	if true {
+		panic("should not be run")
+	}
 	trace.Enable()
 }
 

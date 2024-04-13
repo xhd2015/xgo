@@ -131,6 +131,10 @@ func setupInterceptor() {
 	// collect trace
 	trap.AddInterceptorHead(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
+			if !__xgo_link_init_finished() {
+				// do not collect trace while init
+				return nil, trap.ErrSkip
+			}
 			key := uintptr(__xgo_link_getcurg())
 			localOptStack, ok := collectingMap.Load(key)
 			var localOpts *collectOpts
@@ -140,7 +144,7 @@ func setupInterceptor() {
 					localOpts = l.list[len(l.list)-1]
 				}
 			} else if !enabledGlobally {
-				return nil, nil
+				return nil, trap.ErrSkip
 			}
 			stack := &Stack{
 				FuncInfo: f,
@@ -166,7 +170,7 @@ func setupInterceptor() {
 				// initial stack
 				root := &Root{
 					Top:   stack,
-					Begin: time.Now(),
+					Begin: getNow(),
 					Children: []*Stack{
 						stack,
 					},
@@ -282,7 +286,7 @@ func enableLocal(collOpts *collectOpts) func() {
 	if collOpts.root == nil {
 		collOpts.root = &Root{
 			Top:   &Stack{},
-			Begin: time.Now(),
+			Begin: getNow(),
 		}
 	}
 	top := collOpts.root.Top
@@ -312,8 +316,10 @@ func enableLocal(collOpts *collectOpts) func() {
 	}
 }
 
+var traceOutput = os.Getenv("XGO_TRACE_OUTPUT")
+
 func getTraceOutput() string {
-	return os.Getenv("XGO_TRACE_OUTPUT")
+	return traceOutput
 }
 
 var marshalStack func(root *Root) ([]byte, error)
@@ -343,6 +349,19 @@ func emitTraceNoErr(name string, root *Root) {
 	emitTrace(name, root)
 }
 
+func getNow() (now time.Time) {
+	trap.Direct(func() {
+		now = time.Now()
+	})
+	return
+}
+func formatTime(t time.Time, layout string) (output string) {
+	trap.Direct(func() {
+		output = t.Format(layout)
+	})
+	return
+}
+
 // this should also be marked as trap.Skip()
 // TODO: may add callback for this
 func emitTrace(name string, root *Root) error {
@@ -357,7 +376,7 @@ func emitTrace(name string, root *Root) error {
 		ghex := fmt.Sprintf("g_%x", __xgo_link_getcurg())
 		traceID := "t_" + strconv.FormatInt(traceIDNum, 10)
 		if xgoTraceOutput == "" {
-			traceDir := time.Now().Format("trace_20060102_150405")
+			traceDir := formatTime(getNow(), "trace_20060102_150405")
 			subName = filepath.Join(traceDir, ghex, traceID)
 		} else if useStdout {
 			subName = fmt.Sprintf("%s/%s", ghex, traceID)
@@ -388,5 +407,8 @@ func emitTrace(name string, root *Root) error {
 	if err != nil {
 		return err
 	}
-	return WriteFile(subFile, traceOut, 0755)
+	trap.Direct(func() {
+		err = WriteFile(subFile, traceOut, 0755)
+	})
+	return err
 }

@@ -6,18 +6,35 @@
 package debug
 
 import (
-	"fmt"
+	"context"
+	"os"
 	"testing"
+	"time"
 
+	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
-func ToString[T any](v T) string {
-	return fmt.Sprint(v)
+func TestTimeNowNestedLevel2AllowNested(t *testing.T) {
+	i := 0
+	trap.AddInterceptor(&trap.Interceptor{
+		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			// t.Logf("%s.%s", f.Pkg, f.IdentityName)
+			i++
+			if i > 20 {
+				os.Exit(1)
+			}
+			getTime2()
+			return
+		},
+	})
+	time.Now()
 }
 
-func TestNakedTrapShouldAvoidRecursive(t *testing.T) {
-	trap.InspectPC(ToString[int])
-	// _, fnInfo, funcPC, trappingPC := trap.InspectPC(ToString[int])
-	// _, fnInfoStr, funcPCStr, trappingPCStr := trap.InspectPC(ToString[string])
+func getTime2() time.Time {
+	return getTime3()
+}
+
+func getTime3() time.Time {
+	return time.Now()
 }
