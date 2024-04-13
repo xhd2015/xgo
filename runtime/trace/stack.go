@@ -31,6 +31,8 @@ type Stack struct {
 //	for example: google.golang.org/protobuf/internal/order
 type ExportOptions struct {
 	FilterStack func(stack *StackExport) *StackExport
+	FilterRoot  func(root *RootExport) *RootExport
+	MarshalJSON func(root *RootExport) ([]byte, error)
 }
 
 func (c *Root) Export(opts *ExportOptions) *RootExport {

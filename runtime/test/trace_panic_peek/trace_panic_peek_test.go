@@ -20,7 +20,7 @@ func TestTracePanicPeek(t *testing.T) {
 	var traceData []byte
 	trace.Options().OnComplete(func(root *trace.Root) {
 		var err error
-		traceData, err = trace.MarshalAnyJSON(root.Export())
+		traceData, err = trace.MarshalAnyJSON(root.Export(nil))
 		if err != nil {
 			t.Fatal(err)
 		}

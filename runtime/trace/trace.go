@@ -362,7 +362,16 @@ func fmtStack(root *Root, opts *ExportOptions) (data []byte, err error) {
 	if marshalStack != nil {
 		return marshalStack(root)
 	}
-	return MarshalAnyJSON(root.Export(opts))
+	exportRoot := root.Export(opts)
+	if opts != nil {
+		if opts.FilterRoot != nil {
+			exportRoot = opts.FilterRoot(exportRoot)
+		}
+		if opts.MarshalJSON != nil {
+			return opts.MarshalJSON(exportRoot)
+		}
+	}
+	return MarshalAnyJSON(exportRoot)
 }
 
 func emitTraceNoErr(name string, root *Root, opts *ExportOptions) {
