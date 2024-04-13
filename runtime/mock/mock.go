@@ -93,7 +93,7 @@ func getMethodByName(instance interface{}, method string) (recvPtr interface{}, 
 //   - if mockRecvPtr has a value, then only call to that instance will be mocked
 //   - if mockRecvPtr is nil, then all call to the function will be mocked
 func mock(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr, interceptor Interceptor) func() {
-	return trap.AddInterceptor(&trap.Interceptor{
+	return trap.AddFuncInfoInterceptor(mockFnInfo, &trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
 			if f.Kind == core.Kind_Func && f.PC == 0 {
 				if !f.Generic {

@@ -36,6 +36,8 @@ xgo version
 #   1.0.x
 ```
 
+If `xgo` is not found, you may need to check if `$GOPATH/bin` is added to your `PATH` variable.
+
 There are other options,see [doc/INSTALLATION.md](./doc/INSTALLATION.md).
 
 # Requirement
@@ -60,7 +62,6 @@ xgo version
 # output
 #   1.0.x
 ```
-If `xgo` is not found, you may need to add `~/.xgo/bin` to your `PATH` variable.
 
 2. Init a go project:
 ```sh
@@ -70,7 +71,7 @@ go mod init demo
 ```
 3. Add `demo_test.go` with following code:
 ```go
-package demo
+package demo_test
 
 import (
 	"context"
@@ -83,6 +84,7 @@ import (
 func MyFunc() string {
 	return "my func"
 }
+
 func TestFuncMock(t *testing.T) {
 	mock.Mock(MyFunc, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
 		results.GetFieldIndex(0).Set("mock func")
@@ -303,7 +305,7 @@ func TestMethodMock(t *testing.T){
 }
 ```
 
-**Notice for mocking stdlib**: due to performance and security impact, only a few packages and functions of stdlib can be mocked, the list can be found at [runtime/mock/stdlib.md](./runtime/mock/stdlib.md). If you want to mock additional stdlib functions, please discussion in [Issue#6](https://github.com/xhd2015/xgo/issues/6).
+**Notice for mocking stdlib**: due to performance and security impact, only a few packages and functions of stdlib can be mocked, the list can be found at [runtime/mock/stdlib.md](./runtime/mock/stdlib.md). If you want to mock additional stdlib functions, please file a discussion in [Issue#6](https://github.com/xhd2015/xgo/issues/6).
 
 ## Patch
 The `runtime/mock` package also provides another api:

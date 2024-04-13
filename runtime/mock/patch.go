@@ -8,6 +8,7 @@ import (
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
+	"github.com/xhd2015/xgo/runtime/trap"
 )
 
 // Patch replaces `fn` with `replacer` in current goroutine,
@@ -141,6 +142,10 @@ func buildInterceptorFromPatch(recvPtr interface{}, replacer interface{}) func(c
 		panic("replacer is nil")
 	}
 	nIn := t.NumIn()
+
+	// replacer is usually a closure,
+	// we can bypass it
+	trap.Ignore(replacer)
 
 	// first arg ctx: true => [recv,args[1:]...]
 	// first arg ctx: false => [recv, args[0:]...]

@@ -33,6 +33,7 @@ xgo version
 # 输出:
 #   1.0.x
 ```
+如果未找到`xgo`, 你可能需要查看`$GOPATH/bin`是否已经添加到你的`PATH`变量中。
 
 更多安装方式, 参考[doc/INSTALLATION.md](./doc/INSTALLATION.md).
 
@@ -57,7 +58,6 @@ xgo version
 # 输出
 #   1.0.x
 ```
-如果未找到`xgo`, 你可能需要将`~/.xgo/bin`添加到你的环境变量中。
 
 2. 创建一个demo工程:
 ```sh
@@ -67,7 +67,7 @@ go mod init demo
 ```
 3. 将下面的内容添加到文件`demo_test.go`中:
 ```go
-package demo
+package demo_test
 
 import (
 	"context"
@@ -80,6 +80,7 @@ import (
 func MyFunc() string {
 	return "my func"
 }
+
 func TestFuncMock(t *testing.T) {
 	mock.Mock(MyFunc, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
 		results.GetFieldIndex(0).Set("mock func")

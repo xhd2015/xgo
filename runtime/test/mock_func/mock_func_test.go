@@ -64,3 +64,32 @@ func TestMockFuncErr(t *testing.T) {
 		t.Fatalf("expect mocked neverErr() to be %v, actual: %v", mockErr, err)
 	}
 }
+
+func TestNestedMock(t *testing.T) {
+	// before mock
+	beforeMock := A()
+	beforeMockExpect := "A B"
+	if beforeMock != beforeMockExpect {
+		t.Fatalf("expect before mock: %q, actual: %q", beforeMockExpect, beforeMock)
+	}
+	mock.Mock(B, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		results.GetFieldIndex(0).Set("b")
+		return nil
+	})
+	mock.Mock(A, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		results.GetFieldIndex(0).Set("a " + B())
+		return nil
+	})
+	afterMock := A()
+	afterMockExpect := "a b"
+	if afterMock != afterMockExpect {
+		t.Fatalf("expect after mock: %q, actual: %q", afterMockExpect, afterMock)
+	}
+}
+
+func A() string {
+	return "A " + B()
+}
+func B() string {
+	return "B"
+}

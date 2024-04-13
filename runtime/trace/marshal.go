@@ -16,27 +16,27 @@ import (
 // to JSON, when it encounters unmarshalable values
 // like func, chan, it will bypass these values.
 func MarshalAnyJSON(v interface{}) ([]byte, error) {
-	fn := functab.Info("encoding/json", "newTypeEncoder")
-	if fn == nil {
+	funcInfo := functab.Info("encoding/json", "newTypeEncoder")
+	if funcInfo == nil {
 		fmt.Fprintf(os.Stderr, "WARNING: encoding/json.newTypeEncoder not trapped(requires xgo).\n")
 		return json.Marshal(v)
 	}
 
 	// get the unmarshalable function
-	unmarshalable := getMarshaler(fn.Func, reflect.TypeOf(unmarshalableFunc))
+	unmarshalable := getMarshaler(funcInfo.Func, reflect.TypeOf(unmarshalableFunc))
 	var data []byte
 	var err error
 	// mock the encoding json
-	trap.WithOverride(&trap.Interceptor{
+	trap.WithFuncOverride(funcInfo, &trap.Interceptor{
 		Post: func(ctx context.Context, f *core.FuncInfo, args, result core.Object, data interface{}) error {
-			if f != fn {
+			if f != funcInfo {
 				return nil
 			}
 			resField := result.GetFieldIndex(0)
 
 			// if unmarshalable, replace with an empty struct
 			if reflect.ValueOf(resField.Value()).Pointer() == reflect.ValueOf(unmarshalable).Pointer() {
-				resField.Set(getMarshaler(fn.Func, reflect.TypeOf(struct{}{})))
+				resField.Set(getMarshaler(funcInfo.Func, reflect.TypeOf(struct{}{})))
 			}
 			return nil
 		},
