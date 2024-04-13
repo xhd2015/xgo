@@ -367,8 +367,8 @@ func fmtStack(root *Root, opts *ExportOptions) (data []byte, err error) {
 		if opts.FilterRoot != nil {
 			exportRoot = opts.FilterRoot(exportRoot)
 		}
-		if opts.MarshalJSON != nil {
-			return opts.MarshalJSON(exportRoot)
+		if opts.MarshalRoot != nil {
+			return opts.MarshalRoot(exportRoot)
 		}
 	}
 	return MarshalAnyJSON(exportRoot)

@@ -18,7 +18,7 @@ func TestMockedFuncShouldShowInTrace(t *testing.T) {
 		})
 		h()
 	})
-	data, err := trace.MarshalAnyJSON(root.Export())
+	data, err := trace.MarshalAnyJSON(root.Export(nil))
 	if err != nil {
 		t.Fatal(err)
 	}

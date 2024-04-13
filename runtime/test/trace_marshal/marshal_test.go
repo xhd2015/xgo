@@ -72,20 +72,20 @@ type cyclic struct {
 	Name string
 }
 
-func TestMarshalCyclicJSON(t *testing.T) {
+func TestMarshalCyclicJSONShouldError(t *testing.T) {
 	c := &cyclic{
 		Name: "cyclic",
 	}
 	c.Self = c
 
-	res, err := trace.MarshalAnyJSON(c)
-	if err != nil {
-		t.Fatal(err)
+	//
+	_, err := trace.MarshalAnyJSON(c)
+	if err == nil {
+		t.Fatalf("expect marshal err")
 	}
-	resStr := string(res)
-	expect := `{"Self":null,"Name":"cyclic"}`
-	if resStr != expect {
-		t.Fatalf("expect res to be %q, actual: %q", expect, resStr)
+	expectErrMsg := "encountered a cycle via *trace_marshal.cyclic"
+	if !strings.Contains(err.Error(), expectErrMsg) {
+		t.Fatalf("expect err: %q, actual: %q", expectErrMsg, err.Error())
 	}
 }
 
