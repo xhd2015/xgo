@@ -1,6 +1,8 @@
 package trace
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/xhd2015/xgo/runtime/core"
@@ -30,19 +32,85 @@ type Stack struct {
 //
 //	for example: google.golang.org/protobuf/internal/order
 type ExportOptions struct {
+	// suppress error when marshalling
+	// arguments and results
+	DisableErrSilent bool
+	SizeLimit        int // 0: default limit 4K
+	AppearanceLimit  int // 0: default limit 100
+
 	FilterStack func(stack *StackExport) *StackExport
+
 	FilterRoot  func(root *RootExport) *RootExport
-	MarshalJSON func(root *RootExport) ([]byte, error)
+	MarshalRoot func(root *RootExport) ([]byte, error)
+
+	stats map[string]map[string]*stat
+}
+type stat struct {
+	total   int
+	current int
+}
+
+func (c *ExportOptions) getSizeLimit() int {
+	if c == nil || c.SizeLimit == 0 {
+		return 4 * 1024
+	}
+	return c.SizeLimit
+}
+func (c *ExportOptions) getAppearanceLimit() int {
+	if c == nil || c.AppearanceLimit == 0 {
+		return 100
+	}
+	return c.AppearanceLimit
 }
 
 func (c *Root) Export(opts *ExportOptions) *RootExport {
 	if c == nil {
 		return nil
 	}
+	if opts == nil {
+		opts = &ExportOptions{}
+	}
+	if opts.getAppearanceLimit() > 0 {
+		opts.stats = getStats(c)
+	}
+
 	return &RootExport{
 		Begin:    c.Begin,
 		Children: (stacks)(c.Children).Export(opts),
 	}
+}
+
+func getStats(root *Root) map[string]map[string]*stat {
+	mapping := make(map[string]map[string]*stat)
+	var traverse func(stack *Stack)
+	traverse = func(st *Stack) {
+		if st == nil {
+			return
+		}
+		if st.FuncInfo != nil {
+			pkg := st.FuncInfo.Pkg
+			fn := st.FuncInfo.IdentityName
+			fnMapping := mapping[pkg]
+			if fnMapping == nil {
+				fnMapping = make(map[string]*stat)
+				mapping[pkg] = fnMapping
+			}
+			st := fnMapping[fn]
+			if st == nil {
+				st = &stat{}
+				fnMapping[fn] = st
+			}
+			st.total++
+		}
+
+		for _, st := range st.Children {
+			traverse(st)
+		}
+	}
+	for _, st := range root.Children {
+		traverse(st)
+	}
+	return mapping
 }
 
 type stacks []*Stack
@@ -58,6 +126,18 @@ func (c stacks) Export(opts *ExportOptions) []*StackExport {
 		if exportStack == nil {
 			continue
 		}
+		if exportStack.FuncInfo != nil && opts != nil && opts.stats != nil {
+			apprLimit := opts.getAppearanceLimit()
+			if apprLimit > 0 {
+				fnStat := opts.stats[exportStack.FuncInfo.Pkg][exportStack.FuncInfo.IdentityName]
+				if fnStat != nil && fnStat.total > apprLimit {
+					if fnStat.current >= apprLimit {
+						continue
+					}
+					fnStat.current++
+				}
+			}
+		}
 		list = append(list, exportStack)
 	}
 	return list
@@ -67,16 +147,29 @@ func (c *Stack) Export(opts *ExportOptions) *StackExport {
 	if c == nil {
 		return nil
 	}
+
 	var errMsg string
 	if c.Error != nil {
 		errMsg = c.Error.Error()
+	}
+	var args interface{} = c.Args
+	var results interface{} = c.Results
+
+	sizeLimit := opts.getSizeLimit()
+	if sizeLimit > 0 {
+		args = &LimitSize{args, sizeLimit}
+		results = &LimitSize{results, sizeLimit}
+	}
+	if opts == nil || !opts.DisableErrSilent {
+		args = &ErrSilent{args}
+		results = &ErrSilent{results}
 	}
 	stack := &StackExport{
 		FuncInfo: ExportFuncInfo(c.FuncInfo, opts),
 		Begin:    c.Begin,
 		End:      c.End,
-		Args:     c.Args,
-		Results:  c.Results,
+		Args:     args,
+		Results:  results,
 		Panic:    c.Panic,
 		Error:    errMsg,
 		Children: ((stacks)(c.Children)).Export(opts),
@@ -110,4 +203,45 @@ func ExportFuncInfo(c *core.FuncInfo, opts *ExportOptions) *FuncInfoExport {
 		File: c.File,
 		Line: c.Line,
 	}
+}
+
+// make json err silent
+type ErrSilent struct {
+	Data interface{}
+}
+
+func (c *ErrSilent) MarshalJSON() (data []byte, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			if pe, ok := e.(error); ok {
+				err = pe
+			} else {
+				err = fmt.Errorf("panic: %v", e)
+			}
+		}
+		if err != nil {
+			data = []byte(fmt.Sprintf(`{"error":%q}`, err.Error()))
+			err = nil
+		}
+	}()
+	data, err = json.Marshal(c.Data)
+	return
+}
+
+// make json err silent
+type LimitSize struct {
+	Data  interface{}
+	Limit int
+}
+
+func (c *LimitSize) MarshalJSON() ([]byte, error) {
+	data, err := json.Marshal(c.Data)
+	if err != nil {
+		return nil, err
+	}
+	if c.Limit <= 0 || c.Limit >= len(data) {
+		return data, nil
+	}
+	// shorten
+	return []byte(fmt.Sprintf(`{"size":%d, "sizeBeforeShrink":%d,"partialData":%q}`, c.Limit, len(data), string(data[:c.Limit]))), nil
 }
