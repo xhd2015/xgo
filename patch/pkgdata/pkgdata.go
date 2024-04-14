@@ -11,7 +11,7 @@ import (
 )
 
 type PackageData struct {
-	Vars   map[string]bool
+	Vars   map[string]*VarInfo
 	Consts map[string]*ConstInfo
 	Funcs  map[string]bool
 }
@@ -19,6 +19,9 @@ type PackageData struct {
 type ConstInfo struct {
 	Type    string // t=xx
 	Untyped bool   // no 'e='(explicit) flag
+}
+type VarInfo struct {
+	Trap bool // has comment trap
 }
 
 var pkgDataMapping map[string]*PackageData
@@ -56,11 +59,11 @@ func WritePkgData(pkgPath string, pkgData *PackageData) error {
 	if err != nil {
 		return err
 	}
-	writeSection(w, "[var]", pkgData.Vars)
+	err = writeVarSection(w, "[var]", pkgData.Vars)
 	if err != nil {
 		return err
 	}
-	writeSection(w, "[func]", pkgData.Funcs)
+	err = writeSection(w, "[func]", pkgData.Funcs)
 	if err != nil {
 		return err
 	}
@@ -120,6 +123,7 @@ func writeConstSection(w io.Writer, section string, m map[string]*ConstInfo) err
 	}
 	return nil
 }
+
 func writeConst(w io.Writer, info *ConstInfo) error {
 	if !info.Untyped {
 		_, err := io.WriteString(w, " ")
@@ -141,6 +145,49 @@ func writeConst(w io.Writer, info *ConstInfo) error {
 			return err
 		}
 		_, err = io.WriteString(w, info.Type)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func writeVarSection(w io.Writer, section string, m map[string]*VarInfo) error {
+	if len(m) == 0 {
+		return nil
+	}
+	_, err := io.WriteString(w, section)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, "\n")
+	if err != nil {
+		return err
+	}
+	for k, v := range m {
+		_, err := io.WriteString(w, k)
+		if err != nil {
+			return err
+		}
+		err = writeVar(w, v)
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, "\n")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func writeVar(w io.Writer, info *VarInfo) error {
+	if info.Trap {
+		_, err := io.WriteString(w, " ")
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, "t")
 		if err != nil {
 			return err
 		}
@@ -218,9 +265,17 @@ func parsePkgData(content string) (*PackageData, error) {
 				p.Funcs[name] = true
 			case Section_Var:
 				if p.Vars == nil {
-					p.Vars = make(map[string]bool, 1)
+					p.Vars = make(map[string]*VarInfo, 1)
 				}
-				p.Vars[name] = true
+				varInfo := &VarInfo{}
+				kvs := strings.Split(extra, " ")
+				for _, v := range kvs {
+					if v == "t" {
+						varInfo.Trap = true
+						continue
+					}
+				}
+				p.Vars[name] = varInfo
 			case Section_Const:
 				if p.Consts == nil {
 					p.Consts = make(map[string]*ConstInfo, 1)

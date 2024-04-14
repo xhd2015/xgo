@@ -1,4 +1,4 @@
-package main
+package mock_var
 
 import (
 	"context"
