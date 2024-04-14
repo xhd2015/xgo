@@ -68,7 +68,7 @@ func __xgo_link_peek_panic() interface{} {
 }
 
 var enabledGlobally bool
-var interceptorSet int32
+var interceptorRefCount int32
 
 // Enable setup the trace interceptor
 // if called from init, the interceptor is enabled
@@ -94,7 +94,7 @@ func Collect(f func()) {
 	collect(f, &collectOpts{})
 }
 
-func Begin(f func()) func() {
+func Begin() func() {
 	if !__xgo_link_init_finished() {
 		panic("Begin cannot be called from init")
 	}
@@ -135,142 +135,152 @@ func (c *collectOpts) Begin() func() {
 	return enableLocal(c)
 }
 
-func setupInterceptor() {
-	if !atomic.CompareAndSwapInt32(&interceptorSet, 0, 1) {
-		return
+func setupInterceptor() func() {
+	if atomic.AddInt32(&interceptorRefCount, 1) > 1 {
+		return func() {
+			atomic.AddInt32(&interceptorRefCount, -1)
+		}
 	}
 	// collect trace
-	trap.AddInterceptorHead(&trap.Interceptor{
-		Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
-			if !__xgo_link_init_finished() {
-				// do not collect trace while init
-				return nil, trap.ErrSkip
-			}
-			key := uintptr(__xgo_link_getcurg())
-			localOptStack, ok := collectingMap.Load(key)
-			var localOpts *collectOpts
-			if ok {
-				l := localOptStack.(*optStack)
-				if len(l.list) > 0 {
-					localOpts = l.list[len(l.list)-1]
-				}
-			} else if !enabledGlobally {
-				return nil, trap.ErrSkip
-			}
-			stack := &Stack{
-				FuncInfo: f,
-				Args:     args,
-				Results:  results,
-			}
-			var globalRoot interface{}
-			var localRoot *Root
-			var initial bool
-			if localOpts == nil {
-				var globalLoaded bool
-				globalRoot, globalLoaded = stackMap.Load(key)
-				if !globalLoaded {
-					initial = true
-				}
-			} else {
-				localRoot = localOpts.root
-				if localRoot == nil {
-					initial = true
-				}
-			}
-			if initial {
-				// initial stack
-				root := &Root{
-					Top:   stack,
-					Begin: getNow(),
-					Children: []*Stack{
-						stack,
-					},
-				}
-				stack.Begin = int64(time.Since(root.Begin))
-				if localOpts == nil {
-					stackMap.Store(key, root)
-				} else {
-					localOpts.root = root
-				}
-				// NOTE: for initial stack, the data is nil
-				// this will signal Post to emit a trace
-				return nil, nil
-			}
-			var root *Root
-			if localOpts != nil {
-				root = localRoot
-			} else {
-				root = globalRoot.(*Root)
-			}
-			stack.Begin = int64(time.Since(root.Begin))
-			prevTop := root.Top
-			root.Top.Children = append(root.Top.Children, stack)
-			root.Top = stack
-			return prevTop, nil
-		},
-		Post: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object, data interface{}) error {
-			key := uintptr(__xgo_link_getcurg())
-
-			localOptStack, ok := collectingMap.Load(key)
-			var localOpts *collectOpts
-			if ok {
-				l := localOptStack.(*optStack)
-				if len(l.list) > 0 {
-					localOpts = l.list[len(l.list)-1]
-				}
-			} else if !enabledGlobally {
-				return nil
-			}
-			var root *Root
-			if localOpts != nil {
-				if localOpts.root == nil {
-					panic(fmt.Errorf("unbalanced stack"))
-				}
-				root = localOpts.root
-			} else {
-				v, ok := stackMap.Load(key)
-				if !ok {
-					panic(fmt.Errorf("unbalanced stack"))
-				}
-				root = v.(*Root)
-			}
-
-			// detect panic
-			pe := __xgo_link_peek_panic()
-			if pe != nil {
-				root.Top.Panic = true
-				peErr, ok := pe.(error)
-				if !ok {
-					peErr = fmt.Errorf("panic: %v", pe)
-				}
-				root.Top.Error = peErr
-			} else {
-				if errObj, ok := results.(core.ObjectWithErr); ok {
-					fnErr := errObj.GetErr().Value()
-					if fnErr != nil {
-						root.Top.Error = fnErr.(error)
-					}
-				}
-			}
-			root.Top.End = int64(time.Since(root.Begin))
-			if data == nil {
-				root.Top = nil
-				// stack finished
-				if localOpts != nil {
-					// handled by local options
-					return nil
-				}
-
-				// global
-				stackMap.Delete(key)
-				emitTraceNoErr("", root, nil)
-				return nil
-			}
-			// pop stack
-			root.Top = data.(*Stack)
-			return nil
-		},
+	cancel := trap.AddInterceptorHead(&trap.Interceptor{
+		Pre:  handleTracePre,
+		Post: handleTracePost,
 	})
+	return func() {
+		atomic.AddInt32(&interceptorRefCount, -1)
+		cancel()
+	}
+}
+
+func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
+	if !__xgo_link_init_finished() {
+		// do not collect trace while init
+		return nil, trap.ErrSkip
+	}
+	key := uintptr(__xgo_link_getcurg())
+	localOptStack, ok := collectingMap.Load(key)
+	var localOpts *collectOpts
+	if ok {
+		l := localOptStack.(*optStack)
+		if len(l.list) > 0 {
+			localOpts = l.list[len(l.list)-1]
+		}
+	} else if !enabledGlobally {
+		return nil, trap.ErrSkip
+	}
+	stack := &Stack{
+		FuncInfo: f,
+		Args:     args,
+		Results:  results,
+	}
+	var globalRoot interface{}
+	var localRoot *Root
+	var initial bool
+	if localOpts == nil {
+		var globalLoaded bool
+		globalRoot, globalLoaded = stackMap.Load(key)
+		if !globalLoaded {
+			initial = true
+		}
+	} else {
+		localRoot = localOpts.root
+		if localRoot == nil {
+			initial = true
+		}
+	}
+	if initial {
+		// initial stack
+		root := &Root{
+			Top:   stack,
+			Begin: getNow(),
+			Children: []*Stack{
+				stack,
+			},
+		}
+		stack.Begin = int64(time.Since(root.Begin))
+		if localOpts == nil {
+			stackMap.Store(key, root)
+		} else {
+			localOpts.root = root
+		}
+		// NOTE: for initial stack, the data is nil
+		// this will signal Post to emit a trace
+		return nil, nil
+	}
+	var root *Root
+	if localOpts != nil {
+		root = localRoot
+	} else {
+		root = globalRoot.(*Root)
+	}
+	stack.Begin = int64(time.Since(root.Begin))
+	prevTop := root.Top
+	root.Top.Children = append(root.Top.Children, stack)
+	root.Top = stack
+	return prevTop, nil
+}
+
+func handleTracePost(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object, data interface{}) error {
+	key := uintptr(__xgo_link_getcurg())
+
+	localOptStack, ok := collectingMap.Load(key)
+	var localOpts *collectOpts
+	if ok {
+		l := localOptStack.(*optStack)
+		if len(l.list) > 0 {
+			localOpts = l.list[len(l.list)-1]
+		}
+	} else if !enabledGlobally {
+		return nil
+	}
+	var root *Root
+	if localOpts != nil {
+		if localOpts.root == nil {
+			panic(fmt.Errorf("unbalanced stack"))
+		}
+		root = localOpts.root
+	} else {
+		v, ok := stackMap.Load(key)
+		if !ok {
+			panic(fmt.Errorf("unbalanced stack"))
+		}
+		root = v.(*Root)
+	}
+
+	// detect panic
+	pe := __xgo_link_peek_panic()
+	if pe != nil {
+		root.Top.Panic = true
+		peErr, ok := pe.(error)
+		if !ok {
+			peErr = fmt.Errorf("panic: %v", pe)
+		}
+		root.Top.Error = peErr
+	} else {
+		if errObj, ok := results.(core.ObjectWithErr); ok {
+			fnErr := errObj.GetErr().Value()
+			if fnErr != nil {
+				root.Top.Error = fnErr.(error)
+			}
+		}
+	}
+	root.Top.End = int64(time.Since(root.Begin))
+	if data == nil {
+		root.Top = nil
+		// stack finished
+		if localOpts != nil {
+			// handled by local options
+			return nil
+		}
+
+		// global
+		stackMap.Delete(key)
+		emitTraceNoErr("", root, nil)
+		return nil
+	}
+	// pop stack
+	root.Top = data.(*Stack)
+	return nil
 }
 
 var collectingMap sync.Map // <uintptr> -> []*collectOpts
@@ -289,11 +299,10 @@ func enableLocal(collOpts *collectOpts) func() {
 	if collOpts == nil {
 		collOpts = &collectOpts{}
 	}
-	setupInterceptor()
+	cancel := setupInterceptor()
 	key := uintptr(__xgo_link_getcurg())
 	if collOpts.name == "" {
 		var name string
-		key := uintptr(__xgo_link_getcurg())
 		tinfo, ok := testInfoMapping.Load(key)
 		if ok {
 			name = tinfo.(*testInfo).name
@@ -317,6 +326,10 @@ func enableLocal(collOpts *collectOpts) func() {
 	// push
 	opts.list = append(opts.list, collOpts)
 	return func() {
+		if key != uintptr(__xgo_link_getcurg()) {
+			panic("finish trace from another goroutine!")
+		}
+		cancel()
 		// pop
 		opts.list = opts.list[:len(opts.list)-1]
 		if len(opts.list) == 0 {
