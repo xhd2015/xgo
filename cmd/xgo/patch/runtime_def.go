@@ -92,6 +92,14 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 		}
 		p.file = file
 		noders = append(noders, p)
+
+		// move to head
+		n := len(noders)
+		for i:=n-1;i>0;i--{
+			noders[i]=noders[i-1]
+		}
+		noders[0]=p
+
 		return file
 	})
 }
@@ -114,6 +122,14 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 		}
 		p.file = file
 		noders = append(noders, p)
+
+		// move to head
+		n := len(noders)
+		for i:=n-1;i>0;i--{
+			noders[i]=noders[i-1]
+		}
+		noders[0]=p
+
 		return file
 	})
 }
@@ -136,6 +152,14 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 		}
 		p.file = file
 		noders = append(noders, p)
+
+		// move to head
+		n := len(noders)
+		for i:=n-1;i>0;i--{
+			noders[i]=noders[i-1]
+		}
+		noders[0]=p
+
 		return file
 	})
 }
