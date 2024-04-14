@@ -33,16 +33,9 @@ type __xgo_local_func_stub struct {
 	Line int
 }
 
-// ensure early init
-var _ = func() bool {
-	__xgo_trap_skip()
+func init() {
 	__xgo_link_generate_init_regs_body()
-	return true
-}()
-
-// func init() {
-// 	__xgo_link_generate_init_regs_body()
-// }
+}
 
 // TODO: ensure safety for this
 func __xgo_link_generate_init_regs_body() {

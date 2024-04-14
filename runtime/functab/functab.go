@@ -156,13 +156,14 @@ func registerFuncInfo(fnInfo interface{}) {
 		}
 		// 	fmt.Fprintf(os.Stderr, "empty name\n",pkgPath)
 	}
+	pkgPath := rv.FieldByName("PkgPath").String()
+	// fmt.Printf("register: %s %s\n", pkgPath, identityName)
 	var fnKind core.Kind
 	fnKindV := rv.FieldByName("Kind")
 	if fnKindV.IsValid() {
 		fnKind = core.Kind(fnKindV.Int())
 	}
 	varField := rv.FieldByName("Var")
-	pkgPath := rv.FieldByName("PkgPath").String()
 	recvTypeName := rv.FieldByName("RecvTypeName").String()
 	recvPtr := rv.FieldByName("RecvPtr").Bool()
 	name := rv.FieldByName("Name").String()
