@@ -7,8 +7,8 @@ import (
 )
 
 const VERSION = "1.0.24"
-const REVISION = "b70bf6dce3af4317cb6a3b2b18dc30e2b36b8afa+1"
-const NUMBER = 179
+const REVISION = "b0dd1873bc3e5e5464f55c7b01a077712dc4c818+1"
+const NUMBER = 180
 
 // these fields will be filled by compiler
 const XGO_VERSION = ""
@@ -45,7 +45,7 @@ func checkVersion() error {
 	}
 	var updateCmd string
 	if XGO_NUMBER < NUMBER {
-		updateCmd = "xgo update"
+		updateCmd = "xgo upgrade"
 	} else {
 		updateCmd = "go get github.com/xhd2015/xgo/runtime@latest"
 	}

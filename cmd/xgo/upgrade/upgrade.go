@@ -19,6 +19,32 @@ const latestURL = "https://github.com/xhd2015/xgo/releases/latest"
 
 func Upgrade(installDir string) error {
 	ctx := context.Background()
+	if true {
+		curXgoVersion, err := cmdXgoVersion()
+		if err != nil {
+			return err
+		}
+		// always run a simple go install command
+		err = cmdInstallXgo()
+		if err != nil {
+			return err
+		}
+		xgoVersionAfterUpdate, err := cmdXgoVersion()
+		if err != nil {
+			return err
+		}
+		if xgoVersionAfterUpdate == "" {
+			fmt.Fprintf(os.Stderr, "command 'xgo' not found, you may need to add $GOPATH/bin to your PATH\n")
+			return nil
+		}
+		if curXgoVersion == xgoVersionAfterUpdate {
+			fmt.Printf("upgraded xgo v%s\n", xgoVersionAfterUpdate)
+			return nil
+		}
+		fmt.Printf("upgraded xgo v%s -> v%s\n", curXgoVersion, xgoVersionAfterUpdate)
+		return nil
+	}
+
 	fmt.Printf("checking latest version...\n")
 	latestVersion, err := GetLatestVersion(ctx, 60*time.Second, latestURL)
 	if err != nil {
@@ -136,6 +162,12 @@ func cmdXgoVersion() (string, error) {
 		return "", err
 	}
 	return version, nil
+}
+func cmdInstallXgo() error {
+	cmd := exec.Command("go", "install", "github.com/xhd2015/xgo/cmd/xgo@latest")
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	return cmd.Run()
 }
 
 func cmdOutput(cmd string, args ...string) (string, error) {

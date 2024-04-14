@@ -7,7 +7,7 @@ import (
 	"github.com/xhd2015/xgo/runtime/trace"
 )
 
-func TestMarshalWithTrace(t *testing.T) {
+func TestSubTestTraces(t *testing.T) {
 	const N = 10
 	traces := make([]*trace.Root, N)
 	for i := 0; i < 10; i++ {
