@@ -217,6 +217,51 @@ var syntaxWalkPatch = &FilePatch{
 	},
 }
 
+var synatxParserPatch = &FilePatch{
+	FilePath: _FilePath{"src", "cmd", "compile", "internal", "syntax", "parser.go"},
+	Patches: []*Patch{
+		// {
+		// 	// import
+		// 	Mark:        "syntax_parser_import_xgo_syntax",
+		// 	InsertIndex: 2,
+		// 	Anchors: []string{
+		// 		`package syntax`,
+		// 		`import (`,
+		// 		"\n",
+		// 	},
+		// 	Content: `xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"`,
+		// },
+		{
+			// NOTE: dependency injection
+			Mark:         "syntax_parser_record_comment_declare",
+			InsertIndex:  0,
+			InsertBefore: true,
+			Anchors: []string{
+				`func (p *parser) init(file *PosBase,`,
+			},
+			Content: `var RecordComments func(file *PosBase, line, col uint, comment string)`,
+		},
+		{
+			Mark:        "syntax_parser_record_comments",
+			InsertIndex: 6,
+			Anchors: []string{
+				`func (p *parser) init(file *PosBase,`,
+				`p.scanner.init(`,
+				`func(line`,
+				`text`,
+				`:=`,
+				`commentText(msg)`,
+				"\n",
+			},
+			Content: `
+			if RecordComments != nil {
+				RecordComments(file,line,col,text)
+			}
+			`,
+		},
+	},
+}
+
 var noderWriterPatch = &FilePatch{
 	FilePath: _FilePath{"src", "cmd", "compile", "internal", "noder", "writer.go"},
 	Patches: []*Patch{
@@ -302,11 +347,26 @@ func patchCompilerAstTypeCheck(goroot string, goVersion *goinfo.GoVersion) error
 	if err != nil {
 		return err
 	}
-	if goVersion.Major == 1 && goVersion.Minor < 20 {
-		// only go1.20 and above supports const mock
-		return nil
+	// var mock: comments
+	if false {
+		// this does not work, because comments are turned off
+		err = synatxParserPatch.Apply(goroot, goVersion)
+		if err != nil {
+			return err
+		}
 	}
-	err = type2ExprPatch.Apply(goroot, goVersion)
+	if goVersion.Major > 1 || goVersion.Minor >= 20 {
+		// only go1.20 and above supports const mock
+		err := patchCompilerForConstTrap(goroot, goVersion)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func patchCompilerForConstTrap(goroot string, goVersion *goinfo.GoVersion) error {
+	err := type2ExprPatch.Apply(goroot, goVersion)
 	if err != nil {
 		return err
 	}

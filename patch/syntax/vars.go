@@ -35,10 +35,11 @@ func allowPkgVarTrap(pkgPath string) bool {
 func collectVarDecls(declKind DeclKind, names []*syntax.Name, typ syntax.Expr) []*DeclInfo {
 	var decls []*DeclInfo
 	for _, name := range names {
+		nameVal := name.Value
 		line := name.Pos().Line()
 		decls = append(decls, &DeclInfo{
 			Kind: declKind,
-			Name: name.Value,
+			Name: nameVal,
 
 			Line: int(line),
 		})
@@ -48,13 +49,15 @@ func collectVarDecls(declKind DeclKind, names []*syntax.Name, typ syntax.Expr) [
 
 func trapVariables(pkgPath string, fileList []*syntax.File, funcDelcs []*DeclInfo) {
 	names := make(map[string]*DeclInfo, len(funcDelcs))
-	varNames := make(map[string]bool)
+	varNames := make(map[string]*pkgdata.VarInfo)
 	constNames := make(map[string]*pkgdata.ConstInfo)
 	for _, funcDecl := range funcDelcs {
 		identityName := funcDecl.IdentityName()
 		names[identityName] = funcDecl
 		if funcDecl.Kind == Kind_Var || funcDecl.Kind == Kind_VarPtr {
-			varNames[identityName] = true
+			varNames[identityName] = &pkgdata.VarInfo{
+				Trap: funcDecl.FollowingTrapConst,
+			}
 		} else if funcDecl.Kind == Kind_Const {
 			constDecl := funcDecl.ConstDecl
 			constInfo := &pkgdata.ConstInfo{Untyped: true}
@@ -141,6 +144,8 @@ type BlockContext struct {
 	RHSAssignNoDefParent map[syntax.Node]*syntax.AssignStmt
 	CaseClauseParent     map[syntax.Node]*syntax.CaseClause
 	ReturnStmtParent     map[syntax.Node]*syntax.ReturnStmt
+	ParenParent          map[syntax.Node]*syntax.ParenExpr
+	SelectorParent       map[syntax.Node]*syntax.SelectorExpr
 
 	// const info
 	ConstInfo map[syntax.Node]*ConstInfo
@@ -369,6 +374,25 @@ func (ctx *BlockContext) traverseCommonClause(node *syntax.CommClause, globaleNa
 	return node
 }
 
+func (c *BlockContext) recordParen(paren *syntax.ParenExpr) {
+	if paren == nil || paren.X == nil {
+		return
+	}
+	if c.ParenParent == nil {
+		c.ParenParent = make(map[syntax.Node]*syntax.ParenExpr, 1)
+	}
+	c.ParenParent[paren.X] = paren
+}
+func (c *BlockContext) recordSelectorExpr(sel *syntax.SelectorExpr) {
+	if sel == nil || sel.X == nil {
+		return
+	}
+	if c.SelectorParent == nil {
+		c.SelectorParent = make(map[syntax.Node]*syntax.SelectorExpr, 1)
+	}
+	c.SelectorParent[sel.X] = sel
+}
+
 func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]*DeclInfo, imports map[string]string) syntax.Expr {
 	if node == nil {
 		return nil
@@ -396,6 +420,7 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 		node.Body = funcCtx.traverseBlockStmt(node.Body, globaleNames, imports)
 		return node
 	case *syntax.ParenExpr:
+		ctx.recordParen(node)
 		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
 		if xgoConv, ok := node.X.(*syntax.XgoSimpleConvert); ok {
 			constType := getConstType(xgoConv)
@@ -409,11 +434,12 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 			return newNode
 		}
 	case *syntax.SelectorExpr:
-		newNode, selIsName := ctx.trapSelector(node, node, false, globaleNames, imports)
+		ctx.recordSelectorExpr(node)
+		newNode, xIsName := ctx.trapSelector(node, node, false, globaleNames, imports)
 		if newNode != nil {
 			return newNode
 		}
-		if !selIsName {
+		if !xIsName {
 			node.X = ctx.traverseExpr(node.X, globaleNames, imports)
 		}
 	case *syntax.IndexExpr:
@@ -439,11 +465,11 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 			case *syntax.Name:
 				return ctx.trapAddrNode(node, x, globaleNames)
 			case *syntax.SelectorExpr:
-				newNode, selIsName := ctx.trapSelector(node, x, true, globaleNames, imports)
+				newNode, xIsName := ctx.trapSelector(node, x, true, globaleNames, imports)
 				if newNode != nil {
 					return newNode
 				}
-				if selIsName {
+				if xIsName {
 					return node
 				}
 			}
@@ -596,6 +622,9 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 	var isCallArg bool
 	var untypedConstType string
 	if decl.Kind == Kind_Var || decl.Kind == Kind_VarPtr {
+		if !decl.FollowingTrapConst && !c.isVarOKToTrap(node) {
+			return node
+		}
 		// good to go
 	} else if decl.Kind == Kind_Const {
 		// untyped const(most cases) should only be used in
@@ -654,7 +683,7 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 	return newName
 }
 
-func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr, takeAddr bool, globaleNames map[string]*DeclInfo, imports map[string]string) (newExpr syntax.Expr, selIsName bool) {
+func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr, takeAddr bool, globaleNames map[string]*DeclInfo, imports map[string]string) (newExpr syntax.Expr, xIsName bool) {
 	// form: pkg.var
 	nameNode, ok := sel.X.(*syntax.Name)
 	if !ok {
@@ -700,8 +729,10 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 
 			}
 		}
-	} else if pkgData.Vars[sel.Sel.Value] {
-		// ok to go
+	} else if varInfo, ok := pkgData.Vars[sel.Sel.Value]; ok {
+		if !varInfo.Trap && !takeAddr && !ctx.isVarOKToTrap(node) {
+			return nil, true
+		}
 	} else {
 		return nil, true
 	}
@@ -722,6 +753,20 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 		return newNode, true
 	}
 	return newName, true
+}
+
+func (ctx *BlockContext) isVarOKToTrap(node syntax.Node) bool {
+	// a variable can only trapped when it will not
+	// cause an implicit pointer
+	_, ok := ctx.SelectorParent[node]
+	if ok {
+		return false
+	}
+	paren, ok := ctx.ParenParent[node]
+	if ok {
+		return ctx.isVarOKToTrap(paren)
+	}
+	return true
 }
 
 func (ctx *BlockContext) isConstOKToTrap(node syntax.Node) (explicitType syntax.Expr, ok bool) {

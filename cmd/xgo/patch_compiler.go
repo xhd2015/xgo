@@ -43,6 +43,7 @@ var compilerFiles = []_FilePath{
 	type2ExprPatch.FilePath,
 	type2AssignmentsPatch.FilePath,
 	syntaxWalkPatch.FilePath,
+	synatxParserPatch.FilePath,
 	noderWriterPatch.FilePath,
 	noderExprPatch.FilePath,
 	syntaxPrinterPatch.FilePath,

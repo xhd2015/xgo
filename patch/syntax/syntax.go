@@ -372,9 +372,13 @@ func (c DeclKind) IsVarOrConst() bool {
 }
 
 type DeclInfo struct {
-	FuncDecl     *syntax.FuncDecl
-	VarDecl      *syntax.VarDecl
-	ConstDecl    *syntax.ConstDecl
+	FuncDecl  *syntax.FuncDecl
+	VarDecl   *syntax.VarDecl
+	ConstDecl *syntax.ConstDecl
+
+	// is this var decl follow a const __xgo_trap_xxx = 1?
+	FollowingTrapConst bool
+
 	Kind         DeclKind
 	Name         string
 	RecvTypeName string
@@ -464,7 +468,46 @@ func getFuncDecls(files []*syntax.File, varTrap bool) []*DeclInfo {
 			declFuncs = append(declFuncs, fnDecls...)
 		}
 	}
-	return declFuncs
+	// compute __xgo_trap_xxx
+	n := len(declFuncs)
+	if n == 0 {
+		return nil
+	}
+	j := n
+	for i := n - 1; i >= 0; i-- {
+		if i == 0 || !isTrapped(declFuncs, i) {
+			j--
+			declFuncs[j] = declFuncs[i]
+			continue
+		}
+		// a special comment
+		declFuncs[i].FollowingTrapConst = true
+		j--
+		declFuncs[j] = declFuncs[i]
+		// remove the comment by skipping next
+		i--
+	}
+	return declFuncs[j:]
+}
+
+func isTrapped(declFuncs []*DeclInfo, i int) bool {
+	fn := declFuncs[i]
+	if fn.Kind != Kind_Var {
+		return false
+	}
+	last := declFuncs[i-1]
+	if last.Kind != Kind_Const {
+		return false
+	}
+	const xgoTrapPrefix = "__xgo_trap_"
+	if !strings.HasPrefix(last.Name, xgoTrapPrefix) {
+		return false
+	}
+	subName := last.Name[len(xgoTrapPrefix):]
+	if !strings.EqualFold(fn.Name, subName) {
+		return false
+	}
+	return true
 }
 
 func filterFuncDecls(funcDecls []*DeclInfo, pkgPath string) []*DeclInfo {
