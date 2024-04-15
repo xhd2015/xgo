@@ -483,7 +483,7 @@ In conclusion, `xgo` and monkey are compared as the following:
 |General Trap|Y|N|
 |Compatiblility|NO LIMIT|limited to amd64 and arm64|
 |API|simple|complex|
-|Integration Effore|easy|hard|
+|Integration Effort|easy|hard|
 
 # Contribution
 Want to help contribute to `xgo`? Great! Check [CONTRIBUTING
