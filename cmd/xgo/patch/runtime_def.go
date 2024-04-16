@@ -8,9 +8,8 @@ __xgo_on_init_finished_callbacks = nil
 `
 
 const RuntimeProcGoroutineCreatedPatch = `for _, fn := range __xgo_on_gonewproc_callbacks {
-	fn(uintptr(unsafe.Pointer(newg)))
+	fn(uintptr(unsafe.Pointer(xgo_newg)))
 }
-return newg
 `
 
 // added after goroutine exit1

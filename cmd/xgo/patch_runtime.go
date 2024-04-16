@@ -57,8 +57,8 @@ var runtimeFiles = []_FilePath{
 	timeSleep,
 }
 
-func patchRuntimeAndTesting(goroot string) error {
-	err := patchRuntimeProc(goroot)
+func patchRuntimeAndTesting(goroot string, goVersion *goinfo.GoVersion) error {
+	err := patchRuntimeProc(goroot, goVersion)
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	return true, os.WriteFile(dstFile, content, 0755)
 }
 
-func patchRuntimeProc(goroot string) error {
+func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 	procFile := filepath.Join(goroot, filepath.Join(runtimeProc...))
 	anchors := []string{
 		"func main() {",
@@ -148,12 +148,52 @@ func patchRuntimeProc(goroot string) error {
 			patch.RuntimeProcGoroutineExitPatch,
 		)
 
-		content = replaceContentAfter(content,
+		procDecl := `func newproc(fn`
+		newProc := `newg := newproc1(fn, gp, pc)`
+		if goVersion.Major == 1 && goVersion.Minor <= 17 {
+			procDecl = `func newproc(siz int32`
+			newProc = `newg := newproc1(fn, argp, siz, gp, pc)`
+		}
+
+		// see https://github.com/xhd2015/xgo/issues/67
+		content = addContentAtIndex(
+			content,
+			"/*<begin declare_xgo_newg>*/", "/*<end declare_xgo_newg>*/",
+			[]string{
+				procDecl,
+				`systemstack(func() {`,
+				newProc,
+			},
+			1,
+			true,
+			"var xgo_newg *g",
+		)
+		content = addContentAtIndex(
+			content,
+			"/*<begin set_xgo_newg>*/", "/*<end set_xgo_newg>*/",
+			[]string{
+				procDecl,
+				`systemstack(func() {`,
+				newProc,
+				"\n",
+			},
+			3,
+			false,
+			"xgo_newg = newg",
+		)
+
+		content = addContentAtIndex(content,
 			"/*<begin add_go_newproc_callback>*/", "/*<end add_go_newproc_callback>*/",
 			[]string{
-				"func newproc1(", "*g {",
+				procDecl,
+				`systemstack(func() {`,
+				newProc,
+				"\n",
+				"})",
+				"}",
 			},
-			"return newg",
+			5,
+			true,
 			patch.RuntimeProcGoroutineCreatedPatch,
 		)
 		return content, nil

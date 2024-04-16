@@ -70,7 +70,6 @@ go mod init demo
 package demo_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/mock"
@@ -81,8 +80,8 @@ func MyFunc() string {
 }
 
 func TestFuncMock(t *testing.T) {
-    mock.Patch(MyFunc, func() string {
-        return "mock func"
+	mock.Patch(MyFunc, func() string {
+		return "mock func"
 	})
 	text := MyFunc()
 	if text != "mock func" {
