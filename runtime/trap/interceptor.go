@@ -126,6 +126,24 @@ type interceptorManager struct {
 	funcMapping map[*core.FuncInfo][]*Interceptor // nested mapping
 }
 
+func (c *interceptorManager) hasAny() bool {
+	if c == nil {
+		return false
+	}
+	if len(c.head) > 0 {
+		return true
+	}
+	if len(c.tail) > 0 {
+		return true
+	}
+	for _, m := range c.funcMapping {
+		if len(m) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *interceptorManager) copy() *interceptorManager {
 	if c == nil {
 		return nil

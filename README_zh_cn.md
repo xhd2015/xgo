@@ -354,13 +354,10 @@ import (
     "fmt"
     "testing"
 
-    "github.com/xhd2015/xgo/runtime/trace"
+    _ "github.com/xhd2015/xgo/runtime/trace"
 )
 
 func TestTrace(t *testing.T) {
-    // begin trace
-    finish := trace.Begin()
-    defer finish()
     A()
     B()
     C()
@@ -396,6 +393,20 @@ xgo tool trace TestTrace.json
 - `XGO_TRACE_OUTPUT=stdout`: 堆栈记录会被输出到stdout, 方便debug,
 - `XGO_TRACE_OUTPUT=<dir>`: 堆栈记录被写入到`<dir>`目录下,
 - `XGO_TRACE_OUTPUT=off`: 关闭堆栈记录收集。
+
+除了使用`--strace`之外, xgo还允许你通过`trace.Begin()`的方式手动控制追踪范围:
+```go
+import "github.com/xhd2015/xgo/runtime/trace"
+
+func TestTrace(t *testing.T) {
+    A()
+    finish := trace.Begin()
+    defer finish()
+    B()
+    C()
+}
+```
+结果中只会包含`B()`和`C()`.
 
 # 并发安全
 我知道大部分人认为Monkey Patching不是并发安全的，但那是现有的库的实现方式决定的。
