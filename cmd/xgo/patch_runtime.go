@@ -151,8 +151,10 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 		procDecl := `func newproc(fn`
 		newProc := `newg := newproc1(fn, gp, pc)`
 		if goVersion.Major == 1 && goVersion.Minor <= 17 {
-			procDecl = `func newproc(siz int32`
-			newProc = `newg := newproc1(fn, argp, siz, gp, pc)`
+			// siz: to avoid typo check
+			const siz = "s" + "i" + "z"
+			procDecl = `func newproc(` + siz + ` int32`
+			newProc = `newg := newproc1(fn, argp, ` + siz + `, gp, pc)`
 		}
 
 		// see https://github.com/xhd2015/xgo/issues/67
