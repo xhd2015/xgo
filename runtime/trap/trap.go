@@ -38,7 +38,7 @@ func init() {
 			return
 		}
 		local := getLocalInterceptorList()
-		if local == nil || (len(local.head) == 0 && len(local.tail) == 0) {
+		if !local.hasAny() {
 			return
 		}
 		// inherit interceptors of last group

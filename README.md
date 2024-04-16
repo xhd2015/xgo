@@ -363,13 +363,10 @@ import (
     "fmt"
     "testing"
 
-    "github.com/xhd2015/xgo/runtime/trace"
+    _ "github.com/xhd2015/xgo/runtime/trace"
 )
 
 func TestTrace(t *testing.T) {
-    // begin trace
-    finish := trace.Begin()
-    defer finish()
     A()
     B()
     C()
@@ -385,7 +382,8 @@ Run with `xgo`:
 ```sh
 # run the test
 # this will write the trace into TestTrace.json
-xgo test ./
+# --strace represents stack trace
+xgo test --strace ./
 
 # view the trace
 xgo tool trace TestTrace.json
@@ -406,6 +404,20 @@ By default, Trace will write traces to a temp directory under current working di
 - `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purpose,
 - `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
 - `XGO_TRACE_OUTPUT=off`: turn off trace.
+
+Besides the `--strace` flag, xgo allows you to define which span should be collected, using `trace.Begin()`:
+```go
+import "github.com/xhd2015/xgo/runtime/trace"
+
+func TestTrace(t *testing.T) {
+    A()
+    finish := trace.Begin()
+    defer finish()
+    B()
+    C()
+}
+```
+The trace will only include `B()` and `C()`
 
 # Concurrent safety
 I know you guys from other monkey patching library suffer from the unsafety implied by these frameworks.
