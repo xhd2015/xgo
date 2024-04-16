@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func TryParseFlagValue(flag string, pval *string, pi *int, args []string) (ok bool, err error) {
+func TryParseFlagValue(flag string, pval *string, set func(v string), pi *int, args []string) (ok bool, err error) {
 	i := *pi
 	val, next, ok := tryParseArg(flag, args[i])
 	if !ok {
@@ -18,13 +18,17 @@ func TryParseFlagValue(flag string, pval *string, pi *int, args []string) (ok bo
 		val = args[i+1]
 		*pi++
 	}
-	*pval = val
+	if set != nil {
+		set(val)
+	} else {
+		*pval = val
+	}
 	return true, nil
 }
 
-func TryParseFlagsValue(flags []string, pval *string, pi *int, args []string) (ok bool, err error) {
+func TryParseFlagsValue(flags []string, pval *string, set func(v string), pi *int, args []string) (ok bool, err error) {
 	for _, flag := range flags {
-		ok, err := TryParseFlagValue(flag, pval, pi, args)
+		ok, err := TryParseFlagValue(flag, pval, set, pi, args)
 		if err != nil {
 			return false, err
 		}

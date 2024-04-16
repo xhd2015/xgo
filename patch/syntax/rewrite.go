@@ -34,6 +34,66 @@ func fillFuncArgResNames(fileList []*syntax.File) {
 	}
 }
 
+const patchedTimeNow = "Now_Xgo_Original"
+const patchedTimeSince = "Since_Xgo_Original"
+
+func addTimePatch(funcDelcs []*DeclInfo) {
+	for _, fn := range funcDelcs {
+		if fn.RecvTypeName != "" {
+			continue
+		}
+		if fn.Name == "Now" {
+			newNow := copyFuncDecl(fn.FuncDecl, true)
+			newNow.Name.Value = patchedTimeNow
+			fn.FileSyntax.DeclList = append(fn.FileSyntax.DeclList, newNow)
+
+			fillPos(fn.FuncDecl.Pos(), newNow)
+			continue
+		}
+		if fn.Name == "Since" {
+			newSince := copyFuncDecl(fn.FuncDecl, true)
+			newSince.Name.Value = patchedTimeSince
+			syntax.Inspect(newSince, func(n syntax.Node) bool {
+				if callExpr, ok := n.(*syntax.CallExpr); ok {
+					if callName, ok := callExpr.Fun.(*syntax.Name); ok && callName.Value == "Now" {
+						callName.Value = patchedTimeNow
+					}
+				}
+				return true
+			})
+			fn.FileSyntax.DeclList = append(fn.FileSyntax.DeclList, newSince)
+
+			fillPos(fn.FuncDecl.Pos(), newSince)
+			continue
+		}
+	}
+}
+
+func rewriteTimePatch(funcDelcs []*DeclInfo) {
+	for _, fn := range funcDelcs {
+		if fn.RecvTypeName != "" {
+			continue
+		}
+		if fn.Name == "timeNow" {
+			replaceIdent(fn.FuncDecl, "Now", patchedTimeNow)
+			continue
+		}
+		if fn.Name == "timeSince" {
+			replaceIdent(fn.FuncDecl, "Since", patchedTimeSince)
+			continue
+		}
+	}
+}
+
+func replaceIdent(root syntax.Node, match string, to string) {
+	syntax.Inspect(root, func(n syntax.Node) bool {
+		if name, ok := n.(*syntax.Name); ok && name != nil && name.Value == match {
+			name.Value = to
+		}
+		return true
+	})
+}
+
 func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
 	for _, fn := range funcDecls {
 		if !fn.Kind.IsFunc() {
@@ -355,6 +415,10 @@ func getPresetNames(node syntax.Node) map[string]bool {
 }
 
 func copyFuncDeclWithoutBody(decl *syntax.FuncDecl) *syntax.FuncDecl {
+	return copyFuncDecl(decl, false)
+}
+
+func copyFuncDecl(decl *syntax.FuncDecl, withBody bool) *syntax.FuncDecl {
 	if decl == nil {
 		return nil
 	}
@@ -363,9 +427,14 @@ func copyFuncDeclWithoutBody(decl *syntax.FuncDecl) *syntax.FuncDecl {
 	x.Name = copyName(decl.Name)
 	x.TParamList = copyFields(decl.TParamList)
 	x.Type = copyFuncType(decl.Type)
-
+	if withBody {
+		x.Body = copyBlockStmts(decl.Body)
+	} else {
+		x.Body = nil
+	}
 	return &x
 }
+
 func copyFuncType(typ_ *syntax.FuncType) *syntax.FuncType {
 	if typ_ == nil {
 		return nil
@@ -390,6 +459,7 @@ func copyBasicLiterals(literals []*syntax.BasicLit) []*syntax.BasicLit {
 	}
 	return c
 }
+
 func copyBasicLit(lit *syntax.BasicLit) *syntax.BasicLit {
 	if lit == nil {
 		return nil
@@ -406,6 +476,19 @@ func copyField(field *syntax.Field) *syntax.Field {
 	x.Type = copyExpr(field.Type)
 	return &x
 }
+
+func copyNames(names []*syntax.Name) []*syntax.Name {
+	if names == nil {
+		return nil
+	}
+	n := len(names)
+	copiedNames := make([]*syntax.Name, n)
+	for i := 0; i < n; i++ {
+		copiedNames[i] = copyName(names[i])
+	}
+	return copiedNames
+}
+
 func copyName(name *syntax.Name) *syntax.Name {
 	if name == nil {
 		return nil
@@ -423,6 +506,183 @@ func copyExprs(exprs []syntax.Expr) []syntax.Expr {
 	return copyExprs
 }
 
+func copySimpleStmt(stmt syntax.SimpleStmt) syntax.SimpleStmt {
+	if stmt == nil {
+		return nil
+	}
+	switch stmt := stmt.(type) {
+	case *syntax.AssignStmt:
+		x := *stmt
+		x.Lhs = copyExpr(stmt.Lhs)
+		x.Rhs = copyExpr(stmt.Rhs)
+		return &x
+	case *syntax.SendStmt:
+		x := *stmt
+		x.Chan = copyExpr(stmt.Chan)
+		x.Value = copyExpr(stmt.Value)
+		return &x
+	case *syntax.ExprStmt:
+		x := *stmt
+		x.X = copyExpr(stmt.X)
+		return &x
+	case *syntax.EmptyStmt:
+		x := *stmt
+		return &x
+	case *syntax.RangeClause:
+		x := *stmt
+		x.Lhs = copyExpr(stmt.Lhs)
+		x.X = copyExpr(stmt.X)
+		return &x
+	default:
+		panic(fmt.Errorf("unrecognized simple stmt: %T", stmt))
+	}
+}
+func copyCaseClause(n *syntax.CaseClause) *syntax.CaseClause {
+	if n == nil {
+		return nil
+	}
+	x := *n
+	x.Cases = copyExpr(n.Cases)
+	x.Body = copyStmts(n.Body)
+	return &x
+}
+
+func copyCaseClauses(list []*syntax.CaseClause) []*syntax.CaseClause {
+	if list == nil {
+		return nil
+	}
+	n := len(list)
+	copiedList := make([]*syntax.CaseClause, n)
+	for i := 0; i < n; i++ {
+		copiedList[i] = copyCaseClause(list[i])
+	}
+	return copiedList
+}
+
+func copyCommClause(n *syntax.CommClause) *syntax.CommClause {
+	if n == nil {
+		return nil
+	}
+	x := *n
+	x.Comm = copySimpleStmt(n.Comm)
+	x.Body = copyStmts(n.Body)
+	return &x
+}
+
+func copyCommClauses(list []*syntax.CommClause) []*syntax.CommClause {
+	if list == nil {
+		return nil
+	}
+	n := len(list)
+	copiedList := make([]*syntax.CommClause, n)
+	for i := 0; i < n; i++ {
+		copiedList[i] = copyCommClause(list[i])
+	}
+	return copiedList
+}
+func copyDeclList(decls []syntax.Decl) []syntax.Decl {
+	if decls == nil {
+		return nil
+	}
+	n := len(decls)
+	copiedDecls := make([]syntax.Decl, n)
+	for i := 0; i < n; i++ {
+		copiedDecls[i] = copyDecl(decls[i])
+	}
+	return copiedDecls
+}
+func copyDecl(decl syntax.Decl) syntax.Decl {
+	if decl == nil {
+		return nil
+	}
+	switch decl := decl.(type) {
+	case *syntax.ConstDecl:
+		x := *decl
+		if decl.Group != nil {
+			g := *decl.Group
+			x.Group = &g
+		}
+		x.NameList = copyNames(decl.NameList)
+		x.Type = copyExpr(decl.Type)
+		x.Values = copyExpr(decl.Values)
+		return &x
+	case *syntax.VarDecl:
+		x := *decl
+		if decl.Group != nil {
+			g := *decl.Group
+			x.Group = &g
+		}
+		x.NameList = copyNames(decl.NameList)
+		x.Type = copyExpr(decl.Type)
+		x.Values = copyExpr(decl.Values)
+		return &x
+	case *syntax.TypeDecl:
+		x := *decl
+		if decl.Group != nil {
+			g := *decl.Group
+			x.Group = &g
+		}
+		x.Name = copyName(decl.Name)
+		x.TParamList = copyFields(decl.TParamList)
+		x.Type = copyExpr(decl.Type)
+		return &x
+	default:
+		panic(fmt.Errorf("unrecognized decl: %T", decl))
+	}
+}
+func copyStmt(stmt syntax.Stmt) syntax.Stmt {
+	if stmt == nil {
+		return nil
+	}
+	switch stmt := stmt.(type) {
+	case syntax.SimpleStmt:
+		return copySimpleStmt(stmt)
+	case *syntax.BlockStmt:
+		return copyBlockStmts(stmt)
+	case *syntax.IfStmt:
+		x := *stmt
+		x.Init = copySimpleStmt(stmt.Init)
+		x.Cond = copyExpr(stmt.Cond)
+		x.Then = copyBlockStmts(stmt.Then)
+		x.Else = copyStmt(stmt.Else)
+		return &x
+	case *syntax.CallStmt:
+		x := *stmt
+		x.Call = copyCallExpr(stmt.Call)
+		return &x
+	case *syntax.DeclStmt:
+		x := *stmt
+		x.DeclList = copyDeclList(stmt.DeclList)
+		return &x
+	case *syntax.ReturnStmt:
+		x := *stmt
+		x.Results = copyExpr(stmt.Results)
+		return &x
+	case *syntax.SwitchStmt:
+		x := *stmt
+		x.Init = copySimpleStmt(stmt.Init)
+		x.Tag = copyExpr(stmt.Tag)
+		x.Body = copyCaseClauses(stmt.Body)
+		return &x
+	}
+	panic(fmt.Sprintf("unrecognized stmt: %T", stmt))
+}
+func copyStmts(stmts []syntax.Stmt) []syntax.Stmt {
+	cpStmts := make([]syntax.Stmt, len(stmts))
+	for i := 0; i < len(stmts); i++ {
+		cpStmts[i] = copyStmt(stmts[i])
+	}
+	return cpStmts
+}
+
+func copyBlockStmts(stmt *syntax.BlockStmt) *syntax.BlockStmt {
+	if stmt == nil {
+		return nil
+	}
+	x := *stmt
+	x.List = copyStmts(x.List)
+	return &x
+}
 func copyExpr(expr syntax.Expr) syntax.Expr {
 	if expr == nil {
 		return nil
@@ -443,6 +703,15 @@ func copyExpr(expr syntax.Expr) syntax.Expr {
 		x.X = copyExpr(expr.X)
 		x.Y = copyExpr(expr.Y)
 		return &x
+	case *syntax.CallExpr:
+		x := *expr
+		x.Fun = copyExpr(expr.Fun)
+		x.ArgList = copyExprs(expr.ArgList)
+		return &x
+	case *syntax.ParenExpr:
+		x := *expr
+		x.X = copyExpr(expr.X)
+		return &x
 	case *syntax.DotsType:
 		x := *expr
 		x.Elem = copyExpr(expr.Elem)
@@ -460,6 +729,11 @@ func copyExpr(expr syntax.Expr) syntax.Expr {
 		x.Index[0] = copyExpr(expr.Index[0])
 		x.Index[1] = copyExpr(expr.Index[1])
 		x.Index[2] = copyExpr(expr.Index[2])
+		return &x
+	case *syntax.CompositeLit:
+		x := *expr
+		x.Type = copyExpr(expr.Type)
+		x.ElemList = copyExprs(expr.ElemList)
 		return &x
 	case *syntax.SliceType:
 		x := *expr

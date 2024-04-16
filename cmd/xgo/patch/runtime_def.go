@@ -22,9 +22,18 @@ const TestingCallbackDeclarations = `func __xgo_link_get_test_starts() []interfa
 	return nil
 }
 `
+const TestingEndCallbackDeclarations = `func __xgo_link_get_test_ends() []interface{}{
+	// link by compiler
+	return nil
+}
+`
 
 const TestingStart = `for _,__xgo_on_test_start:=range __xgo_link_get_test_starts(){
 	(__xgo_on_test_start.(func(*T,func(*T))))(t,fn)
+}
+`
+const TestingEnd = `for _,__xgo_on_test_end:=range __xgo_link_get_test_ends(){
+	defer (__xgo_on_test_end.(func(*T,func(*T))))(t,fn)
 }
 `
 

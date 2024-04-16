@@ -43,7 +43,15 @@ type options struct {
 
 	// recognize go flags as is
 	// -gcflags
-	gcflags string
+	// can repeat
+	gcflags []string
+
+	// xgo test --trace
+
+	// --strace, --strace=on, --strace=off
+	// --stack-stackTrace, --stack-stackTrace=off, --stack-stackTrace=on
+	// to be used in test mode
+	stackTrace string
 
 	remainArgs []string
 }
@@ -80,7 +88,8 @@ func parseOptions(args []string) (*options, error) {
 
 	var noBuildOutput bool
 
-	var gcflags string
+	var gcflags []string
+	var stackTrace string
 
 	var remainArgs []string
 	nArg := len(args)
@@ -127,7 +136,9 @@ func parseOptions(args []string) (*options, error) {
 		},
 		{
 			Flags: []string{"-gcflags"},
-			Value: &gcflags,
+			Set: func(v string) {
+				gcflags = append(gcflags, v)
+			},
 		},
 		{
 			Flags:  []string{"--log-debug"},
@@ -211,6 +222,13 @@ func parseOptions(args []string) (*options, error) {
 			noSetup = true
 			continue
 		}
+
+		argVal, ok := parseStackTraceFlag(arg)
+		if ok {
+			stackTrace = argVal
+			continue
+		}
+
 		if isDevelopment && arg == "--debug-with-dlv" {
 			debugWithDlv = true
 			continue
@@ -226,7 +244,7 @@ func parseOptions(args []string) (*options, error) {
 				}
 				continue
 			}
-			ok, err := flag.TryParseFlagsValue(flagVal.Flags, flagVal.Value, &i, args)
+			ok, err := flag.TryParseFlagsValue(flagVal.Flags, flagVal.Value, flagVal.Set, &i, args)
 			if err != nil {
 				return nil, err
 			}
@@ -292,8 +310,35 @@ func parseOptions(args []string) (*options, error) {
 		// default true
 		syncWithLink: syncWithLink == nil || *syncWithLink,
 
-		gcflags: gcflags,
+		gcflags:    gcflags,
+		stackTrace: stackTrace,
 
 		remainArgs: remainArgs,
 	}, nil
+}
+
+func parseStackTraceFlag(arg string) (string, bool) {
+	var stackTracePrefix string
+	if strings.HasPrefix(arg, "--strace") {
+		stackTracePrefix = "--strace"
+	} else if strings.HasPrefix(arg, "--stack-trace") {
+		stackTracePrefix = "--stack-trace"
+	}
+	if stackTracePrefix == "" {
+		return "", false
+	}
+	if len(arg) == len(stackTracePrefix) {
+		return "on", true
+	}
+	if arg[len(stackTracePrefix)] != '=' {
+		return "", false
+	}
+	val := arg[len(stackTracePrefix)+1:]
+	if val == "" || val == "on" {
+		return "on", true
+	}
+	if val == "off" {
+		return "off", true
+	}
+	panic(fmt.Errorf("unrecognized value %s: %s, expects on|off", arg, val))
 }

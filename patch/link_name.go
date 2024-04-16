@@ -17,6 +17,7 @@ const xgoRuntimeTrapPkg = xgoRuntimePkgPrefix + "trap"
 
 // accepts interface{} as argument
 const xgoOnTestStart = "__xgo_on_test_start"
+const xgoOnTestEnd = "__xgo_on_test_end"
 
 const XgoLinkSetTrap = "__xgo_link_set_trap"
 const XgoLinkSetTrapVar = "__xgo_link_set_trap_var"
@@ -39,7 +40,9 @@ var linkMap = map[string]string{
 	"__xgo_link_on_gonewproc":                 "__xgo_on_gonewproc",
 	"__xgo_link_on_goexit":                    "__xgo_on_goexit",
 	"__xgo_link_on_test_start":                xgoOnTestStart,
+	"__xgo_link_on_test_end":                  xgoOnTestEnd,
 	"__xgo_link_get_test_starts":              "__xgo_get_test_starts",
+	"__xgo_link_get_test_ends":                "__xgo_get_test_ends",
 	"__xgo_link_retrieve_all_funcs_and_clear": "__xgo_retrieve_all_funcs_and_clear",
 	"__xgo_link_peek_panic":                   "__xgo_peek_panic",
 	"__xgo_link_mem_equal":                    "__xgo_mem_equal",
@@ -130,7 +133,7 @@ func replaceWithRuntimeCall(fn *ir.Func, name string) {
 	resNames := getTypeNames(results)
 	fnPos := fn.Pos()
 
-	if needConvertArg && name == xgoOnTestStart {
+	if needConvertArg && (name == xgoOnTestStart || name == xgoOnTestEnd) {
 		for i, p := range paramNames {
 			paramNames[i] = convToEFace(fnPos, p, p.(*ir.Name).Type(), false)
 		}

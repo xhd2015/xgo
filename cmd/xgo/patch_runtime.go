@@ -30,7 +30,7 @@ var testingFilePatch = &FilePatch{
 				"{",
 				"\n",
 			},
-			Content: patch.TestingCallbackDeclarations,
+			Content: patch.TestingCallbackDeclarations + patch.TestingEndCallbackDeclarations,
 		},
 		{
 			Mark:         "call_testing_callback_v2",
@@ -43,7 +43,7 @@ var testingFilePatch = &FilePatch{
 				`t.start = time.Now()`,
 				"fn(t",
 			},
-			Content: patch.TestingStart,
+			Content: patch.TestingStart + patch.TestingEnd,
 		},
 	},
 }
@@ -151,10 +151,10 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 		procDecl := `func newproc(fn`
 		newProc := `newg := newproc1(fn, gp, pc)`
 		if goVersion.Major == 1 && goVersion.Minor <= 17 {
-			// siz: to avoid typo check
-			const siz = "s" + "i" + "z"
-			procDecl = `func newproc(` + siz + ` int32`
-			newProc = `newg := newproc1(fn, argp, ` + siz + `, gp, pc)`
+			// to avoid typo check
+			const size = "s" + "i" + "z"
+			procDecl = `func newproc(` + size + ` int32`
+			newProc = `newg := newproc1(fn, argp, ` + size + `, gp, pc)`
 		}
 
 		// see https://github.com/xhd2015/xgo/issues/67

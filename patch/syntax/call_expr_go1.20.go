@@ -8,3 +8,7 @@ import "cmd/compile/internal/syntax"
 func (ctx *BlockContext) traverseCallStmtCallExpr(node syntax.Expr, globaleNames map[string]*DeclInfo, imports map[string]string) syntax.Expr {
 	return ctx.traverseExpr(node, globaleNames, imports)
 }
+
+func copyCallExpr(expr syntax.Expr) syntax.Expr {
+	return copyExpr(expr)
+}
