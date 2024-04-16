@@ -128,13 +128,20 @@ func __xgo_on_goexit(fn func()) {
 }
 
 var __xgo_on_test_starts []interface{} // func(t *testing.T,fn func(t *testing.T))
+var __xgo_on_test_ends []interface{}   // func(t *testing.T,fn func(t *testing.T))
 
 func __xgo_on_test_start(fn interface{}) {
 	__xgo_on_test_starts = append(__xgo_on_test_starts, fn)
 }
+func __xgo_on_test_end(fn interface{}) {
+	__xgo_on_test_ends = append(__xgo_on_test_ends, fn)
+}
 
 func __xgo_get_test_starts() []interface{} {
 	return __xgo_on_test_starts
+}
+func __xgo_get_test_ends() []interface{} {
+	return __xgo_on_test_ends
 }
 
 // check gorecover() for implementation details

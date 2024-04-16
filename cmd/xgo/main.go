@@ -147,6 +147,7 @@ func handleBuild(cmd string, args []string) error {
 	withGoroot := opts.withGoroot
 	dumpIR := opts.dumpIR
 	dumpAST := opts.dumpAST
+	stackTrace := opts.stackTrace
 
 	if cmdExec && len(remainArgs) == 0 {
 		return fmt.Errorf("exec requires command")
@@ -237,7 +238,7 @@ func handleBuild(cmd string, args []string) error {
 	// gcflags can cause the build cache to invalidate
 	// so separate them with normal one
 	buildCacheSuffix := ""
-	if gcflags != "" {
+	if len(gcflags) > 0 {
 		buildCacheSuffix = "-gcflags"
 	}
 	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
@@ -382,8 +383,8 @@ func handleBuild(cmd string, args []string) error {
 		if flagC {
 			buildCmdArgs = append(buildCmdArgs, "-c")
 		}
-		if gcflags != "" {
-			buildCmdArgs = append(buildCmdArgs, "-gcflags="+gcflags)
+		for _, f := range gcflags {
+			buildCmdArgs = append(buildCmdArgs, "-gcflags="+f)
 		}
 		if cmdBuild || (cmdTest && flagC) {
 			// output
@@ -434,6 +435,9 @@ func handleBuild(cmd string, args []string) error {
 		}
 		if vscodeDebugFile != "" {
 			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_VSCODE="+vscodeDebugFile+vscodeDebugFileSuffix)
+		}
+		if stackTrace != "" {
+			execCmd.Env = append(execCmd.Env, "XGO_STACK_TRACE="+stackTrace)
 		}
 	}
 	logDebug("command env: %v", execCmd.Env)

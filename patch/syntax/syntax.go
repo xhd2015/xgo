@@ -180,14 +180,18 @@ func ClearSyntaxDeclMapping() {
 
 func registerFuncs(fileList []*syntax.File, addFile func(name string, r io.Reader) *syntax.File) {
 	allFiles = fileList
-	if xgo_ctxt.SkipPackageTrap() {
-		return
-	}
-	var pkgName string
+
 	pkgPath := xgo_ctxt.GetPkgPath()
-	if len(fileList) > 0 {
-		pkgName = fileList[0].PkgName.Value
+
+	var needTimePatch bool
+	var needTimeRewrite bool
+	if base.Flag.Std && pkgPath == "time" {
+		needTimePatch = true
+	} else if pkgPath == xgo_ctxt.XgoRuntimeTracePkg {
+		needTimeRewrite = true
 	}
+
+	skipTrap := xgo_ctxt.SkipPackageTrap()
 
 	// debugPkgSyntax(fileList)
 	// if true {
@@ -203,8 +207,21 @@ func registerFuncs(fileList []*syntax.File, addFile func(name string, r io.Reade
 	// where its _pkg_.a is.
 
 	varTrap := allowVarTrap()
+	var funcDelcs []*DeclInfo
+	if needTimePatch || needTimeRewrite || !skipTrap {
+		funcDelcs = getFuncDecls(fileList, varTrap)
+	}
+	if needTimePatch {
+		// add time.Now_Xgo_Original() and time.Since_Xgo_Original()
+		addTimePatch(funcDelcs)
+	}
+	if needTimeRewrite {
+		rewriteTimePatch(funcDelcs)
+	}
+	if skipTrap {
+		return
+	}
 
-	funcDelcs := getFuncDecls(fileList, varTrap)
 	for _, funcDecl := range funcDelcs {
 		if funcDecl.RecvTypeName == "" && funcDecl.Name == XgoLinkGeneratedRegisterFunc {
 			// ensure we are safe
@@ -212,6 +229,12 @@ func registerFuncs(fileList []*syntax.File, addFile func(name string, r io.Reade
 			return
 		}
 	}
+
+	var pkgName string
+	if len(fileList) > 0 {
+		pkgName = fileList[0].PkgName.Value
+	}
+
 	// filterFuncDecls
 	funcDelcs = filterFuncDecls(funcDelcs, pkgPath)
 	// assign to global

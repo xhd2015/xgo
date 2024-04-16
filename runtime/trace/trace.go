@@ -20,8 +20,12 @@ import (
 var stackMap sync.Map        // uintptr(goroutine) -> *Root
 var testInfoMapping sync.Map // uintptr(goroutine) -> *testInfo
 
+var xgoStackTrace = os.Getenv("XGO_STACK_TRACE")
+
 type testInfo struct {
 	name string
+
+	onFinish func()
 }
 
 func init() {
@@ -31,12 +35,30 @@ func init() {
 			return
 		}
 		key := uintptr(__xgo_link_getcurg())
-		testInfoMapping.LoadOrStore(key, &testInfo{
+		tInfo := &testInfo{
 			name: name,
-		})
+		}
+		testInfoMapping.LoadOrStore(key, tInfo)
+		if xgoStackTrace == "on" {
+			tInfo.onFinish = Begin()
+		}
 	})
+	__xgo_link_on_test_end(func(t *testing.T, fn func(t *testing.T)) {
+		key := uintptr(__xgo_link_getcurg())
+		val, ok := testInfoMapping.Load(key)
+		if !ok {
+			return
+		}
+		ttInfo := val.(*testInfo)
+		if ttInfo.onFinish != nil {
+			ttInfo.onFinish()
+			ttInfo.onFinish = nil
+		}
+	})
+
 	__xgo_link_on_goexit(func() {
 		key := uintptr(__xgo_link_getcurg())
+
 		testInfoMapping.Delete(key)
 		collectingMap.Delete(key)
 	})
@@ -45,6 +67,9 @@ func init() {
 // link by compiler
 func __xgo_link_on_test_start(fn func(t *testing.T, fn func(t *testing.T))) {
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_test_start(requires xgo).")
+}
+func __xgo_link_on_test_end(fn func(t *testing.T, fn func(t *testing.T))) {
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_test_end(requires xgo).")
 }
 
 // link by compiler
@@ -65,6 +90,17 @@ func __xgo_link_init_finished() bool {
 func __xgo_link_peek_panic() interface{} {
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_peek_panic(requires xgo).")
 	return nil
+}
+
+// xgo will optimize these two functions to direct call
+func timeNow() time.Time {
+	// to: time.Now_Xgo_Original()
+	return time.Now()
+}
+
+func timeSince(t time.Time) time.Duration {
+	// to: time.Since_Xgo_Original()
+	return time.Since(t)
 }
 
 var enabledGlobally bool
@@ -192,12 +228,12 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 		// initial stack
 		root := &Root{
 			Top:   stack,
-			Begin: getNow(),
+			Begin: timeNow(),
 			Children: []*Stack{
 				stack,
 			},
 		}
-		stack.Begin = int64(time.Since(root.Begin))
+		stack.Begin = int64(timeSince(root.Begin))
 		if localOpts == nil {
 			stackMap.Store(key, root)
 		} else {
@@ -213,7 +249,7 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 	} else {
 		root = globalRoot.(*Root)
 	}
-	stack.Begin = int64(time.Since(root.Begin))
+	stack.Begin = int64(timeSince(root.Begin))
 	prevTop := root.Top
 	root.Top.Children = append(root.Top.Children, stack)
 	root.Top = stack
@@ -264,7 +300,7 @@ func handleTracePost(ctx context.Context, f *core.FuncInfo, args core.Object, re
 			}
 		}
 	}
-	root.Top.End = int64(time.Since(root.Begin))
+	root.Top.End = int64(timeSince(root.Begin))
 	if data == nil {
 		root.Top = nil
 		// stack finished
@@ -315,7 +351,7 @@ func enableLocal(collOpts *collectOpts) func() {
 	if collOpts.root == nil {
 		collOpts.root = &Root{
 			Top:   &Stack{},
-			Begin: getNow(),
+			Begin: timeNow(),
 		}
 	}
 	top := collOpts.root.Top
@@ -391,12 +427,6 @@ func emitTraceNoErr(name string, root *Root, opts *ExportOptions) {
 	emitTrace(name, root, opts)
 }
 
-func getNow() (now time.Time) {
-	trap.Direct(func() {
-		now = time.Now()
-	})
-	return
-}
 func formatTime(t time.Time, layout string) (output string) {
 	trap.Direct(func() {
 		output = t.Format(layout)
@@ -408,6 +438,7 @@ func formatTime(t time.Time, layout string) (output string) {
 // TODO: may add callback for this
 func emitTrace(name string, root *Root, opts *ExportOptions) error {
 	xgoTraceOutput := getTraceOutput()
+
 	if xgoTraceOutput == "off" {
 		return nil
 	}
@@ -418,7 +449,7 @@ func emitTrace(name string, root *Root, opts *ExportOptions) error {
 		ghex := fmt.Sprintf("g_%x", __xgo_link_getcurg())
 		traceID := "t_" + strconv.FormatInt(traceIDNum, 10)
 		if xgoTraceOutput == "" {
-			traceDir := formatTime(getNow(), "trace_20060102_150405")
+			traceDir := formatTime(timeNow(), "trace_20060102_150405")
 			subName = filepath.Join(traceDir, ghex, traceID)
 		} else if useStdout {
 			subName = fmt.Sprintf("%s/%s", ghex, traceID)

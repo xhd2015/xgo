@@ -9,6 +9,7 @@ import (
 const XgoModule = "github.com/xhd2015/xgo"
 const XgoRuntimePkg = XgoModule + "/runtime"
 const XgoRuntimeCorePkg = XgoModule + "/runtime/core"
+const XgoRuntimeTracePkg = XgoModule + "/runtime/trace"
 
 var XgoMainModule = os.Getenv("XGO_MAIN_MODULE")
 var XgoCompilePkgDataDir = os.Getenv("XGO_COMPILE_PKG_DATA_DIR")

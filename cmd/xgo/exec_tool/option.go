@@ -65,7 +65,7 @@ func parseOptions(args []string, stopAfterFirstArg bool) (*options, error) {
 			continue
 		}
 
-		ok, err := flag.TryParseFlagsValue([]string{"--debug"}, &debug, &i, args)
+		ok, err := flag.TryParseFlagsValue([]string{"--debug"}, &debug, nil, &i, args)
 		if err != nil {
 			return nil, err
 		}
