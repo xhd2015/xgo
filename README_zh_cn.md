@@ -73,7 +73,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/mock"
 )
 
@@ -82,9 +81,8 @@ func MyFunc() string {
 }
 
 func TestFuncMock(t *testing.T) {
-	mock.Mock(MyFunc, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
-		results.GetFieldIndex(0).Set("mock func")
-		return nil
+    mock.Patch(MyFunc, func() string {
+        return "mock func"
 	})
 	text := MyFunc()
 	if text != "mock func" {
@@ -344,72 +342,56 @@ func TestPatchFunc(t *testing.T) {
 注意: `Mock`和`Patch`也支持对包级别的变量和常量进行mock, 见[runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
 ## Trace
+> Trace也许是xgo提供的最强大的工具
+
 在调试一个非常深的调用栈时, 通常会感觉非常痛苦, 并且效率低下。
 
 为了解决这个问题, Trace实现了结构化的调用堆栈信息收集。在Trace的帮助下, 通常不需要很多Debug即可知道函数调用的细节:
 
-(代码参见[test/testdata/trace/trace.go](test/testdata/trace/trace.go))
 ```go
-package main
+package trace_test
 
 import (
     "fmt"
+    "testing"
 
     "github.com/xhd2015/xgo/runtime/trace"
 )
 
-func init() {
-    trace.Enable()
-}
-
-func main() {
+func TestTrace(t *testing.T) {
+    // begin trace
+    finish := trace.Begin()
+    defer finish()
     A()
     B()
     C()
 }
+
 func A() { fmt.Printf("A\n") }
 func B() { fmt.Printf("B\n");C(); }
 func C() { fmt.Printf("C\n") }
 ```
 
-使用`go`运行:
-
-```sh
-go run ./
-# 输出:
-#   A
-#   B
-#   C
-#   C
-```
-
 使用`xgo`运行:
 
 ```sh
-XGO_TRACE_OUTPUT=stdout xgo run ./
-# 输出一个JSON:
-#        {
-#            "Name": "main",
-#            "Children": [{
-#                 "Name": "A"
-#                },{
-#                  "Name": "B",
-#                  "Children": [{
-#                       "Name": "C"
-#                   }]
-#                },{
-#                   "Name": "C"
-#                }
-#            ]
-#        }
-#
-# NOTE: 省略其他的字段, 只展示关键的信息
+# 执行测试, 生成TestTrace.json
+xgo test ./
+
+# 查看Trace
+xgo tool trace TestTrace.json
 ```
 
-使用`xgo`自带的可视化工具查看Trace: `xgo tool trace TestExample.json`
-
 输出:
-![trace html](cmd/xgo/trace/testdata/stack_trace.jpg "Trace")
+![trace html](doc/img/trace_demo.jpg "Simple Trace")
+
+另一个复杂一些的例子[runtime/test/stack_trace/update_test.go](runtime/test/stack_trace/update_test.go): 
+![trace html](cmd/xgo/trace/testdata/stack_trace.jpg "Complicatd Trace")
+
+真实项目例子: 
+- https://github.com/Shibbaz/GOEventBus/pull/11
+
+使用Trace可以帮助你快速理解代码的执行流程。
 
 默认情况下, Trace会在当前目录下写入堆栈记录, 可通过环境变量`XGO_TRACE_OUTPUT`进行控制:
 - `XGO_TRACE_OUTPUT=stdout`: 堆栈记录会被输出到stdout, 方便debug,

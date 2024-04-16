@@ -77,7 +77,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/mock"
 )
 
@@ -86,9 +85,8 @@ func MyFunc() string {
 }
 
 func TestFuncMock(t *testing.T) {
-	mock.Mock(MyFunc, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
-		results.GetFieldIndex(0).Set("mock func")
-		return nil
+	mock.Patch(MyFunc, func() string {
+        return "mock func"
 	})
 	text := MyFunc()
 	if text != "mock func" {
@@ -351,74 +349,59 @@ func TestPatchFunc(t *testing.T) {
 NOTE: `Mock` and `Patch` supports top-level variables and consts, see [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
 ## Trace
+> Trace might be the most powerful tool inside xgo
+
 It is painful when debugging with a deep call stack.
 
 Trace addresses this issue by collecting the hierarchical stack trace and stores it into file for later use.
 
 Needless to say, with Trace, debug becomes less usual:
 
-(check [test/testdata/trace/trace.go](test/testdata/trace/trace.go) for more details.)
 ```go
-package main
+package trace_test
 
 import (
     "fmt"
+    "testing"
 
     "github.com/xhd2015/xgo/runtime/trace"
 )
 
-func init() {
-    trace.Enable()
-}
-
-func main() {
+func TestTrace(t *testing.T) {
+    // begin trace
+    finish := trace.Begin()
+    defer finish()
     A()
     B()
     C()
 }
+
 func A() { fmt.Printf("A\n") }
 func B() { fmt.Printf("B\n");C(); }
 func C() { fmt.Printf("C\n") }
 ```
 
-Run with `go`:
-
-```sh
-go run ./
-# output:
-#   A
-#   B
-#   C
-#   C
-```
-
 Run with `xgo`:
 
 ```sh
-XGO_TRACE_OUTPUT=stdout xgo run ./
-# output a JSON representing the call stacktrace like:
-#        {
-#            "Name": "main",
-#            "Children": [{
-#                 "Name": "A"
-#                },{
-#                  "Name": "B",
-#                  "Children": [{
-#                       "Name": "C"
-#                   }]
-#                },{
-#                   "Name": "C"
-#                }
-#            ]
-#        }
-#
-# NOTE: other fields are omitted for displaying key information.
+# run the test
+# this will write the trace into TestTrace.json
+xgo test ./
+
+# view the trace
+xgo tool trace TestTrace.json
 ```
 
-You can view the trace with:`xgo tool trace TestExample.json`
-
 Output:
-![trace html](cmd/xgo/trace/testdata/stack_trace.jpg "Trace")
+![trace html](doc/img/trace_demo.jpg "Simple Trace")
+
+Another more complicated example from [runtime/test/stack_trace/update_test.go](runtime/test/stack_trace/update_test.go): 
+![trace html](cmd/xgo/trace/testdata/stack_trace.jpg "Complicatd Trace")
+
+Real world examples: 
+- https://github.com/Shibbaz/GOEventBus/pull/11
+
+Trace helps you get started to a new project quickly.
 
 By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
 - `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purpose,
