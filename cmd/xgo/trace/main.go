@@ -12,7 +12,9 @@ import (
 	"os/exec"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/xhd2015/xgo/support/cmd"
@@ -77,24 +79,43 @@ func serveFile(file string) {
 		}
 		w.Write(output)
 	})
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "7070"
+	var autoIncrPort bool
+	var port int
+	portStr := os.Getenv("PORT")
+	if portStr == "" {
+		port = 7070
+		portStr = strconv.Itoa(port)
+		autoIncrPort = true
 	}
-	url := fmt.Sprintf("http://localhost:%s", port)
-	fmt.Printf("Server listen at %s\n", url)
 
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		openCmd := "open"
-		if runtime.GOOS == "windows" {
-			openCmd = "explorer"
+	for {
+		portErr := make(chan struct{})
+		go func() {
+			select {
+			case <-time.After(500 * time.Millisecond):
+			case <-portErr:
+				return
+			}
+			url := fmt.Sprintf("http://localhost:%s", portStr)
+			fmt.Printf("Server listen at %s\n", url)
+
+			openCmd := "open"
+			if runtime.GOOS == "windows" {
+				openCmd = "explorer"
+			}
+			cmd.Run(openCmd, url)
+		}()
+		err := http.ListenAndServe(fmt.Sprintf(":%s", portStr), server)
+		if err == nil {
+			break
 		}
-		cmd.Run(openCmd, url)
-	}()
-
-	err := http.ListenAndServe(fmt.Sprintf(":%s", port), server)
-	if err != nil {
+		close(portErr)
+		var syscallErr syscall.Errno
+		if autoIncrPort && errors.As(err, &syscallErr) && syscallErr == syscall.EADDRINUSE {
+			port++
+			portStr = strconv.Itoa(port)
+			continue
+		}
 		panic(err)
 	}
 }
