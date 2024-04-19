@@ -51,6 +51,9 @@ var runtimeSubTests = []string{
 	"patch",
 	"patch_const",
 }
+var runtimeSubFileTests = []string{
+	"trap_with_overlay/run",
+}
 
 func main() {
 	args := os.Args[1:]
@@ -406,6 +409,9 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 		} else {
 			for _, runtimeTest := range runtimeSubTests {
 				testArgs = append(testArgs, "./"+runtimeTest+"/...")
+			}
+			for _, runtimeSubFileTest := range runtimeSubFileTests {
+				testArgs = append(testArgs, "./"+runtimeSubFileTest)
 			}
 		}
 	}

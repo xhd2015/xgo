@@ -24,6 +24,7 @@ func editFile(file string, callback func(content string) (string, error)) error 
 	return ioutil.WriteFile(file, []byte(newContent), 0755)
 }
 
+// Deprecated: use addContentAtIndex instead
 func addCodeAfterImports(code string, beginMark string, endMark string, contents []string) string {
 	idx := indexSeq(code, []string{"import", "(", "\n"}, false)
 	if idx < 0 {
@@ -32,14 +33,17 @@ func addCodeAfterImports(code string, beginMark string, endMark string, contents
 	return insertContentNoDuplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
 }
 
+// Deprecated: use addContentAtIndex instead
 func addContentBefore(content string, beginMark string, endMark string, seq []string, addContent string) string {
 	return addContentAt(content, beginMark, endMark, seq, addContent, true)
 }
 
+// Deprecated: use addContentAtIndex instead
 func addContentAfter(content string, beginMark string, endMark string, seq []string, addContent string) string {
 	return addContentAt(content, beginMark, endMark, seq, addContent, false)
 }
 
+// Deprecated: use addContentAtIndex instead
 func addContentAt(content string, beginMark string, endMark string, seq []string, addContent string, begin bool) string {
 	idx := indexSeq(content, seq, begin)
 	if idx < 0 {

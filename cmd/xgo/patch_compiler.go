@@ -317,6 +317,31 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 		}
 		content = addContentAfter(content, "/*<begin file_autogen>*/", "/*<end file_autogen>*/", anchors,
 			noderFiles)
+
+		// expose the trimFilename func for recording
+		if goVersion.Major == 1 && goVersion.Minor <= 17 {
+			content = addContentAtIndex(content,
+				"/*<begin expose_abs_filename>*/", "/*<end expose_abs_filename>*/",
+				[]string{
+					`func absFilename(name string) string {`,
+				},
+				0,
+				true,
+				"func init(){ xgo_syntax.AbsFilename = absFilename;}\n",
+			)
+		} else {
+			content = addContentAtIndex(content,
+				"/*<begin expose_trim_filename>*/", "/*<end expose_trim_filename>*/",
+				[]string{
+					`func trimFilename(b *syntax.PosBase) string {`,
+				},
+				0,
+				true,
+				"func init(){ xgo_syntax.TrimFilename = trimFilename;}\n",
+			)
+		}
+
+		// func trimFilename(b *syntax.PosBase) string {
 		return content, nil
 	})
 }
