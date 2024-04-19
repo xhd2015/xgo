@@ -422,9 +422,11 @@ type DeclInfo struct {
 
 	FileSyntax *syntax.File
 	FileIndex  int
-	File       string
-	FileRef    string
-	Line       int
+
+	// this is file name after applied -trimpath
+	File    string
+	FileRef string
+	Line    int
 }
 
 func (c *DeclInfo) RefName() string {
@@ -481,11 +483,20 @@ func fillName(field *syntax.Field, namePrefix string) {
 // collect funcs from files, register each of them by
 // calling to __xgo_reg_func with names and func pointer
 
+var AbsFilename func(name string) string
+var TrimFilename func(b *syntax.PosBase) string
+
 func getFuncDecls(files []*syntax.File, varTrap bool) []*DeclInfo {
 	// fileInfos := make([]*FileDecl, 0, len(files))
 	var declFuncs []*DeclInfo
 	for i, f := range files {
-		file := f.Pos().RelFilename()
+		var file string
+		if TrimFilename != nil {
+			// >= go1.18
+			file = TrimFilename(f.Pos().Base())
+		} else {
+			file = AbsFilename(f.Pos().Base().Filename())
+		}
 		for _, decl := range f.DeclList {
 			fnDecls := extractFuncDecls(i, f, file, decl, varTrap)
 			declFuncs = append(declFuncs, fnDecls...)
