@@ -6,26 +6,59 @@
 package debug
 
 import (
-	"context"
+	_ "encoding/json"
+	_ "io"
+	_ "io/ioutil"
+	_ "net"
+	_ "net/http"
+	_ "os/exec"
 	"testing"
-	"time"
+	_ "time"
 
 	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/trap"
+	"github.com/xhd2015/xgo/runtime/functab"
 )
 
-func TestNowOriginal(t *testing.T) {
-	var captured bool
-	trap.AddFuncInterceptor(time.Now, &trap.Interceptor{
-		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
-			if f.Pkg == "time" && f.IdentityName == "Now" {
-				captured = true
-			}
-			return nil, nil
-		},
-	})
-	time.Now()
-	if captured {
-		t.Fatalf("should not be captured")
+func TestListStdlib(t *testing.T) {
+	funcs := functab.GetFuncs()
+
+	stdPkgs := map[string]bool{
+		"net/http.Get": true,
 	}
+	found, missing := getMissing(funcs, stdPkgs, false)
+	if len(missing) > 0 {
+		t.Fatalf("expect func list contains: %v, actual %v", missing, found)
+	}
+}
+
+func getMissing(funcs []*core.FuncInfo, missingPkgs map[string]bool, intf bool) (found []string, missing []string) {
+	for _, fn := range funcs {
+		pkg := fn.Pkg
+		if intf {
+			if fn.Interface {
+				// t.Logf("found interface: %v", fn)
+				key := pkg + "." + fn.RecvType
+				if _, ok := missingPkgs[key]; ok {
+					missingPkgs[key] = false
+				}
+			}
+			continue
+		}
+		displayName := fn.DisplayName()
+		// fmt.Printf("found: %s %s\n", pkg, displayName)
+		// debug
+		key := pkg + "." + displayName
+		_, ok := missingPkgs[key]
+		if ok {
+			missingPkgs[key] = false
+		}
+	}
+	for k, ok := range missingPkgs {
+		if ok {
+			missing = append(missing, k)
+		} else {
+			found = append(found, k)
+		}
+	}
+	return
 }

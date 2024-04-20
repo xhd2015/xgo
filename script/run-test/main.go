@@ -26,6 +26,9 @@ import (
 //
 // runtime test:
 //    go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncList -v ./test/func_list
+//
+// runtime sub test:
+//    go run ./script/run-test/ --include go1.17.13 --xgo-runtime-sub-test-only -run TestFuncList -v ./func_list
 
 // xgo default test:
 //    go run ./script/run-test/ --include go1.18.10 --xgo-default-test-only -run TestAtomicGenericPtr -v ./test
@@ -71,6 +74,7 @@ func main() {
 	var resetInstrument bool
 	var xgoTestOnly bool
 	var xgoRuntimeTestOnly bool
+	var xgoRuntimeSubTestOnly bool
 	var xgoDefaultTestOnly bool
 
 	var debug bool
@@ -109,18 +113,28 @@ func main() {
 		if arg == "--xgo-test-only" {
 			xgoTestOnly = true
 			xgoRuntimeTestOnly = false
+			xgoRuntimeSubTestOnly = false
 			xgoDefaultTestOnly = false
 			continue
 		}
 		if arg == "--xgo-runtime-test-only" {
 			xgoTestOnly = false
 			xgoRuntimeTestOnly = true
+			xgoRuntimeSubTestOnly = false
+			xgoDefaultTestOnly = false
+			continue
+		}
+		if arg == "--xgo-runtime-sub-test-only" {
+			xgoTestOnly = false
+			xgoRuntimeTestOnly = false
+			xgoRuntimeSubTestOnly = true
 			xgoDefaultTestOnly = false
 			continue
 		}
 		if arg == "--xgo-default-test-only" {
 			xgoTestOnly = false
 			xgoRuntimeTestOnly = false
+			xgoRuntimeSubTestOnly = false
 			xgoDefaultTestOnly = true
 			continue
 		}
@@ -250,6 +264,11 @@ func main() {
 			runDefault = false
 		} else if xgoRuntimeTestOnly {
 			runRuntimeTestFlag = true
+			runRuntimeSubTestFlag = false
+			runXgoTestFlag = false
+			runDefault = false
+		} else if xgoRuntimeSubTestOnly {
+			runRuntimeTestFlag = false
 			runRuntimeSubTestFlag = true
 			runXgoTestFlag = false
 			runDefault = false
@@ -381,7 +400,13 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 		} else {
 			testArgs = append(testArgs, "./test")
 			testArgs = append(testArgs, "./support/...")
-			testArgs = append(testArgs, "./cmd/...")
+			// exclude ./cmd/xgo/runtime_gen
+			testArgs = append(testArgs, "./cmd/xgo")
+			testArgs = append(testArgs, "./cmd/xgo/exec_tool/...")
+			testArgs = append(testArgs, "./cmd/xgo/patch/...")
+			testArgs = append(testArgs, "./cmd/xgo/pathsum/...")
+			testArgs = append(testArgs, "./cmd/xgo/trace/...")
+			testArgs = append(testArgs, "./cmd/xgo/upgrade/...")
 		}
 	case testKind_xgoTest:
 		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test"}

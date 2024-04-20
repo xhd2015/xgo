@@ -9,7 +9,7 @@ func TestCleanSpecial(t *testing.T) {
 		Res string
 	}{
 		{"", ""},
-		{" ", ""}, // space to _
+		{" ", "_"}, // space to _
 		{"/", ""},
 		{"/a", "a"},
 		{"C:/a", "Ca"}, // Windows

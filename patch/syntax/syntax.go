@@ -424,9 +424,8 @@ type DeclInfo struct {
 	FileIndex  int
 
 	// this is file name after applied -trimpath
-	File    string
-	FileRef string
-	Line    int
+	File string
+	Line int
 }
 
 func (c *DeclInfo) RefName() string {
@@ -491,11 +490,16 @@ func getFuncDecls(files []*syntax.File, varTrap bool) []*DeclInfo {
 	var declFuncs []*DeclInfo
 	for i, f := range files {
 		var file string
-		if TrimFilename != nil {
+		if base.Flag.Std && false {
+			file = f.Pos().RelFilename()
+		} else if TrimFilename != nil {
 			// >= go1.18
 			file = TrimFilename(f.Pos().Base())
-		} else {
+		} else if AbsFilename != nil {
 			file = AbsFilename(f.Pos().Base().Filename())
+		} else {
+			// fallback to default
+			file = f.Pos().RelFilename()
 		}
 		for _, decl := range f.DeclList {
 			fnDecls := extractFuncDecls(i, f, file, decl, varTrap)
