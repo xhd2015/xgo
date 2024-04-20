@@ -13,8 +13,11 @@ import (
 )
 
 type Options struct {
-	useLink    bool
-	concurrent int
+	useLink        bool
+	concurrent     int
+	ignoreSubPaths []string
+	ignoreSuffix   []string
+	includeSuffix  []string
 }
 
 func NewOptions() *Options {
@@ -28,6 +31,20 @@ func (c *Options) UseLink() *Options {
 
 func (c *Options) Concurrent(n int) *Options {
 	c.concurrent = n
+	return c
+}
+func (c *Options) Ignore(subPath ...string) *Options {
+	c.ignoreSubPaths = append(c.ignoreSubPaths, subPath...)
+	return c
+}
+
+func (c *Options) IgnoreSuffix(suffix ...string) *Options {
+	c.ignoreSuffix = append(c.ignoreSuffix, suffix...)
+	return c
+}
+
+func (c *Options) IncludeSuffix(suffix ...string) *Options {
+	c.includeSuffix = append(c.includeSuffix, suffix...)
 	return c
 }
 
@@ -47,6 +64,43 @@ func copyReplaceDir(srcDir string, targetDir string, opts *Options) error {
 	}
 	if srcDir == "" {
 		return fmt.Errorf("requires srcDir")
+	}
+
+	var filterSubPath func(subPath string, isDir bool) bool
+	if opts != nil && (len(opts.includeSuffix) > 0 || len(opts.ignoreSubPaths) > 0 || len(opts.ignoreSuffix) > 0) {
+		filterSubPath = func(subPath string, isDir bool) bool {
+			for _, ignoreSubPath := range opts.ignoreSubPaths {
+				if ignoreSubPath != "" && ignoreSubPath == subPath {
+					return false
+				}
+			}
+			if isDir {
+				return true
+			}
+
+			// check file suffix
+			if len(opts.includeSuffix) > 0 {
+				var hasAny bool
+				for _, suffix := range opts.includeSuffix {
+					if suffix != "" && strings.HasSuffix(subPath, suffix) {
+						hasAny = true
+						break
+					}
+				}
+				if !hasAny {
+					return false
+				}
+			}
+			for _, ignoreSuffix := range opts.ignoreSuffix {
+				if ignoreSuffix != "" && strings.HasSuffix(subPath, ignoreSuffix) {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	copyOpts := &copyOptions{
+		filterSubPath: filterSubPath,
 	}
 
 	// fmt.Printf("targetDir: %s\n",targetDir)
@@ -78,7 +132,7 @@ func copyReplaceDir(srcDir string, targetDir string, opts *Options) error {
 	numGo := opts.concurrent
 	if numGo <= 1 {
 		buf := make([]byte, BUF_SIZE)
-		return copyDirHandle(srcDir, targetAbsDir, func(srcFile, dstFile string) error {
+		return copyDirHandle(srcDir, targetAbsDir, copyOpts, func(srcFile, dstFile string) error {
 			return copyFile(srcFile, dstFile, false, buf)
 		})
 	}
@@ -138,7 +192,7 @@ func copyReplaceDir(srcDir string, targetDir string, opts *Options) error {
 		}
 		return nil
 	}
-	err = copyDirHandle(srcDir, targetAbsDir, sendFile)
+	err = copyDirHandle(srcDir, targetAbsDir, copyOpts, sendFile)
 	close(ch)
 	// NOTE: must wait all goroutines to finish
 	wg.Wait()
@@ -161,7 +215,11 @@ func copyNoPanic(src string, dst string, buf []byte) (err error) {
 	return copyFile(src, dst, false, buf)
 }
 
-func copyDirHandle(srcDir string, targetAbsDir string, handler func(srcFile string, dstFile string) error) error {
+type copyOptions struct {
+	filterSubPath func(subPath string, dir bool) bool
+}
+
+func copyDirHandle(srcDir string, targetAbsDir string, opts *copyOptions, handler func(srcFile string, dstFile string) error) error {
 	// special case, when srcDir is a symbolic, it fails to
 	// walk, so we make a workaround here
 	stat, err := os.Lstat(srcDir)
@@ -187,8 +245,17 @@ func copyDirHandle(srcDir string, targetAbsDir string, handler func(srcFile stri
 			return os.MkdirAll(targetAbsDir, 0755)
 		}
 		subPath := path[prefixLen:]
+
+		isDir := d.IsDir()
+		if opts != nil && opts.filterSubPath != nil && !opts.filterSubPath(subPath, isDir) {
+			// should skip
+			if isDir {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		dstPath := filepath.Join(targetAbsDir, subPath)
-		if d.IsDir() {
+		if isDir {
 			return os.MkdirAll(dstPath, 0755)
 		}
 		return handler(path, dstPath)

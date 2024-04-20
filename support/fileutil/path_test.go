@@ -1,14 +1,15 @@
-package pathsum
+package fileutil
 
 import "testing"
 
-// go test -run TestProcessSpecial -v ./cmd/xgo/pathsum
-func TestProcessSpecial(t *testing.T) {
+// go test -run TestCleanSpecial -v ./cmd/xgo/pathsum
+func TestCleanSpecial(t *testing.T) {
 	testCases := []*struct {
 		Arg string
 		Res string
 	}{
 		{"", ""},
+		{" ", ""}, // space to _
 		{"/", ""},
 		{"/a", "a"},
 		{"C:/a", "Ca"}, // Windows
@@ -19,9 +20,9 @@ func TestProcessSpecial(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		res := processSpecial(testCase.Arg)
+		res := CleanSpecial(testCase.Arg)
 		if res != testCase.Res {
-			t.Fatalf("expect processSpecial(%q) = %q, actual: %q", testCase.Arg, testCase.Res, res)
+			t.Fatalf("expect CleanSpecial(%q) = %q, actual: %q", testCase.Arg, testCase.Res, res)
 		}
 	}
 }

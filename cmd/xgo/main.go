@@ -144,6 +144,7 @@ func handleBuild(cmd string, args []string) error {
 	debug := opts.debug
 	vscode := opts.vscode
 	gcflags := opts.gcflags
+	overlay := opts.overlay
 	withGoroot := opts.withGoroot
 	dumpIR := opts.dumpIR
 	dumpAST := opts.dumpAST
@@ -358,10 +359,22 @@ func handleBuild(cmd string, args []string) error {
 	execCmdEnv := os.Environ()
 	var execCmd *exec.Cmd
 	if !cmdExec {
-		mainModule, err := goinfo.ResolveMainModule(projectDir, remainArgs)
+		instrumentGo := filepath.Join(instrumentGoroot, "bin", "go")
+		subPaths, mainModule, err := goinfo.ResolveMainModule(projectDir, remainArgs)
 		if err != nil {
 			if !errors.Is(err, goinfo.ErrGoModNotFound) && !errors.Is(err, goinfo.ErrGoModDoesNotHaveModule) {
 				return err
+			}
+		}
+		if (stackTrace == "" || stackTrace == "on") && overlay == "" {
+			// check if xgo/runtime ready
+			impOpts, impRuntimeErr := importRuntimeDep(cmdTest, instrumentGoroot, instrumentGo, realXgoSrc, projectDir, subPaths, mainModule, remainArgs)
+			if impRuntimeErr != nil {
+				// can be silently ignored
+				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", TRACE_PKG, TRACE_PKG, impRuntimeErr)
+			}
+			if impOpts != nil {
+				overlay = impOpts.overlayFile
 			}
 		}
 		logDebug("resolved main module: %s", mainModule)
@@ -382,6 +395,9 @@ func handleBuild(cmd string, args []string) error {
 		}
 		if flagC {
 			buildCmdArgs = append(buildCmdArgs, "-c")
+		}
+		if overlay != "" {
+			buildCmdArgs = append(buildCmdArgs, "-overlay", overlay)
 		}
 		for _, f := range gcflags {
 			buildCmdArgs = append(buildCmdArgs, "-gcflags="+f)
@@ -405,7 +421,6 @@ func handleBuild(cmd string, args []string) error {
 			}
 		}
 		buildCmdArgs = append(buildCmdArgs, remainArgs...)
-		instrumentGo := filepath.Join(instrumentGoroot, "bin", "go")
 		logDebug("command: %s %v", instrumentGo, buildCmdArgs)
 		execCmd = exec.Command(instrumentGo, buildCmdArgs...)
 	} else {

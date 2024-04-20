@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -413,32 +414,35 @@ func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, s
 		}
 	}
 
-	patchFS := xgo.PatchFS
 	// read from embed
-	err := fs.WalkDir(patchFS, patchCompilerName, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if path == patchCompilerName {
-			return os.MkdirAll(dstDir, 0755)
-		}
-		// TODO: test on Windows if "/" works
-		dstPath := filepath.Join(dstDir, path[len(patchCompilerName)+len("/"):])
-		if d.IsDir() {
-			return os.MkdirAll(dstPath, 0755)
-		}
-
-		content, err := patchFS.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(dstPath, content, 0755)
-	})
+	err := copyEmbedDir(xgo.PatchFS, patchCompilerName, dstDir)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func copyEmbedDir(srcFS embed.FS, subName string, dstDir string) error {
+	return fs.WalkDir(srcFS, subName, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == subName {
+			return os.MkdirAll(dstDir, 0755)
+		}
+		// TODO: test on Windows if "/" works
+		dstPath := filepath.Join(dstDir, path[len(subName)+len("/"):])
+		if d.IsDir() {
+			return os.MkdirAll(dstPath, 0755)
+		}
+
+		content, err := srcFS.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dstPath, content, 0755)
+	})
 }
 
 func readXgoSrc(xgoSrc string, paths []string) ([]byte, error) {

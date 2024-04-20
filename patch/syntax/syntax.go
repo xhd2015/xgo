@@ -604,7 +604,7 @@ func extractFuncDecls(fileIndex int, f *syntax.File, file string, decl syntax.De
 		// the that comes from other package
 		if _, ok := decl.Type.(*syntax.InterfaceType); ok {
 			return []*DeclInfo{
-				&DeclInfo{
+				{
 					RecvTypeName: decl.Name.Value,
 					Interface:    true,
 
@@ -734,7 +734,6 @@ func generateFuncRegBody(funcDecls []*DeclInfo, xgoRegFunc string, xgoLocalFuncS
 		}
 		fileIdx := funcDecl.FileIndex
 		fileRef := getFileRef(fileIdx)
-		// func(pkgPath string, fn interface{}, recvTypeName string, recvPtr bool, name string, identityName string, generic bool, recvName string, argNames []string, resNames []string, firstArgCtx bool, lastResErr bool, file string, line int)
 
 		// check __xgo_local_func_stub for correctness
 		regKind := func(kind DeclKind, identityName string) {
@@ -771,7 +770,7 @@ func generateFuncRegBody(funcDecls []*DeclInfo, xgoRegFunc string, xgoLocalFuncS
 		// add files
 		if !fileDeclaredMapping[fileIdx] {
 			fileDeclaredMapping[fileIdx] = true
-			fileValue := funcDecl.FileSyntax.Pos().RelFilename()
+			fileValue := funcDecl.File
 			fileDefs = append(fileDefs, fmt.Sprintf("%s := %q", fileRef, fileValue))
 		}
 	}
