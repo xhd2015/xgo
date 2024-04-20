@@ -41,12 +41,14 @@ type options struct {
 	buildCompiler bool
 	syncWithLink  bool
 
+	mod string
 	// recognize go flags as is
 	// -gcflags
 	// can repeat
 	gcflags []string
 
 	overlay string
+	modfile string
 
 	// xgo test --trace
 
@@ -90,8 +92,10 @@ func parseOptions(args []string) (*options, error) {
 
 	var noBuildOutput bool
 
+	var mod string
 	var gcflags []string
 	var overlay string
+	var modfile string
 	var stackTrace string
 
 	var remainArgs []string
@@ -138,6 +142,12 @@ func parseOptions(args []string) (*options, error) {
 			Value: &dumpAST,
 		},
 		{
+			Flags: []string{"-mod"},
+			Set: func(v string) {
+				mod = v
+			},
+		},
+		{
 			Flags: []string{"-gcflags"},
 			Set: func(v string) {
 				gcflags = append(gcflags, v)
@@ -147,6 +157,12 @@ func parseOptions(args []string) (*options, error) {
 			Flags: []string{"-overlay"},
 			Set: func(v string) {
 				overlay = v
+			},
+		},
+		{
+			Flags: []string{"-modfile"},
+			Set: func(v string) {
+				modfile = v
 			},
 		},
 		{
@@ -319,8 +335,10 @@ func parseOptions(args []string) (*options, error) {
 		// default true
 		syncWithLink: syncWithLink == nil || *syncWithLink,
 
+		mod:        mod,
 		gcflags:    gcflags,
 		overlay:    overlay,
+		modfile:    modfile,
 		stackTrace: stackTrace,
 
 		remainArgs: remainArgs,
@@ -351,4 +369,39 @@ func parseStackTraceFlag(arg string) (string, bool) {
 		return "off", true
 	}
 	panic(fmt.Errorf("unrecognized value %s: %s, expects on|off", arg, val))
+}
+
+func getPkgArgs(args []string) []string {
+	n := len(args)
+	newArgs := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		arg := args[i]
+		if !strings.HasPrefix(arg, "-") {
+			// stop at first non-arg
+			newArgs = append(newArgs, args[i:]...)
+			break
+		}
+		if arg == "-args" {
+			// go test -args: pass everything after to underlying program
+			break
+		}
+		eqIdx := strings.Index(arg, "=")
+		if eqIdx >= 0 {
+			// self hosted arg
+			continue
+		}
+		// make --opt equivalent with -opt
+		if strings.HasPrefix(arg, "--") {
+			arg = arg[1:]
+		}
+		switch arg {
+		case "-a", "-n", "-race", "-masan", "-asan", "-cover", "-v", "-work", "-x", "-linkshared", "-buildvcs", // shared among build,test,run
+			"-args", "-c", "-json": // -json for test
+			// zero arg
+		default:
+			// 1 arg
+			i++
+		}
+	}
+	return newArgs
 }
