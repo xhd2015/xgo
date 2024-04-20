@@ -20,6 +20,10 @@ import (
 //	go run ./script/run-test/ -count=1 --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.2
 //  go run ./script/run-test/ -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile covers/cover.out --include go1.21.8
 
+// when will cache affect?
+//   -tags dev : cache is off by default, so revision is not significant
+//   otherwise, revision is used as cache key
+//
 // runtime test:
 //    go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncList -v ./test/func_list
 

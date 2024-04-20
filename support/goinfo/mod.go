@@ -12,34 +12,22 @@ import (
 var ErrGoModNotFound = errors.New("go.mod not found")
 var ErrGoModDoesNotHaveModule = errors.New("go.mod does not have module")
 
-func ResolveMainModule(dir string, args []string) (string, error) {
-	goMod, _, err := findGoMod(dir)
+func ResolveMainModule(dir string, args []string) (subPaths []string, mainModule string, err error) {
+	goMod, subPaths, err := findGoMod(dir)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 
 	goModContent, err := os.ReadFile(goMod)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 	modPath := parseModPath(string(goModContent))
 	if modPath == "" {
-		return "", ErrGoModDoesNotHaveModule
+		return nil, "", ErrGoModDoesNotHaveModule
 	}
 
-	return modPath, nil
-
-	// // has qualified name: not starting with ./ or ../
-	// var qualifieldNames []string
-	// for _, arg := range args {
-	// 	if !isRelative(arg) {
-	// 		qualifieldNames = append(qualifieldNames, arg)
-	// 	} else {
-
-	// 	}
-	// }
-
-	// return "", nil
+	return subPaths, modPath, nil
 }
 
 func isRelative(arg string) bool {

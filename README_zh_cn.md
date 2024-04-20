@@ -372,7 +372,7 @@ func C() { fmt.Printf("C\n") }
 
 ```sh
 # 执行测试, 生成TestTrace.json
-xgo test ./
+xgo test --strace ./
 
 # 查看Trace
 xgo tool trace TestTrace.json

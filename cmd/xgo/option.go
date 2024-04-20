@@ -46,6 +46,8 @@ type options struct {
 	// can repeat
 	gcflags []string
 
+	overlay string
+
 	// xgo test --trace
 
 	// --strace, --strace=on, --strace=off
@@ -89,6 +91,7 @@ func parseOptions(args []string) (*options, error) {
 	var noBuildOutput bool
 
 	var gcflags []string
+	var overlay string
 	var stackTrace string
 
 	var remainArgs []string
@@ -138,6 +141,12 @@ func parseOptions(args []string) (*options, error) {
 			Flags: []string{"-gcflags"},
 			Set: func(v string) {
 				gcflags = append(gcflags, v)
+			},
+		},
+		{
+			Flags: []string{"-overlay"},
+			Set: func(v string) {
+				overlay = v
 			},
 		},
 		{
@@ -311,6 +320,7 @@ func parseOptions(args []string) (*options, error) {
 		syncWithLink: syncWithLink == nil || *syncWithLink,
 
 		gcflags:    gcflags,
+		overlay:    overlay,
 		stackTrace: stackTrace,
 
 		remainArgs: remainArgs,

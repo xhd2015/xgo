@@ -18,7 +18,8 @@ func setupDebugLog(logDebugOption *string) (func(), error) {
 	if logDebugOption != nil {
 		logDebugFileName = *logDebugOption
 		if logDebugFileName == "" {
-			logDebugFileName = "debug.log"
+			// default to stderr
+			logDebugFileName = "stderr"
 		}
 	}
 	if logDebugFileName == "" {

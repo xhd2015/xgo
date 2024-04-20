@@ -25,13 +25,14 @@ const (
 	GenernateType_RuntimeDef         GenernateType = "runtime-def"
 	GenernateType_StackTraceDef      GenernateType = "stack-trace-def"
 	GenernateType_InstallSrc         GenernateType = "install-src"
+	GenernateType_XgoRuntime         GenernateType = "xgo-runtime"
 )
 
 func main() {
 	args := os.Args[1:]
 
 	var rootDir string
-	var subGen []GenernateType
+	var subGens []GenernateType
 	n := len(args)
 	for i := 0; i < n; i++ {
 		arg := args[i]
@@ -41,14 +42,14 @@ func main() {
 			continue
 		}
 		if !strings.HasPrefix(arg, "-") {
-			subGen = append(subGen, GenernateType(arg))
+			subGens = append(subGens, GenernateType(arg))
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "unrecognized flag: %s\n", arg)
 		os.Exit(1)
 	}
 
-	err := generate(rootDir, subGen)
+	err := generate(rootDir, subGens)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -123,6 +124,12 @@ func generate(rootDir string, subGens SubGens) error {
 		}
 
 		err = copyUpgrade(filepath.Join(rootDir, "cmd", "xgo", "upgrade"), upgradeDst)
+		if err != nil {
+			return err
+		}
+	}
+	if subGens.Has(GenernateType_XgoRuntime) {
+		err := genXgoRuntime(rootDir)
 		if err != nil {
 			return err
 		}
