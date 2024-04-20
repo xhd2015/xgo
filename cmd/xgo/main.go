@@ -143,8 +143,10 @@ func handleBuild(cmd string, args []string) error {
 	syncWithLink := opts.syncWithLink
 	debug := opts.debug
 	vscode := opts.vscode
+	mod := opts.mod
 	gcflags := opts.gcflags
 	overlay := opts.overlay
+	modfile := opts.modfile
 	withGoroot := opts.withGoroot
 	dumpIR := opts.dumpIR
 	dumpAST := opts.dumpAST
@@ -368,13 +370,19 @@ func handleBuild(cmd string, args []string) error {
 		}
 		if stackTrace == "on" && overlay == "" {
 			// check if xgo/runtime ready
-			impOpts, impRuntimeErr := importRuntimeDep(cmdTest, instrumentGoroot, instrumentGo, realXgoSrc, projectDir, subPaths, mainModule, remainArgs)
+			impResult, impRuntimeErr := importRuntimeDep(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, subPaths, mainModule, mod, remainArgs)
 			if impRuntimeErr != nil {
 				// can be silently ignored
 				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", TRACE_PKG, TRACE_PKG, impRuntimeErr)
 			}
-			if impOpts != nil {
-				overlay = impOpts.overlayFile
+			if impResult != nil {
+				overlay = impResult.overlayFile
+				if impResult.mod != "" {
+					mod = impResult.mod
+				}
+				if impResult.modfile != "" {
+					modfile = impResult.modfile
+				}
 			}
 		}
 		logDebug("resolved main module: %s", mainModule)
@@ -399,6 +407,13 @@ func handleBuild(cmd string, args []string) error {
 		if overlay != "" {
 			buildCmdArgs = append(buildCmdArgs, "-overlay", overlay)
 		}
+		if mod != "" {
+			buildCmdArgs = append(buildCmdArgs, "-mod="+mod)
+		}
+		if modfile != "" {
+			buildCmdArgs = append(buildCmdArgs, "-modfile", modfile)
+		}
+
 		for _, f := range gcflags {
 			buildCmdArgs = append(buildCmdArgs, "-gcflags="+f)
 		}

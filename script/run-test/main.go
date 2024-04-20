@@ -75,6 +75,11 @@ var extraSubTests = []*TestCase{
 		flags: []string{"--strace"},
 	},
 	{
+		name:  "trace_without_dep_vendor",
+		dir:   "runtime/test/trace_without_dep_vendor",
+		flags: []string{"--strace"},
+	},
+	{
 		name:  "trap_with_overlay",
 		dir:   "runtime/test/trap_with_overlay",
 		flags: []string{"-overlay", "overlay.json"},
