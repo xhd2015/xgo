@@ -41,19 +41,20 @@ func importRuntimeDep(test bool, goroot string, goBinary string, xgoSrc string, 
 		projectRoot = filepath.Dir(projectRoot)
 	}
 
+	pkgArgs := getPkgArgs(args)
 	// check if trace package already exists
 	listArgs := []string{"list", "-deps"}
 	if test {
 		listArgs = append(listArgs, "-test")
 	}
-	listArgs = append(listArgs, args...)
+	listArgs = append(listArgs, pkgArgs...)
+	logDebug("go %v", listArgs)
 	output, err := cmd.Dir(projectDir).Env([]string{
 		"GOROOT=" + goroot,
 	}).Output(goBinary, listArgs...)
 	if err != nil {
 		return nil, err
 	}
-	logDebug("go %v", listArgs)
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		pkg := strings.TrimSpace(line)
@@ -69,11 +70,11 @@ func importRuntimeDep(test bool, goroot string, goBinary string, xgoSrc string, 
 			return nil, statErr
 		}
 	} else {
-		// no vendor support, supress
+		// no vendor support, suppress
 		return nil, nil
 	}
 
-	overlayFile, err := createOverlay(goroot, goBinary, xgoSrc, test, projectRoot, projectDir, args)
+	overlayFile, err := createOverlay(goroot, goBinary, xgoSrc, test, projectRoot, projectDir, pkgArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +84,46 @@ func importRuntimeDep(test bool, goroot string, goBinary string, xgoSrc string, 
 	}, nil
 }
 
+func getPkgArgs(args []string) []string {
+	n := len(args)
+	newArgs := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		arg := args[i]
+		if !strings.HasPrefix(arg, "-") {
+			// stop at first non-arg
+			newArgs = append(newArgs, args[i:]...)
+			break
+		}
+		if arg == "-args" {
+			// go test -args: pass everything after to underlying program
+			break
+		}
+		eqIdx := strings.Index(arg, "=")
+		if eqIdx >= 0 {
+			// self hosted arg
+			continue
+		}
+		// make --opt equivalent with -opt
+		if strings.HasPrefix(arg, "--") {
+			arg = arg[1:]
+		}
+		switch arg {
+		case "-a", "-n", "-race", "-masan", "-asan", "-cover", "-v", "-work", "-x", "-linkshared", "-buildvcs", // shared among build,test,run
+			"-args", "-c", "-json": // -json for test
+			// zero arg
+		default:
+			// 1 arg
+			i++
+		}
+	}
+	return newArgs
+}
+
 type Overlay struct {
 	Replace map[string]string
 }
 
-func createOverlay(goroot string, goBinary string, xgoSrc string, test bool, projectRoot string, projectDir string, args []string) (string, error) {
+func createOverlay(goroot string, goBinary string, xgoSrc string, test bool, projectRoot string, projectDir string, pkgArgs []string) (string, error) {
 	// try /tmp first
 	tmpDir := "/tmp"
 	_, statErr := os.Stat(tmpDir)
@@ -181,7 +217,7 @@ func createOverlay(goroot string, goBinary string, xgoSrc string, test bool, pro
 	// ignored files will be placed to IgnoredGoFiles
 
 	listArgs := []string{"list", "-json"}
-	listArgs = append(listArgs, args...)
+	listArgs = append(listArgs, pkgArgs...)
 	output, err := cmd.Dir(projectDir).Env([]string{
 		"GOROOT=" + goroot,
 	}).Output(goBinary, listArgs...)

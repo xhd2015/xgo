@@ -28,7 +28,7 @@ func TestTraceWithoutDep(t *testing.T) {
 		"test",
 		"--strace",
 		"-count=1",
-		// "--log-debug=stdout",
+		// "--log-debug",
 		"--project-dir", filepath.Join(wd, "target"),
 		"-v",
 		"./",
