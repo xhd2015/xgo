@@ -366,7 +366,7 @@ func handleBuild(cmd string, args []string) error {
 				return err
 			}
 		}
-		if (stackTrace == "" || stackTrace == "on") && overlay == "" {
+		if stackTrace == "on" && overlay == "" {
 			// check if xgo/runtime ready
 			impOpts, impRuntimeErr := importRuntimeDep(cmdTest, instrumentGoroot, instrumentGo, realXgoSrc, projectDir, subPaths, mainModule, remainArgs)
 			if impRuntimeErr != nil {
