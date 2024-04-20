@@ -234,6 +234,7 @@ func main() {
 		begin := time.Now()
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
 		if resetInstrument {
+			// reset-instrument: reset goroot, but not caches
 			if debug {
 				fmt.Printf("resetting instrument\n")
 			}

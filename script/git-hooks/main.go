@@ -9,6 +9,7 @@ import (
 	"github.com/xhd2015/xgo/script/build-release/revision"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
+	"github.com/xhd2015/xgo/support/git"
 )
 
 // usage:
@@ -59,20 +60,12 @@ const preCommitCmd = "go run ./script/git-hooks pre-commit"
 const postCommitCmdHead = "# xgo check"
 const postCommitCmd = "go run ./script/git-hooks post-commit"
 
-func getGitDir() (string, error) {
-	return cmd.Output("git", "rev-parse", "--git-dir")
-}
-
 func preCommitCheck(noCommit bool) error {
-	gitDir, err := getGitDir()
+	gitDir, err := git.ShowTopLevel("")
 	if err != nil {
 		return err
 	}
-	rootDir := filepath.Dir(gitDir)
-	if rootDir == "" {
-		return fmt.Errorf("invalid git dir:%s", gitDir)
-	}
-	rootDir, err = filepath.Abs(rootDir)
+	rootDir, err := filepath.Abs(gitDir)
 	if err != nil {
 		return err
 	}
@@ -118,7 +111,7 @@ func postCommitCheck(noCommit bool) error {
 }
 
 func install() error {
-	gitDir, err := getGitDir()
+	gitDir, err := git.GetGitDir("")
 	if err != nil {
 		return err
 	}
