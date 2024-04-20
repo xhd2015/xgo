@@ -32,7 +32,7 @@ jobs:
       run: go build -o /dev/null -v ./cmd/xgo
 
     - name: Test
-      run: go run ./script/run-test --reset-instrument -a --debug -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out
+      run: go run ./script/run-test --reset-instrument --debug -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out
 
     - name: Merge Coverages
       run: go run ./script/cover merge ./cover-runtime.out ./cover-runtime-sub.out -o cover-runtime-merged.out

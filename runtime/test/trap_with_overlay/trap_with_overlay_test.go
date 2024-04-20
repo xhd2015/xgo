@@ -1,4 +1,4 @@
-package with_overlay
+package trap_with_overlay
 
 import (
 	"context"

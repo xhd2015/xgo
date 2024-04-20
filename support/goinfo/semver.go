@@ -234,16 +234,16 @@ func comparePrerelease(x, y string) int {
 		dx, x = nextIdent(x)
 		dy, y = nextIdent(y)
 		if dx != dy {
-			ix := isNum(dx)
-			iy := isNum(dy)
-			if ix != iy {
-				if ix {
+			numX := isNum(dx)
+			numY := isNum(dy)
+			if numX != numY {
+				if numX {
 					return -1
 				} else {
 					return +1
 				}
 			}
-			if ix {
+			if numX {
 				if len(dx) < len(dy) {
 					return -1
 				}

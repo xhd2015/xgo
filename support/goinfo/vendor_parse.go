@@ -115,7 +115,7 @@ func (c *VendorInfo) parseLine(line string) {
 		return
 	}
 
-	if annotations, ok := strings.CutPrefix(line, "## "); ok {
+	if annotations, ok := cutPrefix(line, "## "); ok {
 		// Metadata. Take the union of annotations across multiple lines, if present.
 		meta := vendorMeta[c.mod]
 		for _, entry := range strings.Split(annotations, ";") {
@@ -123,7 +123,7 @@ func (c *VendorInfo) parseLine(line string) {
 			if entry == "explicit" {
 				meta.Explicit = true
 			}
-			if goVersion, ok := strings.CutPrefix(entry, "go "); ok {
+			if goVersion, ok := cutPrefix(entry, "go "); ok {
 				meta.GoVersion = goVersion
 			}
 			// All other tokens are reserved for future use.
