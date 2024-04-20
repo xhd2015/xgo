@@ -106,3 +106,44 @@ func parseModPath(goModContent string) string {
 	}
 	return ""
 }
+
+func ModCompare(path string, x, y string) int {
+	if path == "go" {
+		return CompareVersion(x, y)
+	}
+	if path == "toolchain" {
+		return CompareVersion(maybeToolchainVersion(x), maybeToolchainVersion(y))
+	}
+	return CompareSemVer(x, y)
+}
+
+func maybeToolchainVersion(name string) string {
+	if IsValidVersion(name) {
+		return name
+	}
+	return FromToolchain(name)
+}
+
+func FromToolchain(name string) string {
+	if strings.ContainsAny(name, "\\/") {
+		// The suffix must not include a path separator, since that would cause
+		// exec.LookPath to resolve it from a relative directory instead of from
+		// $PATH.
+		return ""
+	}
+
+	var v string
+	if strings.HasPrefix(name, "go") {
+		v = name[2:]
+	} else {
+		return ""
+	}
+	// Some builds use custom suffixes; strip them.
+	if i := strings.IndexAny(v, " \t-"); i >= 0 {
+		v = v[:i]
+	}
+	if !IsValidVersion(v) {
+		return ""
+	}
+	return v
+}
