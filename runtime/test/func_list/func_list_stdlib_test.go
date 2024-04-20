@@ -1,27 +1,17 @@
 package func_list
 
 import (
-	"encoding/json"
-	"io"
-	"io/ioutil"
-	"net"
-	"net/http"
-	"os/exec"
+	_ "encoding/json"
+	_ "io"
+	_ "io/ioutil"
+	_ "net"
+	_ "net/http"
+	_ "os/exec"
 	"testing"
-	"time"
+	_ "time"
 
 	"github.com/xhd2015/xgo/runtime/functab"
 )
-
-var _ http.Request
-var _ net.Addr
-var _ time.Time
-var _ exec.Cmd
-var _ = ioutil.ReadAll
-var _ = ioutil.ReadFile
-var _ = ioutil.ReadDir
-var _ = io.ReadAll
-var _ json.Encoder
 
 // go run ./cmd/xgo test --project-dir runtime -run TestListStdlib -v ./test/func_list
 func TestListStdlib(t *testing.T) {
@@ -77,6 +67,10 @@ func TestListStdlib(t *testing.T) {
 		//json
 		"encoding/json.newTypeEncoder": true,
 	}
+	// debug
+	// stdPkgs = map[string]bool{
+	// 	"net/http.Get": true,
+	// }
 	found, missing := getMissing(funcs, stdPkgs, false)
 	if len(missing) > 0 {
 		t.Fatalf("expect func list contains: %v, actual %v", missing, found)
