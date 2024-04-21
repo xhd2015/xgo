@@ -3,30 +3,21 @@ package core
 import (
 	"errors"
 	"fmt"
-	"os"
 )
 
+// copied from core/version.go
+
 const VERSION = "1.0.26"
-const REVISION = "d19c85ac922d26f26038dc99ae3049de0d91d2f6+1"
-const NUMBER = 199
+const REVISION = "4e6a5615d778b8909e3315a2ead323822581dd0e+1"
+const NUMBER = 198
 
 // these fields will be filled by compiler
 const XGO_VERSION = ""
 const XGO_REVISION = ""
 const XGO_NUMBER = 0
 
-const XGO_CHECK_TOOLCHAIN_VERSION = "XGO_CHECK_TOOLCHAIN_VERSION"
+// copy from core
 
-func init() {
-	envVal := os.Getenv(XGO_CHECK_TOOLCHAIN_VERSION)
-	if envVal == "false" || envVal == "off" {
-		return
-	}
-	err := checkVersion()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: xgo toolchain: %v\nnote: this message can be turned off by setting %s=false\n", err, XGO_CHECK_TOOLCHAIN_VERSION)
-	}
-}
 func checkVersion() error {
 	// xgoVersion, xgoRevision, xgoNumber := XGO_VERSION, XGO_REVISION, XGO_NUMBER
 	// _, _, _ = xgoVersion, xgoRevision, xgoNumber

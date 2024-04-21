@@ -28,6 +28,14 @@ jobs:
       with: 
         files: ./
       
+    - name: Binary Install
+      continue-on-error: false
+      run: curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | env INSTALL_TO_BIN=true bash -x
+    
+    - name: Check Binary Install
+      continue-on-error: false
+      run: xgo revision
+      
     - name: Build
       run: go build -o /dev/null -v ./cmd/xgo
 
