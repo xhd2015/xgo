@@ -485,8 +485,8 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
 		node.Y = ctx.traverseExpr(node.Y, globaleNames, imports)
 		// if both side are const, then the operation should also
-		// be wrapped in a const
-		if node.X != nil && node.Y != nil {
+		// be wrapped in a const if the operation is not ==
+		if node.X != nil && node.Y != nil && !isBoolOp(node.Op) {
 			xConst := ctx.ConstInfo[node.X]
 			yConst := ctx.ConstInfo[node.Y]
 			isXgoConv := func(node syntax.Expr) bool {
@@ -544,6 +544,13 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 		errorUnknown("expr", node)
 	}
 	return node
+}
+func isBoolOp(op syntax.Operator) bool {
+	switch op {
+	case syntax.Eql, syntax.Neq, syntax.Lss, syntax.Leq, syntax.Gtr, syntax.Geq:
+		return true
+	}
+	return false
 }
 
 func getConstType(xgoConv *syntax.XgoSimpleConvert) string {
