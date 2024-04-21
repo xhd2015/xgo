@@ -70,25 +70,29 @@ curl --fail --location --progress-bar --output "${tmp_dir}/${file}" "$uri" || er
 (
     cd "$bin_dir"
     tar -xzf "${tmp_dir}/${file}"
-    [[ -f xgo ]] && chmod +x ./xgo
-    [[ -f exec_tool ]] && chmod +x ./exec_tool
+    if [[ -f xgo ]];then chmod +x ./xgo;fi
 )
 
-if [[ -f ~/.bash_profile ]];then
-    content=$(cat ~/.bash_profile)
-    if [[ "$content" != *'# setup xgo'* ]];then
-        echo "# setup xgo" >> ~/.bash_profile
-        echo "export PATH=\"$bin_dir:\$PATH\"" >> ~/.bash_profile
+if [[ "$INSTALL_TO_BIN" == "true" ]];then
+    install "$bin_dir/xgo" /usr/local/bin
+else
+    if [[ -f ~/.bash_profile ]];then
+        content=$(cat ~/.bash_profile)
+        if [[ "$content" != *'# setup xgo'* ]];then
+            echo "# setup xgo" >> ~/.bash_profile
+            echo "export PATH=\"$bin_dir:\$PATH\"" >> ~/.bash_profile
+        fi
+    fi
+
+    if [[ -f ~/.zshrc ]];then
+        content=$(cat ~/.zshrc)
+        if [[ "$content" != *'# setup xgo'* ]];then
+            echo "# setup xgo" >> ~/.zshrc
+            echo "export PATH=\"$bin_dir:\$PATH\"" >> ~/.zshrc
+        fi
     fi
 fi
 
-if [[ -f ~/.zshrc ]];then
-    content=$(cat ~/.zshrc)
-    if [[ "$content" != *'# setup xgo'* ]];then
-        echo "# setup xgo" >> ~/.zshrc
-        echo "export PATH=\"$bin_dir:\$PATH\"" >> ~/.zshrc
-    fi
-fi
 
 xgoTip=xgo
 sourceTip=""

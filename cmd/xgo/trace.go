@@ -17,7 +17,7 @@ import (
 )
 
 const RUNTIME_MODULE = "github.com/xhd2015/xgo/runtime"
-const TRACE_PKG = RUNTIME_MODULE + "/trace"
+const RUNTIME_TRACE_PKG = RUNTIME_MODULE + "/trace"
 
 type importResult struct {
 	overlayFile string
@@ -29,7 +29,7 @@ type importResult struct {
 var runtimeGenFS embed.FS
 
 // TODO: may apply tags
-func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, modfile string, xgoSrc string, projectDir string, modRootRel []string, mainModule string, mod string, args []string) (*importResult, error) {
+func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, modRootRel []string, mainModule string, mod string, args []string) (*importResult, error) {
 	if mainModule == "" {
 		// only work with module
 		return nil, nil
@@ -43,30 +43,8 @@ func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goin
 	for i := 0; i < n; i++ {
 		projectRoot = filepath.Dir(projectRoot)
 	}
-
-	pkgArgs := getPkgArgs(args)
-	// check if trace package already exists
-	listArgs := []string{"list", "-deps"}
-	if test {
-		listArgs = append(listArgs, "-test")
-	}
-	listArgs = append(listArgs, pkgArgs...)
-	logDebug("go %v", listArgs)
-	output, err := cmd.Dir(projectDir).Env([]string{
-		"GOROOT=" + goroot,
-	}).Output(goBinary, listArgs...)
-	if err != nil {
-		return nil, err
-	}
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		pkg := strings.TrimSpace(line)
-		if pkg == TRACE_PKG {
-			return nil, nil
-		}
-	}
 	var vendorDir string
-	if mod != "mod" {
+	if mod == "vendor" || mod == "" {
 		// not forcing mod
 		testVendorDir := filepath.Join(projectRoot, "vendor")
 		_, statErr := os.Stat(testVendorDir)
@@ -78,32 +56,126 @@ func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goin
 			vendorDir = testVendorDir
 		}
 	}
-
-	overlayInfo, err := createOverlay(goroot, goBinary, goVersion, modfile, xgoSrc, test, projectRoot, projectDir, vendorDir, pkgArgs)
+	if mod == "vendor" && vendorDir == "" {
+		return nil, fmt.Errorf("-mod=vendor: vendor dir not found")
+	}
+	needLoad, err := checkNeedLoadDep(goroot, goBinary, projectRoot, vendorDir, absModFile)
 	if err != nil {
 		return nil, err
 	}
-	res := &importResult{}
-	if overlayInfo != nil {
-		res.overlayFile = overlayInfo.overlayFile
-		res.mod = overlayInfo.mod
-		res.modfile = overlayInfo.modfile
+
+	pkgArgs := getPkgArgs(args)
+	tmpRoot, tmpProjectDir, err := createWorkDir(projectRoot)
+	if err != nil {
+		return nil, err
 	}
 
+	var modReplace map[string]string
+	res := &importResult{}
+	if needLoad {
+		overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, vendorDir, tmpRoot, tmpProjectDir)
+		if err != nil {
+			return nil, err
+		}
+		if overlayInfo != nil {
+			modReplace = overlayInfo.modReplace
+			res.mod = overlayInfo.mod
+			res.modfile = overlayInfo.modfile
+		}
+	}
+
+	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, tmpProjectDir)
+	if err != nil {
+		return nil, err
+	}
+	replace := make(map[string]string, len(modReplace)+len(fileReplace))
+	for k, v := range modReplace {
+		replace[k] = v
+	}
+	for k, v := range fileReplace {
+		replace[k] = v
+	}
+
+	overlayFile, err := createOverlayFile(tmpProjectDir, replace)
+	if err != nil {
+		return nil, err
+	}
+	res.overlayFile = overlayFile
+
 	return res, nil
+}
+
+// when listing in vendor mod, only Path and Version is effective
+type ListModule struct {
+	Path    string
+	Main    bool
+	Version string
+	Dir     string
+	GoMod   string
+	Error   *ListError
+}
+type ListError struct {
+	Err string
+}
+
+func checkNeedLoadDep(goroot string, goBinary string, projectRoot string, vendorDir string, modfile string) (bool, error) {
+	effectiveMod := "mod"
+	if vendorDir != "" {
+		effectiveMod = "vendor"
+	}
+	// -e: suppress error
+	//  if github.com/xhd2015/xgo/runtime does not exists,
+	//  err: "module github.com/xhd2015/xgo/runtime: not a known dependency"
+	listArgs := []string{"list", "-m", "-json", "-mod=" + effectiveMod, "-e"}
+	if modfile != "" {
+		listArgs = append(listArgs, "-modfile", modfile)
+	}
+	listArgs = append(listArgs, RUNTIME_MODULE)
+
+	logDebug("go %v", listArgs)
+	// go list -m -json -mod=$effective_mod -modfile $modfile -e github.com/xhd2015/xgo
+	output, err := cmd.Dir(projectRoot).Env([]string{
+		"GOROOT=" + goroot,
+	}).Output(goBinary, listArgs...)
+	if err != nil {
+		return false, err
+	}
+	var listModule *ListModule
+	dec := json.NewDecoder(strings.NewReader(output))
+	if dec.More() {
+		err := dec.Decode(&listModule)
+		if err != nil {
+			return false, err
+		}
+	}
+	if listModule == nil {
+		return true, nil
+	}
+	if listModule.Error != nil {
+		logDebug("list err: %s", listModule.Error.Err)
+		return true, nil
+	}
+	if effectiveMod != "vendor" {
+		return false, nil
+	}
+	// check if vendor/${trace} exists
+	if !isDir(filepath.Join(vendorDir, RUNTIME_TRACE_PKG)) {
+		return true, nil
+	}
+	return false, nil
 }
 
 type Overlay struct {
 	Replace map[string]string
 }
 
-type overlayInfo struct {
-	overlayFile string
-	mod         string
-	modfile     string // alternative go.mod
+type dependencyInfo struct {
+	modReplace map[string]string
+	mod        string
+	modfile    string // alternative go.mod
 }
 
-func createOverlay(goroot string, goBinary string, goVersion *goinfo.GoVersion, modfileOption string, xgoSrc string, test bool, projectRoot string, projectDir string, vendorDir string, pkgArgs []string) (*overlayInfo, error) {
+func createWorkDir(projectRoot string) (tmpRoot string, tmpProjectDir string, err error) {
 	// try /tmp first
 	tmpDir := "/tmp"
 	_, statErr := os.Stat(tmpDir)
@@ -111,19 +183,34 @@ func createOverlay(goroot string, goBinary string, goVersion *goinfo.GoVersion, 
 		tmpDir = os.TempDir()
 	}
 
-	xgoTmp := filepath.Join(tmpDir, "xgo_"+fileutil.CleanSpecial(getRevision()))
-	err := os.MkdirAll(xgoTmp, 0755)
+	tmpRoot = filepath.Join(tmpDir, "xgo_"+fileutil.CleanSpecial(getRevision()))
+	err = os.MkdirAll(tmpRoot, 0755)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
-	logDebug("xgo tmp dir: %s", xgoTmp)
+	logDebug("xgo tmp dir: %s", tmpRoot)
 
+	// create project
+	projectSum, err := pathsum.PathSum("", projectRoot)
+	if err != nil {
+		return "", "", err
+	}
+	tmpProjectDir = filepath.Join(tmpRoot, "projects", projectSum)
+	logDebug("tmp project dir: %s", tmpProjectDir)
+	err = os.MkdirAll(tmpProjectDir, 0755)
+	if err != nil {
+		return "", "", err
+	}
+	return tmpRoot, tmpProjectDir, nil
+}
+
+func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion, modfileOption string, xgoSrc string, projectRoot string, vendorDir string, tmpRoot string, tmpProjectDir string) (*dependencyInfo, error) {
 	suffix := ""
 	if isDevelopment {
 		suffix = "_dev"
 	}
-	tmpRuntime := filepath.Join(xgoTmp, "runtime"+suffix)
-	err = os.MkdirAll(tmpRuntime, 0755)
+	tmpRuntime := filepath.Join(tmpRoot, "runtime"+suffix)
+	err := os.MkdirAll(tmpRuntime, 0755)
 	if err != nil {
 		return nil, err
 	}
@@ -133,10 +220,6 @@ func createOverlay(goroot string, goBinary string, goVersion *goinfo.GoVersion, 
 			return nil, err
 		}
 	} else {
-		exists := func(path string) bool {
-			_, err := os.Stat(path)
-			return err == nil
-		}
 		files := []string{"core", "trap", "trace", "go.mod"}
 		allExists := true
 		for _, file := range files {
@@ -160,18 +243,6 @@ func createOverlay(goroot string, goBinary string, goVersion *goinfo.GoVersion, 
 				return nil, err
 			}
 		}
-	}
-
-	// create project
-	projectSum, err := pathsum.PathSum("", projectRoot)
-	if err != nil {
-		return nil, err
-	}
-	tmpProjectDir := filepath.Join(xgoTmp, "projects", projectSum)
-	logDebug("tmp project dir: %s", tmpProjectDir)
-	err = os.MkdirAll(tmpProjectDir, 0755)
-	if err != nil {
-		return nil, err
 	}
 
 	goMod := modfileOption
@@ -262,11 +333,35 @@ func createOverlay(goroot string, goBinary string, goVersion *goinfo.GoVersion, 
 	if err != nil {
 		return nil, err
 	}
+	if modfile == "" {
+		goModReplace[goMod] = tmpGoMod
+	}
 
+	return &dependencyInfo{
+		modReplace: goModReplace,
+		mod:        mod,
+		modfile:    modfile,
+	}, nil
+}
+
+func createOverlayFile(tmpProjectDir string, replace map[string]string) (string, error) {
+	overlay := Overlay{Replace: replace}
+	overlayData, err := json.Marshal(overlay)
+	if err != nil {
+		return "", err
+	}
+	overlayFile := filepath.Join(tmpProjectDir, "overlay.json")
+	err = os.WriteFile(overlayFile, overlayData, 0755)
+	if err != nil {
+		return "", err
+	}
+	return overlayFile, nil
+}
+
+func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs []string, test bool, tmpProjectDir string) (replace map[string]string, err error) {
 	// list files, add init
 	// NOTE: go build tag applies,
 	// ignored files will be placed to IgnoredGoFiles
-
 	listArgs := []string{"list", "-json"}
 	listArgs = append(listArgs, pkgArgs...)
 	output, err := cmd.Dir(projectDir).Env([]string{
@@ -286,9 +381,20 @@ func createOverlay(goroot string, goBinary string, goVersion *goinfo.GoVersion, 
 		pkgs = append(pkgs, pkg)
 	}
 
-	replace := make(map[string]string)
+	replace = make(map[string]string)
 	for _, pkg := range pkgs {
 		if pkg.Standard {
+			continue
+		}
+		// already has trace?
+		var hasDep bool
+		for _, dep := range pkg.Deps {
+			if dep == RUNTIME_TRACE_PKG {
+				hasDep = true
+				break
+			}
+		}
+		if hasDep {
 			continue
 		}
 		var file string
@@ -322,29 +428,20 @@ func createOverlay(goroot string, goBinary string, goVersion *goinfo.GoVersion, 
 		}
 		replace[srcFile] = dstFile
 	}
+	return replace, nil
+}
 
-	if modfile == "" {
-		replace[goMod] = tmpGoMod
-	}
-	for k, v := range goModReplace {
-		replace[k] = v
-	}
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
 
-	overlay := Overlay{Replace: replace}
-	overlayData, err := json.Marshal(overlay)
+func isDir(path string) bool {
+	stat, err := os.Stat(path)
 	if err != nil {
-		return nil, err
+		return false
 	}
-	overlayFile := filepath.Join(tmpProjectDir, "overlay.json")
-	err = os.WriteFile(overlayFile, overlayData, 0755)
-	if err != nil {
-		return nil, err
-	}
-	return &overlayInfo{
-		overlayFile: overlayFile,
-		mod:         mod,
-		modfile:     modfile,
-	}, nil
+	return stat.IsDir()
 }
 
 type GoListPkg struct {
@@ -354,6 +451,7 @@ type GoListPkg struct {
 	Standard    bool
 	GoFiles     []string
 	TestGoFiles []string
+	Deps        []string // all dependents
 }
 
 func addBlankImport(content string) (string, bool) {
@@ -369,7 +467,7 @@ func addBlankImport(content string) (string, bool) {
 		base += rIdx
 		subContent = subContent[rIdx+1:]
 	}
-	q := fmt.Sprintf(";import _ %q", TRACE_PKG)
+	q := fmt.Sprintf(";import _ %q", RUNTIME_TRACE_PKG)
 	nIdx := strings.Index(subContent, "\n")
 	if nIdx < 0 {
 		return content + q, true
