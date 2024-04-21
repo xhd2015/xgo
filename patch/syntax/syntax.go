@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -284,6 +285,12 @@ func registerFuncs(fileList []*syntax.File, addFile func(name string, r io.Reade
 			// special when there are multiple files
 			fileNameBase += fmt.Sprintf("_%d", i)
 		}
+		if false {
+			// debug
+			dir := filepath.Join("/tmp/xgo_debug_gen", pkgPath)
+			os.MkdirAll(dir, 0755)
+			os.WriteFile(filepath.Join(dir, fileNameBase+".go"), []byte(fileCode), 0755)
+		}
 		addFile(fileNameBase+".go", strings.NewReader(fileCode))
 		if false && pkgPath == "main" {
 			// debug
@@ -490,15 +497,23 @@ func getFuncDecls(files []*syntax.File, varTrap bool) []*DeclInfo {
 	var declFuncs []*DeclInfo
 	for i, f := range files {
 		var file string
+		var trimmed bool
 		if base.Flag.Std && false {
 			file = f.Pos().RelFilename()
 		} else if TrimFilename != nil {
 			// >= go1.18
 			file = TrimFilename(f.Pos().Base())
+			trimmed = true
 		} else if AbsFilename != nil {
 			file = AbsFilename(f.Pos().Base().Filename())
+			trimmed = true
 		} else {
 			// fallback to default
+			file = f.Pos().RelFilename()
+		}
+
+		// see https://github.com/xhd2015/xgo/issues/80
+		if trimmed && strings.HasPrefix(file, "_cgo") {
 			file = f.Pos().RelFilename()
 		}
 		for _, decl := range f.DeclList {
@@ -625,7 +640,9 @@ func extractFuncDecls(fileIndex int, f *syntax.File, file string, decl syntax.De
 
 func getFuncDeclInfo(fileIndex int, f *syntax.File, file string, fn *syntax.FuncDecl) *DeclInfo {
 	line := fn.Pos().Line()
-	if fn.Name.Value == "init" {
+	fnName := fn.Name.Value
+	if fnName == "init" || strings.HasPrefix(fnName, "_cgo") || strings.HasPrefix(fnName, "_Cgo") {
+		// skip cgo also,see https://github.com/xhd2015/xgo/issues/80#issuecomment-2067976575
 		return nil
 	}
 	var genericFunc bool
@@ -676,7 +693,7 @@ func getFuncDeclInfo(fileIndex int, f *syntax.File, file string, fn *syntax.Func
 
 	return &DeclInfo{
 		FuncDecl:     fn,
-		Name:         fn.Name.Value,
+		Name:         fnName,
 		RecvTypeName: recvTypeName,
 		RecvPtr:      recvPtr,
 		Generic:      genericFunc || genericRecv,

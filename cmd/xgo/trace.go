@@ -362,6 +362,11 @@ func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs 
 	// list files, add init
 	// NOTE: go build tag applies,
 	// ignored files will be placed to IgnoredGoFiles
+
+	// meanings:
+	//   TestGoFiles       []string   // _test.go files in package
+	//   XTestGoFiles      []string   // _test.go files outside package
+	// XTestGoFiles are files with another package name, such as api_test for api
 	listArgs := []string{"list", "-json"}
 	listArgs = append(listArgs, pkgArgs...)
 	output, err := cmd.Dir(projectDir).Env([]string{
@@ -384,53 +389,82 @@ func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs 
 	replace = make(map[string]string)
 	for _, pkg := range pkgs {
 		if pkg.Standard {
+			// skip standarding packages
 			continue
 		}
-		// already has trace?
-		var hasDep bool
-		for _, dep := range pkg.Deps {
-			if dep == RUNTIME_TRACE_PKG {
-				hasDep = true
-				break
+		type pkgInfo struct {
+			imports        []string
+			files          []string
+			addForAllFiles bool
+		}
+		var pkgInfos []pkgInfo
+
+		// no matter test or not,adding to the
+		// original package is always fine.
+		// it is a catch-all workaround
+		// when there is no source files, then we add to all tests
+		// the fact is: go allows duplicate blank imports
+		if len(pkg.GoFiles) > 0 {
+			pkgInfos = append(pkgInfos, pkgInfo{pkg.Imports, pkg.GoFiles, false})
+		} else {
+			pkgInfos = append(pkgInfos, pkgInfo{nil, pkg.TestGoFiles, true})
+			pkgInfos = append(pkgInfos, pkgInfo{nil, pkg.XTestGoFiles, true})
+		}
+		for _, p := range pkgInfos {
+			mapping, err := addBlankImportForPackage(pkg.Dir, tmpProjectDir, p.imports, p.files, p.addForAllFiles)
+			if err != nil {
+				return nil, err
+			}
+			for srcFile, dstFile := range mapping {
+				replace[srcFile] = dstFile
 			}
 		}
-		if hasDep {
-			continue
+	}
+	return replace, nil
+}
+
+func addBlankImportForPackage(srcDir string, dstDir string, imports []string, files []string, allFile bool) (map[string]string, error) {
+	if len(files) == 0 {
+		// no files
+		return nil, nil
+	}
+	if !allFile {
+		// check if already has trace
+		for _, imp := range imports {
+			if imp == RUNTIME_TRACE_PKG {
+				return nil, nil
+			}
 		}
-		var file string
-		if test && len(pkg.TestGoFiles) > 0 {
-			file = pkg.TestGoFiles[0]
-		} else if len(pkg.GoFiles) > 0 {
-			file = pkg.GoFiles[0]
-		}
-		if file == "" {
-			// no files
-			continue
-		}
-		srcFile := filepath.Join(pkg.Dir, file)
-		dstFile := filepath.Join(tmpProjectDir, srcFile)
+		// take the first one
+		files = files[0:1]
+	}
+
+	mapping := make(map[string]string, len(files))
+	for _, file := range files {
+		srcFile := filepath.Join(srcDir, file)
+		dstFile := filepath.Join(dstDir, srcFile)
 		err := filecopy.CopyFileAll(srcFile, dstFile)
 		if err != nil {
 			return nil, err
 		}
 		// add blank import
+		// NOTE: go allows duplicate blank imports
 		content, err := os.ReadFile(dstFile)
 		if err != nil {
 			return nil, err
 		}
 		newContent, ok := addBlankImport(string(content))
 		if !ok {
-			continue
+			return nil, nil
 		}
 		err = os.WriteFile(dstFile, []byte(newContent), 0755)
 		if err != nil {
 			return nil, err
 		}
-		replace[srcFile] = dstFile
+		mapping[srcFile] = dstFile
 	}
-	return replace, nil
+	return mapping, nil
 }
-
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
@@ -444,14 +478,23 @@ func isDir(path string) bool {
 	return stat.IsDir()
 }
 
+// see go-release/go1.22.2/src/cmd/go/internal/list/list.go
 type GoListPkg struct {
-	Dir         string // real dir
-	ImportPath  string
-	Root        string // project root
-	Standard    bool
-	GoFiles     []string
-	TestGoFiles []string
-	Deps        []string // all dependents
+	Dir        string // real dir
+	ImportPath string
+	Root       string // project root
+	Standard   bool
+
+	GoFiles      []string // .go source files (excluding CgoFiles, TestGoFiles, XTestGoFiles)
+	TestGoFiles  []string
+	XTestGoFiles []string // _test.go files outside package
+
+	// Dependency information
+	Deps         []string // all (recursively) imported dependencies
+	Imports      []string // import paths used by this package
+	TestImports  []string // imports from TestGoFiles
+	XTestImports []string // imports from XTestGoFiles
+
 }
 
 func addBlankImport(content string) (string, bool) {
