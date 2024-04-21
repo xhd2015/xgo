@@ -407,7 +407,7 @@ func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs 
 			// no files
 			continue
 		}
-		srcFile := filepath.Join(pkg.Root, file)
+		srcFile := filepath.Join(pkg.Dir, file)
 		dstFile := filepath.Join(tmpProjectDir, srcFile)
 		err := filecopy.CopyFileAll(srcFile, dstFile)
 		if err != nil {
@@ -445,9 +445,9 @@ func isDir(path string) bool {
 }
 
 type GoListPkg struct {
-	Dir         string
+	Dir         string // real dir
 	ImportPath  string
-	Root        string
+	Root        string // project root
 	Standard    bool
 	GoFiles     []string
 	TestGoFiles []string

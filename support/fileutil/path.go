@@ -11,7 +11,7 @@ func CleanSpecial(path string) string {
 			j++
 			continue
 		}
-		if ch < 128 && !(ch == '_' || ch == '-' || (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
+		if ch < 128 && !(ch == '.' || ch == '_' || ch == '-' || (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
 			continue
 		}
 		chars[j] = chars[i]
