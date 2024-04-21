@@ -89,6 +89,12 @@ func preCommitCheck(noCommit bool) error {
 		}
 	}
 
+	// run generate
+	err = cmd.Dir(rootDir).Run("go", "run", "./script/generate", "xgo-runtime")
+	if err != nil {
+		return err
+	}
+	files = append(files, filepath.Join("cmd", "xgo", "runtime_gen"))
 	if !noCommit {
 		err = cmd.Run("git", append([]string{"add"}, files...)...)
 		if err != nil {

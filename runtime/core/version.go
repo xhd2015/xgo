@@ -7,8 +7,8 @@ import (
 )
 
 const VERSION = "1.0.25"
-const REVISION = "c84c8a6b5fa49005a741ff078078c16d317b1709+1"
-const NUMBER = 195
+const REVISION = "4e07bbae9c2c6c3dc7acf471b763a7fed0fcd66d+1"
+const NUMBER = 196
 
 // these fields will be filled by compiler
 const XGO_VERSION = ""
