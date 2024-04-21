@@ -361,6 +361,13 @@ func handleBuild(cmd string, args []string) error {
 	execCmdEnv := os.Environ()
 	var execCmd *exec.Cmd
 	if !cmdExec {
+		if modfile != "" {
+			// make modfile absolute
+			modfile, err = filepath.Abs(modfile)
+			if err != nil {
+				return nil
+			}
+		}
 		instrumentGo := filepath.Join(instrumentGoroot, "bin", "go")
 		subPaths, mainModule, err := goinfo.ResolveMainModule(projectDir, remainArgs)
 		if err != nil {
@@ -373,9 +380,8 @@ func handleBuild(cmd string, args []string) error {
 			impResult, impRuntimeErr := importRuntimeDep(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, subPaths, mainModule, mod, remainArgs)
 			if impRuntimeErr != nil {
 				// can be silently ignored
-				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", TRACE_PKG, TRACE_PKG, impRuntimeErr)
-			}
-			if impResult != nil {
+				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", RUNTIME_TRACE_PKG, RUNTIME_TRACE_PKG, impRuntimeErr)
+			} else if impResult != nil {
 				overlay = impResult.overlayFile
 				if impResult.mod != "" {
 					mod = impResult.mod
