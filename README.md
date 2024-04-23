@@ -38,7 +38,7 @@ xgo version
 
 If `xgo` is not found, you may need to check if `$GOPATH/bin` is added to your `PATH` variable.
 
-There are other options,see [doc/INSTALLATION.md](./doc/INSTALLATION.md).
+For CI jobs like github workflow, see [doc/INSTALLATION.md](./doc/INSTALLATION.md).
 
 # Requirement
 `xgo` requires at least `go1.17` to compile.
@@ -348,7 +348,7 @@ func TestPatchFunc(t *testing.T) {
 NOTE: `Mock` and `Patch` supports top-level variables and consts, see [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
 ## Trace
-> Trace might be the most powerful tool inside xgo
+> Trace might be the most powerful tool provided by xgo, this blog have a more thorough example: https://blog.xhd2015.xyz/posts/xgo-trace_a-powerful-visualization-tool-in-go
 
 It is painful when debugging with a deep call stack.
 
@@ -362,8 +362,6 @@ package trace_test
 import (
     "fmt"
     "testing"
-
-    _ "github.com/xhd2015/xgo/runtime/trace"
 )
 
 func TestTrace(t *testing.T) {
@@ -417,7 +415,7 @@ func TestTrace(t *testing.T) {
     C()
 }
 ```
-The trace will only include `B()` and `C()`
+The trace will only include `B()` and `C()`.
 
 # Concurrent safety
 I know you guys from other monkey patching library suffer from the unsafety implied by these frameworks.

@@ -35,7 +35,7 @@ xgo version
 ```
 如果未找到`xgo`, 你可能需要查看`$GOPATH/bin`是否已经添加到你的`PATH`变量中。
 
-更多安装方式, 参考[doc/INSTALLATION.md](./doc/INSTALLATION.md).
+对于CI, 如github workflow, 参考[doc/INSTALLATION.md](./doc/INSTALLATION.md).
 
 # 使用须知
 `xgo` 需要`go1.17`及以上的版本。
@@ -341,7 +341,7 @@ func TestPatchFunc(t *testing.T) {
 注意: `Mock`和`Patch`也支持对包级别的变量和常量进行mock, 见[runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
 ## Trace
-> Trace也许是xgo提供的最强大的工具
+> Trace也许是xgo提供的最强大的工具, 这个博客介绍了一个更全面的例子: https://blog.xhd2015.xyz/zh/posts/xgo-trace_a-powerful-visualization-tool-in-go/
 
 在调试一个非常深的调用栈时, 通常会感觉非常痛苦, 并且效率低下。
 
@@ -353,8 +353,6 @@ package trace_test
 import (
     "fmt"
     "testing"
-
-    _ "github.com/xhd2015/xgo/runtime/trace"
 )
 
 func TestTrace(t *testing.T) {
