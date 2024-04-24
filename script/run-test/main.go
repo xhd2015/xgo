@@ -80,6 +80,12 @@ var extraSubTests = []*TestCase{
 		flags: []string{"--strace"},
 	},
 	{
+		// see https://github.com/xhd2015/xgo/issues/87
+		name:  "trace_without_dep_vendor_replace",
+		dir:   "runtime/test/trace_without_dep_vendor_replace",
+		flags: []string{"--strace"},
+	},
+	{
 		name:  "trap_with_overlay",
 		dir:   "runtime/test/trap_with_overlay",
 		flags: []string{"-overlay", "overlay.json"},

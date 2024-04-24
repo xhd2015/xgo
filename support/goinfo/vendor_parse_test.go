@@ -1,6 +1,10 @@
 package goinfo
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestParseVendorInfo(t *testing.T) {
 	// NOTE: in vendor, replacing module have no
@@ -28,4 +32,34 @@ git.some/x1/y1/mark
 		}
 	}
 	t.Logf("%v", info)
+}
+
+func TestDebugParseCustomVendor(t *testing.T) {
+	t.Skipf("debug only")
+
+	debugPkg := "test"
+	file := os.Getenv("TEST_DEBUG_FILE")
+
+	vendorInfo, err := ParseVendor(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, mod := range vendorInfo.VendorList {
+		if strings.HasPrefix(debugPkg, mod.Path) {
+			t.Logf("VendorList found mod: %s %s", mod.Path, mod.Version)
+		}
+	}
+	for _, mod := range vendorInfo.VendorReplaced {
+		if strings.HasPrefix(debugPkg, mod.Path) {
+			t.Logf("VendorReplaced found mod: %s %s", mod.Path, mod.Version)
+		}
+	}
+	for mod, meta := range vendorInfo.VendorMeta {
+		if strings.HasPrefix(debugPkg, mod.Path) {
+			t.Logf("VendorMeta found mod: %s %s, meta: %+v", mod.Path, mod.Version, meta)
+		}
+	}
+	modVersion := vendorInfo.VendorVersion[debugPkg]
+	t.Logf("VendorVersion: %s", modVersion)
 }

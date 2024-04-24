@@ -1,0 +1,4 @@
+# github.com/xhd2015/xgo/runtime/test/trace_without_dep_vendor_replace/lib v1.0.0 => ./lib
+## explicit
+github.com/xhd2015/xgo/runtime/test/trace_without_dep_vendor_replace/lib
+# github.com/xhd2015/xgo/runtime/test/trace_without_dep_vendor_replace/lib => ./lib
