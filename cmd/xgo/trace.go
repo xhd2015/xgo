@@ -262,21 +262,20 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 	goModReplace := make(map[string]string)
 	if vendorDir != "" {
 		var hasReplace bool
-		editArgs := []string{"mod", "edit"}
 
 		// read vendor/modules.txt,
 		vendorInfo, err := goinfo.ParseVendor(vendorDir)
 		if err != nil {
 			return nil, err
 		}
+		replacedModules := make([]string, 0, len(vendorInfo.VendorList))
 		// get all modules, convert all deps to replace
 		for _, mod := range vendorInfo.VendorList {
-			modInfo, ok := vendorInfo.VendorMeta[mod]
-			if !ok {
-				continue
-			}
+			// modInfo is completely optional
+			modInfo := vendorInfo.VendorMeta[mod]
 			modPath := mod.Path
-			if modInfo.Replacement.Path != "" {
+			if modInfo.Replacement.Path != "" &&
+				!isLocalReplace(modInfo.Replacement.Path) { // !isLocalReplace, see https://github.com/xhd2015/xgo/issues/87#issuecomment-2074722912
 				modPath = modInfo.Replacement.Path
 			}
 			vendorModPath := filepath.Join(vendorDir, modPath)
@@ -284,7 +283,22 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			replaceModFile := filepath.Join(tmpProjectDir, vendorModFile)
 			// replace goMod => vendor=>
 
-			editArgs = append(editArgs, fmt.Sprintf("-replace=%s=%s", modPath, vendorModPath))
+			// NOTE: if replace without require, go will automatically add
+			//     version v0.0.0-00010101000000-000000000000
+			// https://stackoverflow.com/questions/58012771/go-mod-fails-to-find-version-v0-0-0-00010101000000-000000000000-of-a-dependency
+			//
+			// to suppress this message, always add require
+			version := mod.Version
+			if version == "" {
+				version = "v0.0.0-00010101000000-000000000000"
+			}
+			requireCmd := fmt.Sprintf("-require=%s@%s", modPath, version)
+
+			// logDebug("replace %s -> %s", modPath, vendorModPath)
+			replacedModules = append(replacedModules,
+				requireCmd,
+				fmt.Sprintf("-replace=%s=%s", modPath, vendorModPath),
+			)
 			hasReplace = true
 			// create placeholder go.mod for each module
 			modGoVersion := modInfo.GoVersion
@@ -297,6 +311,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			}
 			goModReplace[vendorModFile] = replaceModFile
 		}
+		logDebug("num replaced modules: %d", len(replacedModules)/2)
 
 		if hasReplace {
 			if false {
@@ -313,13 +328,19 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			// force use -mod=mod
 			mod = "mod" // force use mod after replaced vendor
 			modfile = tmpGoMod
-			editArgs = append(editArgs, tmpGoMod)
-			err = cmd.Env([]string{
-				"GOROOT=" + goroot,
-			}).Run(goBinary, editArgs...)
-			if err != nil {
-				return nil, err
+			for _, replaceModuleGroup := range splitArgsBatch(replacedModules, 100) {
+				editArgs := make([]string, 0, 3+len(replaceModuleGroup))
+				editArgs = append(editArgs, "mod", "edit")
+				editArgs = append(editArgs, replaceModuleGroup...)
+				editArgs = append(editArgs, tmpGoMod)
+				err = cmd.Env([]string{
+					"GOROOT=" + goroot,
+				}).Run(goBinary, editArgs...)
+				if err != nil {
+					return nil, err
+				}
 			}
+
 		}
 	}
 
@@ -342,6 +363,52 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 		mod:        mod,
 		modfile:    modfile,
 	}, nil
+}
+
+// system may have limit on single go command
+func splitArgsBatch(args []string, limit int) [][]string {
+	if len(args) <= limit {
+		return [][]string{args}
+	}
+	n := len(args) / limit
+	remain := len(args) - n*limit
+	bcap := n
+	if remain > 0 {
+		bcap++
+	}
+	groups := make([][]string, bcap)
+	off := 0
+	for i := 0; i < n; i++ {
+		group := make([]string, limit)
+		for j := 0; j < limit; j++ {
+			group[j] = args[off]
+			off++
+		}
+		groups[i] = group
+	}
+	if remain > 0 {
+		group := make([]string, remain)
+		for i := 0; i < remain; i++ {
+			group[i] = args[off]
+			off++
+		}
+		groups[bcap-1] = group
+	}
+	return groups
+}
+
+func isLocalReplace(modPath string) bool {
+	// ./ or ../
+	if modPath == "." || modPath == ".." {
+		return true
+	}
+	if strings.HasPrefix(modPath, "./") {
+		return true
+	}
+	if strings.HasPrefix(modPath, "../") {
+		return true
+	}
+	return false
 }
 
 func createOverlayFile(tmpProjectDir string, replace map[string]string) (string, error) {

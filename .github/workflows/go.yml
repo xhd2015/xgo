@@ -30,7 +30,7 @@ jobs:
       
     - name: Binary Install
       continue-on-error: false
-      run: curl -fsSL https://github.com/xhd2015/xgo/raw/master/install.sh | env INSTALL_TO_BIN=true bash -x
+      run: curl -fsSL https://github.com/xhd2015/xgo/raw/master/script/install/install.sh | env INSTALL_TO_BIN=true bash -x
     
     - name: Check Binary Install
       continue-on-error: false

@@ -348,7 +348,7 @@ func TestPatchFunc(t *testing.T) {
 NOTE: `Mock` and `Patch` supports top-level variables and consts, see [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
 ## Trace
-> Trace might be the most powerful tool provided by xgo, this blog have a more thorough example: https://blog.xhd2015.xyz/posts/xgo-trace_a-powerful-visualization-tool-in-go
+> Trace might be the most powerful tool provided by xgo, this blog has a more thorough example: https://blog.xhd2015.xyz/posts/xgo-trace_a-powerful-visualization-tool-in-go
 
 It is painful when debugging with a deep call stack.
 

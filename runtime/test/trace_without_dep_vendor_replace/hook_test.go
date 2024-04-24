@@ -1,7 +1,7 @@
 //go:build ignore
 // +build ignore
 
-package trace_without_dep_vendor
+package trace_without_dep_vendor_replace
 
 import (
 	"os"

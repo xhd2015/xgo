@@ -24,8 +24,9 @@ Examples:
     xgo build -o main -gcflags="all=-N -l" ./    build current module with debug flags
     xgo run ./                                   run current module
     xgo test ./...                               test all test cases of current module
+    xgo test -run TestSomething --strace ./      test and collect stack trace
+    xgo tool trace TestSomething.json            view collected stack trace
     xgo exec go version                          print instrumented go version
-    xgo tool trace TestSomething.json            view test trace
 
 See https://github.com/xhd2015/xgo for documentation.
 

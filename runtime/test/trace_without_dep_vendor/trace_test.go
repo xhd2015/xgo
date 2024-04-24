@@ -1,4 +1,4 @@
-package trace_without_dep
+package trace_without_dep_vendor
 
 import (
 	"testing"

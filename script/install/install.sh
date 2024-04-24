@@ -74,6 +74,10 @@ curl --fail --location --progress-bar --output "${tmp_dir}/${file}" "$uri" || er
 )
 
 if [[ "$INSTALL_TO_BIN" == "true" ]];then
+    # install fails if target already exists
+    if [[ -f /usr/local/bin/xgo ]];then
+        mv /usr/local/bin/{xgo,xgo_backup}
+    fi
     install "$bin_dir/xgo" /usr/local/bin
 else
     if [[ -f ~/.bash_profile ]];then
