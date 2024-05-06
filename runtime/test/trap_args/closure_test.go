@@ -18,8 +18,11 @@ var gcUnnamed = func(context.Context) {
 func TestClosureShouldRetrieveCtxInfoAtTrapTime(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, "test", "mock")
+
+	// avoid local variable affects interceptor
+	gclocal := gc
 	callAndCheck(func() {
-		gc(ctx)
+		gclocal(ctx)
 	}, func(trapCtx context.Context, f *core.FuncInfo, args, result core.Object) error {
 		if !f.FirstArgCtx {
 			t.Fatalf("expect closure also mark firstArgCtx, actually not marked")
@@ -37,8 +40,9 @@ func TestClosureShouldRetrieveCtxInfoAtTrapTime(t *testing.T) {
 func TestClosureUnnamedArgShouldRetrieveCtxInfo(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, "test", "mock")
+	localGcUnnamed := gcUnnamed
 	callAndCheck(func() {
-		gcUnnamed(ctx)
+		localGcUnnamed(ctx)
 	}, func(trapCtx context.Context, f *core.FuncInfo, args, result core.Object) error {
 		if !f.FirstArgCtx {
 			t.Fatalf("expect closure also mark firstArgCtx, actually not marked")

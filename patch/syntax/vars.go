@@ -584,8 +584,16 @@ func (ctx *BlockContext) traverseCallExpr(node *syntax.CallExpr, globaleNames ma
 		}
 	}
 
-	// NOTE: we skip capturing a name as a function
-	// node.Fun = ctx.traverseExpr(node.Fun, globaleNames, imports)
+	// NOTE: previousely we skip capturing a name as a function(i.e. the next statement is commented out)
+	// reason: we cannot tell if the receiver is
+	// a pointer or a value. If the target function requires a
+	// pointer while we assign a value, then effect will lost, such
+	// as lock and unlock.
+	//
+	// however, since we have isVarOKToTrap() to check if a variable is ok to trap, so this can be turned on, resulting in workaround:
+	//    A.B() -> typeOfA(A).B() which makes things work
+
+	node.Fun = ctx.traverseExpr(node.Fun, globaleNames, imports)
 	for i, arg := range node.ArgList {
 		node.ArgList[i] = ctx.traverseExpr(arg, globaleNames, imports)
 	}
@@ -762,6 +770,7 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 	return newName, true
 }
 
+// check if node is either X of an X.Y, or (X).Y or ((X)).Y...
 func (ctx *BlockContext) isVarOKToTrap(node syntax.Node) bool {
 	// a variable can only trapped when it will not
 	// cause an implicit pointer

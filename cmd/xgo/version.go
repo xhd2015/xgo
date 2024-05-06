@@ -2,9 +2,9 @@ package main
 
 import "fmt"
 
-const VERSION = "1.0.28"
-const REVISION = "2eaf6cf94cd17d2888d6708cb76d194b334c8957+1"
-const NUMBER = 202
+const VERSION = "1.0.29"
+const REVISION = "5d121a999ca8ce5c744a110d4f42b31ef4490e8f+1"
+const NUMBER = 204
 
 func getRevision() string {
 	revSuffix := ""
