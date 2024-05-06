@@ -5,12 +5,25 @@
 
 package debug
 
-import "testing"
+import (
+	"testing"
 
-const XGO_VERSION = ""
+	"github.com/xhd2015/xgo/runtime/mock"
+	"github.com/xhd2015/xgo/runtime/test/mock_var/sub"
+)
 
-func TestListStdlib(t *testing.T) {
-	if XGO_VERSION == "" {
-		t.Fatalf("fail")
+var c sub.Mapping = sub.Mapping{
+	1: "hello",
+}
+
+func TestThirdPartyTypeMethodVar(t *testing.T) {
+	mock.Patch(&c, func() sub.Mapping {
+		return sub.Mapping{
+			1: "mock",
+		}
+	})
+	txt := c.Get(1)
+	if txt != "mock" {
+		t.Fatalf("expect c[1] to be %s, actual: %s", "mock", txt)
 	}
 }
