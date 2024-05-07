@@ -140,6 +140,7 @@ func Begin() func() {
 type collectOpts struct {
 	name          string
 	onComplete    func(root *Root)
+	filter        []func(stack *Stack) bool
 	root          *Root
 	exportOptions *ExportOptions
 }
@@ -155,6 +156,11 @@ func (c *collectOpts) Name(name string) *collectOpts {
 
 func (c *collectOpts) OnComplete(f func(root *Root)) *collectOpts {
 	c.onComplete = f
+	return c
+}
+
+func (c *collectOpts) WithFilter(f func(stack *Stack) bool) *collectOpts {
+	c.filter = append(c.filter, f)
 	return c
 }
 
@@ -219,6 +225,10 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 			initial = true
 		}
 	} else {
+		if !checkFilter(stack, localOpts.filter) {
+			// do not collect trace if filtered out
+			return nil, trap.ErrSkip
+		}
 		localRoot = localOpts.root
 		if localRoot == nil {
 			initial = true
@@ -254,6 +264,15 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 	root.Top.Children = append(root.Top.Children, stack)
 	root.Top = stack
 	return prevTop, nil
+}
+
+func checkFilter(stack *Stack, filters []func(stack *Stack) bool) bool {
+	for _, f := range filters {
+		if !f(stack) {
+			return false
+		}
+	}
+	return true
 }
 
 func handleTracePost(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object, data interface{}) error {
