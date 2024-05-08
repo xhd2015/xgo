@@ -7,8 +7,8 @@ import (
 )
 
 const VERSION = "1.0.29"
-const REVISION = "818c18ff3d125cf9734fe4d554655c922d645534+1"
-const NUMBER = 205
+const REVISION = "81a667d545fbd097e4403650a69af2c8477814fc+1"
+const NUMBER = 206
 
 // these fields will be filled by compiler
 const XGO_VERSION = ""
@@ -34,12 +34,12 @@ func checkVersion() error {
 		return errors.New("failed to detect xgo version, consider install xgo: go install github.com/xhd2015/xgo/cmd/xgo@latest")
 	}
 	if XGO_VERSION == VERSION {
-		// if runtime version is larger, that means
-		if XGO_NUMBER < NUMBER {
-			return errors.New("newer xgo available, consider run: xgo upgrade")
-		}
-		// only one case is feasible: XGO_NUMBER >= runtime NUMBER
-		// because xgo can be compatible with older sdk
+		// if xgo version same with runtime version, then
+		// different numbers are compatible with each other,
+		// e.g.  xgo v1.0.29 <-> runtime v1.0.29
+		//       [ok] xgo 205, runtime 205
+		//       [ok] xgo 205, runtime 206
+		//       [ok] xgo 205, runtime 204
 		return nil
 	}
 	if XGO_NUMBER == NUMBER {
@@ -48,9 +48,11 @@ func checkVersion() error {
 	}
 	var msg string
 	if XGO_NUMBER < NUMBER {
+		// incompatible possibly: xgo < runtime
 		updateCmd := "xgo upgrade"
 		msg = fmt.Sprintf("xgo v%s maybe incompatible with xgo/runtime v%s, consider run: %s", XGO_VERSION, VERSION, updateCmd)
 	} else {
+		// compatible: xgo >= runtime
 		updateCmd := "go get github.com/xhd2015/xgo/runtime@latest"
 		msg = fmt.Sprintf("xgo/runtime v%s can be upgraded to v%s, consider run: %s", VERSION, XGO_VERSION, updateCmd)
 	}
