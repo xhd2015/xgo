@@ -49,7 +49,7 @@ func init() {
 
 	__xgo_link_on_gonewproc(func(newg uintptr) {
 		// cannot lock/unlock on sys stack
-		if __xgo_link_is_system_stack() && false {
+		if __xgo_link_is_system_stack() {
 			return
 		}
 
