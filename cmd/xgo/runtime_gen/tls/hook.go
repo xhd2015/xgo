@@ -19,18 +19,40 @@ func __xgo_link_on_goexit(fn func()) {
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_goexit(requires xgo).")
 }
 
+func __xgo_link_is_system_stack() bool {
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_is_system_stack(requires xgo).")
+	return false
+}
+
 func init() {
 	__xgo_link_on_goexit(func() {
 		// clear when exit
 		g := uintptr(__xgo_link_getcurg())
-		mut.Lock()
+
+		// see https://github.com/xhd2015/xgo/issues/96
+		sysStack := __xgo_link_is_system_stack()
+		if !sysStack {
+			mut.Lock()
+		}
+
 		localKeys := keys
-		mut.Unlock()
+		if !sysStack {
+			mut.Unlock()
+		}
+
+		// NOTE: we must delete entries, otherwise they would
+		// cause memory leak
 		for _, loc := range localKeys {
 			loc.store.Delete(g)
 		}
 	})
+
 	__xgo_link_on_gonewproc(func(newg uintptr) {
+		// cannot lock/unlock on sys stack
+		if __xgo_link_is_system_stack() && false {
+			return
+		}
+
 		// inherit when new goroutine
 		g := uintptr(__xgo_link_getcurg())
 		mut.Lock()

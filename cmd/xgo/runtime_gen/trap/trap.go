@@ -13,6 +13,11 @@ import (
 
 var setupOnce sync.Once
 
+func __xgo_link_is_system_stack() bool {
+	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_is_system_stack(requires xgo).")
+	return false
+}
+
 func ensureTrapInstall() {
 	setupOnce.Do(func() {
 		// set trap once needed, no matter it
@@ -35,6 +40,10 @@ func ensureTrapInstall() {
 func init() {
 	__xgo_link_on_gonewproc(func(g uintptr) {
 		if isByPassing() {
+			return
+		}
+		if __xgo_link_is_system_stack() {
+			// cannot lock/unlock on sys stack
 			return
 		}
 		local := getLocalInterceptorList()

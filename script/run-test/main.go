@@ -60,6 +60,7 @@ var runtimeSubTests = []string{
 	"mock_var",
 	"patch",
 	"patch_const",
+	"tls",
 }
 
 type TestCase struct {
@@ -528,6 +529,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 				"./trace/...",
 				"./trap/...",
 				"./mock/...",
+				"./tls/...",
 			)
 		}
 	case testKind_runtimeSubTest:
