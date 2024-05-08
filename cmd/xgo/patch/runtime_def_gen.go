@@ -6,6 +6,7 @@ package patch
 const RuntimeExtraDef = `
 // xgo
 func __xgo_getcurg() unsafe.Pointer
+func __xgo_is_system_stack() bool
 func __xgo_trap(pkgPath string, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
 func __xgo_trap_for_generated(pkgPath string, pc uintptr, identityName string, generic bool, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
 func __xgo_trap_var_for_generated(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool)

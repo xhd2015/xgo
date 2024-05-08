@@ -13,6 +13,12 @@ import (
 // see: https://github.com/golang/go/blob/master/src/runtime/HACKING.md
 func __xgo_getcurg() unsafe.Pointer { return unsafe.Pointer(getg().m.curg) }
 
+// used to avoid https://github.com/xhd2015/xgo/issues/96
+func __xgo_is_system_stack() bool {
+	gp := getg()
+	return gp != gp.m.curg
+}
+
 // exported so other func can call it
 var __xgo_trap_impl func(pkgPath string, identityName string, generic bool, funcPC uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)
 

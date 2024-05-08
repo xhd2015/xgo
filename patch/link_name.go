@@ -31,6 +31,7 @@ const reflectSetImpl = "__xgo_set_all_method_by_name_impl"
 
 var linkMap = map[string]string{
 	"__xgo_link_getcurg":                      "__xgo_getcurg",
+	"__xgo_link_is_system_stack":              "__xgo_is_system_stack",
 	XgoLinkSetTrap:                            setTrap,
 	XgoLinkSetTrapVar:                         setTrapVar,
 	xgo_syntax.XgoLinkTrapForGenerated:        XgoTrapForGenerated,
