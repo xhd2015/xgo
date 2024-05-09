@@ -43,7 +43,7 @@ jobs:
       run: go run ./script/run-test --reset-instrument --debug -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out
 
     - name: Merge Coverages
-      run: go run ./script/cover merge ./cover-runtime.out ./cover-runtime-sub.out -o cover-runtime-merged.out
+      run: go run ./cmd/coverage merge ./cover-runtime.out ./cover-runtime-sub.out -o cover-runtime-merged.out --exclude-prefix github.com/xhd2015/xgo/runtime/test
 
     - name: Print coverage
       run: cd runtime && go tool cover --func ../cover-runtime-merged.out

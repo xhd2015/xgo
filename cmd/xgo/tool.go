@@ -8,13 +8,19 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/xhd2015/xgo/cmd/xgo/coverage"
 	"github.com/xhd2015/xgo/cmd/xgo/trace"
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
 func handleTool(tool string, args []string) error {
 	if tool == "trace" {
-		return trace.Main(args)
+		trace.Main(args)
+		return nil
+	}
+	if tool == "coverage" {
+		coverage.Main(args)
+		return nil
 	}
 	tools := []string{
 		tool,
