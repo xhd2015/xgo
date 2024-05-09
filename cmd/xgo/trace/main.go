@@ -20,13 +20,13 @@ import (
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
-func Main(args []string) error {
+func Main(args []string) {
 	if len(args) == 0 {
-		return errors.New("requires file")
+		fmt.Fprintf(os.Stderr, "requires file\n")
+		os.Exit(1)
 	}
 	file := args[0]
 	serveFile(file)
-	return nil
 }
 
 func serveFile(file string) {
