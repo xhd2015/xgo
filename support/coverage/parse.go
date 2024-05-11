@@ -43,3 +43,29 @@ func ParseCovLine(line string) *CovLine {
 		Count:  cnt,
 	}
 }
+
+// same file can have multiple lines of count
+// see: https://go-review.googlesource.com/c/go/+/76875
+// go will append coverage profiles of multiple runnings
+func Compact(lines []*CovLine) []*CovLine {
+	return compact(make(map[string]*CovLine, len(lines)), lines)
+}
+
+func compact(lineByPrefix map[string]*CovLine, lines []*CovLine) []*CovLine {
+	n := len(lines)
+
+	i := 0
+	for j := 0; j < n; j++ {
+		line := lines[j]
+		prefix := lines[j].Prefix
+		prevLine, ok := lineByPrefix[prefix]
+		if ok {
+			prevLine.Count += line.Count
+			continue
+		}
+		lineByPrefix[prefix] = line
+		lines[i] = lines[j]
+		i++
+	}
+	return lines[:i]
+}

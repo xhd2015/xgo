@@ -16,7 +16,7 @@ import (
 //
 //	go run ./script/git-hooks install
 //	go run ./script/git-hooks pre-commit
-//	go run ./script/git-hooks pre-commit --no-commit
+//	go run ./script/git-hooks pre-commit --no-commit --no-update-version
 //	go run ./script/git-hooks post-commit
 func main() {
 	args := os.Args[1:]
@@ -27,11 +27,22 @@ func main() {
 	}
 
 	var noCommit bool
+	var noUpdateVersion bool
 	for _, arg := range args {
 		if arg == "--no-commit" {
 			noCommit = true
 			continue
 		}
+		if arg == "--no-update-version" {
+			noUpdateVersion = true
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") {
+			fmt.Fprintf(os.Stderr, "unexpected arg: %s\n", arg)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "unrecognized flag: %s\n", arg)
+		os.Exit(1)
 	}
 	if cmd == "" {
 		fmt.Fprintf(os.Stderr, "requires command\n")
@@ -41,7 +52,7 @@ func main() {
 	if cmd == "install" {
 		err = install()
 	} else if cmd == "pre-commit" {
-		err = preCommitCheck(noCommit)
+		err = preCommitCheck(noCommit, noUpdateVersion)
 	} else if cmd == "post-commit" {
 		err = postCommitCheck(noCommit)
 	} else {
@@ -60,7 +71,7 @@ const preCommitCmd = "go run ./script/git-hooks pre-commit"
 const postCommitCmdHead = "# xgo check"
 const postCommitCmd = "go run ./script/git-hooks post-commit"
 
-func preCommitCheck(noCommit bool) error {
+func preCommitCheck(noCommit bool, noUpdateVersion bool) error {
 	gitDir, err := git.ShowTopLevel("")
 	if err != nil {
 		return err
@@ -70,23 +81,28 @@ func preCommitCheck(noCommit bool) error {
 		return err
 	}
 
-	commitHash, err := revision.GetCommitHash("", "HEAD")
-	if err != nil {
-		return err
-	}
-
-	// due to the nature of git, we cannot
-	// know the commit hash of current commit
-	// which has not yet happened, so we add
-	// suffix "+1" to indicate this
-	rev := commitHash + "+1"
-
-	files := revision.GetVersionFiles(rootDir)
-	for _, file := range files {
-		err = revision.PatchVersionFile(file, rev, true)
+	var affectedFiles []string
+	const updateRevision = true
+	if updateRevision {
+		commitHash, err := revision.GetCommitHash("", "HEAD")
 		if err != nil {
 			return err
 		}
+
+		// due to the nature of git, we cannot
+		// know the commit hash of current commit
+		// which has not yet happened, so we add
+		// suffix "+1" to indicate this
+		rev := commitHash + "+1"
+
+		versionFiles := revision.GetVersionFiles(rootDir)
+		for _, file := range versionFiles {
+			err = revision.PatchVersionFile(file, rev, !noUpdateVersion)
+			if err != nil {
+				return err
+			}
+		}
+		affectedFiles = append(affectedFiles, versionFiles...)
 	}
 
 	// run generate
@@ -94,9 +110,9 @@ func preCommitCheck(noCommit bool) error {
 	if err != nil {
 		return err
 	}
-	files = append(files, filepath.Join("cmd", "xgo", "runtime_gen"))
+	affectedFiles = append(affectedFiles, filepath.Join("cmd", "xgo", "runtime_gen"))
 	if !noCommit {
-		err = cmd.Run("git", append([]string{"add"}, files...)...)
+		err = cmd.Run("git", append([]string{"add"}, affectedFiles...)...)
 		if err != nil {
 			return nil
 		}

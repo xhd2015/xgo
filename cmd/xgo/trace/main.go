@@ -89,22 +89,14 @@ func serveFile(file string) {
 	}
 
 	for {
+		// open url after 500ms, waiting for port opening to check if error
 		portErr := make(chan struct{})
-		go func() {
-			select {
-			case <-time.After(500 * time.Millisecond):
-			case <-portErr:
-				return
-			}
+		go watchSignalWithinTimeout(500*time.Millisecond, portErr, func() {
 			url := fmt.Sprintf("http://localhost:%s", portStr)
 			fmt.Printf("Server listen at %s\n", url)
 
-			openCmd := "open"
-			if runtime.GOOS == "windows" {
-				openCmd = "explorer"
-			}
-			cmd.Run(openCmd, url)
-		}()
+			openURL(url)
+		})
 		err := http.ListenAndServe(fmt.Sprintf(":%s", portStr), server)
 		if err == nil {
 			break
@@ -118,6 +110,24 @@ func serveFile(file string) {
 		}
 		panic(err)
 	}
+}
+
+// executing action
+func watchSignalWithinTimeout(timeout time.Duration, errSignal chan struct{}, action func()) {
+	select {
+	case <-time.After(timeout):
+	case <-errSignal:
+		return
+	}
+	action()
+}
+
+func openURL(url string) {
+	openCmd := "open"
+	if runtime.GOOS == "windows" {
+		openCmd = "explorer"
+	}
+	cmd.Run(openCmd, url)
 }
 
 //go:embed style.css

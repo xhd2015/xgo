@@ -8,6 +8,7 @@ Usage:
 
 The commands are:
     merge       merge coverage profiles
+    compact     compact profile
     help        show help message
 
 Options for merge:

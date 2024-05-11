@@ -98,7 +98,7 @@ func generate(rootDir string, subGens SubGens) error {
 	if subGens.Has(GenernateType_StackTraceDef) {
 		err := copyTraceExport(
 			filepath.Join(rootDir, "runtime", "trace", "stack_export.go"),
-			filepath.Join(rootDir, "cmd", "trace", "stack_export.go"),
+			filepath.Join(rootDir, "cmd", "xgo", "trace", "stack_export.go"),
 		)
 		if err != nil {
 			return err
@@ -255,7 +255,8 @@ func copyTraceExport(srcFile string, targetFile string) error {
 		return err
 	}
 	content := string(contentBytes)
-	content = strings.ReplaceAll(content, "package trace", "package main")
+	// replace package
+	content = strings.ReplaceAll(content, "package trace", "package trace")
 	content = prelude + content
 
 	return os.WriteFile(targetFile, []byte(content), 0755)
