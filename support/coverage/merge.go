@@ -1,15 +1,19 @@
 package coverage
 
+// Merge profiles
+// the result will be compacted
 func Merge(covs ...[]*CovLine) []*CovLine {
 	if len(covs) == 0 {
 		return nil
 	}
 	if len(covs) == 1 {
-		return covs[0]
+		return Compact(covs[0])
 	}
 	result := covs[0]
+	lineByPrefix := make(map[string]*CovLine, len(result))
+	result = compact(lineByPrefix, result)
 	for i := 1; i < len(covs); i++ {
-		result = doMerge(result, covs[i])
+		result = doMerge(lineByPrefix, result, covs[i])
 	}
 	return result
 }
@@ -26,21 +30,24 @@ func Filter(covs []*CovLine, check func(line *CovLine) bool) []*CovLine {
 	return covs[:j]
 }
 
-func doMerge(linesA []*CovLine, linesB []*CovLine) []*CovLine {
-	for _, line := range linesB {
-		idx := -1
-		for i := 0; i < len(linesA); i++ {
-			if linesA[i].Prefix == line.Prefix {
-				idx = i
-				break
-			}
+func doMerge(lineByPrefix map[string]*CovLine, dst []*CovLine, src []*CovLine) []*CovLine {
+	for _, line := range src {
+		prevLine, ok := lineByPrefix[line.Prefix]
+		if ok {
+			prevLine.Count += line.Count
+			continue
 		}
-		if idx < 0 {
-			linesA = append(linesA, line)
-		} else {
-			// fmt.Printf("add %s %d %d\n", a[idx].prefix, a[idx].count, line.count)
-			linesA[idx].Count += line.Count
+		lineByPrefix[line.Prefix] = line
+		dst = append(dst, line)
+	}
+	return dst
+}
+
+func findByPrefix(linesA []*CovLine, prefix string) int {
+	for i := 0; i < len(linesA); i++ {
+		if linesA[i].Prefix == prefix {
+			return i
 		}
 	}
-	return linesA
+	return -1
 }

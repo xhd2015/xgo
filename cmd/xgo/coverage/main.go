@@ -19,6 +19,10 @@ func Main(args []string) {
 		fmt.Print(strings.TrimPrefix(help, "\n"))
 		return
 	}
+	if cmd != "merge" && cmd != "compact" {
+		fmt.Fprintf(os.Stderr, "unrecognized cmd: %s\n", cmd)
+		return
+	}
 	args = args[1:]
 
 	var remainArgs []string
@@ -82,6 +86,21 @@ func Main(args []string) {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
+	case "compact":
+		if len(remainArgs) == 0 {
+			fmt.Fprintf(os.Stderr, "requires file\n")
+			os.Exit(1)
+		}
+		if len(remainArgs) != 1 {
+			fmt.Fprintf(os.Stderr, "compact requires exactly 1, found: %v\n", remainArgs)
+			os.Exit(1)
+		}
+		// compact is a special case of merge
+		err := mergeCover(remainArgs, outFile, excludePrefix)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unrecognized cmd: %s\n", cmd)
 		os.Exit(1)
@@ -89,28 +108,29 @@ func Main(args []string) {
 }
 
 func mergeCover(files []string, outFile string, excludePrefix []string) error {
-	var mode string
+	// var mode string
 	covs := make([][]*coverage.CovLine, 0, len(files))
 	for _, file := range files {
 		content, err := os.ReadFile(file)
 		if err != nil {
 			return err
 		}
-		covMode, cov := coverage.Parse(string(content))
+		_, cov := coverage.Parse(string(content))
 		covs = append(covs, cov)
-		if mode == "" {
-			mode = covMode
-		}
+		// if mode == "" {
+		// 	mode = covMode
+		// }
 	}
 	res := coverage.Merge(covs...)
 	res = coverage.Filter(res, func(line *coverage.CovLine) bool {
 		return !hasAnyPrefix(line.Prefix, excludePrefix)
 	})
 
-	if mode == "" {
-		mode = "set"
-	}
-	mergedCov := coverage.Format(mode, res)
+	// if mode == "" {
+	// 	mode = "set"
+	// }
+	// always set mode to count
+	mergedCov := coverage.Format("count", res)
 
 	var out io.Writer = os.Stdout
 	if outFile != "" {
