@@ -368,7 +368,7 @@ func handleBuild(cmd string, args []string) error {
 				return nil
 			}
 		}
-		instrumentGo := filepath.Join(instrumentGoroot, "bin", "go")
+		instrumentGo := filepath.Join(instrumentGoroot, "bin", "go"+osinfo.EXE_SUFFIX)
 		subPaths, mainModule, err := goinfo.ResolveMainModule(projectDir, remainArgs)
 		if err != nil {
 			if !errors.Is(err, goinfo.ErrGoModNotFound) && !errors.Is(err, goinfo.ErrGoModDoesNotHaveModule) {

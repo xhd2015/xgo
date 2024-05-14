@@ -14,6 +14,7 @@ import (
 // go run ./script/run-test/ --include go1.22.1 --xgo-runtime-test-only -run TestMockTimeNow -v ./test/mock_stdlib
 func TestMockTimeNow(t *testing.T) {
 	now1 := time.Now()
+	time.Sleep(1 * time.Millisecond)
 	now2 := time.Now()
 
 	d1 := now2.Sub(now1)

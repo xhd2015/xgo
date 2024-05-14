@@ -123,12 +123,12 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 		return err
 	}
 	var goBinaryChanged bool = true
-	srcGoBin := filepath.Join(goroot, "bin", "go")
-	dstGoBin := filepath.Join(instrumentGoroot, "bin", "go")
+	srcGoBin := filepath.Join(goroot, "bin", "go"+osinfo.EXE_SUFFIX)
+	dstGoBin := filepath.Join(instrumentGoroot, "bin", "go"+osinfo.EXE_SUFFIX)
 
 	srcFile, err := os.Stat(srcGoBin)
 	if err != nil {
-		return nil
+		return err
 	}
 	if srcFile.IsDir() {
 		return fmt.Errorf("bad goroot: %s", goroot)
