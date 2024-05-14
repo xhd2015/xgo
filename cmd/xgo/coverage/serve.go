@@ -42,7 +42,7 @@ func handleServe(args []string) error {
 	}
 	var lastCheckTime time.Time
 	if s != "" {
-		lastCheckTime, _ = time.Parse(time.DateTime, s)
+		lastCheckTime, _ = time.Parse(dateTime, s)
 	}
 
 	// if tool does not exist, download it
@@ -88,6 +88,8 @@ func handleServe(args []string) error {
 		Run(serveTool, serveArgs...)
 }
 
+const dateTime = "2006-01-02 15:04:05"
+
 func downloadTool(serveTool string, recordFile string) error {
 	goos, err := getGOOS()
 	if err != nil {
@@ -107,7 +109,7 @@ func downloadTool(serveTool string, recordFile string) error {
 	if err != nil {
 		return err
 	}
-	recordTime := time.Now().Format(time.DateTime)
+	recordTime := time.Now().Format(dateTime)
 	os.WriteFile(recordFile, []byte(recordTime), 0755)
 
 	return chmodExec(serveTool)
