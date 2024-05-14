@@ -242,7 +242,11 @@ func generateFuncHelperCode(srcFile string) (*genInfo, error) {
 
 	funcStubCode := getSlice(code, fset, st.Pos(), st.End())
 
-	helperCode := getSlice(code, fset, astFile.Name.End(), astFile.FileEnd)
+	// TODO: use astFile.FileEnd
+	var fileEnd token.Pos
+	fileEnd = astFile.End()
+
+	helperCode := getSlice(code, fset, astFile.Name.End(), fileEnd)
 	return &genInfo{
 		funcStub:   funcStubCode,
 		helperCode: helperCode,

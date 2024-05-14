@@ -280,7 +280,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			}
 			vendorModPath := filepath.Join(vendorDir, modPath)
 			vendorModFile := filepath.Join(vendorModPath, "go.mod")
-			replaceModFile := filepath.Join(tmpProjectDir, vendorModFile)
+			replaceModFile := filepath.Join(tmpProjectDir, asSubPath(vendorModFile))
 			// replace goMod => vendor=>
 
 			// NOTE: if replace without require, go will automatically add
@@ -490,6 +490,11 @@ func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs 
 	return replace, nil
 }
 
+// when doing filepath.Join(a,b),
+// on windows, if b has :, everything fails
+func asSubPath(path string) string {
+	return fileutil.CleanSpecial(path)
+}
 func addBlankImportForPackage(srcDir string, dstDir string, imports []string, files []string, allFile bool) (map[string]string, error) {
 	if len(files) == 0 {
 		// no files
@@ -509,7 +514,7 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 	mapping := make(map[string]string, len(files))
 	for _, file := range files {
 		srcFile := filepath.Join(srcDir, file)
-		dstFile := filepath.Join(dstDir, srcFile)
+		dstFile := filepath.Join(dstDir, asSubPath(srcFile))
 		err := filecopy.CopyFileAll(srcFile, dstFile)
 		if err != nil {
 			return nil, err

@@ -19,6 +19,14 @@ func IsTCPAddrServing(url string, timeout time.Duration) (bool, error) {
 
 func ServePort(port int, autoIncrPort bool, watchTimeout time.Duration, watch func(port int), doWithPort func(port int) error) error {
 	for {
+		serving, err := IsTCPAddrServing(net.JoinHostPort("localhost", strconv.Itoa(port)), 20*time.Millisecond)
+		if err != nil {
+			return err
+		}
+		if serving {
+			continue
+		}
+
 		// open url after 500ms, waiting for port opening to check if error
 		portErr := make(chan struct{})
 		if watchTimeout > 0 && watch != nil {
@@ -27,13 +35,6 @@ func ServePort(port int, autoIncrPort bool, watchTimeout time.Duration, watch fu
 			})
 		}
 
-		serving, err := IsTCPAddrServing(net.JoinHostPort("localhost", strconv.Itoa(port)), 20*time.Millisecond)
-		if err != nil {
-			return err
-		}
-		if serving {
-			continue
-		}
 		err = doWithPort(port)
 		if err == nil {
 			return nil
