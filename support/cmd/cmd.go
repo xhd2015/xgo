@@ -48,15 +48,12 @@ func (c *CmdBuilder) Dir(dir string) *CmdBuilder {
 }
 
 func (c *CmdBuilder) Stdout(stdout io.Writer) *CmdBuilder {
-	if stdout != nil {
-		c.stdout = stdout
-	}
+	c.stdout = stdout
 	return c
 }
+
 func (c *CmdBuilder) Stderr(stderr io.Writer) *CmdBuilder {
-	if stderr != nil {
-		c.stderr = stderr
-	}
+	c.stderr = stderr
 	return c
 }
 

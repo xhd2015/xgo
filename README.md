@@ -9,16 +9,14 @@
 
 **English | [简体中文](./README_zh_cn.md)**
 
-Enable function Trap in `go`, provide tools like Mock and Trace to help go developers write unit test and debug both easier and faster.
+`xgo` provides *all-in-one* test utilities for golang, including:
 
-`xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec)).
-
-It **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, adding missing abilities to go program by cooperating with(or hacking) the go compiler.
-
-These abilities include:
 - [Trap](#trap) 
 - [Mock](#mock)
 - [Trace](#trace)
+- [Incremental Coverage](#incremental-coverage)
+
+As for the monkey patching part, `xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec)).
 
 See [Quick Start](#quick-start) and [Documentation](./doc) for more details.
 
@@ -136,6 +134,9 @@ The above demo can be found at [doc/demo](./doc/demo).
 
 # API
 ## Trap
+It **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, adding missing abilities to go program by cooperating with(or hacking) the go compiler.
+
+
 Trap allows developer to intercept function execution on the fly.
 
 Trap is the core of `xgo` as it is the basis of other abilities like Mock and Trace.
@@ -416,6 +417,29 @@ func TestTrace(t *testing.T) {
 }
 ```
 The trace will only include `B()` and `C()`.
+
+## Incremental Coverage
+The `xgo tool coverage` sub command extends go's builtin `go tool cover` for better visualization.
+
+First, run `go test` or `xgo test` to get a coverage profile:
+```sh
+go test -cover -coverpkg ./... -coverprofile cover.out ./...
+``` 
+
+Then, use `xgo` to display the coverage:
+```sh
+xgo tool coverage serve cover.out
+```
+
+Output:
+
+![coverage](doc/img/coverage.jpg "Coverage")
+
+The displayed coverage is a combination of coverage and git diff. By default, only modified lines were shown:
+- Covered lines shown as light blue,
+- Uncovered lines shown as light yellow
+
+This helps to quickly locate changes that were not covered, and add tests for them incrementally.
 
 # Concurrent safety
 I know you guys from other monkey patching library suffer from the unsafety implied by these frameworks.
