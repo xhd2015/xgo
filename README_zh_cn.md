@@ -7,16 +7,16 @@
 
 **[English](./README.md) | 简体中文**
 
-允许对`go`的函数进行拦截, 并提供Mock和Trace等工具帮助开发者编写测试和快速调试。
+`xgo`提供了一个*全功能*的Golang测试工具集, 包括:
 
-`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec))。
-
-`xgo`对源代码和IR(中间码)进行预处理之后, 再调用`go`进行后续的编译工作。通过这种方式, `xgo`实现了一些在`go`中缺乏的能力。
-
-这些能力包括:
 - [Trap](#trap)
 - [Mock](#mock)
-- [Trace](#trace).
+- [Trace](#trace)
+- [增量覆盖率](#增量覆盖率)
+
+就Mock而言，`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec))。
+
+`xgo`对源代码和IR(中间码)进行预处理之后, 再调用`go`进行后续的编译工作。通过这种方式, `xgo`实现了一些在`go`中缺乏的能力。
 
 更多细节, 参见[快速开始](#快速开始)和[文档](./doc)。
 
@@ -405,6 +405,29 @@ func TestTrace(t *testing.T) {
 }
 ```
 结果中只会包含`B()`和`C()`.
+
+## 增量覆盖率
+子命令`xgo tool coverage`扩展了go内置的`go tool cover`, 提供了更好的覆盖率可视化体验。
+
+首先，运行`go test`或`xgo test`来生成覆盖率文件:
+```sh
+go test -cover -coverpkg ./... -coverprofile cover.out ./...
+``` 
+
+然后，使用`xgo`来展示覆盖率:
+```sh
+xgo tool coverage serve cover.out
+```
+
+展示效果:
+
+![coverage](doc/img/coverage.jpg "Coverage")
+
+展示结果是覆盖率和git diff的组合。默认情况下，只有变更的行会被展示:
+- 已经覆盖的行展示为浅蓝色,
+- 未覆盖的行展示为浅黄色
+
+这个工具可以帮助我们快速定位未覆盖的变更代码，从而增量地为它们添加测试用例。
 
 # 并发安全
 我知道大部分人认为Monkey Patching不是并发安全的，但那是现有的库的实现方式决定的。

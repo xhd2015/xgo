@@ -3,7 +3,6 @@ package trace
 import (
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -14,10 +13,10 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/netutil"
 )
 
 func Main(args []string) {
@@ -84,42 +83,25 @@ func serveFile(file string) {
 	portStr := os.Getenv("PORT")
 	if portStr == "" {
 		port = 7070
-		portStr = strconv.Itoa(port)
 		autoIncrPort = true
+	} else {
+		parsePort, err := strconv.ParseInt(portStr, 10, 64)
+		if err != nil {
+			panic(fmt.Errorf("bad port: %s", portStr))
+		}
+		port = int(parsePort)
 	}
+	err := netutil.ServePort(port, autoIncrPort, 500*time.Millisecond, func(port int) {
+		url := fmt.Sprintf("http://localhost:%s", portStr)
+		fmt.Printf("Server listen at %s\n", url)
 
-	for {
-		// open url after 500ms, waiting for port opening to check if error
-		portErr := make(chan struct{})
-		go watchSignalWithinTimeout(500*time.Millisecond, portErr, func() {
-			url := fmt.Sprintf("http://localhost:%s", portStr)
-			fmt.Printf("Server listen at %s\n", url)
-
-			openURL(url)
-		})
-		err := http.ListenAndServe(fmt.Sprintf(":%s", portStr), server)
-		if err == nil {
-			break
-		}
-		close(portErr)
-		var syscallErr syscall.Errno
-		if autoIncrPort && errors.As(err, &syscallErr) && syscallErr == syscall.EADDRINUSE {
-			port++
-			portStr = strconv.Itoa(port)
-			continue
-		}
+		openURL(url)
+	}, func(port int) error {
+		return http.ListenAndServe(fmt.Sprintf(":%d", port), server)
+	})
+	if err != nil {
 		panic(err)
 	}
-}
-
-// executing action
-func watchSignalWithinTimeout(timeout time.Duration, errSignal chan struct{}, action func()) {
-	select {
-	case <-time.After(timeout):
-	case <-errSignal:
-		return
-	}
-	action()
 }
 
 func openURL(url string) {
