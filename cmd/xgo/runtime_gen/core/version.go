@@ -6,9 +6,9 @@ import (
 	"os"
 )
 
-const VERSION = "1.0.34"
-const REVISION = "d73b24dafc105fe4610e9130b0db429892961b80+1"
-const NUMBER = 215
+const VERSION = "1.0.35"
+const REVISION = "53b18b05f3c84c33887d7373607183daff63ce03+1"
+const NUMBER = 216
 
 // these fields will be filled by compiler
 const XGO_VERSION = ""
