@@ -20,15 +20,61 @@ import (
 )
 
 func Main(args []string) {
-	if len(args) == 0 {
+	var files []string
+	var port string
+	n := len(args)
+	for i := 0; i < n; i++ {
+		arg := args[i]
+		if arg == "--" {
+			files = append(files, args[i+1:]...)
+			break
+		}
+		if arg == "--port" {
+			if i+1 >= n {
+				fmt.Fprintf(os.Stderr, "--port requires arg\n")
+				os.Exit(1)
+			}
+			port = arg
+			continue
+		} else if strings.HasPrefix(arg, "--port=") {
+			port = strings.TrimPrefix(arg, "--port=")
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") {
+			files = append(files, arg)
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "unrecognized flag: %s\n", arg)
+		os.Exit(1)
+	}
+	if len(files) == 0 {
 		fmt.Fprintf(os.Stderr, "requires file\n")
 		os.Exit(1)
 	}
-	file := args[0]
-	serveFile(file)
+	if len(files) != 1 {
+		fmt.Fprintf(os.Stderr, "xgo tool trace requires exactly 1 file, given: %v", files)
+		os.Exit(1)
+	}
+	file := files[0]
+	if port == "" {
+		port = os.Getenv("PORT")
+	}
+	err := serveFile(port, file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
 }
 
-func serveFile(file string) {
+func serveFile(portStr string, file string) error {
+	stat, err := os.Stat(file)
+	if err != nil {
+		return err
+	}
+	if stat.IsDir() {
+		return fmt.Errorf("expect a trace file, given dir: %s", file)
+	}
 	server := http.NewServeMux()
 	server.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -80,19 +126,18 @@ func serveFile(file string) {
 	})
 	var autoIncrPort bool
 	var port int
-	portStr := os.Getenv("PORT")
 	if portStr == "" {
 		port = 7070
 		autoIncrPort = true
 	} else {
 		parsePort, err := strconv.ParseInt(portStr, 10, 64)
 		if err != nil {
-			panic(fmt.Errorf("bad port: %s", portStr))
+			return fmt.Errorf("bad port: %s", portStr)
 		}
 		port = int(parsePort)
 	}
-	err := netutil.ServePort(port, autoIncrPort, 500*time.Millisecond, func(port int) {
-		url := fmt.Sprintf("http://localhost:%s", portStr)
+	err = netutil.ServePort(port, autoIncrPort, 500*time.Millisecond, func(port int) {
+		url := fmt.Sprintf("http://localhost:%d", port)
 		fmt.Printf("Server listen at %s\n", url)
 
 		openURL(url)
@@ -100,8 +145,9 @@ func serveFile(file string) {
 		return http.ListenAndServe(fmt.Sprintf(":%d", port), server)
 	})
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
 
 func openURL(url string) {
