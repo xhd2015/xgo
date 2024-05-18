@@ -41,7 +41,7 @@ func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Re
 	debugSyntax(fileList)
 	patchVersions(fileList)
 	fillFuncArgResNames(fileList)
-	registerFuncs(fileList, addFile)
+	registerAndTrapFuncs(fileList, addFile)
 }
 
 // typeinfo not used
@@ -179,7 +179,7 @@ func ClearSyntaxDeclMapping() {
 	syntaxDeclMapping = nil
 }
 
-func registerFuncs(fileList []*syntax.File, addFile func(name string, r io.Reader) *syntax.File) {
+func registerAndTrapFuncs(fileList []*syntax.File, addFile func(name string, r io.Reader) *syntax.File) {
 	allFiles = fileList
 
 	pkgPath := xgo_ctxt.GetPkgPath()
@@ -237,6 +237,9 @@ func registerFuncs(fileList []*syntax.File, addFile func(name string, r io.Reade
 	}
 
 	// filterFuncDecls
+	// NOTE: stdlib is only available via source rewrite
+	// IR is turned off.
+	// so closure is not rewritten in stdlib
 	funcDelcs = filterFuncDecls(funcDelcs, pkgPath)
 	// assign to global
 	allDecls = funcDelcs
@@ -415,6 +418,7 @@ type DeclInfo struct {
 	RecvPtr      bool
 	Generic      bool
 	Closure      bool
+	Stdlib       bool
 
 	// this is an interface type declare
 	// only the RecvTypeName is valid
@@ -641,7 +645,8 @@ func extractFuncDecls(fileIndex int, f *syntax.File, file string, decl syntax.De
 func getFuncDeclInfo(fileIndex int, f *syntax.File, file string, fn *syntax.FuncDecl) *DeclInfo {
 	line := fn.Pos().Line()
 	fnName := fn.Name.Value
-	if fnName == "init" || strings.HasPrefix(fnName, "_cgo") || strings.HasPrefix(fnName, "_Cgo") {
+	// there are cases where fnName is _
+	if fnName == "" || fnName == "_" || fnName == "init" || strings.HasPrefix(fnName, "_cgo") || strings.HasPrefix(fnName, "_Cgo") {
 		// skip cgo also,see https://github.com/xhd2015/xgo/issues/80#issuecomment-2067976575
 		return nil
 	}
@@ -697,6 +702,8 @@ func getFuncDeclInfo(fileIndex int, f *syntax.File, file string, fn *syntax.Func
 		RecvTypeName: recvTypeName,
 		RecvPtr:      recvPtr,
 		Generic:      genericFunc || genericRecv,
+
+		Stdlib: base.Flag.Std,
 
 		RecvName: recvName,
 		ArgNames: getFieldNames(fn.Type.ParamList),
@@ -756,7 +763,8 @@ func generateFuncRegBody(funcDecls []*DeclInfo, xgoRegFunc string, xgoLocalFuncS
 		fileIdx := funcDecl.FileIndex
 		fileRef := getFileRef(fileIdx)
 
-		// check __xgo_local_func_stub for correctness
+		// check expected__xgo_stub_def and __xgo_local_func_stub for correctness
+		var _ = expected__xgo_stub_def
 		regKind := func(kind DeclKind, identityName string) {
 			fieldList := []string{
 				XgoLocalPkgName,                           // PkgPath
@@ -767,6 +775,7 @@ func generateFuncRegBody(funcDecls []*DeclInfo, xgoRegFunc string, xgoLocalFuncS
 				strconv.FormatBool(funcDecl.Interface),    // Interface
 				strconv.FormatBool(funcDecl.Generic),      // Generic
 				strconv.FormatBool(funcDecl.Closure),      // Closure
+				strconv.FormatBool(funcDecl.Stdlib),       // Stdlib
 				strconv.Quote(funcDecl.RecvTypeName),      // RecvTypeName
 				strconv.FormatBool(funcDecl.RecvPtr),      // RecvPtr
 				strconv.Quote(funcDecl.Name),              // Name

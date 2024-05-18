@@ -54,7 +54,39 @@ var stdWhitelist = map[string]map[string]bool{
 	},
 }
 
+// effective when XgoStdTrapDefaultAllow is true
+//
+//	"net":map[string]bool{
+//	   "*": true -> disable all
+//	}
+var stdBlocklist = map[string]map[string]bool{
+	"syscall": map[string]bool{
+		"*": true,
+	},
+	"reflect": map[string]bool{
+		"*": true,
+	},
+	"sync": map[string]bool{
+		"*": true,
+	},
+	"sync/atomic": map[string]bool{
+		"*": true,
+	},
+	"testing": map[string]bool{
+		"*": true,
+	},
+	"unsafe": map[string]bool{
+		"*": true,
+	},
+}
+
 func allowStdFunc(pkgPath string, funcName string) bool {
+	if XgoStdTrapDefaultAllow {
+		if stdBlocklist[pkgPath]["*"] || stdBlocklist[pkgPath][funcName] {
+			return false
+		}
+		return true
+	}
 	if stdWhitelist[pkgPath][funcName] {
 		return true
 	}

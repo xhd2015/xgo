@@ -192,16 +192,20 @@ func ExportFuncInfo(c *core.FuncInfo, opts *ExportOptions) *FuncInfoExport {
 		return nil
 	}
 	return &FuncInfoExport{
+		Kind:         FuncKind(c.Kind.String()),
 		Pkg:          c.Pkg,
 		IdentityName: c.IdentityName,
 		Name:         c.Name,
 		RecvType:     c.RecvType,
 		RecvPtr:      c.RecvPtr,
 
-		Generic:  c.Generic,
-		RecvName: c.RecvName,
-		ArgNames: c.ArgNames,
-		ResNames: c.ResNames,
+		Interface: c.Interface,
+		Generic:   c.Generic,
+		Closure:   c.Closure,
+		Stdlib:    c.Stdlib,
+		RecvName:  c.RecvName,
+		ArgNames:  c.ArgNames,
+		ResNames:  c.ResNames,
 
 		FirstArgCtx:   c.FirstArgCtx,
 		LastResultErr: c.LastResultErr,

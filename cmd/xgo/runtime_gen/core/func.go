@@ -51,6 +51,9 @@ type FuncInfo struct {
 	// is this a closure?
 	Closure bool
 
+	// is this function from stdlib
+	Stdlib bool
+
 	// source info
 	File string
 	Line int
