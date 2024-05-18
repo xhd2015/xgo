@@ -14,6 +14,7 @@ type __xgo_local_func_stub struct {
 	Interface    bool
 	Generic      bool
 	Closure      bool // is the given function a closure
+	Stdlib       bool
 	RecvTypeName string
 	RecvPtr      bool
 	Name         string

@@ -50,6 +50,9 @@ type options struct {
 	overlay string
 	modfile string
 
+	// --trap-stdlib
+	trapStdlib bool
+
 	// xgo test --trace
 
 	// --strace, --strace=on, --strace=off
@@ -97,6 +100,7 @@ func parseOptions(args []string) (*options, error) {
 	var overlay string
 	var modfile string
 	var stackTrace string
+	var trapStdlib bool
 
 	var remainArgs []string
 	nArg := len(args)
@@ -254,6 +258,11 @@ func parseOptions(args []string) (*options, error) {
 			continue
 		}
 
+		if arg == "--trap-stdlib" {
+			trapStdlib = true
+			continue
+		}
+
 		if isDevelopment && arg == "--debug-with-dlv" {
 			debugWithDlv = true
 			continue
@@ -340,6 +349,7 @@ func parseOptions(args []string) (*options, error) {
 		overlay:    overlay,
 		modfile:    modfile,
 		stackTrace: stackTrace,
+		trapStdlib: trapStdlib,
 
 		remainArgs: remainArgs,
 	}, nil

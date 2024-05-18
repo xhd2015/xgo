@@ -151,6 +151,7 @@ func handleBuild(cmd string, args []string) error {
 	dumpIR := opts.dumpIR
 	dumpAST := opts.dumpAST
 	stackTrace := opts.stackTrace
+	trapStdlib := opts.trapStdlib
 
 	if cmdExec && len(remainArgs) == 0 {
 		return fmt.Errorf("exec requires command")
@@ -241,8 +242,11 @@ func handleBuild(cmd string, args []string) error {
 	// gcflags can cause the build cache to invalidate
 	// so separate them with normal one
 	buildCacheSuffix := ""
+	if trapStdlib {
+		buildCacheSuffix += "-trapstd"
+	}
 	if len(gcflags) > 0 {
-		buildCacheSuffix = "-gcflags"
+		buildCacheSuffix += "-gcflags"
 	}
 	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
 	revisionFile := filepath.Join(instrumentDir, "xgo-revision.txt")
@@ -461,20 +465,33 @@ func handleBuild(cmd string, args []string) error {
 		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_VERSION="+VERSION)
 		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_REVISION="+REVISION)
 		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_VERSION_NUMBER="+strconv.FormatInt(NUMBER, 10))
-		if dumpIR != "" {
-			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)
-			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_IR_FILE="+tmpIRFile)
-		}
-		if dumpAST != "" {
-			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_AST="+dumpAST)
-			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_AST_FILE="+tmpASTFile)
-		}
+
+		// IR
+		execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)
+		execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_IR_FILE="+tmpIRFile)
+
+		// AST
+		execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_AST="+dumpAST)
+		execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_AST_FILE="+tmpASTFile)
+
+		// vscode debug
+		var xgoDebugVscode string
 		if vscodeDebugFile != "" {
-			execCmd.Env = append(execCmd.Env, "XGO_DEBUG_VSCODE="+vscodeDebugFile+vscodeDebugFileSuffix)
+			xgoDebugVscode = vscodeDebugFile + vscodeDebugFileSuffix
 		}
+		execCmd.Env = append(execCmd.Env, "XGO_DEBUG_VSCODE="+xgoDebugVscode)
+
+		// stack trace
 		if stackTrace != "" {
 			execCmd.Env = append(execCmd.Env, "XGO_STACK_TRACE="+stackTrace)
 		}
+
+		// trap stdlib
+		var trapStdlibEnv string
+		if trapStdlib {
+			trapStdlibEnv = "true"
+		}
+		execCmd.Env = append(execCmd.Env, "XGO_STD_LIB_TRAP_DEFAULT_ALLOW="+trapStdlibEnv)
 	}
 	logDebug("command env: %v", execCmd.Env)
 	execCmd.Stdout = os.Stdout

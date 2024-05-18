@@ -169,6 +169,13 @@ func registerFuncInfo(fnInfo interface{}) {
 	name := rv.FieldByName("Name").String()
 	interface_ := rv.FieldByName("Interface").Bool()
 	generic := rv.FieldByName("Generic").Bool()
+
+	var stdlib bool
+	stdlibField := rv.FieldByName("Stdlib")
+	if stdlibField.IsValid() {
+		stdlib = stdlibField.Bool()
+	}
+
 	f := rv.FieldByName("Fn").Interface()
 
 	var firstArgCtx bool
@@ -222,6 +229,7 @@ func registerFuncInfo(fnInfo interface{}) {
 		Interface: interface_,
 		Generic:   generic,
 		Closure:   closure,
+		Stdlib:    stdlib,
 
 		File: file,
 		Line: line,

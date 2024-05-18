@@ -91,6 +91,12 @@ var extraSubTests = []*TestCase{
 		dir:   "runtime/test/trap_with_overlay",
 		flags: []string{"-overlay", "overlay.json"},
 	},
+	{
+		// see https://github.com/xhd2015/xgo/issues/111
+		name:  "trap_stdlib_any",
+		dir:   "runtime/test/trap_stdlib_any",
+		flags: []string{"--trap-stdlib"},
+	},
 }
 
 func main() {

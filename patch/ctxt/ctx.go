@@ -2,7 +2,6 @@ package ctxt
 
 import (
 	"cmd/compile/internal/base"
-	"os"
 	"strings"
 )
 
@@ -11,9 +10,6 @@ const XgoRuntimePkg = XgoModule + "/runtime"
 const XgoRuntimeCorePkg = XgoModule + "/runtime/core"
 const XgoRuntimeTracePkg = XgoModule + "/runtime/trace"
 
-var XgoMainModule = os.Getenv("XGO_MAIN_MODULE")
-var XgoCompilePkgDataDir = os.Getenv("XGO_COMPILE_PKG_DATA_DIR")
-
 const XgoLinkTrapVarForGenerated = "__xgo_link_trap_var_for_generated"
 
 func SkipPackageTrap() bool {
@@ -21,7 +17,7 @@ func SkipPackageTrap() bool {
 	if pkgPath == "" {
 		return true
 	}
-	if strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") {
+	if pkgPath == "runtime" || strings.HasPrefix(pkgPath, "runtime/") || strings.HasPrefix(pkgPath, "internal/") {
 		return true
 	}
 	if base.Flag.Std {
@@ -37,6 +33,12 @@ func SkipPackageTrap() bool {
 		// because generic instantiation happens in other package, so this
 		// func may be a foreigner.
 
+		if XgoStdTrapDefaultAllow {
+			if _, ok := stdBlocklist[pkgPath]["*"]; ok {
+				return true
+			}
+			return false
+		}
 		// allow http
 		if _, ok := stdWhitelist[pkgPath]; ok {
 			return false

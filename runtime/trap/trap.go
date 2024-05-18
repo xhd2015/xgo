@@ -184,6 +184,7 @@ func trap(f *core.FuncInfo, pc uintptr, recv interface{}, args []interface{}, re
 
 	var resetFlag bool
 	parent := r.top
+
 	if !r.intercepting {
 		resetFlag = true
 		r.intercepting = true

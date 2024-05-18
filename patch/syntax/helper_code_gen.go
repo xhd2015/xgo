@@ -11,6 +11,7 @@ const __xgo_stub_def = `struct {
 	Interface    bool
 	Generic      bool
 	Closure      bool // is the given function a closure
+	Stdlib       bool
 	RecvTypeName string
 	RecvPtr      bool
 	Name         string
@@ -43,6 +44,7 @@ type __xgo_local_func_stub struct {
 	Interface    bool
 	Generic      bool
 	Closure      bool // is the given function a closure
+	Stdlib       bool
 	RecvTypeName string
 	RecvPtr      bool
 	Name         string
@@ -92,10 +94,4 @@ func __xgo_local_register_func(pkgPath string, identityName string, fn interface
 	__xgo_link_generated_register_func(__xgo_local_func_stub{PkgPath: pkgPath, IdentityName: identityName, Fn: fn, Closure: closure, RecvName: recvName, ArgNames: argNames, ResNames: resNames, File: file, Line: line})
 }
 
-func __xgo_trap_skip() {}
-
-// not used
-// func __xgo_local_register_interface(pkgPath string, interfaceName string, file string, line int) {
-// 	__xgo_link_generated_register_func(__xgo_local_func_stub{PkgPath: pkgPath, Interface: true, File: file, Line: line})
-// }
-`
+func __xgo_trap_skip() {}`

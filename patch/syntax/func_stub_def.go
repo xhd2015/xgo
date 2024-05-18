@@ -9,6 +9,7 @@ const expected__xgo_stub_def = `struct {
 	Interface    bool
 	Generic      bool
 	Closure      bool // is the given function a closure
+	Stdlib       bool
 	RecvTypeName string
 	RecvPtr      bool
 	Name         string
