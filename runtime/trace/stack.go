@@ -8,6 +8,12 @@ import (
 	"github.com/xhd2015/xgo/runtime/core"
 )
 
+// default size to shrink 16K
+const DefaultSizeLimit = 16 * 1024
+
+// default appearance limit on repeative functions
+const DefaultAppearanceLimit = 100
+
 type Root struct {
 	// current executed function
 	Top      *Stack
@@ -35,7 +41,7 @@ type ExportOptions struct {
 	// suppress error when marshalling
 	// arguments and results
 	DisableErrSilent bool
-	SizeLimit        int // 0: default limit 4K
+	SizeLimit        int // 0: default limit 16K
 	AppearanceLimit  int // 0: default limit 100
 
 	FilterStack func(stack *StackExport) *StackExport
@@ -52,13 +58,13 @@ type stat struct {
 
 func (c *ExportOptions) getSizeLimit() int {
 	if c == nil || c.SizeLimit == 0 {
-		return 4 * 1024
+		return DefaultSizeLimit
 	}
 	return c.SizeLimit
 }
 func (c *ExportOptions) getAppearanceLimit() int {
 	if c == nil || c.AppearanceLimit == 0 {
-		return 100
+		return DefaultAppearanceLimit
 	}
 	return c.AppearanceLimit
 }
