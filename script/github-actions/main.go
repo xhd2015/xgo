@@ -32,25 +32,44 @@ func handle(args []string) error {
 
 // check if merge to master
 // will not result in merge commit
+
+// NOTE: even when your commit is already
+// based on master, choosing 'Merge'
+// will always generate a 'Merge Commit'.
+//
+// So we add an enforcement:
+//
+//	only one commit at a time, and the version must
+//	match master+1.
+//	With this limitation, we can always use rebase
+//	to merge new commits without breaking the version file
 func checkMerge(args []string) error {
 	gitDir, err := git.ShowTopLevel("")
 	if err != nil {
 		return err
 	}
 
-	err = git.FetchRef(gitDir, "origin", "master")
+	const targetBranch = "master"
+
+	err = git.FetchRef(gitDir, "origin", targetBranch)
 	if err != nil {
 		return err
 	}
 
-	masterCommitHash, err := revision.GetCommitHash(gitDir, "origin/master")
+	masterCommitHash, err := revision.GetCommitHash(gitDir, "origin/"+targetBranch)
+	if err != nil {
+		return err
+	}
+
+	branch, err := git.GetCurrentBranch(gitDir)
 	if err != nil {
 		return err
 	}
 
 	var found bool
 	n := 20
-	for i := 0; i < n; i++ {
+	i := 0
+	for ; i < n; i++ {
 		ref := "HEAD"
 		if i > 0 {
 			ref = fmt.Sprintf("HEAD~%d", i)
@@ -65,11 +84,13 @@ func checkMerge(args []string) error {
 		}
 	}
 	if !found {
-		branch, err := git.GetCurrentBranch(gitDir)
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("%s cannot be merged into master without creating intermediate commit", branch)
+		return fmt.Errorf("%s cannot be merged into %s without creating intermediate commit", branch, targetBranch)
+	}
+	if i == 0 {
+		return fmt.Errorf("%s is the same with %s", branch, targetBranch)
+	}
+	if i != 1 {
+		return fmt.Errorf("expect 1 commit to be merged, actual: %d", i)
 	}
 	return nil
 }
