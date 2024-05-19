@@ -1,6 +1,7 @@
 # xgo
 [![Go Reference](https://pkg.go.dev/badge/github.com/xhd2015/xgo.svg)](https://pkg.go.dev/github.com/xhd2015/xgo)
 [![Go Report Card](https://goreportcard.com/badge/github.com/xhd2015/xgo)](https://goreportcard.com/report/github.com/xhd2015/xgo)
+[![Slack Widget](https://img.shields.io/badge/join-us%20on%20slack-gray.svg?longCache=true&logo=slack&colorB=red)](https://join.slack.com/t/golang-xgo/shared_invite/zt-2ixe161jb-3XYTDn37U1ZHZJSgnQi6sg)
 [![Go Coverage](https://img.shields.io/badge/Coverage-82.6%25-brightgreen)](https://github.com/xhd2015/xgo/actions)
 [![CI](https://github.com/xhd2015/xgo/workflows/Go/badge.svg)](https://github.com/xhd2015/xgo/actions)
 [![Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
@@ -9,9 +10,9 @@
 
 `xgo`提供了一个*全功能*的Golang测试工具集, 包括:
 
-- [Trap](#trap)
-- [Mock](#mock)
+- [Mock](#patch)
 - [Trace](#trace)
+- [Trap](#trap)
 - [增量覆盖率](#增量覆盖率)
 
 就Mock而言，`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec))。
@@ -130,6 +131,137 @@ FAIL
 上面的示例代码可在[doc/demo](./doc/demo)中找到.
 
 # API
+
+## Patch
+在当前协程中mock指定的函数。
+
+API:
+- `Patch(fn,replacer) func()`
+
+快速参考:
+```go
+// 包级别函数
+mock.Patch(SomeFunc, mockFunc)
+
+// 实例方法
+// 只有实例`v`的方法会被mock
+// `v`可以是结构体或接口
+mock.Patch(v.Method, mockMethod)
+
+// 参数类型级别的范型函数
+// 只有`int`参数的才会被mock
+mock.Patch(GenericFunc[int], mockFuncInt)
+
+// 实例和参数级别的范型方法
+v := GenericStruct[int]
+mock.Mock(v.Method, mockMethod)
+
+// 闭包
+// 虽然很少需要mock,但支持
+mock.Mock(closure, mockFunc)
+```
+
+参数:
+- 如果`fn`是普通函数(即包级别的函数, 类型的函数或者匿名函数(是的, xgo支持Mock匿名函数)), 则所有对该函数的调用都将被Mock,
+- `replacer`一个用来替换`fn`的函数.
+
+影响范围:
+- 如果`Patch`在`init`过程中调用, 则改函数在所有的Gorotuine的调用都会被Mock,
+- 否则, `Patch`在`init`完成之后调用, 则仅对当前Goroutine生效, 其他Goroutine不受影响.
+
+注意: `replacer`应当和`fn`具有同样的签名。
+
+返回值:
+- 一个`func()`, 用来提前移除`replacer`
+
+Patch将`fn`替换为`replacer`,这个替换仅对当前goroutine生效.在当前Goroutine退出后, `replacer`被自动移除。
+
+例子:
+```go
+package patch_test
+
+import (
+	"testing"
+
+	"github.com/xhd2015/xgo/runtime/mock"
+)
+
+func greet(s string) string {
+	return "hello " + s
+}
+
+func TestPatchFunc(t *testing.T) {
+	mock.Patch(greet, func(s string) string {
+		return "mock " + s
+	})
+
+	res := greet("world")
+	if res != "mock world" {
+		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)
+	}
+}
+```
+
+注意: `Mock`和`Patch`也支持对包级别的变量和常量进行mock, 见[runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
+
+**关于标准库Mock的注意事项**: 出于性能和安全考虑, 标准库中只有一部分包和函数能被Mock, 这个List可以在[runtime/mock/stdlib.md](./runtime/mock/stdlib.md)找到. 如果你需要Mock的标准库函数不在列表中, 可以在[Issue#6](https://github.com/xhd2015/xgo/issues/6)中进行评论。
+
+## Mock
+`runtime/mock` 还提供了名为`Mock`的API, 它与`Patch`十分类似，唯一的区别是第二个参数接受一个拦截器。
+
+因此，当函数含有未导出类型时，`Patch`无法使用，此时可以使用`Mock`。
+
+> API更多细节: [runtime/mock/README.md](runtime/mock)
+
+Mock的API:
+- `Mock(fn, interceptor)`
+
+参数:
+- `fn` 与[Patch](#patch)中的第一个参数相同
+- 如果`fn`是方法(即实例或接口的方法, 例如`file.Read`), 则只有绑定的实例会被拦截, 其他实例不会被Mock.
+
+拦截器签名: `func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error`
+- 如果返回`nil`, 则目标函数被Mock,
+- 如果返回`mock.ErrCallOld`, 则目标函数会被调用,
+- 否则, 返回的其他错误, 会被设置为目标函数的error返回值, 目标函数不会被调用。
+
+Mock还有两个额外的API, 它们基于名称进行拦截, 更多细节，参见[runtime/mock/README.md](runtime/mock/README.md)。
+
+方法Mock示例:
+```go
+type MyStruct struct {
+    name string
+}
+func (c *MyStruct) Name() string {
+    return c.name
+}
+
+func TestMethodMock(t *testing.T){
+    myStruct := &MyStruct{
+        name: "my struct",
+    }
+    otherStruct := &MyStruct{
+        name: "other struct",
+    }
+    mock.Mock(myStruct.Name, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
+        results.GetFieldIndex(0).Set("mock struct")
+        return nil
+    })
+
+    // myStruct受影响
+    name := myStruct.Name()
+    if name!="mock struct"{
+        t.Fatalf("expect myStruct.Name() to be 'mock struct', actual: %s", name)
+    }
+
+    // otherStruct不受影响
+    otherName := otherStruct.Name()
+    if otherName!="other struct"{
+        t.Fatalf("expect otherStruct.Name() to be 'other struct', actual: %s", otherName)
+    }
+}
+```
+
 ## Trap
 Trap允许对几乎所有函数进行拦截, 它是`xgo`的核心机制, 是其他功能, 如Mock和Trace的基础。
 
@@ -213,132 +345,6 @@ func main(){
 ```
 
 Trap还提供了一个`Direct(fn)`的函数, 用于跳过拦截器, 直接调用到原始的函数。
-
-## Mock
-Mock简化了设置拦截器的步骤, 并允许仅对特定的函数进行拦截。
-
-> API更多细节: [runtime/mock/README.md](runtime/mock)
-
-Mock的API:
-- `Mock(fn, interceptor)`
-
-快速参考:
-```go
-// 包级别函数
-mock.Mock(SomeFunc, interceptor)
-
-// 实例方法
-// 只有实例`v`的方法会被mock
-// `v`可以是结构体或接口
-mock.Mock(v.Method, interceptor)
-
-// 参数类型级别的范型函数
-// 只有`int`参数的才会被mock
-mock.Mock(GenericFunc[int], interceptor)
-
-// 实例和参数级别的范型方法
-v := GenericStruct[int]
-mock.Mock(v.Method, interceptor)
-
-// 闭包
-// 虽然很少需要mock,但支持
-mock.Mock(closure, interceptor)
-```
-
-参数:
-- 如果`fn`是普通函数(即包级别的函数, 类型的函数或者匿名函数(是的, xgo支持Mock匿名函数)), 则所有对该函数的调用都将被Mock,
-- 如果`fn`是方法(即实例或接口的方法, 例如`file.Read`), 则只有绑定的实例会被拦截, 其他实例不会被Mock.
-
-影响范围:
-- 如果`Mock`在`init`过程中调用, 则改函数在所有的Gorotuine的调用都会被Mock,
-- 否则, `Mock`在`init`完成之后调用, 则仅对当前Goroutine生效, 其他Goroutine不受影响.
-
-拦截器签名: `func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error`
-- 如果返回`nil`, 则目标函数被Mock,
-- 如果返回`mock.ErrCallOld`, 则目标函数会被调用,
-- 否则, 返回的其他错误, 会被设置为目标函数的error返回值, 目标函数不会被调用。
-
-Mock还有两个额外的API, 它们基于名称进行拦截, 更多细节，参见[runtime/mock/README.md](runtime/mock/README.md)。
-
-方法Mock示例:
-```go
-type MyStruct struct {
-    name string
-}
-func (c *MyStruct) Name() string {
-    return c.name
-}
-
-func TestMethodMock(t *testing.T){
-    myStruct := &MyStruct{
-        name: "my struct",
-    }
-    otherStruct := &MyStruct{
-        name: "other struct",
-    }
-    mock.Mock(myStruct.Name, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
-        results.GetFieldIndex(0).Set("mock struct")
-        return nil
-    })
-
-    // myStruct受影响
-    name := myStruct.Name()
-    if name!="mock struct"{
-        t.Fatalf("expect myStruct.Name() to be 'mock struct', actual: %s", name)
-    }
-
-    // otherStruct不受影响
-    otherName := otherStruct.Name()
-    if otherName!="other struct"{
-        t.Fatalf("expect otherStruct.Name() to be 'other struct', actual: %s", otherName)
-    }
-}
-```
-
-**关于标准库Mock的注意事项**: 出于性能和安全考虑, 标准库中只有一部分包和函数能被Mock, 这个List可以在[runtime/mock/stdlib.md](./runtime/mock/stdlib.md)找到. 如果你需要Mock的标准库函数不在列表中, 可以在[Issue#6](https://github.com/xhd2015/xgo/issues/6)中进行评论。
-
-## Patch
-`runtime/mock`还提供了另一个API:
-- `Patch(fn,replacer) func()`
-
-参数:
-- `fn` 与[Mock](#mock)中的第一个参数相同
-- `replacer`一个用来替换`fn`的函数
-
-注意: `replacer`应当和`fn`具有同样的签名。
-
-返回值:
-- 一个`func()`, 用来提前移除`replacer`
-
-Patch将`fn`替换为`replacer`,这个替换仅对当前goroutine生效.在当前Goroutine退出后, `replacer`被自动移除。
-
-例子:
-```go
-package patch_test
-
-import (
-	"testing"
-
-	"github.com/xhd2015/xgo/runtime/mock"
-)
-
-func greet(s string) string {
-	return "hello " + s
-}
-
-func TestPatchFunc(t *testing.T) {
-	mock.Patch(greet, func(s string) string {
-		return "mock " + s
-	})
-
-	res := greet("world")
-	if res != "mock world" {
-		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)
-	}
-}
-```
-
-注意: `Mock`和`Patch`也支持对包级别的变量和常量进行mock, 见[runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
 ## Trace
 > Trace也许是xgo提供的最强大的工具, 这个博客介绍了一个更全面的例子: https://blog.xhd2015.xyz/zh/posts/xgo-trace_a-powerful-visualization-tool-in-go/
