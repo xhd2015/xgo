@@ -11,16 +11,19 @@ on:
 
 jobs:
 
-  build:
-    runs-on: ubuntu-latest
+  tests-with-coverage:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest]
+        go: [ '1.20' ]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
 
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.20'
-        cache: false
+        go-version: '${{ matrix.go }}'
 
     - name: Test
       run: go run ./script/run-test --reset-instrument --debug -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out

@@ -505,7 +505,10 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)
 		} else {
-			testArgs = append(testArgs, "./test")
+			// TODO: enable integration tests on windows
+			if runtime.GOOS != "windows" {
+				testArgs = append(testArgs, "./test")
+			}
 			testArgs = append(testArgs, "./support/...")
 			// exclude ./cmd/xgo/runtime_gen
 			testArgs = append(testArgs, "./cmd/xgo")

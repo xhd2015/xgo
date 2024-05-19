@@ -7,11 +7,11 @@ on:
   push:
     branches: [ "master" ]
   pull_request:
-    branches: [ "master", "pre-master" ]
+    branches: [ "master" ]
 
 jobs:
 
-  build:
+  check-build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
