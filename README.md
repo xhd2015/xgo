@@ -3,6 +3,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/xhd2015/xgo.svg)](https://pkg.go.dev/github.com/xhd2015/xgo)
 [![Go Report Card](https://goreportcard.com/badge/github.com/xhd2015/xgo)](https://goreportcard.com/report/github.com/xhd2015/xgo)
+[![Slack Widget](https://img.shields.io/badge/join-us%20on%20slack-gray.svg?longCache=true&logo=slack&colorB=red)](https://join.slack.com/t/golang-xgo/shared_invite/zt-2ixe161jb-3XYTDn37U1ZHZJSgnQi6sg)
 [![Go Coverage](https://img.shields.io/badge/Coverage-82.6%25-brightgreen)](https://github.com/xhd2015/xgo/actions)
 [![CI](https://github.com/xhd2015/xgo/workflows/Go/badge.svg)](https://github.com/xhd2015/xgo/actions)
 [![Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
@@ -11,9 +12,9 @@
 
 `xgo` provides *all-in-one* test utilities for golang, including:
 
-- [Trap](#trap) 
-- [Mock](#mock)
+- [Mock](#patch)
 - [Trace](#trace)
+- [Trap](#trap) 
 - [Incremental Coverage](#incremental-coverage)
 
 As for the monkey patching part, `xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec)).
@@ -133,9 +134,210 @@ FAIL
 The above demo can be found at [doc/demo](./doc/demo).
 
 # API
-## Trap
-It **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, adding missing abilities to go program by cooperating with(or hacking) the go compiler.
 
+## Patch
+Patch given function within current goroutine.
+
+The API:
+- `Patch(fn,replacer) func()`
+
+Cheatsheet:
+```go
+// package level func
+mock.Patch(SomeFunc, mockFunc)
+
+// per-instance method
+// only the bound instance `v` will be mocked
+// `v` can be either a struct or an interface
+mock.Patch(v.Method, mockMethod)
+
+// per-TParam generic function
+// only the specified `int` version will be mocked
+mock.Patch(GenericFunc[int], mockFuncInt)
+
+// per TParam and instance generic method
+v := GenericStruct[int]
+mock.Mock(v.Method, mockMethod)
+
+// closure can also be mocked
+// less used, but also supported
+mock.Mock(closure, mockFunc)
+```
+
+Parameters:
+- If `fn` is a simple function(i.e. a package level function, or a function owned by a type, or a closure(yes, we do support mocking closures)),then all call to that function will be intercepted,
+- `replacer` another function that will replace `fn`
+
+Scope:
+- If `Patch` is called from `init`, then all goroutines will be mocked.
+- Otherwise, `Patch` is called after `init`, then the mock interceptor will only be effective for current goroutine, other goroutines are not affected.
+
+NOTE: `fn` and `replacer` should have the same signature.
+
+Return:
+- a `func()` can be used to remove the replacer earlier before current goroutine exits
+
+Patch replaces the given `fn` with `replacer` in current goroutine. It will remove the replacer once current goroutine exits.
+
+Example:
+```go
+package patch_test
+
+import (
+	"testing"
+
+	"github.com/xhd2015/xgo/runtime/mock"
+)
+
+func greet(s string) string {
+	return "hello " + s
+}
+
+func TestPatchFunc(t *testing.T) {
+	mock.Patch(greet, func(s string) string {
+		return "mock " + s
+	})
+
+	res := greet("world")
+	if res != "mock world" {
+		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)
+	}
+}
+```
+
+NOTE: `Patch` and `Mock`(below) supports top-level variables and consts, see [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
+
+**Notice for mocking stdlib**: due to performance and security impact, only a few packages and functions of stdlib can be mocked, the list can be found at [runtime/mock/stdlib.md](./runtime/mock/stdlib.md). If you want to mock additional stdlib functions, please file a discussion in [Issue#6](https://github.com/xhd2015/xgo/issues/6).
+
+## Mock
+`runtime/mock` also provides another API called `Mock`, which is similar to `Patch`.
+
+The the only difference between them lies in the the second parameter: `Mock` accepts an interceptor. 
+
+`Mock` can be used where `Patch` cannot be used, such as functions with unexported type.
+
+> API details: [runtime/mock/README.md](runtime/mock)
+
+The Mock API:
+- `Mock(fn, interceptor)`
+
+Parameters:
+- `fn` same as described in [Patch](#patch) section
+- If `fn` is a method(i.e. `file.Read`),then only call to the instance will be intercepted, other instances will not be affected
+
+Interceptor Signature: `func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error`
+- If the interceptor returns `nil`, then the target function is mocked,
+- If the interceptor returns `mock.ErrCallOld`, then the target function is called again,
+- Otherwise, the interceptor returns a non-nil error, that will be set to the function's return error.
+
+There are other 2 APIs can be used to setup mock based on name, check [runtime/mock/README.md](runtime/mock/README.md) for more details.
+
+Method mock example:
+```go
+type MyStruct struct {
+    name string
+}
+func (c *MyStruct) Name() string {
+    return c.name
+}
+
+func TestMethodMock(t *testing.T){
+    myStruct := &MyStruct{
+        name: "my struct",
+    }
+    otherStruct := &MyStruct{
+        name: "other struct",
+    }
+    mock.Mock(myStruct.Name, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
+        results.GetFieldIndex(0).Set("mock struct")
+        return nil
+    })
+
+    // myStruct is affected
+    name := myStruct.Name()
+    if name!="mock struct"{
+        t.Fatalf("expect myStruct.Name() to be 'mock struct', actual: %s", name)
+    }
+
+    // otherStruct is not affected
+    otherName := otherStruct.Name()
+    if otherName!="other struct"{
+        t.Fatalf("expect otherStruct.Name() to be 'other struct', actual: %s", otherName)
+    }
+}
+```
+
+## Trace
+> Trace might be the most powerful tool provided by xgo, this blog has a more thorough example: https://blog.xhd2015.xyz/posts/xgo-trace_a-powerful-visualization-tool-in-go
+
+It is painful when debugging with a deep call stack.
+
+Trace addresses this issue by collecting the hierarchical stack trace and stores it into file for later use.
+
+Needless to say, with Trace, debug becomes less usual:
+
+```go
+package trace_test
+
+import (
+    "fmt"
+    "testing"
+)
+
+func TestTrace(t *testing.T) {
+    A()
+    B()
+    C()
+}
+
+func A() { fmt.Printf("A\n") }
+func B() { fmt.Printf("B\n");C(); }
+func C() { fmt.Printf("C\n") }
+```
+
+Run with `xgo`:
+
+```sh
+# run the test
+# this will write the trace into TestTrace.json
+# --strace represents stack trace
+xgo test --strace ./
+
+# view the trace
+xgo tool trace TestTrace.json
+```
+
+Output:
+![trace html](doc/img/trace_demo.jpg "Simple Trace")
+
+Another more complicated example from [runtime/test/stack_trace/update_test.go](runtime/test/stack_trace/update_test.go): 
+![trace html](cmd/xgo/trace/testdata/stack_trace.jpg "Complicatd Trace")
+
+Real world examples: 
+- https://github.com/Shibbaz/GOEventBus/pull/11
+
+Trace helps you get started to a new project quickly.
+
+By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
+- `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purpose,
+- `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
+- `XGO_TRACE_OUTPUT=off`: turn off trace.
+
+Besides the `--strace` flag, xgo allows you to define which span should be collected, using `trace.Begin()`:
+```go
+import "github.com/xhd2015/xgo/runtime/trace"
+
+func TestTrace(t *testing.T) {
+    A()
+    finish := trace.Begin()
+    defer finish()
+    B()
+    C()
+}
+```
+The trace will only include `B()` and `C()`.
+## Trap
+Xgo **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, providing a chance for user to intercept any function when called.
 
 Trap allows developer to intercept function execution on the fly.
 
@@ -221,202 +423,6 @@ func main(){
 ```
 
 Trap also have a helper function called `Direct(fn)`, which can be used to bypass any trap and mock interceptors, calling directly into the original function.
-
-## Mock
-Mock simplifies the process of setting up Trap interceptors. 
-
-> API details: [runtime/mock/README.md](runtime/mock)
-
-The Mock API:
-- `Mock(fn, interceptor)`
-
-Cheatsheet:
-```go
-// package level func
-mock.Mock(SomeFunc, interceptor)
-
-// per-instance method
-// only the bound instance `v` will be mocked
-// `v` can be either a struct or an interface
-mock.Mock(v.Method, interceptor)
-
-// per-TParam generic function
-// only the specified `int` version will be mocked
-mock.Mock(GenericFunc[int], interceptor)
-
-// per TParam and instance generic method
-v := GenericStruct[int]
-mock.Mock(v.Method, interceptor)
-
-// closure can also be mocked
-// less used, but also supported
-mock.Mock(closure, interceptor)
-```
-
-Parameters:
-- If `fn` is a simple function(i.e. a package level function, or a function owned by a type, or a closure(yes, we do support mocking closures)),then all call to that function will be intercepted, 
-- If `fn` is a method(i.e. `file.Read`),then only call to the instance will be intercepted, other instances will not be affected
-
-Scope:
-- If `Mock` is called from `init`, then all goroutines will be mocked.
-- Otherwise, `Mock` is called after `init`, then the mock interceptor will only be effective for current goroutine, other goroutines are not affected.
-
-Interceptor Signature: `func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error`
-- If the interceptor returns `nil`, then the target function is mocked,
-- If the interceptor returns `mock.ErrCallOld`, then the target function is called again,
-- Otherwise, the interceptor returns a non-nil error, that will be set to the function's return error.
-
-There are other 2 APIs can be used to setup mock based on name, check [runtime/mock/README.md](runtime/mock/README.md) for more details.
-
-Method mock example:
-```go
-type MyStruct struct {
-    name string
-}
-func (c *MyStruct) Name() string {
-    return c.name
-}
-
-func TestMethodMock(t *testing.T){
-    myStruct := &MyStruct{
-        name: "my struct",
-    }
-    otherStruct := &MyStruct{
-        name: "other struct",
-    }
-    mock.Mock(myStruct.Name, func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error {
-        results.GetFieldIndex(0).Set("mock struct")
-        return nil
-    })
-
-    // myStruct is affected
-    name := myStruct.Name()
-    if name!="mock struct"{
-        t.Fatalf("expect myStruct.Name() to be 'mock struct', actual: %s", name)
-    }
-
-    // otherStruct is not affected
-    otherName := otherStruct.Name()
-    if otherName!="other struct"{
-        t.Fatalf("expect otherStruct.Name() to be 'other struct', actual: %s", otherName)
-    }
-}
-```
-
-**Notice for mocking stdlib**: due to performance and security impact, only a few packages and functions of stdlib can be mocked, the list can be found at [runtime/mock/stdlib.md](./runtime/mock/stdlib.md). If you want to mock additional stdlib functions, please file a discussion in [Issue#6](https://github.com/xhd2015/xgo/issues/6).
-
-## Patch
-The `runtime/mock` package also provides another api:
-- `Patch(fn,replacer) func()`
-
-Parameters:
-- `fn` same as described in [Mock](#mock) section
-- `replacer` another function that will replace `fn`
-
-NOTE: `fn` and `replacer` should have the same signature.
-
-Return:
-- a `func()` can be used to remove the replacer earlier before current goroutine exits
-
-Patch replaces the given `fn` with `replacer` in current goroutine. It will remove the replacer once current goroutine exits.
-
-Example:
-```go
-package patch_test
-
-import (
-	"testing"
-
-	"github.com/xhd2015/xgo/runtime/mock"
-)
-
-func greet(s string) string {
-	return "hello " + s
-}
-
-func TestPatchFunc(t *testing.T) {
-	mock.Patch(greet, func(s string) string {
-		return "mock " + s
-	})
-
-	res := greet("world")
-	if res != "mock world" {
-		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)
-	}
-}
-```
-
-NOTE: `Mock` and `Patch` supports top-level variables and consts, see [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
-
-## Trace
-> Trace might be the most powerful tool provided by xgo, this blog has a more thorough example: https://blog.xhd2015.xyz/posts/xgo-trace_a-powerful-visualization-tool-in-go
-
-It is painful when debugging with a deep call stack.
-
-Trace addresses this issue by collecting the hierarchical stack trace and stores it into file for later use.
-
-Needless to say, with Trace, debug becomes less usual:
-
-```go
-package trace_test
-
-import (
-    "fmt"
-    "testing"
-)
-
-func TestTrace(t *testing.T) {
-    A()
-    B()
-    C()
-}
-
-func A() { fmt.Printf("A\n") }
-func B() { fmt.Printf("B\n");C(); }
-func C() { fmt.Printf("C\n") }
-```
-
-Run with `xgo`:
-
-```sh
-# run the test
-# this will write the trace into TestTrace.json
-# --strace represents stack trace
-xgo test --strace ./
-
-# view the trace
-xgo tool trace TestTrace.json
-```
-
-Output:
-![trace html](doc/img/trace_demo.jpg "Simple Trace")
-
-Another more complicated example from [runtime/test/stack_trace/update_test.go](runtime/test/stack_trace/update_test.go): 
-![trace html](cmd/xgo/trace/testdata/stack_trace.jpg "Complicatd Trace")
-
-Real world examples: 
-- https://github.com/Shibbaz/GOEventBus/pull/11
-
-Trace helps you get started to a new project quickly.
-
-By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
-- `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purpose,
-- `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
-- `XGO_TRACE_OUTPUT=off`: turn off trace.
-
-Besides the `--strace` flag, xgo allows you to define which span should be collected, using `trace.Begin()`:
-```go
-import "github.com/xhd2015/xgo/runtime/trace"
-
-func TestTrace(t *testing.T) {
-    A()
-    finish := trace.Begin()
-    defer finish()
-    B()
-    C()
-}
-```
-The trace will only include `B()` and `C()`.
 
 ## Incremental Coverage
 The `xgo tool coverage` sub command extends go's builtin `go tool cover` for better visualization.
