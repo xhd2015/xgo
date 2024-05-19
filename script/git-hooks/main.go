@@ -28,9 +28,14 @@ func main() {
 
 	var noCommit bool
 	var noUpdateVersion bool
+	var amend bool
 	for _, arg := range args {
 		if arg == "--no-commit" {
 			noCommit = true
+			continue
+		}
+		if arg == "--amend" {
+			amend = true
 			continue
 		}
 		if arg == "--no-update-version" {
@@ -52,7 +57,7 @@ func main() {
 	if cmd == "install" {
 		err = install()
 	} else if cmd == "pre-commit" {
-		err = preCommitCheck(noCommit, noUpdateVersion)
+		err = preCommitCheck(noCommit, amend, noUpdateVersion)
 	} else if cmd == "post-commit" {
 		err = postCommitCheck(noCommit)
 	} else {
@@ -66,12 +71,24 @@ func main() {
 }
 
 const preCommitCmdHead = "# xgo check"
-const preCommitCmd = "go run ./script/git-hooks pre-commit"
+
+// NOTE: no empty lines in between
+const preCommitCmd = `# see: https://stackoverflow.com/questions/19387073/how-to-detect-commit-amend-by-pre-commit-hook
+is_amend=$(ps -ocommand= -p $PPID | grep -e '--amend')
+# echo "is amend: $is_amend"
+# args is always empty
+# echo "args: ${args[@]}"
+flags=()
+if [[ -n $is_amend ]];then
+    flags=("${flags[@]}" --amend)
+fi
+go run ./script/git-hooks pre-commit "${flags[@]}"
+`
 
 const postCommitCmdHead = "# xgo check"
 const postCommitCmd = "go run ./script/git-hooks post-commit"
 
-func preCommitCheck(noCommit bool, noUpdateVersion bool) error {
+func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 	gitDir, err := git.ShowTopLevel("")
 	if err != nil {
 		return err
@@ -84,7 +101,11 @@ func preCommitCheck(noCommit bool, noUpdateVersion bool) error {
 	var affectedFiles []string
 	const updateRevision = true
 	if updateRevision {
-		commitHash, err := revision.GetCommitHash("", "HEAD")
+		refLast := "HEAD"
+		if amend {
+			refLast = "HEAD~1"
+		}
+		commitHash, err := revision.GetCommitHash(rootDir, refLast)
 		if err != nil {
 			return err
 		}
@@ -95,13 +116,25 @@ func preCommitCheck(noCommit bool, noUpdateVersion bool) error {
 		// suffix "+1" to indicate this
 		rev := commitHash + "+1"
 
-		versionFiles := revision.GetVersionFiles(rootDir)
-		for _, file := range versionFiles {
-			err = revision.PatchVersionFile(file, rev, !noUpdateVersion)
+		relVersionFiles := revision.GetVersionFiles("")
+		versionFiles := make([]string, 0, len(relVersionFiles))
+		for _, relFile := range relVersionFiles {
+			file := filepath.Join(rootDir, relFile)
+			versionFiles = append(versionFiles, file)
+			content, err := revision.GetFileContent(rootDir, commitHash, relFile)
+			if err != nil {
+				return err
+			}
+			version, err := revision.GetVersionNumber(content)
+			if err != nil {
+				return err
+			}
+			err = revision.PatchVersionFile(file, rev, !noUpdateVersion, version+1)
 			if err != nil {
 				return err
 			}
 		}
+
 		affectedFiles = append(affectedFiles, versionFiles...)
 	}
 
@@ -133,6 +166,7 @@ func postCommitCheck(noCommit bool) error {
 }
 
 func install() error {
+	// NOTE: is git dir, not toplevel dir when in worktree mode
 	gitDir, err := git.GetGitDir("")
 	if err != nil {
 		return err

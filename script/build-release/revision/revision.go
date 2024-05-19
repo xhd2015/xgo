@@ -13,14 +13,22 @@ import (
 
 func GetCommitHash(dir string, ref string) (string, error) {
 	var args []string
-	if dir != "" {
-		args = append(args, "-C", dir)
-	}
 	args = append(args, "log", "--format=%H", "-1")
 	if ref != "" {
 		args = append(args, ref)
 	}
-	return cmd.Output("git", args...)
+	return cmd.Dir(dir).Output("git", args...)
+}
+
+// git cat-file -p REF:FILE
+func GetFileContent(dir string, ref string, file string) (string, error) {
+	if ref == "" {
+		return "", fmt.Errorf("requires ref")
+	}
+	if file == "" {
+		return "", fmt.Errorf("requires file")
+	}
+	return cmd.Dir(dir).Output("git", "cat-file", "-p", fmt.Sprintf("%s:%s", ref, file))
 }
 
 func ReplaceRevision(s string, revision string) (string, error) {
@@ -43,37 +51,65 @@ func ReplaceRevision(s string, revision string) (string, error) {
 	return replaceSequence(s, []string{"const", "REVISION", "="}, replaceLine)
 }
 
+var constNumberSeq = []string{"const", "NUMBER", "="}
+
 func IncrementNumber(s string) (string, error) {
+	return replaceOrIncrementNumber(s, -1)
+}
+func replaceOrIncrementNumber(s string, version int) (string, error) {
 	replaceLine := func(line string, index int) (string, error) {
-		isDigit := func(r rune) bool {
-			return '0' <= r && r <= '9'
-		}
-		start := strings.IndexFunc(line[index+1:], isDigit)
-		if start < 0 {
-			return "", fmt.Errorf("no number found: %s", line)
-		}
-		start += index + 1
-
-		end := strings.LastIndexFunc(line[start:], isDigit)
-		if end < 0 {
-			return "", fmt.Errorf("no number found: %s", line)
-		}
-		end += start + 1
-
-		numStr := line[start:end]
-
-		num, err := strconv.ParseInt(numStr, 10, 64)
+		start, end, num, err := parseNum(line[index:])
 		if err != nil {
-			return "", fmt.Errorf("invalid number %s: %w", line, err)
+			return "", fmt.Errorf("line %q: %w", line, err)
 		}
-		newNum := num + 1
-		return line[:start] + strconv.FormatInt(newNum, 10) + line[end:], nil
+		start += index
+		end += index
+		if version < 0 {
+			version = num + 1
+		}
+
+		return line[:start] + strconv.Itoa(version) + line[end:], nil
 	}
-	return replaceSequence(s, []string{"const", "NUMBER", "="}, replaceLine)
+	return replaceSequence(s, constNumberSeq, replaceLine)
 }
 
-func replaceSequence(s string, seq []string, replaceLine func(line string, index int) (string, error)) (string, error) {
+func isDigit(r rune) bool {
+	return '0' <= r && r <= '9'
+}
+
+func parseNum(str string) (start int, end int, num int, err error) {
+	start = strings.IndexFunc(str, isDigit)
+	if start < 0 {
+		return 0, 0, 0, fmt.Errorf("no number found")
+	}
+
+	end = strings.LastIndexFunc(str[start+1:], isDigit)
+	if end < 0 {
+		return 0, 0, 0, fmt.Errorf("no number found")
+	}
+	end += start + 2
+
+	numStr := str[start:end]
+
+	num, err = strconv.Atoi(numStr)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("invalid number: %w", err)
+	}
+	return start, end, int(num), nil
+}
+
+func GetVersionNumber(s string) (int, error) {
+	// const NUMBER =
 	lines := strings.Split(s, "\n")
+	lineIdx, byteIdx := IndexLinesSequence(lines, constNumberSeq)
+	if lineIdx < 0 {
+		return 0, fmt.Errorf("sequence %v not found", constNumberSeq)
+	}
+	_, _, num, err := parseNum(lines[lineIdx][byteIdx:])
+	return num, err
+}
+
+func IndexLinesSequence(lines []string, seq []string) (lineIndex int, byteIndex int) {
 	n := len(lines)
 	lineIdx := -1
 	byteIdx := -1
@@ -87,6 +123,14 @@ func replaceSequence(s string, seq []string, replaceLine func(line string, index
 		}
 	}
 	if lineIdx < 0 {
+		return -1, -1
+	}
+	return lineIdx, byteIdx
+}
+func replaceSequence(s string, seq []string, replaceLine func(line string, index int) (string, error)) (string, error) {
+	lines := strings.Split(s, "\n")
+	lineIdx, byteIdx := IndexLinesSequence(lines, seq)
+	if lineIdx < 0 {
 		return "", fmt.Errorf("sequence %v not found", seq)
 	}
 	var err error
@@ -98,14 +142,19 @@ func replaceSequence(s string, seq []string, replaceLine func(line string, index
 	return strings.Join(lines, "\n"), nil
 }
 
-func PatchVersionFile(file string, rev string, incrementNumber bool) error {
+func PatchVersionFile(file string, rev string, autIncrementNumber bool, version int) error {
 	err := fileutil.Patch(file, func(data []byte) ([]byte, error) {
 		content := string(data)
 		newContent, err := ReplaceRevision(content, rev)
 		if err != nil {
 			return nil, err
 		}
-		if incrementNumber {
+		if version > 0 {
+			newContent, err = replaceOrIncrementNumber(newContent, version)
+			if err != nil {
+				return nil, err
+			}
+		} else if autIncrementNumber {
 			newContent, err = IncrementNumber(newContent)
 			if err != nil {
 				return nil, err

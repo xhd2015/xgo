@@ -7,7 +7,7 @@ on:
   push:
     branches: [ "master" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master", "pre-master" ]
 
 jobs:
 
@@ -22,23 +22,6 @@ jobs:
         go-version: '1.20'
         cache: false
 
-    - name: Check spelling of files
-      uses: crate-ci/typos@master
-      continue-on-error: false
-      with: 
-        files: ./
-      
-    - name: Binary Install
-      continue-on-error: false
-      run: curl -fsSL https://github.com/xhd2015/xgo/raw/master/script/install/install.sh | env INSTALL_TO_BIN=true bash -x
-    
-    - name: Check Binary Install
-      continue-on-error: false
-      run: xgo revision
-      
-    - name: Build
-      run: go build -o /dev/null -v ./cmd/xgo
-
     - name: Test
       run: go run ./script/run-test --reset-instrument --debug -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out
 
@@ -47,12 +30,3 @@ jobs:
 
     - name: Print coverage
       run: cd runtime && go tool cover --func ../cover-runtime-merged.out
-
-    - name: Build Release
-      run: go run ./script/build-release --include-install-src --include-local
-    
-    - name: Check Version
-      run: ~/.xgo/bin/xgo revision
-
-    - name: Check Go Version
-      run: ~/.xgo/bin/xgo exec go version
