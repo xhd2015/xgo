@@ -27,6 +27,7 @@ func stageFile(file string) (restore func() error, err error) {
 	}, nil
 }
 
+// NOTE: only commit is updated, version number not touched
 func updateRevisions(targetDir string, unlink bool, rev string) (restore func() error, err error) {
 	// unlink files because all files are symlink
 	files := revision.GetVersionFiles(targetDir)
@@ -54,7 +55,7 @@ func updateRevisions(targetDir string, unlink bool, rev string) (restore func() 
 	}
 
 	for _, file := range files {
-		err := revision.PatchVersionFile(file, rev, false)
+		err := revision.PatchVersionFile(file, rev, false, -1)
 		if err != nil {
 			return restore, err
 		}
