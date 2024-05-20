@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en" style="height: 100%;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xgo Test Explorer</title>
+    <style>
+    </style>
+    <script>
+        window.onload = function(){
+            const {renderReact,UrlXgoTestingExplorer} = Open
+            renderReact(root,UrlXgoTestingExplorer,{
+                apiPrefix:"http://localhost:8080"
+            })
+        }
+    </script>
+</head>
+<body style="height: 100%;">
+    <div id="root" style="height: 100%;"></div>
+</body>
+<!--after body because document.body may be null-->
+<!--available in CN and Global-->
+<script src="https://cdn.jsdelivr.net/npm/xgo-explorer@0.0.2/index.js"></script>
+<!-- <script src="http://127.0.0.1:8080/npm-publish/index.js"></script> -->
+</html>

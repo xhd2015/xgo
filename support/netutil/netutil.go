@@ -2,7 +2,9 @@ package netutil
 
 import (
 	"errors"
+	"fmt"
 	"net"
+	"net/http"
 	"strconv"
 	"syscall"
 	"time"
@@ -17,6 +19,13 @@ func IsTCPAddrServing(url string, timeout time.Duration) (bool, error) {
 	return true, nil
 }
 
+func ServePortHTTP(server *http.ServeMux, port int, autoIncrPort bool, watchTimeout time.Duration, watch func(port int)) error {
+	return ServePort(port, autoIncrPort, watchTimeout, watch, func(port int) error {
+		return http.ListenAndServe(fmt.Sprintf("localhost:%d", port), server)
+	})
+}
+
+// suggested watch timeout: 500ms
 func ServePort(port int, autoIncrPort bool, watchTimeout time.Duration, watch func(port int), doWithPort func(port int) error) error {
 	for {
 		serving, err := IsTCPAddrServing(net.JoinHostPort("localhost", strconv.Itoa(port)), 20*time.Millisecond)
