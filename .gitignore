@@ -28,3 +28,5 @@
 # coverage
 /covers
 cover*.out
+
+/tmp

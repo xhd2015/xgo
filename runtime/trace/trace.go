@@ -20,7 +20,17 @@ import (
 var stackMap sync.Map        // uintptr(goroutine) -> *Root
 var testInfoMapping sync.Map // uintptr(goroutine) -> *testInfo
 
+// stack trace options:
+//
+//	on: automatically collect when test starts and ends
 var xgoStackTrace = os.Getenv("XGO_STACK_TRACE")
+
+// options:
+//
+//		true: stdlib is by default allowed
+//	 TODO: use compiler inserted flag instead of env
+var xgoStdlibTrapDefaultAllow = os.Getenv("XGO_STD_LIB_TRAP_DEFAULT_ALLOW")
+var skipStdlibTraceByDefault = xgoStdlibTrapDefaultAllow == "true"
 
 type testInfo struct {
 	name string
@@ -194,9 +204,16 @@ func setupInterceptor() func() {
 	}
 }
 
+// returns a value to be passed to post
+// if returns err trap.ErrSkip, this interceptor is skipped, handleTracePost is not called, next interceptors will
+// be normally executed
+// if returns nil error, handleTracePost is called
 func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
 	if !__xgo_link_init_finished() {
 		// do not collect trace while init
+		return nil, trap.ErrSkip
+	}
+	if f.Stdlib && skipStdlibTraceByDefault {
 		return nil, trap.ErrSkip
 	}
 	key := uintptr(__xgo_link_getcurg())

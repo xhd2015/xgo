@@ -84,13 +84,13 @@ func checkMerge(args []string) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("%s cannot be merged into %s without creating intermediate commit", branch, targetBranch)
+		return fmt.Errorf("%s is not based on newest %s, please rebase with %s", branch, targetBranch, targetBranch)
 	}
 	if i == 0 {
-		return fmt.Errorf("%s is the same with %s", branch, targetBranch)
+		return fmt.Errorf("%s is same with %s, nothing to merge", branch, targetBranch)
 	}
 	if i != 1 {
-		return fmt.Errorf("expect 1 commit to be merged, actual: %d", i)
+		return fmt.Errorf("%s has %d commits to be merged into %s, please squash them into 1(using 'git reset --soft origin/%s')", branch, i, targetBranch, targetBranch)
 	}
 	return nil
 }
