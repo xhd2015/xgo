@@ -72,9 +72,10 @@ var stdBlocklist = map[string]map[string]bool{
 	"sync/atomic": map[string]bool{
 		"*": true,
 	},
-	"testing": map[string]bool{
-		"*": true,
-	},
+	// testing is not harmful
+	// "testing": map[string]bool{
+	// 	"*": true,
+	// },
 	"unsafe": map[string]bool{
 		"*": true,
 	},
