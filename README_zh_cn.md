@@ -33,6 +33,9 @@ go install github.com/xhd2015/xgo/cmd/xgo@latest
 xgo version
 # 输出:
 #   1.0.x
+
+xgo help
+# 输出: xgo使用帮助
 ```
 如果未找到`xgo`, 你可能需要查看`$GOPATH/bin`是否已经添加到你的`PATH`变量中。
 

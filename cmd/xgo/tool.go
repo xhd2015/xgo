@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/cmd/xgo/coverage"
+	test_explorer "github.com/xhd2015/xgo/cmd/xgo/test-explorer"
 	"github.com/xhd2015/xgo/cmd/xgo/trace"
 	"github.com/xhd2015/xgo/support/cmd"
 )
@@ -21,6 +22,11 @@ func handleTool(tool string, args []string) error {
 	if tool == "coverage" {
 		coverage.Main(args)
 		return nil
+	}
+	if tool == "test-explorer" {
+		return test_explorer.Main(args, &test_explorer.Options{
+			DefaultGoCommand: "xgo",
+		})
 	}
 	tools := []string{
 		tool,

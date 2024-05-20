@@ -47,6 +47,21 @@ func ParseGoVersion(s string) (*GoVersion, error) {
 	version := s[:spaceIdx]
 	osArch := s[spaceIdx+1:]
 
+	res, err := ParseGoVersionNumber(version)
+	if err != nil {
+		return nil, err
+	}
+
+	slashIdx := strings.Index(osArch, "/")
+	if slashIdx < 0 {
+		return nil, fmt.Errorf("unrecognized version, expect os/arch: %s", osArch)
+	}
+	res.OS = osArch[:slashIdx]
+	res.Arch = osArch[slashIdx+1:]
+	return res, nil
+}
+
+func ParseGoVersionNumber(version string) (*GoVersion, error) {
 	res := &GoVersion{}
 	verList := strings.Split(version, ".")
 	for i := 0; i < 3; i++ {
@@ -65,11 +80,5 @@ func ParseGoVersion(s string) (*GoVersion, error) {
 			}
 		}
 	}
-	slashIdx := strings.Index(osArch, "/")
-	if slashIdx < 0 {
-		return nil, fmt.Errorf("unrecognized version, expect os/arch: %s", osArch)
-	}
-	res.OS = osArch[:slashIdx]
-	res.Arch = osArch[slashIdx+1:]
 	return res, nil
 }

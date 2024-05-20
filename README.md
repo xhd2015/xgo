@@ -33,6 +33,9 @@ Verify the installation:
 xgo version
 # output:
 #   1.0.x
+
+xgo help
+# output: help messages
 ```
 
 If `xgo` is not found, you may need to check if `$GOPATH/bin` is added to your `PATH` variable.
