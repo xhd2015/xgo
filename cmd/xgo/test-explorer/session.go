@@ -54,10 +54,11 @@ type PollSessionResult struct {
 }
 
 type session struct {
-	dir     string
-	goCmd   string
-	exclude []string
-	env     []string
+	dir       string
+	goCmd     string
+	exclude   []string
+	env       []string
+	testFlags []string
 
 	item *TestingItem
 
@@ -266,7 +267,8 @@ func (c *session) Start() error {
 		if c.goCmd != "" {
 			goCmd = c.goCmd
 		}
-		testFlags := append([]string{"test", "-json"}, testArgs...)
+		testFlags := append([]string{"test", "-json"}, c.testFlags...)
+		testFlags = append(testFlags, testArgs...)
 		fmt.Printf("%s %v\n", goCmd, testFlags)
 
 		err := cmd.Env(c.env).Dir(c.dir).
@@ -393,8 +395,7 @@ func (c *session) sendEvent(event *TestingItemEvent) {
 }
 
 // TODO: add /session/destroy
-func setupSessionHandler(server *http.ServeMux, projectDir string, config *TestConfig, env []string) {
-
+func setupSessionHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
 	var nextID int64 = 0
 	var sessionMapping sync.Map
 
@@ -410,14 +411,21 @@ func setupSessionHandler(server *http.ServeMux, projectDir string, config *TestC
 				return nil, netutil.ParamErrorf("requires file")
 			}
 
+			config, err := getTestConfig()
+			if err != nil {
+				return nil, err
+			}
+
 			idInt := atomic.AddInt64(&nextID, 1)
-			id := fmt.Sprintf("session_%d", idInt)
+			// to avoid stale requests from older pages
+			id := fmt.Sprintf("session_%s_%d", time.Now().Format("2006-01-02_15:04:05"), idInt)
 
 			sess := &session{
-				dir:     projectDir,
-				goCmd:   config.GoCmd,
-				exclude: config.Exclude,
-				env:     env,
+				dir:       projectDir,
+				goCmd:     config.GoCmd,
+				exclude:   config.Exclude,
+				env:       config.CmdEnv(),
+				testFlags: config.Flags,
 
 				eventCh: make(chan *TestingItemEvent, 100),
 				item:    req.TestingItem,
