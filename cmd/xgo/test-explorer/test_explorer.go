@@ -5,7 +5,6 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -33,6 +32,7 @@ type Options struct {
 	GoCommand        string
 	ProjectDir       string
 	Exclude          []string
+	Flags            []string
 }
 
 func Main(args []string, opts *Options) error {
@@ -66,6 +66,15 @@ func Main(args []string, opts *Options) error {
 				return fmt.Errorf("%s requires value", arg)
 			}
 			opts.Exclude = append(opts.Exclude, args[i+1])
+			i++
+			continue
+		}
+		if arg == "--flag" || arg == "--flags" {
+			// e.g. -parallel
+			if i+1 >= n {
+				return fmt.Errorf("%s requires value", arg)
+			}
+			opts.Flags = append(opts.Flags, args[i+1])
 			i++
 			continue
 		}
@@ -162,66 +171,17 @@ func handle(opts *Options) error {
 	}
 
 	configFile := filepath.Join(opts.ProjectDir, "test.config.json")
-
-	data, readErr := ioutil.ReadFile(configFile)
-	if readErr != nil {
-		if !errors.Is(readErr, os.ErrNotExist) {
-			return readErr
-		}
-		readErr = nil
-	}
-	var testConfig *TestConfig
-	if len(data) > 0 {
-		var err error
-		testConfig, err = parseTestConfig(string(data))
-		if err != nil {
-			return fmt.Errorf("parse test.config.json: %w", err)
-		}
-	}
-	if testConfig == nil {
-		testConfig = &TestConfig{}
-	}
-	if opts.GoCommand != "" {
-		testConfig.GoCmd = opts.GoCommand
-	} else if testConfig.GoCmd == "" {
-		testConfig.GoCmd = opts.DefaultGoCommand
-	}
-	testConfig.Exclude = append(testConfig.Exclude, opts.Exclude...)
-
-	// check go version
-	if testConfig.Go != nil && (testConfig.Go.Min != "" || testConfig.Go.Max != "") {
-		goVersionStr, err := goinfo.GetGoVersionOutput("go")
-		if err != nil {
-			return err
-		}
-		goVersion, err := goinfo.ParseGoVersion(goVersionStr)
-		if err != nil {
-			return err
-		}
-		if testConfig.Go.Min != "" {
-			minVer, _ := goinfo.ParseGoVersionNumber(strings.TrimPrefix(testConfig.Go.Min, "go"))
-			if minVer != nil {
-				if compareGoVersion(goVersion, minVer, true) < 0 {
-					return fmt.Errorf("go version %s < %s", strings.TrimPrefix(goVersionStr, "go version "), testConfig.Go.Min)
-				}
-			}
-		}
-		if testConfig.Go.Max != "" {
-			maxVer, _ := goinfo.ParseGoVersionNumber(strings.TrimPrefix(testConfig.Go.Max, "go"))
-			if maxVer != nil {
-				if compareGoVersion(goVersion, maxVer, true) > 0 {
-					return fmt.Errorf("go version %s > %s", strings.TrimPrefix(goVersionStr, "go version "), testConfig.Go.Max)
-				}
-			}
-		}
+	err := parseConfigAndValidate(configFile, opts)
+	if err != nil {
+		return err
 	}
 
-	var env []string
-	if len(testConfig.Env) > 0 {
-		env = append(env, os.Environ()...)
-		for k, v := range testConfig.Env {
-			env = append(env, fmt.Sprintf("%s=%s", k, fmt.Sprint(v)))
+	getTestConfig := func() (*TestConfig, error) {
+		conf, err := parseConfigAndMergeOptions(configFile, opts)
+		if err != nil {
+			return nil, fmt.Errorf("read test config:%w", err)
 		}
+		return conf, nil
 	}
 
 	server := &http.ServeMux{}
@@ -289,12 +249,16 @@ func handle(opts *Options) error {
 			if err != nil {
 				return nil, err
 			}
+			config, err := getTestConfig()
+			if err != nil {
+				return nil, err
+			}
 
-			return run(req, testConfig.GoCmd, env)
+			return run(req, config.GoCmd, config.CmdEnv(), config.Flags)
 		})
 	})
 
-	setupSessionHandler(server, opts.ProjectDir, testConfig, env)
+	setupSessionHandler(server, opts.ProjectDir, getTestConfig)
 
 	server.HandleFunc("/openVscode", func(w http.ResponseWriter, r *http.Request) {
 		netutil.SetCORSHeaders(w)
@@ -485,7 +449,7 @@ func getDetail(req *DetailRequest) (*DetailResponse, error) {
 		Content: string(content)[i:j],
 	}, nil
 }
-func run(req *RunRequest, goCmd string, env []string) (*RunResult, error) {
+func run(req *RunRequest, goCmd string, env []string, testFlags []string) (*RunResult, error) {
 	if req == nil || req.BaseRequest == nil || req.File == "" {
 		return nil, fmt.Errorf("requires file")
 	}
@@ -498,6 +462,7 @@ func run(req *RunRequest, goCmd string, env []string) (*RunResult, error) {
 	if req.Verbose {
 		args = append(args, "-v")
 	}
+	args = append(args, testFlags...)
 	if goCmd == "" {
 		goCmd = "go"
 	}
