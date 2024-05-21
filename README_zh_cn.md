@@ -166,7 +166,7 @@ mock.Mock(closure, mockFunc)
 - `replacer`一个用来替换`fn`的函数.
 
 影响范围:
-- 如果`Patch`在`init`过程中调用, 则改函数在所有的Gorotuine的调用都会被Mock,
+- 如果`Patch`在`init`过程中调用, 则该函数在所有的Gorotuine的调用都会被Mock,
 - 否则, `Patch`在`init`完成之后调用, 则仅对当前Goroutine生效, 其他Goroutine不受影响.
 
 注意: `replacer`应当和`fn`具有同样的签名。
