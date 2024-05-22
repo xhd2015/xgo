@@ -19,10 +19,10 @@ chmod +x .git/hooks/post-commit
 All are set, now start to development, try:
 ```sh
 # help
-go -tags dev run ./cmd/xgo help
+go run -tags dev ./cmd/xgo help
 
 # run Hello world test
-go -tags dev test -run TestHelloWorld -v ./test
+go test -tags dev -run TestHelloWorld -v ./test
 ```
 
 NOTE: when developing, always add `-tags dev` to tell go that we building with dev mode.
