@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ func Run(cmd string, args ...string) error {
 type CmdBuilder struct {
 	env    []string
 	dir    string
+	debug  bool
 	stdout io.Writer
 	stderr io.Writer
 }
@@ -31,6 +33,11 @@ func Env(env []string) *CmdBuilder {
 func Dir(dir string) *CmdBuilder {
 	return &CmdBuilder{
 		dir: dir,
+	}
+}
+func Debug() *CmdBuilder {
+	return &CmdBuilder{
+		debug: true,
 	}
 }
 
@@ -56,6 +63,10 @@ func (c *CmdBuilder) Stderr(stderr io.Writer) *CmdBuilder {
 	c.stderr = stderr
 	return c
 }
+func (c *CmdBuilder) Debug() *CmdBuilder {
+	c.debug = true
+	return c
+}
 
 func (c *CmdBuilder) Output(cmd string, args ...string) (string, error) {
 	return cmdExecEnv(cmd, args, c.env, c.dir, false, c)
@@ -70,6 +81,26 @@ func cmdExec(cmd string, args []string, dir string, pipeStdout bool) (string, er
 	return cmdExecEnv(cmd, args, nil, dir, pipeStdout, nil)
 }
 func cmdExecEnv(cmd string, args []string, env []string, dir string, useStdout bool, c *CmdBuilder) (string, error) {
+	if c != nil && c.debug {
+		var lines []string
+		if len(env) > 0 {
+			for _, e := range env {
+				lines = append(lines, "# "+e)
+			}
+		}
+		if dir != "" {
+			lines = append(lines, "# cd "+dir)
+		}
+		cmdStr := cmd
+		if len(args) > 0 {
+			cmdStr += " " + strings.Join(args, " ")
+		}
+		lines = append(lines, cmdStr)
+		for _, line := range lines {
+			fmt.Fprintln(os.Stderr, line)
+		}
+	}
+
 	execCmd := exec.Command(cmd, args...)
 	if c != nil && c.stderr != nil {
 		execCmd.Stderr = c.stderr

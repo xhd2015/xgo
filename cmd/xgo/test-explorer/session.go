@@ -269,9 +269,8 @@ func (c *session) Start() error {
 		}
 		testFlags := append([]string{"test", "-json"}, c.testFlags...)
 		testFlags = append(testFlags, testArgs...)
-		fmt.Printf("%s %v\n", goCmd, testFlags)
 
-		err := cmd.Env(c.env).Dir(c.dir).
+		err := cmd.Debug().Env(c.env).Dir(c.dir).
 			Stdout(io.MultiWriter(os.Stdout, w)).
 			Run(goCmd, testFlags...)
 		if err != nil {

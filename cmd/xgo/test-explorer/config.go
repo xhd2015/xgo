@@ -30,7 +30,6 @@ func (c *TestConfig) CmdEnv() []string {
 		return nil
 	}
 	var env []string
-	env = append(env, os.Environ()...)
 	for k, v := range c.Env {
 		env = append(env, fmt.Sprintf("%s=%s", k, fmt.Sprint(v)))
 	}
@@ -147,7 +146,7 @@ func parseConfigAndMergeOptions(configFile string, opts *Options) (*TestConfig, 
 }
 
 func validateGoVersion(testConfig *TestConfig) error {
-	if testConfig.Go != nil || (testConfig.Go.Min == "" && testConfig.Go.Max == "") {
+	if testConfig == nil || testConfig.Go == nil || (testConfig.Go.Min == "" && testConfig.Go.Max == "") {
 		return nil
 	}
 	// check go version

@@ -259,18 +259,7 @@ func handle(opts *Options) error {
 	})
 
 	setupSessionHandler(server, opts.ProjectDir, getTestConfig)
-
-	server.HandleFunc("/openVscode", func(w http.ResponseWriter, r *http.Request) {
-		netutil.SetCORSHeaders(w)
-		netutil.HandleJSON(w, r, func(ctx context.Context, r *http.Request) (interface{}, error) {
-			q := r.URL.Query()
-			file := q.Get("file")
-			line := q.Get("line")
-
-			err := cmd.Run("code", "--goto", fmt.Sprintf("%s:%s", file, line))
-			return nil, err
-		})
-	})
+	setupOpenHandler(server)
 
 	return netutil.ServePortHTTP(server, 7070, true, 500*time.Millisecond, func(port int) {
 		url = fmt.Sprintf("http://localhost:%d", port)
@@ -467,8 +456,7 @@ func run(req *RunRequest, goCmd string, env []string, testFlags []string) (*RunR
 		goCmd = "go"
 	}
 
-	fmt.Printf("test: %s %v\n", goCmd, args)
-	runErr := cmd.Dir(filepath.Dir(req.File)).
+	runErr := cmd.Debug().Dir(filepath.Dir(req.File)).
 		Env(env).
 		Stderr(io.MultiWriter(os.Stderr, &buf)).
 		Stdout(io.MultiWriter(os.Stdout, &buf)).
