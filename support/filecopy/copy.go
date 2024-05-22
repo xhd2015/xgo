@@ -258,6 +258,21 @@ func copyDirHandle(srcDir string, targetAbsDir string, opts *copyOptions, handle
 		if isDir {
 			return os.MkdirAll(dstPath, 0755)
 		}
+
+		// handle symlink and other files
+		typ := d.Type()
+		if !typ.IsRegular() {
+			if (typ & fs.ModeSymlink) == 0 {
+				return nil
+			}
+			// create symlink
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(target, dstPath)
+		}
+
 		return handler(path, dstPath)
 	})
 }
