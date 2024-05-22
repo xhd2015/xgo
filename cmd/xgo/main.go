@@ -343,7 +343,10 @@ func handleBuild(cmd string, args []string) error {
 	var toolExecFlag string
 	if !noInstrument {
 		logDebug("build instrument tools: %s", instrumentGoroot)
-		xgoBin := os.Args[0]
+		xgoBin, err := filepath.Abs(os.Args[0])
+		if err != nil {
+			return err
+		}
 		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, "", xgoBin, debug, logCompile, noSetup, debugWithDlv)
 		if err != nil {
 			return err
