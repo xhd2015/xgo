@@ -17,16 +17,22 @@ The commands are:
     version     print xgo version
     revision    print xgo revision
     upgrade     upgrade to latest version of xgo
-    tool        invoke xgo tools      
+    tool        invoke xgo tools   
 
 Examples:
     xgo build -o main ./                         build current module
     xgo build -o main -gcflags="all=-N -l" ./    build current module with debug flags
     xgo run ./                                   run current module
     xgo test ./...                               test all test cases of current module
+    xgo exec go version                          print instrumented go version
+    xgo tool help                                print help for xgo tools
+
+Examples of Trace:
     xgo test -run TestSomething --strace ./      test and collect stack trace
     xgo tool trace TestSomething.json            view collected stack trace
-    xgo exec go version                          print instrumented go version
+
+Example of Test Explorer:
+    xgo tool test-explorer                       open test explorer 
 
 See https://github.com/xhd2015/xgo for documentation.
 

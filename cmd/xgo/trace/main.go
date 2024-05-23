@@ -19,14 +19,34 @@ import (
 	"github.com/xhd2015/xgo/support/netutil"
 )
 
+const help = `
+Xgo tool trace visualize a generated trace file.
+
+Usage:
+    xgo tool trace <file>
+
+Examples:
+    xgo test -run TestSomething --strace ./   generate trace file
+    xgo tool trace TestSomething.json         visualize a generated trace
+
+See https://github.com/xhd2015/xgo for documentation.
+
+`
+
 func Main(args []string) {
 	var files []string
 	var port string
 	n := len(args)
+
+	var showHelp bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--" {
 			files = append(files, args[i+1:]...)
+			break
+		}
+		if arg == "-h" || arg == "--help" {
+			showHelp = true
 			break
 		}
 		if arg == "--port" {
@@ -34,7 +54,8 @@ func Main(args []string) {
 				fmt.Fprintf(os.Stderr, "--port requires arg\n")
 				os.Exit(1)
 			}
-			port = arg
+			port = args[i+1]
+			i++
 			continue
 		} else if strings.HasPrefix(arg, "--port=") {
 			port = strings.TrimPrefix(arg, "--port=")
@@ -46,6 +67,10 @@ func Main(args []string) {
 		}
 		fmt.Fprintf(os.Stderr, "unrecognized flag: %s\n", arg)
 		os.Exit(1)
+	}
+	if showHelp {
+		fmt.Print(strings.TrimPrefix(help, "\n"))
+		return
 	}
 	if len(files) == 0 {
 		fmt.Fprintf(os.Stderr, "requires file\n")
@@ -136,13 +161,11 @@ func serveFile(portStr string, file string) error {
 		}
 		port = int(parsePort)
 	}
-	err = netutil.ServePort(port, autoIncrPort, 500*time.Millisecond, func(port int) {
+	err = netutil.ServePortHTTP(server, port, autoIncrPort, 500*time.Millisecond, func(port int) {
 		url := fmt.Sprintf("http://localhost:%d", port)
 		fmt.Printf("Server listen at %s\n", url)
 
 		openURL(url)
-	}, func(port int) error {
-		return http.ListenAndServe(fmt.Sprintf(":%d", port), server)
 	})
 	if err != nil {
 		return err
