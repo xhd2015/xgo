@@ -28,11 +28,16 @@ func ServePortHTTP(server *http.ServeMux, port int, autoIncrPort bool, watchTime
 // suggested watch timeout: 500ms
 func ServePort(port int, autoIncrPort bool, watchTimeout time.Duration, watch func(port int), doWithPort func(port int) error) error {
 	for {
-		serving, err := IsTCPAddrServing(net.JoinHostPort("localhost", strconv.Itoa(port)), 20*time.Millisecond)
+		addr := net.JoinHostPort("localhost", strconv.Itoa(port))
+		serving, err := IsTCPAddrServing(addr, 20*time.Millisecond)
 		if err != nil {
 			return err
 		}
 		if serving {
+			if !autoIncrPort {
+				return fmt.Errorf("bind %s failed: address in use", addr)
+			}
+			port++
 			continue
 		}
 

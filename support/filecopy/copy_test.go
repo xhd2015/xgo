@@ -9,34 +9,6 @@ import (
 	"testing"
 )
 
-func testCopyReplace(prepare func(rootDir string, srcDir string, dstDir string) error, check func(rootDir string, srcDir string, dstDir string) error) error {
-	tmpDir, err := os.MkdirTemp("", "copy-with-link")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpDir)
-
-	srcDir := filepath.Join(tmpDir, "src")
-	err = os.MkdirAll(srcDir, 0755)
-	if err != nil {
-		return err
-	}
-	dstDir := filepath.Join(tmpDir, "dst")
-
-	err = prepare(tmpDir, srcDir, dstDir)
-	if err != nil {
-		return err
-	}
-	err = CopyReplaceDir(srcDir, dstDir, false)
-	if err != nil {
-		return err
-	}
-	if check == nil {
-		return nil
-	}
-	return check(tmpDir, srcDir, dstDir)
-}
-
 func TestCopyWithSymLinkFiles(t *testing.T) {
 	// doc.txt
 	// src/
@@ -73,16 +45,6 @@ func TestCopyWithSymLinkFiles(t *testing.T) {
 	}
 }
 
-func checkIsSymLink(file string) (bool, error) {
-	finfo, err := os.Lstat(file)
-	if err != nil {
-		return false, err
-	}
-	if finfo.Mode()&fs.ModeSymlink != 0 {
-		return true, nil
-	}
-	return false, nil
-}
 func TestCopyWithSymLinkDirs(t *testing.T) {
 	// doc.txt
 	// src/
@@ -116,4 +78,43 @@ func TestCopyWithSymLinkDirs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func checkIsSymLink(file string) (bool, error) {
+	finfo, err := os.Lstat(file)
+	if err != nil {
+		return false, err
+	}
+	if finfo.Mode()&fs.ModeSymlink != 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
+func testCopyReplace(prepare func(rootDir string, srcDir string, dstDir string) error, check func(rootDir string, srcDir string, dstDir string) error) error {
+	tmpDir, err := os.MkdirTemp("", "copy-with-link")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	srcDir := filepath.Join(tmpDir, "src")
+	err = os.MkdirAll(srcDir, 0755)
+	if err != nil {
+		return err
+	}
+	dstDir := filepath.Join(tmpDir, "dst")
+
+	err = prepare(tmpDir, srcDir, dstDir)
+	if err != nil {
+		return err
+	}
+	err = CopyReplaceDir(srcDir, dstDir, false)
+	if err != nil {
+		return err
+	}
+	if check == nil {
+		return nil
+	}
+	return check(tmpDir, srcDir, dstDir)
 }

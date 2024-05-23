@@ -14,7 +14,53 @@ import (
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
-func handleTool(tool string, args []string) error {
+const toolHelp = `
+Xgo ships with a toolset that improves testing experience.
+
+Usage:
+    xgo tool <command> [arguments]
+
+The commands are:
+    trace          stack trace visualization
+    test-explorer  test explorer
+    coverage       incremental coverage tool
+    list           list all tools
+    help           show help
+
+Examples:
+    xgo tool trace TestSomething.json     visualize a generated trace
+    xgo tool test-explorer                open test explorer UI
+    xgo tool coverage serve cover.out     visualize incrementa coverage of cover.out
+
+See https://github.com/xhd2015/xgo for documentation.
+
+`
+
+const toolList = `
+Available tools:
+  trace            visualize a generated trace
+  test-explorer    open test explorer UI
+  coverage         visualize incrementa coverage 
+`
+
+func handleTool(args []string) error {
+	// tool string,
+
+	// if len(args) == 0 {
+	// 	fmt.Fprintf(os.Stderr, "xgo tool: requires tool to run\n")
+	// 	os.Exit(1)
+	// }
+
+	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
+		fmt.Print(strings.TrimPrefix(toolHelp, "\n"))
+		return nil
+	}
+	tool := args[0]
+	args = args[1:]
+	if tool == "list" {
+		fmt.Print(strings.TrimPrefix(toolList, "\n"))
+		return nil
+	}
 	if tool == "trace" {
 		trace.Main(args)
 		return nil

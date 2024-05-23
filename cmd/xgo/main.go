@@ -44,7 +44,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "xgo: requires command\nRun 'xgo help' for usage.\n")
 		os.Exit(1)
 	}
-	if cmd == "help" {
+	if cmd == "help" || cmd == "-h" || cmd == "--help" {
 		fmt.Print(strings.TrimPrefix(help, "\n"))
 		return
 	}
@@ -69,11 +69,7 @@ func main() {
 		return
 	}
 	if cmd == "tool" {
-		if len(args) == 0 {
-			fmt.Fprintf(os.Stderr, "xgo tool: requires tool to run\n")
-			os.Exit(1)
-		}
-		err := handleTool(args[0], args[1:])
+		err := handleTool(args)
 		if err != nil {
 			if err, ok := err.(*exec.ExitError); ok {
 				os.Exit(err.ExitCode())
