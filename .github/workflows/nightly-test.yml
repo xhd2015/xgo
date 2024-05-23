@@ -9,6 +9,10 @@ on:
     - cron: "23 0 * * *"
   push:
     branches: [ "trigger-nightly-test" ]
+  workflow_dispatch:
+    inputs:
+      dummy:
+        default: nothing
 
     # 'gin-gonic/gin' ok
     # 'fatedier/frp' cannot pass even with go? need to verify
@@ -24,6 +28,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: xgo
+          ref: master
 
       - name: Set up Go
         uses: actions/setup-go@v4
