@@ -97,6 +97,12 @@ var extraSubTests = []*TestCase{
 		dir:   "runtime/test/trap_stdlib_any",
 		flags: []string{"--trap-stdlib"},
 	},
+	{
+		// see https://github.com/xhd2015/xgo/issues/142
+		name:  "bugs_regression",
+		dir:   "runtime/test/bugs/...",
+		flags: []string{},
+	},
 }
 
 func main() {
@@ -451,9 +457,17 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 			continue
 		}
 		dir := tt.dir
-		hookFile := filepath.Join(dir, "hook_test.go")
-		_, statErr := os.Stat(hookFile)
-		hasHook := statErr == nil
+		var subDirs bool
+		if strings.HasSuffix(dir, "/...") {
+			subDirs = true
+			dir = strings.TrimSuffix(dir, "/...")
+		}
+		var hasHook bool
+		if !subDirs {
+			hookFile := filepath.Join(dir, "hook_test.go")
+			_, statErr := os.Stat(hookFile)
+			hasHook = statErr == nil
+		}
 		dotDir := "./" + dir
 		if hasHook {
 			err := doRunTest(goroot, testKind_xgoAny, amendArgs([]string{"--project-dir", dotDir, "-run", "TestPreCheck"}, nil), []string{"./hook_test.go"})
@@ -461,7 +475,13 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 				return err
 			}
 		}
-		err := doRunTest(goroot, testKind_xgoAny, amendArgs([]string{"--project-dir", dotDir}, tt.flags), []string{"./"})
+		var testArgDir string
+		if !subDirs {
+			testArgDir = "./"
+		} else {
+			testArgDir = "./..."
+		}
+		err := doRunTest(goroot, testKind_xgoAny, amendArgs([]string{"--project-dir", dotDir}, tt.flags), []string{testArgDir})
 		if err != nil {
 			return err
 		}

@@ -832,6 +832,19 @@ func getConstDeclValueType(expr syntax.Expr) string {
 			return "bool"
 		}
 		// NOTE: nil is not a constant
+	case *syntax.Operation:
+		// binary operation
+		if isBoolOp(expr.Op) {
+			return "bool"
+		}
+		if expr.X != nil {
+			return getConstDeclValueType(expr.X)
+		}
+		if expr.Y != nil {
+			return getConstDeclValueType(expr.Y)
+		}
+	case *syntax.ParenExpr:
+		return getConstDeclValueType(expr.X)
 	}
 	return ""
 }

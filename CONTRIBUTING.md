@@ -25,7 +25,7 @@ go run -tags dev ./cmd/xgo help
 go test -tags dev -run TestHelloWorld -v ./test
 ```
 
-NOTE: when developing, always add `-tags dev` to tell go that we building with dev mode.
+NOTE: when developing, always add `-tags dev` to tell go that we are building in dev mode.
 
 If you want to check instrumented GOROOT, run:
 ```sh
@@ -53,7 +53,7 @@ We can also explicitly specify all expected go versions we want to pass:
 go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1
 ```
 
-If there were testing cache, we can force the test re-run by adding a `-count=1` flag:
+If there were testing cache, we can force the test to re-run by adding a `-count=1` flag:
 ```sh
 go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
 ```
