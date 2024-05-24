@@ -28,7 +28,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: xgo
-          ref: fix-const-expr-type-recognition
+      
+      - name: Switch To Master If From Nightly-Test
+        run: |
+           cd xgo
+           cur_branch=$(git branch --show-current)
+           if [[ $cur_branch = trigger-nightly-test ]];then 
+               git fetch --depth=1 origin master
+               git checkout master
+           fi
+
+      - name: Prepare Utility Scripts
+        run: |
+          cat > util.sh <<EOF
+          function record_exit_code {
+              echo "exit code: $1"
+              echo "$1" > test-exit-code.txt
+          }
+          trap 'record $?' EXIT
+          EOF
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -44,16 +62,27 @@ jobs:
       
       - uses: actions/checkout@v4
         with:
+          repository: gin-gonic/gin
+          path:  gin-gonic/gin
+
+      - name: Test gin-gonic/gin
+        continue-on-error: true
+        run: |
+          source util.sh
+          cd gin-gonic/gin
+          xgo test -v ./...
+
+      - uses: actions/checkout@v4
+        with:
           repository: pocketbase/pocketbase
           path:  pocketbase/pocketbase
 
       - name: Test pocketbase/pocketbase
         continue-on-error: true
         run: |
+          source util.sh
           cd pocketbase/pocketbase
           xgo test -v ./...
-          echo $? > test-exit-code.txt
-          echo "exit code is $(cat test-exit-code.txt)"
 
       - uses: actions/checkout@v4
         with:
@@ -63,11 +92,9 @@ jobs:
       - name: Test gohugoio/hugo
         continue-on-error: true
         run: |
+          source util.sh
           cd gohugoio/hugo
           xgo test -v ./...
-          echo $? > test-exit-code.txt
-          echo "exit code is $?"
-          echo "exit code is $(cat test-exit-code.txt)"
 
       - uses: actions/checkout@v4
         with:
@@ -77,14 +104,14 @@ jobs:
       - name: Test kubernetes/kubernetes
         continue-on-error: true
         run: |
+          source util.sh
           cd kubernetes/kubernetes 
           xgo test -v ./...
-          echo $? > test-exit-code.txt
-          echo "exit code is $(cat test-exit-code.txt)"
         
       - name: Summary
         run: |
          echo "exit code:"
+         echo "  gin-gonic/gin:         $(cat gin-gonic/gin/test-exit-code.txt)"
          echo "  pocketbase/pocketbase: $(cat pocketbase/pocketbase/test-exit-code.txt)"
          echo "  gohugoio/hugo:         $(cat gohugoio/hugo/test-exit-code.txt)"
          echo "  kubernetes/kubernetes: $(cat kubernetes/kubernetes/test-exit-code.txt)"

@@ -8,6 +8,8 @@
 
 **[English](./README.md) | 简体中文**
 
+> 分享视频: [#151 xgo: 基于编译期代码重写实现 Mock 和 Trace【Go 夜读】](https://www.bilibili.com/video/BV11D421A7zW)
+
 `xgo`提供了一个*全功能*的Golang测试工具集, 包括:
 
 - [Mock](#patch)
