@@ -40,12 +40,13 @@ jobs:
 
       - name: Prepare Utility Scripts
         run: |
-          cat > util.sh <<EOF
+          cat > util.sh <<'EOF'
           function record_exit_code {
-              echo "exit code: $1"
-              echo "$1" > test-exit-code.txt
+              local exit_code=$?
+              echo "exit code: $exit_code"
+              echo "$exit_code" > test-exit-code.txt
           }
-          trap 'record $?' EXIT
+          trap 'record_exit_code' EXIT
           EOF
 
       - name: Set up Go
