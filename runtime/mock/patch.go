@@ -11,11 +11,13 @@ import (
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
-// Patch replaces `fn` with `replacer` in current goroutine,
-// it returns a cleanup function to remove `replacer`.
-// the `replacer` will be automatically cleared when current
-// gorotuine exits if the returned cleanup function is not
-// called.
+// Patch replaces `fn` with `replacer` in current goroutine.
+// You do not have to manually clean up the replacer, as
+// xgo will automatically clear the replacer when
+// current gorotuine exits.
+// However, if you want to clear the replacer earlier,
+// this function returns a clean up function that can be
+// used to clear the replacer.
 func Patch(fn interface{}, replacer interface{}) func() {
 	if fn == nil {
 		panic("fn cannot be nil")

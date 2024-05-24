@@ -187,6 +187,12 @@ func handle(opts *Options) error {
 	server := &http.ServeMux{}
 	var url string
 	server.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		uri := r.RequestURI
+		if uri != "" && uri != "/" {
+			w.WriteHeader(404)
+			w.Write([]byte("requested source not found:" + uri))
+			return
+		}
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(strings.ReplaceAll(indexHTML, apiPlaceholder, url)))
 	})
