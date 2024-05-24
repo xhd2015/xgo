@@ -128,7 +128,7 @@ func downloadGo(cmd string, version string) error {
 			return err
 		}
 
-		goTmpDir, err := os.MkdirTemp("", "go")
+		goTmpDir, err := os.MkdirTemp(".", "go")
 		if err != nil {
 			return err
 		}

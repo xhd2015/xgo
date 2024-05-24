@@ -5,25 +5,12 @@
 
 package debug
 
-import (
-	"testing"
+const DefaultDateLayout = "2006-01-02 15:04:05.000Z"
 
-	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/mock_var/sub"
-)
-
-var c sub.Mapping = sub.Mapping{
-	1: "hello",
+func chainedConst() {
+	wrap(DefaultDateLayout).Min(nil)
 }
 
-func TestThirdPartyTypeMethodVar(t *testing.T) {
-	mock.Patch(&c, func() sub.Mapping {
-		return sub.Mapping{
-			1: "mock",
-		}
-	})
-	txt := c.Get(1)
-	if txt != "mock" {
-		t.Fatalf("expect c[1] to be %s, actual: %s", "mock", txt)
-	}
+func wrap(e string) interface{ Min(t interface{}) } {
+	return nil
 }

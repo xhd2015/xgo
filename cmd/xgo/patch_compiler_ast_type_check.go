@@ -305,6 +305,7 @@ var noderExprPatch = &FilePatch{
 	},
 }
 
+// /Users/xhd2015/.xgo/go-instrument-dev/go1.22.2_Us_xh_Pr_xh_xg_go_go_e9d4e1e8/go1.22.2/src/cmd/compile/internal/syntax/printer.go
 var syntaxPrinterPatch = &FilePatch{
 	FilePath: _FilePath{"src", "cmd", "compile", "internal", "syntax", "printer.go"},
 	Patches: []*Patch{
@@ -321,7 +322,7 @@ var syntaxPrinterPatch = &FilePatch{
 			p.printRawNode(n.X)
 			`,
 			CheckGoVersion: func(goVersion *goinfo.GoVersion) bool {
-				return goVersion.Major == 1 && goVersion.Minor <= 21
+				return goVersion.Major == 1 && goVersion.Minor <= 22
 			},
 		},
 	},
@@ -387,6 +388,8 @@ func patchCompilerForConstTrap(goroot string, goVersion *goinfo.GoVersion) error
 		if err != nil {
 			return err
 		}
+	}
+	if goVersion.Major == 1 && goVersion.Minor <= 22 {
 		err = syntaxPrinterPatch.Apply(goroot, goVersion)
 		if err != nil {
 			return err
