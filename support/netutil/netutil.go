@@ -21,14 +21,14 @@ func IsTCPAddrServing(url string, timeout time.Duration) (bool, error) {
 
 func ServePortHTTP(server *http.ServeMux, port int, autoIncrPort bool, watchTimeout time.Duration, watch func(port int)) error {
 	return ServePort(port, autoIncrPort, watchTimeout, watch, func(port int) error {
-		return http.ListenAndServe(fmt.Sprintf("localhost:%d", port), server)
+		return http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), server)
 	})
 }
 
 // suggested watch timeout: 500ms
 func ServePort(port int, autoIncrPort bool, watchTimeout time.Duration, watch func(port int), doWithPort func(port int) error) error {
 	for {
-		addr := net.JoinHostPort("localhost", strconv.Itoa(port))
+		addr := net.JoinHostPort("0.0.0.0", strconv.Itoa(port))
 		serving, err := IsTCPAddrServing(addr, 20*time.Millisecond)
 		if err != nil {
 			return err

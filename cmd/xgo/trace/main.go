@@ -162,7 +162,7 @@ func serveFile(portStr string, file string) error {
 		port = int(parsePort)
 	}
 	err = netutil.ServePortHTTP(server, port, autoIncrPort, 500*time.Millisecond, func(port int) {
-		url := fmt.Sprintf("http://localhost:%d", port)
+		url := fmt.Sprintf("http://0.0.0.0:%d", port)
 		fmt.Printf("Server listen at %s\n", url)
 
 		openURL(url)

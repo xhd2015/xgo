@@ -150,7 +150,7 @@ type RunResult struct {
 //go:embed index.html
 var indexHTML string
 
-const apiPlaceholder = "http://localhost:8080"
+const apiPlaceholder = "http://0.0.0.0:8080"
 
 func compareGoVersion(a *goinfo.GoVersion, b *goinfo.GoVersion, ignorePatch bool) int {
 	if a.Major != b.Major {
@@ -268,7 +268,7 @@ func handle(opts *Options) error {
 	setupOpenHandler(server)
 
 	return netutil.ServePortHTTP(server, 7070, true, 500*time.Millisecond, func(port int) {
-		url = fmt.Sprintf("http://localhost:%d", port)
+		url = fmt.Sprintf("http://0.0.0.0:%d", port)
 		fmt.Printf("Server listen at %s\n", url)
 		openURL(url)
 	})
