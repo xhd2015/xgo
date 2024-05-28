@@ -264,7 +264,8 @@ func handle(opts *Options) error {
 		})
 	})
 
-	setupSessionHandler(server, opts.ProjectDir, getTestConfig)
+	setupRunHandler(server, opts.ProjectDir, getTestConfig)
+	setupDebugHandler(server, opts.ProjectDir, getTestConfig)
 	setupOpenHandler(server)
 
 	return netutil.ServePortHTTP(server, 7070, true, 500*time.Millisecond, func(port int) {

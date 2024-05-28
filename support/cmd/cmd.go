@@ -63,6 +63,7 @@ func (c *CmdBuilder) Stderr(stderr io.Writer) *CmdBuilder {
 	c.stderr = stderr
 	return c
 }
+
 func (c *CmdBuilder) Debug() *CmdBuilder {
 	c.debug = true
 	return c
@@ -81,6 +82,12 @@ func cmdExec(cmd string, args []string, dir string, pipeStdout bool) (string, er
 	return cmdExecEnv(cmd, args, nil, dir, pipeStdout, nil)
 }
 func cmdExecEnv(cmd string, args []string, env []string, dir string, useStdout bool, c *CmdBuilder) (string, error) {
+	var stderr io.Writer
+	if c != nil && c.stderr != nil {
+		stderr = c.stderr
+	} else {
+		stderr = os.Stderr
+	}
 	if c != nil && c.debug {
 		var lines []string
 		if len(env) > 0 {
@@ -97,16 +104,12 @@ func cmdExecEnv(cmd string, args []string, env []string, dir string, useStdout b
 		}
 		lines = append(lines, cmdStr)
 		for _, line := range lines {
-			fmt.Fprintln(os.Stderr, line)
+			fmt.Fprintln(stderr, line)
 		}
 	}
 
 	execCmd := exec.Command(cmd, args...)
-	if c != nil && c.stderr != nil {
-		execCmd.Stderr = c.stderr
-	} else {
-		execCmd.Stderr = os.Stderr
-	}
+	execCmd.Stderr = stderr
 	if len(env) > 0 {
 		execCmd.Env = os.Environ()
 		execCmd.Env = append(execCmd.Env, env...)
