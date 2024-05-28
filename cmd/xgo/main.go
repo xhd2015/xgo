@@ -113,11 +113,12 @@ func handleBuild(cmd string, args []string) error {
 	cmdBuild := cmd == "build"
 	cmdTest := cmd == "test"
 	cmdExec := cmd == "exec"
-	opts, err := parseOptions(args)
+	opts, err := parseOptions(cmd, args)
 	if err != nil {
 		return err
 	}
 	remainArgs := opts.remainArgs
+	testArgs := opts.testArgs
 	flagA := opts.flagA
 	projectDir := opts.projectDir
 	output := opts.output
@@ -442,6 +443,9 @@ func handleBuild(cmd string, args []string) error {
 			}
 		}
 		buildCmdArgs = append(buildCmdArgs, remainArgs...)
+		if cmdTest && len(testArgs) > 0 {
+			buildCmdArgs = append(buildCmdArgs, testArgs...)
+		}
 		logDebug("command: %s %v", instrumentGo, buildCmdArgs)
 		execCmd = exec.Command(instrumentGo, buildCmdArgs...)
 	} else {
