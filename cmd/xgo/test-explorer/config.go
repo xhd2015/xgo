@@ -36,6 +36,13 @@ func (c *TestConfig) CmdEnv() []string {
 	return env
 }
 
+func (c *TestConfig) GetGoCmd() string {
+	if c.GoCmd != "" {
+		return c.GoCmd
+	}
+	return "go"
+}
+
 type GoConfig struct {
 	Min string `json:"min"`
 	Max string `json:"max"`

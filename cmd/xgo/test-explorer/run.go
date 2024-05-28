@@ -13,13 +13,13 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/netutil"
+	"github.com/xhd2015/xgo/support/session"
 )
 
 type StartSessionRequest struct {
@@ -28,6 +28,7 @@ type StartSessionRequest struct {
 type StartSessionResult struct {
 	ID string `json:"id"`
 }
+
 type Event string
 
 const (
@@ -52,8 +53,11 @@ type PollSessionRequest struct {
 type PollSessionResult struct {
 	Events []*TestingItemEvent `json:"events"`
 }
+type DestroySessionRequest struct {
+	ID string `json:"id"`
+}
 
-type session struct {
+type runSession struct {
 	dir       string
 	goCmd     string
 	exclude   []string
@@ -62,7 +66,7 @@ type session struct {
 
 	item *TestingItem
 
-	eventCh chan *TestingItemEvent
+	session session.Session
 }
 
 func getRelDirs(root *TestingItem, file string) []string {
@@ -155,7 +159,7 @@ func resolveTests(fullSubDir string) ([]*TestingItem, error) {
 	return results, nil
 }
 
-func (c *session) Start() error {
+func (c *runSession) Start() error {
 	absDir, err := filepath.Abs(c.dir)
 	if err != nil {
 		return err
@@ -370,33 +374,21 @@ func buildEvent(testEvent *TestEvent, absDir string, modPath string, resolveTest
 	}
 }
 
-func (c *session) Poll() []*TestingItemEvent {
-	var events []*TestingItemEvent
-
-	timeout := time.After(5 * time.Second)
-	for {
-		select {
-		case event := <-c.eventCh:
-			events = append(events, event)
-		case <-timeout:
-			return events
-		default:
-			if len(events) > 0 {
-				return events
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
+func convTestingEvents(events []interface{}) []*TestingItemEvent {
+	testingEvents := make([]*TestingItemEvent, 0, len(events))
+	for _, e := range events {
+		testingEvents = append(testingEvents, e.(*TestingItemEvent))
 	}
+	return testingEvents
 }
 
-func (c *session) sendEvent(event *TestingItemEvent) {
-	c.eventCh <- event
+func (c *runSession) sendEvent(event *TestingItemEvent) {
+	c.session.SendEvents(event)
 }
 
-// TODO: add /session/destroy
-func setupSessionHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
-	var nextID int64 = 0
-	var sessionMapping sync.Map
+// TODO: make FE call /session/destroy
+func setupRunHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
+	sessionManager := session.NewSessionManager()
 
 	server.HandleFunc("/session/start", func(w http.ResponseWriter, r *http.Request) {
 		netutil.SetCORSHeaders(w)
@@ -415,22 +407,22 @@ func setupSessionHandler(server *http.ServeMux, projectDir string, getTestConfig
 				return nil, err
 			}
 
-			idInt := atomic.AddInt64(&nextID, 1)
-			// to avoid stale requests from older pages
-			id := fmt.Sprintf("session_%s_%d", time.Now().Format("2006-01-02_15:04:05"), idInt)
+			id, ses, err := sessionManager.Start()
+			if err != nil {
+				return nil, err
+			}
 
-			sess := &session{
+			runSess := &runSession{
 				dir:       projectDir,
 				goCmd:     config.GoCmd,
 				exclude:   config.Exclude,
 				env:       config.CmdEnv(),
 				testFlags: config.Flags,
 
-				eventCh: make(chan *TestingItemEvent, 100),
+				session: ses,
 				item:    req.TestingItem,
 			}
-			sessionMapping.Store(id, sess)
-			err = sess.Start()
+			err = runSess.Start()
 			if err != nil {
 				return nil, err
 			}
@@ -449,17 +441,38 @@ func setupSessionHandler(server *http.ServeMux, projectDir string, getTestConfig
 			if req.ID == "" {
 				return nil, netutil.ParamErrorf("requires id")
 			}
-			val, ok := sessionMapping.Load(req.ID)
-			if !ok {
-				return nil, netutil.ParamErrorf("session %s does not exist or has been removed", req.ID)
+			session, err := sessionManager.Get(req.ID)
+			if err != nil {
+				return nil, err
 			}
-			sess := val.(*session)
 
-			events := sess.Poll()
+			events, err := session.PollEvents()
+			if err != nil {
+				return nil, err
+			}
 			// fmt.Printf("poll: %v\n", events)
 			return &PollSessionResult{
-				Events: events,
+				Events: convTestingEvents(events),
 			}, nil
+		})
+	})
+
+	server.HandleFunc("/session/destroy", func(w http.ResponseWriter, r *http.Request) {
+		netutil.SetCORSHeaders(w)
+		netutil.HandleJSON(w, r, func(ctx context.Context, r *http.Request) (interface{}, error) {
+			var req *DestroySessionRequest
+			err := parseBody(r.Body, &req)
+			if err != nil {
+				return nil, err
+			}
+			if req.ID == "" {
+				return nil, netutil.ParamErrorf("requires id")
+			}
+			err = sessionManager.Destroy(req.ID)
+			if err != nil {
+				return nil, err
+			}
+			return nil, nil
 		})
 	})
 }
