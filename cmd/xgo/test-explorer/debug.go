@@ -49,6 +49,9 @@ func setupDebugHandler(server *http.ServeMux, projectDir string, getTestConfig f
 			if req == nil || req.Item == nil || req.Item.File == "" {
 				return nil, netutil.ParamErrorf("requires file")
 			}
+			if req.Item.Name == "" {
+				return nil, netutil.ParamErrorf("requires name")
+			}
 
 			file := req.Item.File
 			isFile, err := fileutil.IsFile(file)
@@ -59,6 +62,11 @@ func setupDebugHandler(server *http.ServeMux, projectDir string, getTestConfig f
 				return nil, fmt.Errorf("cannot debug multiple tests")
 			}
 			absDir, err := filepath.Abs(projectDir)
+			if err != nil {
+				return nil, err
+			}
+
+			parsedFlags, parsedArgs, err := getTestFlags(absDir, file, req.Item.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -109,7 +117,12 @@ func setupDebugHandler(server *http.ServeMux, projectDir string, getTestConfig f
 					// }
 					relPathDir := filepath.Dir(relPath)
 					tmpBin := filepath.Join(tmpDir, binName)
-					err = cmd.Dir(projectDir).Debug().Stderr(stderr).Stdout(stdout).Run(goCmd, "test", "-c", "-o", tmpBin, "-gcflags=all=-N -l", "./"+relPathDir)
+
+					flags := []string{"test", "-c", "-o", tmpBin, "-gcflags=all=-N -l"}
+					flags = append(flags, config.Flags...)
+					flags = append(flags, parsedFlags...)
+					flags = append(flags, "./"+relPathDir)
+					err = cmd.Dir(projectDir).Debug().Stderr(stderr).Stdout(stdout).Run(goCmd, flags...)
 					if err != nil {
 						return err
 					}
@@ -123,14 +136,19 @@ func setupDebugHandler(server *http.ServeMux, projectDir string, getTestConfig f
 						fmt.Fprintf(stderr, "  > Terminal: dlv connect localhost:%d\n", port)
 					}, func(port int) error {
 						// dlv exec --api-version=2 --listen=localhost:2345 --accept-multiclient --headless ./debug.bin
-						return cmd.Dir(filepath.Dir(file)).Debug().Stderr(stderr).Stdout(stdout).Run("dlv", "exec",
-							"--api-version=2",
-							fmt.Sprintf("--listen=localhost:%d", port),
-							// NOTE: --init is ignored if --headless
-							// "--init", dlvInitFile,
-							"--headless",
-							// "--allow-non-terminal-interactive=true",
-							tmpBin, "-test.v", "-test.run", fmt.Sprintf("$%s^", req.Item.Name))
+						return cmd.Dir(filepath.Dir(file)).Debug().Stderr(stderr).Stdout(stdout).Run("dlv",
+							append([]string{
+								"exec",
+								"--api-version=2",
+								"--check-go-version=false",
+								// NOTE: --init is ignored if --headless
+								// "--init", dlvInitFile,
+								"--headless",
+								// "--allow-non-terminal-interactive=true",
+								fmt.Sprintf("--listen=localhost:%d", port),
+								tmpBin, "--", "-test.v", "-test.run", fmt.Sprintf("^%s$", req.Item.Name),
+							}, parsedArgs...)...,
+						)
 					})
 					if err != nil {
 						return err

@@ -135,30 +135,6 @@ func getPkgSubDirPath(modPath string, pkgPath string) string {
 	return strings.TrimPrefix(pkgPath[len(modPath):], "/")
 }
 
-func resolveTests(fullSubDir string) ([]*TestingItem, error) {
-	files, err := os.ReadDir(fullSubDir)
-	if err != nil {
-		return nil, err
-	}
-	var results []*TestingItem
-	for _, file := range files {
-		fileName := file.Name()
-		if !strings.HasSuffix(fileName, "_test.go") {
-			continue
-		}
-		if file.IsDir() {
-			continue
-		}
-		fullFile := filepath.Join(fullSubDir, fileName)
-		tests, err := parseTests(fullFile)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, tests...)
-	}
-	return results, nil
-}
-
 func (c *runSession) Start() error {
 	absDir, err := filepath.Abs(c.dir)
 	if err != nil {
@@ -475,4 +451,75 @@ func setupRunHandler(server *http.ServeMux, projectDir string, getTestConfig fun
 			return nil, nil
 		})
 	})
+}
+
+func run(req *RunRequest, projectDir string, goCmd string, env []string, testFlags []string) (*RunResult, error) {
+	if req == nil || req.BaseRequest == nil || req.File == "" {
+		return nil, fmt.Errorf("requires file")
+	}
+	if req.Name == "" {
+		return nil, fmt.Errorf("requires name")
+	}
+	absDir, err := filepath.Abs(projectDir)
+	if err != nil {
+		return nil, err
+	}
+	relPath, err := filepath.Rel(absDir, req.File)
+	if err != nil {
+		return nil, err
+	}
+	parsedFlags, parsedArgs, err := getTestFlags(absDir, req.File, req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	// fmt.Printf("run:%v\n", req)
+	var buf bytes.Buffer
+	args := []string{"test", "-run", fmt.Sprintf("^%s$", req.Name)}
+	if req.Verbose {
+		args = append(args, "-v")
+	}
+	args = append(args, testFlags...)
+	args = append(args, parsedFlags...)
+	args = append(args, "./"+filepath.Dir(relPath))
+	if len(parsedArgs) > 0 {
+		args = append(args, "-args")
+		args = append(args, parsedArgs...)
+	}
+
+	if goCmd == "" {
+		goCmd = "go"
+	}
+	runErr := cmd.Debug().Dir(projectDir).
+		Env(env).
+		Stderr(io.MultiWriter(os.Stderr, &buf)).
+		Stdout(io.MultiWriter(os.Stdout, &buf)).
+		Run(goCmd, args...)
+	if runErr != nil {
+		return &RunResult{
+			Status: RunStatus_Fail,
+			Msg:    buf.String(),
+		}, nil
+	}
+
+	return &RunResult{
+		Status: RunStatus_Success,
+		Msg:    buf.String(),
+	}, nil
+}
+
+func getTestFlags(absProjectDir string, file string, name string) (flags []string, args []string, err error) {
+	_, funcs, err := parseTestFuncs(file)
+	if err != nil {
+		return nil, nil, err
+	}
+	fn, err := getFuncDecl(funcs, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	flags, args, err = parseFuncArgs(fn)
+	if err != nil {
+		return nil, nil, err
+	}
+	return applyVars(absProjectDir, flags), applyVars(absProjectDir, args), nil
 }
