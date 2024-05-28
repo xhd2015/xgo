@@ -30,7 +30,7 @@ The commands are:
 Examples:
     xgo tool trace TestSomething.json     visualize a generated trace
     xgo tool test-explorer                open test explorer UI
-    xgo tool coverage serve cover.out     visualize incrementa coverage of cover.out
+    xgo tool coverage serve cover.out     visualize incremental coverage of cover.out
 
 See https://github.com/xhd2015/xgo for documentation.
 
@@ -40,7 +40,7 @@ const toolList = `
 Available tools:
   trace            visualize a generated trace
   test-explorer    open test explorer UI
-  coverage         visualize incrementa coverage 
+  coverage         visualize incremental coverage 
 `
 
 func handleTool(args []string) error {
