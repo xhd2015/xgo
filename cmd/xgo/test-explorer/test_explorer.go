@@ -1,19 +1,15 @@
 package test_explorer
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"io"
 	"io/fs"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -260,7 +256,7 @@ func handle(opts *Options) error {
 				return nil, err
 			}
 
-			return run(req, config.GoCmd, config.CmdEnv(), config.Flags)
+			return run(req, opts.ProjectDir, config.GoCmd, config.CmdEnv(), config.Flags)
 		})
 	})
 
@@ -444,114 +440,4 @@ func getDetail(req *DetailRequest) (*DetailResponse, error) {
 	return &DetailResponse{
 		Content: string(content)[i:j],
 	}, nil
-}
-func run(req *RunRequest, goCmd string, env []string, testFlags []string) (*RunResult, error) {
-	if req == nil || req.BaseRequest == nil || req.File == "" {
-		return nil, fmt.Errorf("requires file")
-	}
-	if req.Name == "" {
-		return nil, fmt.Errorf("requires name")
-	}
-	// fmt.Printf("run:%v\n", req)
-	var buf bytes.Buffer
-	args := []string{"test", "-run", fmt.Sprintf("^%s$", req.Name)}
-	if req.Verbose {
-		args = append(args, "-v")
-	}
-	args = append(args, testFlags...)
-	if goCmd == "" {
-		goCmd = "go"
-	}
-
-	runErr := cmd.Debug().Dir(filepath.Dir(req.File)).
-		Env(env).
-		Stderr(io.MultiWriter(os.Stderr, &buf)).
-		Stdout(io.MultiWriter(os.Stdout, &buf)).
-		Run(goCmd, args...)
-	if runErr != nil {
-		return &RunResult{
-			Status: RunStatus_Fail,
-			Msg:    buf.String(),
-		}, nil
-	}
-
-	return &RunResult{
-		Status: RunStatus_Success,
-		Msg:    buf.String(),
-	}, nil
-}
-
-func filterItem(item *TestingItem, withCases bool) *TestingItem {
-	if item == nil {
-		return nil
-	}
-
-	if withCases {
-		children := item.Children
-		n := len(children)
-		i := 0
-		for j := 0; j < n; j++ {
-			child := filterItem(children[j], withCases)
-			if child != nil {
-				children[i] = child
-				i++
-			}
-		}
-		item.Children = children[:i]
-		if i == 0 && item.Kind != TestingItemKind_Case {
-			return nil
-		}
-	} else {
-		if !item.HasTestCases {
-			return nil
-		}
-	}
-
-	return item
-}
-
-func parseTests(file string) ([]*TestingItem, error) {
-	fset, decls, err := parseTestFuncs(file)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]*TestingItem, 0, len(decls))
-	for _, fnDecl := range decls {
-		items = append(items, &TestingItem{
-			Name: fnDecl.Name.Name,
-			File: file,
-			Line: fset.Position(fnDecl.Pos()).Line,
-			Kind: TestingItemKind_Case,
-		})
-	}
-	return items, nil
-}
-
-func parseTestFuncs(file string) (*token.FileSet, []*ast.FuncDecl, error) {
-	fset := token.NewFileSet()
-	astFile, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
-	if err != nil {
-		return nil, nil, err
-	}
-	var results []*ast.FuncDecl
-	for _, decl := range astFile.Decls {
-		fnDecl, ok := decl.(*ast.FuncDecl)
-		if !ok {
-			continue
-		}
-		if fnDecl.Name == nil {
-			continue
-		}
-		if !strings.HasPrefix(fnDecl.Name.Name, "Test") {
-			continue
-		}
-		if fnDecl.Body == nil {
-			continue
-		}
-		if fnDecl.Type.Params == nil || len(fnDecl.Type.Params.List) != 1 {
-			continue
-		}
-		results = append(results, fnDecl)
-	}
-	return fset, results, nil
 }
