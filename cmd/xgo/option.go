@@ -61,9 +61,11 @@ type options struct {
 	stackTrace string
 
 	remainArgs []string
+
+	testArgs []string
 }
 
-func parseOptions(args []string) (*options, error) {
+func parseOptions(cmd string, args []string) (*options, error) {
 	var flagA bool
 	var flagV bool
 	var flagX bool
@@ -103,6 +105,7 @@ func parseOptions(args []string) (*options, error) {
 	var trapStdlib bool
 
 	var remainArgs []string
+	var testArgs []string
 	nArg := len(args)
 
 	type FlagValue struct {
@@ -190,6 +193,11 @@ func parseOptions(args []string) (*options, error) {
 		if !strings.HasPrefix(arg, "-") {
 			remainArgs = append(remainArgs, arg)
 			continue
+		}
+		if cmd == "test" && arg == "-args" {
+			// pass everything after -args to test binary
+			testArgs = append(testArgs, args[i:]...)
+			break
 		}
 		if arg == "--" {
 			remainArgs = append(remainArgs, args[i+1:]...)
@@ -352,6 +360,7 @@ func parseOptions(args []string) (*options, error) {
 		trapStdlib: trapStdlib,
 
 		remainArgs: remainArgs,
+		testArgs:   testArgs,
 	}, nil
 }
 
