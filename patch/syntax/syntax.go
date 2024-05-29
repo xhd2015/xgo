@@ -250,8 +250,9 @@ func registerAndTrapFuncs(fileList []*syntax.File, addFile func(name string, r i
 	// assign to global
 	allDecls = funcDelcs
 
-	// std lib functions
-	rewriteStdAndGenericFuncs(funcDelcs, pkgPath)
+	// std lib, and generic functions
+	// normal functions uses IR
+	rewriteFuncsSource(funcDelcs, pkgPath)
 
 	if varTrap {
 		trapVariables(pkgPath, fileList, funcDelcs)
