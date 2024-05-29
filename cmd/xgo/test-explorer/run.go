@@ -22,6 +22,14 @@ import (
 	"github.com/xhd2015/xgo/support/session"
 )
 
+func setupTestHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
+	setupPollHandler(server, "/run", projectDir, getTestConfig, run)
+}
+
+func setupRunHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
+	doSetupRunHandler(server, projectDir, getTestConfig)
+}
+
 type StartSessionRequest struct {
 	*TestingItem
 }
@@ -363,7 +371,7 @@ func (c *runSession) sendEvent(event *TestingItemEvent) {
 }
 
 // TODO: make FE call /session/destroy
-func setupRunHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
+func doSetupRunHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
 	sessionManager := session.NewSessionManager()
 
 	server.HandleFunc("/session/start", func(w http.ResponseWriter, r *http.Request) {
@@ -453,59 +461,37 @@ func setupRunHandler(server *http.ServeMux, projectDir string, getTestConfig fun
 	})
 }
 
-func run(req *RunRequest, projectDir string, goCmd string, env []string, testFlags []string) (*RunResult, error) {
-	if req == nil || req.BaseRequest == nil || req.File == "" {
-		return nil, fmt.Errorf("requires file")
-	}
-	if req.Name == "" {
-		return nil, fmt.Errorf("requires name")
-	}
-	absDir, err := filepath.Abs(projectDir)
-	if err != nil {
-		return nil, err
-	}
-	relPath, err := filepath.Rel(absDir, req.File)
-	if err != nil {
-		return nil, err
-	}
-	parsedFlags, parsedArgs, err := getTestFlags(absDir, req.File, req.Name)
-	if err != nil {
-		return nil, err
-	}
+func run(ctx *RunContext) error {
+	projectDir := ctx.ProjectDir
+	relPath := ctx.RelPath
+	name := ctx.Name
+	buildFlags := ctx.BuildFlags
+	runArgs := ctx.Args
+	env := ctx.Env
+	goCmd := ctx.GoCmd
+	stderr := ctx.Stderr
+	stdout := ctx.Stdout
+	verbose := true
 
-	// fmt.Printf("run:%v\n", req)
-	var buf bytes.Buffer
-	args := []string{"test", "-run", fmt.Sprintf("^%s$", req.Name)}
-	if req.Verbose {
+	args := []string{"test", "-run", fmt.Sprintf("^%s$", name)}
+	if verbose {
 		args = append(args, "-v")
 	}
-	args = append(args, testFlags...)
-	args = append(args, parsedFlags...)
+	args = append(args, buildFlags...)
 	args = append(args, "./"+filepath.Dir(relPath))
-	if len(parsedArgs) > 0 {
+	if len(runArgs) > 0 {
 		args = append(args, "-args")
-		args = append(args, parsedArgs...)
+		args = append(args, runArgs...)
 	}
 
 	if goCmd == "" {
 		goCmd = "go"
 	}
-	runErr := cmd.Debug().Dir(projectDir).
+	return cmd.Debug().Dir(projectDir).
 		Env(env).
-		Stderr(io.MultiWriter(os.Stderr, &buf)).
-		Stdout(io.MultiWriter(os.Stdout, &buf)).
+		Stdout(stdout).
+		Stderr(stderr).
 		Run(goCmd, args...)
-	if runErr != nil {
-		return &RunResult{
-			Status: RunStatus_Fail,
-			Msg:    buf.String(),
-		}, nil
-	}
-
-	return &RunResult{
-		Status: RunStatus_Success,
-		Msg:    buf.String(),
-	}, nil
 }
 
 func getTestFlags(absProjectDir string, file string, name string) (flags []string, args []string, err error) {
