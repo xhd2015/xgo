@@ -47,6 +47,9 @@ func TestSubErrShouldNotSetErrRes(t *testing.T) {
 		callAndCheck(func() {
 			err = subErr()
 		}, func(trapCtx context.Context, f *core.FuncInfo, args, result core.Object) error {
+			if f.Stdlib {
+				return nil
+			}
 			if f.LastResultErr {
 				t.Fatalf("expect f.LastResultErr to be false, actual: true")
 			}

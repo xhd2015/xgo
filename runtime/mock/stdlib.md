@@ -1,11 +1,34 @@
-# Limitation On Stdlib Functions
-Stdlib functions like `os.ReadFile`, `io.Read` are widely used by go code. So installing a trap on these functions may have big impact on performance and security.
+# Support Of Mocking Stdlib Functions
+There are two modes for mocking stdlib functions,
+1. Default-Allow Mode
+2. Default-Disallow Mode
 
-And as compiler treats stdlib from ordinary module differently, current implementation to support stdlib function is based on source code injection, which may causes build time to slow down.
+These two modes can be switched by `--trap-stdlib` and `--trap-stdlib=false`.
 
-So only a limited list of stdlib functions can be mocked. However, if there lacks some functions you may want to use, you can leave a comment in [Issue#6](https://github.com/xhd2015/xgo/issues/6) or fire an issue to let us know and add it.
+When running `xgo test`, `--trap-stdlib` is assumed, you can turn it off with `--trap-stdlib=false`.
 
-# Supported List
+When running `xgo run` and `xgo build`, `--trap-stdlib=false` is assumed, you can turn it on with `--trap-stdlib`.
+
+# `--trap-stdlib`: Default-Allow Mode
+In this mode, most stdlib packages can be mocked, except `runtime`, `syscall`, `reflect`, `sync`, `sync/atomic`, `testing`, `unsafe`.
+
+# `--trap-stdlib=false`: Default-Disallow Mode
+In this mode, only a small list of stdlib functions can be mocked due to performance and security impact.
+
+Rational: stdlib functions like `os.ReadFile`, `io.Read` are widely used by go code, installing a trap on these functions may have big impact on performance and security.
+
+So in this mode only a limited list of stdlib functions can be mocked. However, if there lacks some functions you may want to use, you can leave a comment in [Issue#6](https://github.com/xhd2015/xgo/issues/6) or fire an issue to let us know and add it.
+
+# Functions In Stdlib Calling `recover()` Cannot Be Mocked
+When a function calls `recover()`, it will capture panic when used in defer.
+
+However, since compiler treats stdlib from ordinary module differently, current implementation to support stdlib function is based on source code injection, which may causes build time to slow down, and also causes functions containing `recover()` to be invalid if rewritten, see https://github.com/xhd2015/xgo/issues/164.
+
+This will be fixed in the long run, but before that, such functions in stdlib cannot be mocked.
+
+NOTE: functions outside stdlib, even with calling `recover()`, are not affected since they are rewritten with IR, not source code.
+
+# Supported List When `--trap-stdlib=false`
 ## `os`
 - `Getenv`
 - `Getwd`

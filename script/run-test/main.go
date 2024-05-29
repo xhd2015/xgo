@@ -42,15 +42,14 @@ import (
 // run specific test for all go versions
 //     go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1 --xgo-default-test-only -run TestFuncNameSliceShouldWorkWithDebug -v
 
+var globalFlags = []string{"-timeout=60s"}
+
 // TODO: remove duplicate test between xgo test and runtime test
 var runtimeSubTests = []string{
 	"func_list",
 	"trap",
 	"trap_inspect_func",
 	"trap_args",
-	"trace",
-	"trace_marshal",
-	"trace_panic_peek",
 	"mock_func",
 	"mock_method",
 	"mock_by_name",
@@ -64,9 +63,10 @@ var runtimeSubTests = []string{
 }
 
 type TestCase struct {
-	name  string
-	dir   string
-	flags []string
+	name         string
+	dir          string
+	flags        []string
+	windowsFlags []string
 }
 
 var extraSubTests = []*TestCase{
@@ -74,17 +74,21 @@ var extraSubTests = []*TestCase{
 		name:  "trace_without_dep",
 		dir:   "runtime/test/trace_without_dep",
 		flags: []string{"--strace"},
+		// see https://github.com/xhd2015/xgo/issues/144#issuecomment-2138565532
+		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
 	},
 	{
-		name:  "trace_without_dep_vendor",
-		dir:   "runtime/test/trace_without_dep_vendor",
-		flags: []string{"--strace"},
+		name:         "trace_without_dep_vendor",
+		dir:          "runtime/test/trace_without_dep_vendor",
+		flags:        []string{"--strace"},
+		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
 	},
 	{
 		// see https://github.com/xhd2015/xgo/issues/87
-		name:  "trace_without_dep_vendor_replace",
-		dir:   "runtime/test/trace_without_dep_vendor_replace",
-		flags: []string{"--strace"},
+		name:         "trace_without_dep_vendor_replace",
+		dir:          "runtime/test/trace_without_dep_vendor_replace",
+		flags:        []string{"--strace"},
+		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
 	},
 	{
 		name:  "trap_with_overlay",
@@ -102,6 +106,26 @@ var extraSubTests = []*TestCase{
 		name:  "bugs_regression",
 		dir:   "runtime/test/bugs/...",
 		flags: []string{},
+	},
+	{
+		name:         "trace_marshal",
+		dir:          "runtime/test/trace_marshal/...",
+		flags:        []string{},
+		windowsFlags: []string{"--trap-stdlib=false"},
+	},
+	{
+		// see https://github.com/xhd2015/xgo/issues/142
+		name:         "trace",
+		dir:          "runtime/test/trace/...",
+		flags:        []string{},
+		windowsFlags: []string{"--trap-stdlib=false"},
+	},
+	{
+		// see https://github.com/xhd2015/xgo/issues/142
+		name:         "trace_panic_peek",
+		dir:          "runtime/test/trace_panic_peek/...",
+		flags:        []string{},
+		windowsFlags: []string{"--trap-stdlib=false"},
 	},
 	{
 		// see https://github.com/xhd2015/xgo/issues/164
@@ -487,7 +511,11 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 		} else {
 			testArgDir = "./..."
 		}
-		err := doRunTest(goroot, testKind_xgoAny, amendArgs([]string{"--project-dir", dotDir}, tt.flags), []string{testArgDir})
+		testFlags := tt.flags
+		if runtime.GOOS == "windows" && tt.windowsFlags != nil {
+			testFlags = tt.windowsFlags
+		}
+		err := doRunTest(goroot, testKind_xgoAny, amendArgs([]string{"--project-dir", dotDir}, testFlags), []string{testArgDir})
 		if err != nil {
 			return err
 		}
@@ -527,6 +555,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 	switch kind {
 	case testKind_default:
 		testArgs = []string{"test"}
+		testArgs = append(testArgs, globalFlags...)
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)
@@ -546,6 +575,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 		}
 	case testKind_xgoTest:
 		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test"}
+		testArgs = append(testArgs, globalFlags...)
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)
@@ -569,6 +599,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 		}
 	case testKind_runtimeSubTest:
 		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test", "--project-dir", "runtime/test"}
+		testArgs = append(testArgs, globalFlags...)
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
 			testArgs = append(testArgs, tests...)
@@ -579,6 +610,7 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 		}
 	case testKind_xgoAny:
 		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test"}
+		testArgs = append(testArgs, globalFlags...)
 		testArgs = append(testArgs, args...)
 		testArgs = append(testArgs, tests...)
 	}

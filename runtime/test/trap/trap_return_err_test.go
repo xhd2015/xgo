@@ -14,6 +14,9 @@ func TestTrapReturnedErrorShouldBeSet(t *testing.T) {
 	mockErr := errors.New("must not be an odd")
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			return nil, mockErr
 		},
 	})
@@ -30,6 +33,9 @@ func TestTrapPosReturnedErrorShouldBeSet(t *testing.T) {
 	mockErr := errors.New("must not be an odd")
 	trap.AddInterceptor(&trap.Interceptor{
 		Post: func(ctx context.Context, f *core.FuncInfo, args, result core.Object, data interface{}) error {
+			if f.Stdlib {
+				return nil
+			}
 			return mockErr
 		},
 	})

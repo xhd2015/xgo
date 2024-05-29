@@ -1,6 +1,9 @@
 package ctxt
 
-import "strings"
+import (
+	"cmd/compile/internal/types"
+	"strings"
+)
 
 var stdWhitelist = map[string]map[string]bool{
 	// "runtime": map[string]bool{
@@ -73,21 +76,35 @@ var stdBlocklist = map[string]map[string]bool{
 		"*": true,
 	},
 	// testing is not harmful
-	// "testing": map[string]bool{
-	// 	"*": true,
-	// },
+	// but may cause infinite loop?
+	// we may dig later or just add somce whitelist
+	"testing": map[string]bool{
+		"*": true,
+	},
 	"unsafe": map[string]bool{
 		"*": true,
 	},
 }
 
 func allowStdFunc(pkgPath string, funcName string) bool {
-	if XgoStdTrapDefaultAllow {
-		if stdBlocklist[pkgPath]["*"] || stdBlocklist[pkgPath][funcName] {
-			return false
-		}
+	if isWhitelistStdFunc(pkgPath, funcName) {
 		return true
 	}
+	if !XgoStdTrapDefaultAllow {
+		return false
+	}
+
+	if stdBlocklist[pkgPath]["*"] || stdBlocklist[pkgPath][funcName] {
+		return false
+	}
+	if !types.IsExported(funcName) {
+		// unexported func
+		return false
+	}
+	return true
+}
+
+func isWhitelistStdFunc(pkgPath string, funcName string) bool {
 	if stdWhitelist[pkgPath][funcName] {
 		return true
 	}
