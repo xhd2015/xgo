@@ -94,7 +94,7 @@ func replaceIdent(root syntax.Node, match string, to string) {
 	})
 }
 
-func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
+func rewriteFuncsSource(funcDecls []*DeclInfo, pkgPath string) {
 	for _, fn := range funcDecls {
 		if !fn.Kind.IsFunc() {
 			continue
@@ -119,6 +119,13 @@ func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
 		fnDecl := fn.FuncDecl
 		pos := fn.FuncDecl.Pos()
 
+		// check if body contains recover(), if so
+		// do not add interceptor
+		// see https://github.com/xhd2015/xgo/issues/164
+		if hasRecoverCall(fnDecl.Body) {
+			continue
+		}
+
 		fnName := fnDecl.Name.Value
 
 		// dump
@@ -136,6 +143,7 @@ func rewriteStdAndGenericFuncs(funcDecls []*DeclInfo, pkgPath string) {
 			// cannot trap
 			continue
 		}
+
 		// stop if __xgo_link_generated_trap conflict with recv?
 		preset[XgoLinkTrapForGenerated] = true
 
@@ -412,6 +420,23 @@ func getPresetNames(node syntax.Node) map[string]bool {
 		return true
 	})
 	return preset
+}
+
+func hasRecoverCall(node syntax.Node) bool {
+	var found bool
+	syntax.Inspect(node, func(n syntax.Node) bool {
+		if n == nil {
+			return false
+		}
+		if call, ok := n.(*syntax.CallExpr); ok {
+			if idt, ok := call.Fun.(*syntax.Name); ok && idt.Value == "recover" {
+				found = true
+				return false
+			}
+		}
+		return true
+	})
+	return found
 }
 
 func copyFuncDeclWithoutBody(decl *syntax.FuncDecl) *syntax.FuncDecl {

@@ -103,6 +103,12 @@ var extraSubTests = []*TestCase{
 		dir:   "runtime/test/bugs/...",
 		flags: []string{},
 	},
+	{
+		// see https://github.com/xhd2015/xgo/issues/164
+		name:  "stdlib_recover_no_trap",
+		dir:   "runtime/test/recover_no_trap",
+		flags: []string{"--trap-stdlib"},
+	},
 }
 
 func main() {

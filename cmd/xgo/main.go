@@ -299,7 +299,8 @@ func handleBuild(cmd string, args []string) error {
 				return err
 			}
 		}
-		if isDevelopment || resetInstrument || revisionChanged {
+		resetOrRevisionChanged := resetInstrument || revisionChanged
+		if isDevelopment || resetOrRevisionChanged {
 			logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
 			err = syncGoroot(goroot, instrumentGoroot, fullSyncRecord)
 			if err != nil {
@@ -307,13 +308,13 @@ func handleBuild(cmd string, args []string) error {
 			}
 			// patch go runtime and compiler
 			logDebug("patch compiler at: %s", instrumentGoroot)
-			err = patchRuntimeAndCompiler(goroot, instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, revisionChanged)
+			err = patchRuntimeAndCompiler(goroot, instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged)
 			if err != nil {
 				return err
 			}
 		}
 
-		if resetInstrument || revisionChanged {
+		if resetOrRevisionChanged {
 			logDebug("revision %s write to %s", revision, revisionFile)
 			err := os.WriteFile(revisionFile, []byte(revision), 0755)
 			if err != nil {

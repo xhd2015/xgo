@@ -40,14 +40,14 @@ func init() {
 // assume go 1.20
 // the patch should be idempotent
 // the origGoroot is used to generate runtime defs, see https://github.com/xhd2015/xgo/issues/4#issuecomment-2017880791
-func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, revisionChanged bool) error {
+func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrRevisionChanged bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
 	if isDevelopment && xgoSrc == "" {
 		return fmt.Errorf("requires xgoSrc")
 	}
-	if !isDevelopment && !revisionChanged {
+	if !isDevelopment && !resetOrRevisionChanged {
 		return nil
 	}
 
@@ -58,7 +58,7 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 	}
 
 	// compiler
-	err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, revisionChanged, syncWithLink)
+	err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, resetOrRevisionChanged, syncWithLink)
 	if err != nil {
 		return err
 	}
