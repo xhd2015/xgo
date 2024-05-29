@@ -5,12 +5,8 @@
 
 package debug
 
-const DefaultDateLayout = "2006-01-02 15:04:05.000Z"
+import "testing"
 
-func chainedConst() {
-	wrap(DefaultDateLayout).Min(nil)
-}
-
-func wrap(e string) interface{ Min(t interface{}) } {
-	return nil
+func TestHello(t *testing.T) {
+	t.Logf("hello world!")
 }

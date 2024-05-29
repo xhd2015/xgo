@@ -20,17 +20,18 @@ import (
 var stackMap sync.Map        // uintptr(goroutine) -> *Root
 var testInfoMapping sync.Map // uintptr(goroutine) -> *testInfo
 
+// persist the --strace flag when invoking xgo test
 // stack trace options:
 //
 //	on: automatically collect when test starts and ends
-var xgoStackTrace = os.Getenv("XGO_STACK_TRACE")
+const __xgo_injected_StraceFlag = ""
 
 // options:
 //
-//		true: stdlib is by default allowed
-//	 TODO: use compiler inserted flag instead of env
-var xgoStdlibTrapDefaultAllow = os.Getenv("XGO_STD_LIB_TRAP_DEFAULT_ALLOW")
-var skipStdlibTraceByDefault = xgoStdlibTrapDefaultAllow == "true"
+//	true: stdlib is by default allowed
+const __xgo_injected_StdlibTrapDefaultAllow = ""
+
+var skipStdlibTraceByDefault = __xgo_injected_StdlibTrapDefaultAllow == "true"
 
 type testInfo struct {
 	name string
@@ -49,7 +50,7 @@ func init() {
 			name: name,
 		}
 		testInfoMapping.LoadOrStore(key, tInfo)
-		if xgoStackTrace == "on" {
+		if __xgo_injected_StraceFlag == "on" {
 			tInfo.onFinish = Begin()
 		}
 	})
