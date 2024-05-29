@@ -18,6 +18,9 @@ func TestNestedTrapShouldBeAllowedBySpecifyingMapping(t *testing.T) {
 	// list the names that can be nested
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			traceRecords.WriteString(fmt.Sprintf("call %s\n", f.IdentityName))
 			if f.IdentityName == "A0" {
 				// call A1 inside the interceptor
@@ -29,12 +32,18 @@ func TestNestedTrapShouldBeAllowedBySpecifyingMapping(t *testing.T) {
 	})
 	trap.AddFuncInterceptor(A1, &trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			traceRecords.WriteString(fmt.Sprintf("call %s\n", f.IdentityName))
 			return
 		},
 	})
 	trap.AddFuncInterceptor(A2, &trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			traceRecords.WriteString(fmt.Sprintf("call %s\n", f.IdentityName))
 			return
 		},
@@ -68,6 +77,9 @@ func TestNestedTrapPartialAllowShouldTakeEffect(t *testing.T) {
 	var traceRecords bytes.Buffer
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			traceRecords.WriteString(fmt.Sprintf("call %s\n", f.IdentityName))
 			if f.IdentityName == "B0" {
 				// call A1 inside the interceptor
@@ -80,6 +92,9 @@ func TestNestedTrapPartialAllowShouldTakeEffect(t *testing.T) {
 
 	trap.AddFuncInterceptor(B2, &trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			traceRecords.WriteString(fmt.Sprintf("call %s\n", f.IdentityName))
 			return
 		},

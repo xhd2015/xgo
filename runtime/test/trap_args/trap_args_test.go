@@ -48,6 +48,9 @@ func TestCtxArgWithRecvCanBeRecognized(t *testing.T) {
 	var callCount int
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(trapCtx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			callCount++
 			if !f.FirstArgCtx {
 				t.Fatalf("expect first arg to be context")
@@ -80,6 +83,9 @@ func callAndCheck(fn func(), check func(trapCtx context.Context, f *core.FuncInf
 	var callCount int
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(trapCtx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			if callCount == 0 {
 				callCount++
 				if pcName != f.FullName {

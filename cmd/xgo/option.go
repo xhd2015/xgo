@@ -188,6 +188,10 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		})
 	}
 
+	if cmd == "test" {
+		trapStdlib = true
+	}
+
 	for i := 0; i < nArg; i++ {
 		arg := args[i]
 		if !strings.HasPrefix(arg, "-") {
@@ -266,8 +270,14 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			continue
 		}
 
-		if arg == "--trap-stdlib" {
-			trapStdlib = true
+		// supported flag: --trap-stdlib, --trap-stdlib=false, --trap-stdlib=true
+		trapStdlibFlag, trapStdlibVal := flag.TrySingleFlag([]string{"--trap-stdlib"}, arg)
+		if trapStdlibFlag != "" {
+			if trapStdlibVal == "" || trapStdlibVal == "true" {
+				trapStdlib = true
+			} else {
+				trapStdlib = false
+			}
 			continue
 		}
 

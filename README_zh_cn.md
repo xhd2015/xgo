@@ -209,7 +209,7 @@ func TestPatchFunc(t *testing.T) {
 
 注意: `Mock`和`Patch`也支持对包级别的变量和常量进行mock, 见[runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
-**关于标准库Mock的注意事项**: 出于性能和安全考虑, 标准库中只有一部分包和函数能被Mock, 这个List可以在[runtime/mock/stdlib.md](./runtime/mock/stdlib.md)找到. 如果你需要Mock的标准库函数不在列表中, 可以在[Issue#6](https://github.com/xhd2015/xgo/issues/6)中进行评论。
+**关于标准库Mock的注意事项**: 针对标准库有两种不同的模式，参考[runtime/mock/stdlib.md](./runtime/mock/stdlib.md).
 
 ## Mock
 `runtime/mock` 还提供了名为`Mock`的API, 它与`Patch`十分类似，唯一的区别是第二个参数接受一个拦截器。

@@ -17,10 +17,16 @@ func TestNakedTrapShouldAvoidRecursiveInterceptor(t *testing.T) {
 	var recurseBuf bytes.Buffer
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			fmt.Fprintf(&recurseBuf, "pre\n")
 			return nil, nil
 		},
 		Post: func(ctx context.Context, f *core.FuncInfo, args, result core.Object, data interface{}) (err error) {
+			if f.Stdlib {
+				return nil
+			}
 			fmt.Fprintf(&recurseBuf, "post\n")
 			return nil
 		},
@@ -41,10 +47,16 @@ func TestDeferredFuncShouldBeExecutedWhenAbort(t *testing.T) {
 	var recurseBuf bytes.Buffer
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.Stdlib {
+				return nil, nil
+			}
 			fmt.Fprintf(&recurseBuf, "pre\n")
 			return nil, trap.ErrAbort
 		},
 		Post: func(ctx context.Context, f *core.FuncInfo, args, result core.Object, data interface{}) (err error) {
+			if f.Stdlib {
+				return nil
+			}
 			fmt.Fprintf(&recurseBuf, "post\n")
 			return nil
 		},

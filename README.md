@@ -210,7 +210,7 @@ func TestPatchFunc(t *testing.T) {
 
 NOTE: `Patch` and `Mock`(below) supports top-level variables and consts, see [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
-**Notice for mocking stdlib**: due to performance and security impact, only a few packages and functions of stdlib can be mocked, the list can be found at [runtime/mock/stdlib.md](./runtime/mock/stdlib.md). If you want to mock additional stdlib functions, please file a discussion in [Issue#6](https://github.com/xhd2015/xgo/issues/6).
+**Notice for mocking stdlib**: There are different modes for mocking stdlib functions,see [runtime/mock/stdlib.md](./runtime/mock/stdlib.md).
 
 ## Mock
 `runtime/mock` also provides another API called `Mock`, which is similar to `Patch`.
