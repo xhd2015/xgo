@@ -71,7 +71,7 @@ jobs:
         run: |
           source util.sh
           cd gin-gonic/gin
-          xgo test -v ./...
+          xgo test --trap-stdlib -v ./...
 
       - uses: actions/checkout@v4
         with:
@@ -83,7 +83,7 @@ jobs:
         run: |
           source util.sh
           cd pocketbase/pocketbase
-          xgo test -v ./...
+          xgo test --trap-stdlib -v ./...
 
       - uses: actions/checkout@v4
         with:
@@ -95,7 +95,7 @@ jobs:
         run: |
           source util.sh
           cd gohugoio/hugo
-          xgo test -v ./...
+          xgo test --trap-stdlib -v ./...
 
       - uses: actions/checkout@v4
         with:
@@ -107,7 +107,7 @@ jobs:
         run: |
           source util.sh
           cd kubernetes/kubernetes 
-          xgo test -v ./...
+          xgo test --trap-stdlib -v ./...
         
       - name: Summary
         run: |
