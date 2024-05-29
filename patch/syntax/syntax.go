@@ -22,6 +22,12 @@ const XGO_VERSION = "XGO_VERSION"
 const XGO_REVISION = "XGO_REVISION"
 const XGO_NUMBER = "XGO_NUMBER"
 
+// --strace
+const XGO_STACK_TRACE = "XGO_STACK_TRACE"
+const XGO_STD_LIB_TRAP_DEFAULT_ALLOW = "XGO_STD_LIB_TRAP_DEFAULT_ALLOW"
+const straceFlagConstName = "__xgo_injected_StraceFlag"
+const trapStdlibFlagConstName = "__xgo_injected_StdlibTrapDefaultAllow"
+
 // this link function is considered safe as we do not allow user
 // to define such one,there will no abuse
 const XgoLinkGeneratedRegisterFunc = "__xgo_link_generated_register_func"
@@ -39,7 +45,7 @@ func init() {
 
 func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader) *syntax.File) {
 	debugSyntax(fileList)
-	patchVersions(fileList)
+	injectXgoFlags(fileList)
 	fillFuncArgResNames(fileList)
 	registerAndTrapFuncs(fileList, addFile)
 }
@@ -303,11 +309,38 @@ func registerAndTrapFuncs(fileList []*syntax.File, addFile func(name string, r i
 	}
 }
 
-func patchVersions(fileList []*syntax.File) {
+func injectXgoFlags(fileList []*syntax.File) {
 	pkgPath := xgo_ctxt.GetPkgPath()
-	if pkgPath != xgo_ctxt.XgoRuntimeCorePkg {
-		return
+	switch pkgPath {
+	case xgo_ctxt.XgoRuntimeCorePkg:
+		patchXgoRuntimeCoreVersions(fileList)
+	case xgo_ctxt.XgoRuntimeTracePkg:
+		injectXgoStraceFlag(fileList)
 	}
+}
+
+func findFile(fileList []*syntax.File, name string) *syntax.File {
+	n := len(name)
+	for _, file := range fileList {
+		relFileName := file.Pos().RelFilename()
+		if !strings.HasSuffix(relFileName, name) {
+			continue
+		}
+		fn := len(relFileName)
+		if fn == n {
+			return file
+		}
+		c := relFileName[fn-n-1]
+
+		// must be a separator
+		if c == '/' || c == '\\' || c == filepath.Separator {
+			return file
+		}
+	}
+	return nil
+}
+
+func patchXgoRuntimeCoreVersions(fileList []*syntax.File) {
 	version := os.Getenv(XGO_TOOLCHAIN_VERSION)
 	if version == "" {
 		return
@@ -322,22 +355,11 @@ func patchVersions(fileList []*syntax.File) {
 		return
 	}
 
-	var versionFile *syntax.File
-	for _, file := range fileList {
-		if strings.HasSuffix(file.Pos().RelFilename(), "version.go") {
-			versionFile = file
-			break
-		}
-	}
+	versionFile := findFile(fileList, "version.go")
 	if versionFile == nil {
 		return
 	}
-	for _, decl := range versionFile.DeclList {
-		constDecl, ok := decl.(*syntax.ConstDecl)
-		if !ok {
-			continue
-		}
-
+	forEachConst(versionFile.DeclList, func(constDecl *syntax.ConstDecl) bool {
 		for _, name := range constDecl.NameList {
 			switch name.Value {
 			case XGO_VERSION:
@@ -348,7 +370,44 @@ func patchVersions(fileList []*syntax.File) {
 				constDecl.Values = newIntLit(int(versionNum))
 			}
 		}
+		return false
+	})
+}
+func forEachConst(declList []syntax.Decl, fn func(constDecl *syntax.ConstDecl) bool) {
+	for _, decl := range declList {
+		constDecl, ok := decl.(*syntax.ConstDecl)
+		if !ok {
+			continue
+		}
+		if fn(constDecl) {
+			return
+		}
 	}
+}
+
+func injectXgoStraceFlag(fileList []*syntax.File) {
+	straceFlag := os.Getenv(XGO_STACK_TRACE)
+	trapStdlibFlag := os.Getenv(XGO_STD_LIB_TRAP_DEFAULT_ALLOW)
+	if straceFlag == "" && trapStdlibFlag == "" {
+		return
+	}
+
+	traceFile := findFile(fileList, "trace.go")
+	if traceFile == nil {
+		return
+	}
+
+	forEachConst(traceFile.DeclList, func(constDecl *syntax.ConstDecl) bool {
+		for _, name := range constDecl.NameList {
+			switch name.Value {
+			case straceFlagConstName:
+				constDecl.Values = newStringLit(straceFlag)
+			case trapStdlibFlagConstName:
+				constDecl.Values = newStringLit(trapStdlibFlag)
+			}
+		}
+		return false
+	})
 }
 
 func getFileIndexMapping(files []*syntax.File) map[*syntax.File]int {
