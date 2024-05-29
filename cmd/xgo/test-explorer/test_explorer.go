@@ -243,25 +243,9 @@ func handle(opts *Options) error {
 		})
 	})
 
-	server.HandleFunc("/run", func(w http.ResponseWriter, r *http.Request) {
-		netutil.SetCORSHeaders(w)
-		netutil.HandleJSON(w, r, func(ctx context.Context, r *http.Request) (interface{}, error) {
-			var req *RunRequest
-			err := parseBody(r.Body, &req)
-			if err != nil {
-				return nil, err
-			}
-			config, err := getTestConfig()
-			if err != nil {
-				return nil, err
-			}
-
-			return run(req, opts.ProjectDir, config.GoCmd, config.CmdEnv(), config.Flags)
-		})
-	})
-
 	setupRunHandler(server, opts.ProjectDir, getTestConfig)
 	setupDebugHandler(server, opts.ProjectDir, getTestConfig)
+	setupTestHandler(server, opts.ProjectDir, getTestConfig)
 	setupOpenHandler(server)
 
 	return netutil.ServePortHTTP(server, 7070, true, 500*time.Millisecond, func(port int) {
