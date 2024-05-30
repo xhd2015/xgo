@@ -271,15 +271,15 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 	if err != nil {
 		return err
 	}
-	tmpDir, err := os.MkdirTemp("", "xgo-release")
+	tmpDir, err := os.MkdirTemp(".", "xgo-release")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(tmpDir)
 
 	exeSuffix := osinfo.EXE_SUFFIX
-
-	archive := filepath.Join(tmpDir, "archive")
+	//
+	archive, _ := filepath.Abs(filepath.Join(tmpDir, "archive"))
 
 	bins := [][2]string{
 		{"xgo", "./cmd/xgo"},
@@ -362,7 +362,6 @@ func buildBinaryRelease(dir string, srcDir string, version string, goos string, 
 	if err != nil {
 		return err
 	}
-
 	// mv the release to dir
 	targetArchive := filepath.Join(dir, fmt.Sprintf("xgo%s-%s-%s.tar.gz", version, goos, goarch))
 	err = os.Rename(archive, targetArchive)
