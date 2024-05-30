@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
@@ -140,7 +141,12 @@ func TestTimeNowNestedLevel1Normal(t *testing.T) {
 	if diff < 0 {
 		t.Fatalf("pre should happen before call, diff: %v", diff)
 	}
-	if diff > 1*time.Millisecond {
+	// on windows this will exceed 1ms
+	threshold := 1 * time.Millisecond
+	if runtime.GOOS == "windows" {
+		threshold = 5 * time.Millisecond
+	}
+	if diff > threshold {
 		t.Fatalf("interval too large:%v", diff)
 	}
 }
@@ -161,7 +167,13 @@ func TestTimeNowNestedLevel2Normal(t *testing.T) {
 	if diff < 0 {
 		t.Fatalf("pre should happen before call, diff: %v", diff)
 	}
-	if diff > 1*time.Millisecond {
+
+	// on windows this will exceed 1ms
+	threshold := 1 * time.Millisecond
+	if runtime.GOOS == "windows" {
+		threshold = 5 * time.Millisecond
+	}
+	if diff > threshold {
 		t.Fatalf("interval too large:%v", diff)
 	}
 }
