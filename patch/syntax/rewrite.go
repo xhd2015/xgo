@@ -11,7 +11,8 @@ import (
 
 const XgoLinkTrapForGenerated = "__xgo_link_trap_for_generated"
 
-// for closure
+// for closures outside stdlib
+// why closure needs names?
 func fillFuncArgResNames(fileList []*syntax.File) {
 	if base.Flag.Std {
 		return
@@ -117,180 +118,184 @@ func rewriteFuncsSource(funcDecls []*DeclInfo, pkgPath string) {
 			}
 		}
 		fnDecl := fn.FuncDecl
+		fnType := fnDecl.Type
 		pos := fn.FuncDecl.Pos()
 
 		// check if body contains recover(), if so
 		// do not add interceptor
 		// see https://github.com/xhd2015/xgo/issues/164
-		if hasRecoverCall(fnDecl.Body) {
-			continue
-		}
+		// UPDATE: since we are not declaring new functions,
+		// recover() is just fine
+		// if hasRecoverCall(fnDecl.Body) {
+		// 	continue
+		// }
 
-		fnName := fnDecl.Name.Value
-
-		// dump
-		// syntax.Fdump(os.Stderr, fn.FuncDecl.Body)
-
-		// i
-		newDecl := copyFuncDeclWithoutBody(fnDecl)
-		oldFnName := "__xgo_orig_" + fnName
-		fnDecl.Name.Value = oldFnName
-
-		preset := getPresetNames(newDecl)
-
-		fillNames(pos, newDecl.Recv, newDecl.Type, preset)
+		preset := getPresetNames(fnDecl)
 		if preset[XgoLinkTrapForGenerated] {
-			// cannot trap
+			// cannot trap because name conflict
 			continue
 		}
 
 		// stop if __xgo_link_generated_trap conflict with recv?
+		fillNames(pos, fnDecl.Recv, fnDecl.Type, preset)
 		preset[XgoLinkTrapForGenerated] = true
 
-		afterV := nextName("_after", "", preset)
-		stopV := nextName("_stop", "", preset)
-
 		idName := fn.IdentityName()
-
-		var callOldFunc syntax.Expr
 		var recvRef syntax.Expr
-		if newDecl.Recv != nil {
-			recvName := newDecl.Recv.Name.Value
+		if fnDecl.Recv != nil {
+			recvName := fnDecl.Recv.Name.Value
 			recvRef = &syntax.Operation{
 				Op: syntax.And,
 				X:  syntax.NewName(pos, recvName),
 			}
-			callOldFunc = &syntax.SelectorExpr{
-				X:   syntax.NewName(pos, recvName),
-				Sel: syntax.NewName(pos, oldFnName),
-			}
 		} else {
 			recvRef = syntax.NewName(pos, "nil")
-			callOldFunc = syntax.NewName(pos, oldFnName)
-
-			// need TParams
-			tparams := newDecl.TParamList
-			if len(tparams) > 0 {
-				tparamExprs := make([]syntax.Expr, len(tparams))
-				for i, tparam := range tparams {
-					tparamExprs[i] = syntax.NewName(pos, tparam.Name.Value)
-				}
-				var indexExpr syntax.Expr
-				if len(tparamExprs) == 1 {
-					indexExpr = tparamExprs[0]
-				} else {
-					indexExpr = &syntax.ListExpr{
-						ElemList: tparamExprs,
-					}
-				}
-				callOldFunc = &syntax.IndexExpr{
-					X:     callOldFunc,
-					Index: indexExpr,
-				}
-			}
 		}
+		argAddrs := getRefAddrSlice(pos, fnType.ParamList)
+		resultAddrs := getRefAddrSlice(pos, fnType.ResultList)
 
-		fnTypeCopy := newDecl.Type
-		argValues := getRefSlice(pos, fnTypeCopy.ParamList)
-		argAddrs := getRefAddrSlice(pos, fnTypeCopy.ParamList)
-		resultAddrs := getRefAddrSlice(pos, fnTypeCopy.ResultList)
-
-		var hasDots bool
-		if len(fnTypeCopy.ParamList) > 0 {
-			_, hasDots = fnTypeCopy.ParamList[len(fnTypeCopy.ParamList)-1].Type.(*syntax.DotsType)
-		}
-		callOldExpr := &syntax.CallExpr{
-			Fun:     callOldFunc,
-			ArgList: argValues,
-			HasDots: hasDots,
-		}
-		var lastStmt syntax.Stmt
-		// var lastReturn syntax.Stmt
-		if len(fnTypeCopy.ResultList) > 0 {
-			lastStmt = &syntax.ReturnStmt{
-				Results: callOldExpr,
-			}
-		} else {
-			lastStmt = makeEmptyCallStmt(callOldExpr)
-		}
-
-		newDecl.Body = &syntax.BlockStmt{
-			Rbrace: pos,
-			List: []syntax.Stmt{
-				&syntax.AssignStmt{
-					Op: syntax.Def,
-					Lhs: &syntax.ListExpr{
-						ElemList: []syntax.Expr{
-							syntax.NewName(pos, afterV),
-							syntax.NewName(pos, stopV),
-						},
-					},
-					Rhs: &syntax.CallExpr{
-						Fun: syntax.NewName(pos, XgoLinkTrapForGenerated),
-						ArgList: []syntax.Expr{
-							newStringLit(pkgPath),
-							newIntLit(0), // pc, filled by IR
-							newStringLit(idName),
-							syntax.NewName(pos, strconv.FormatBool(fn.Generic)),
-							recvRef,
-							argAddrs,
-							resultAddrs,
-						},
+		// proto type:
+		//    afterV,stopV := __xgo_link_trap_for_generated(pkgPath,pc=0,identityName, isGeneric, &recv,&args,&results)
+		//   if afterV!=nil{
+		//	        defer afterV()
+		//   }
+		//   if stopV {
+		//	    return
+		//   }
+		afterV := nextName("_after", "", preset)
+		stopV := nextName("_stop", "", preset)
+		prependStmts := make([]syntax.Stmt, 0, 3+len(fnDecl.Body.List))
+		prependStmts = append(prependStmts,
+			&syntax.AssignStmt{
+				Op: syntax.Def,
+				Lhs: &syntax.ListExpr{
+					ElemList: []syntax.Expr{
+						syntax.NewName(pos, afterV),
+						syntax.NewName(pos, stopV),
 					},
 				},
-
-				&syntax.IfStmt{
-					Cond: &syntax.Operation{
-						Op: syntax.Neq,
-						X:  syntax.NewName(pos, afterV),
-						Y:  syntax.NewName(pos, "nil"),
+				Rhs: &syntax.CallExpr{
+					Fun: syntax.NewName(pos, XgoLinkTrapForGenerated),
+					ArgList: []syntax.Expr{
+						newStringLit(pkgPath),
+						newIntLit(0), // pc, filled by IR
+						newStringLit(idName),
+						syntax.NewName(pos, strconv.FormatBool(fn.Generic)),
+						recvRef,
+						argAddrs,
+						resultAddrs,
 					},
-					Then: &syntax.BlockStmt{
-						List: []syntax.Stmt{
-							&syntax.CallStmt{
-								Tok: syntax.Defer,
-								Call: &syntax.CallExpr{
-									Fun: syntax.NewName(pos, afterV),
-								},
+				},
+			},
+
+			&syntax.IfStmt{
+				Cond: &syntax.Operation{
+					Op: syntax.Neq,
+					X:  syntax.NewName(pos, afterV),
+					Y:  syntax.NewName(pos, "nil"),
+				},
+				Then: &syntax.BlockStmt{
+					List: []syntax.Stmt{
+						&syntax.CallStmt{
+							Tok: syntax.Defer,
+							Call: &syntax.CallExpr{
+								Fun: syntax.NewName(pos, afterV),
 							},
 						},
 					},
 				},
-				// debug
-				// &syntax.AssignStmt{
-				// 	Lhs: &syntax.ListExpr{
-				// 		ElemList: []syntax.Expr{
-				// 			syntax.NewName(pos, "_"),
-				// 			syntax.NewName(pos, "_"),
-				// 		},
-				// 	},
-				// 	Rhs: &syntax.ListExpr{
-				// 		ElemList: []syntax.Expr{
-				// 			syntax.NewName(pos, afterV),
-				// 			syntax.NewName(pos, stopV),
-				// 		},
-				// 	},
-				// },
-				&syntax.IfStmt{
-					Cond: syntax.NewName(pos, stopV),
-					Then: &syntax.BlockStmt{
-						List: []syntax.Stmt{
-							&syntax.ReturnStmt{},
-						},
-						Rbrace: pos,
-					},
-				},
-				lastStmt,
 			},
+			// debug
+			// &syntax.AssignStmt{
+			// 	Lhs: &syntax.ListExpr{
+			// 		ElemList: []syntax.Expr{
+			// 			syntax.NewName(pos, "_"),
+			// 			syntax.NewName(pos, "_"),
+			// 		},
+			// 	},
+			// 	Rhs: &syntax.ListExpr{
+			// 		ElemList: []syntax.Expr{
+			// 			syntax.NewName(pos, afterV),
+			// 			syntax.NewName(pos, stopV),
+			// 		},
+			// 	},
+			// },
+			&syntax.IfStmt{
+				Cond: syntax.NewName(pos, stopV),
+				Then: &syntax.BlockStmt{
+					List: []syntax.Stmt{
+						&syntax.ReturnStmt{},
+					},
+					Rbrace: pos,
+				},
+			},
+		)
+		for _, p := range prependStmts {
+			fillPos(pos, p)
 		}
-		fillPos(pos, newDecl)
-		fn.FileSyntax.DeclList = append(fn.FileSyntax.DeclList, newDecl)
-
+		fnDecl.Body.List = append(prependStmts, fnDecl.Body.List...)
 		if false {
 			// debug
-			syntax.Fdump(os.Stderr, newDecl)
+			syntax.Fdump(os.Stderr, fnDecl)
 		}
 	}
+}
+
+func makeCallToOldFuncStmt(pos syntax.Pos, fnDecl *syntax.FuncDecl, oldFnName string) syntax.Stmt {
+	var callOldFunc syntax.Expr
+	if fnDecl.Recv != nil {
+		recvName := fnDecl.Recv.Name.Value
+		callOldFunc = &syntax.SelectorExpr{
+			X:   syntax.NewName(pos, recvName),
+			Sel: syntax.NewName(pos, oldFnName),
+		}
+	} else {
+		callOldFunc = syntax.NewName(pos, oldFnName)
+
+		// need TParams
+		tparams := fnDecl.TParamList
+		if len(tparams) > 0 {
+			tparamExprs := make([]syntax.Expr, len(tparams))
+			for i, tparam := range tparams {
+				tparamExprs[i] = syntax.NewName(pos, tparam.Name.Value)
+			}
+			var indexExpr syntax.Expr
+			if len(tparamExprs) == 1 {
+				indexExpr = tparamExprs[0]
+			} else {
+				indexExpr = &syntax.ListExpr{
+					ElemList: tparamExprs,
+				}
+			}
+			callOldFunc = &syntax.IndexExpr{
+				X:     callOldFunc,
+				Index: indexExpr,
+			}
+		}
+	}
+
+	fnTypeCopy := fnDecl.Type
+	argValues := getRefSlice(pos, fnTypeCopy.ParamList)
+
+	var hasDots bool
+	if len(fnTypeCopy.ParamList) > 0 {
+		_, hasDots = fnTypeCopy.ParamList[len(fnTypeCopy.ParamList)-1].Type.(*syntax.DotsType)
+	}
+	callOldExpr := &syntax.CallExpr{
+		Fun:     callOldFunc,
+		ArgList: argValues,
+		HasDots: hasDots,
+	}
+	var stmt syntax.Stmt
+	// var lastReturn syntax.Stmt
+	if len(fnTypeCopy.ResultList) > 0 {
+		stmt = &syntax.ReturnStmt{
+			Results: callOldExpr,
+		}
+	} else {
+		stmt = makeEmptyCallStmt(callOldExpr)
+	}
+	return stmt
 }
 
 func makeEmptyCallStmt(callExpr *syntax.CallExpr) syntax.Stmt {
@@ -313,6 +318,8 @@ func fillPos(pos syntax.Pos, node syntax.Node) {
 	})
 
 }
+
+// auto fill unnamed parameters
 func fillNames(pos syntax.Pos, recv *syntax.Field, funcType *syntax.FuncType, preset map[string]bool) {
 	if recv != nil {
 		fillFieldNames(pos, []*syntax.Field{recv}, preset, "_x")

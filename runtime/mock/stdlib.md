@@ -3,7 +3,7 @@ There are two modes for mocking stdlib functions,
 1. Default-Allow Mode
 2. Default-Disallow Mode
 
-These two modes can be switched by `--trap-stdlib` and `--trap-stdlib=false`.
+These two modes can be switched between `--trap-stdlib` and `--trap-stdlib=false`.
 
 When running `xgo test`, `--trap-stdlib` is assumed, you can turn it off with `--trap-stdlib=false`.
 
