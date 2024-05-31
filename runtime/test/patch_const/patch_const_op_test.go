@@ -1,9 +1,4 @@
-// debug test is a convenient package
-// you can paste your minimal code your
-// to focus only the problemtic part of
-// failing code
-
-package debug
+package patch_const
 
 import (
 	"testing"
@@ -14,8 +9,8 @@ import (
 
 const A = 20 * time.Second
 
-func TestHello(t *testing.T) {
-	mock.PatchByName("github.com/xhd2015/xgo/runtime/test/debug", "A", func() time.Duration {
+func TestPatchConstOp(t *testing.T) {
+	mock.PatchByName("github.com/xhd2015/xgo/runtime/test/patch_const", "A", func() time.Duration {
 		return 10 * time.Second
 	})
 	a := A

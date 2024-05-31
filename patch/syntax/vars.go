@@ -837,12 +837,35 @@ func getConstDeclValueType(expr syntax.Expr) string {
 		if isBoolOp(expr.Op) {
 			return "bool"
 		}
-		if expr.X != nil {
-			return getConstDeclValueType(expr.X)
+		xIsNil := expr.X == nil
+		yIsNil := expr.Y == nil
+		if xIsNil && yIsNil {
+			return ""
 		}
-		if expr.Y != nil {
-			return getConstDeclValueType(expr.Y)
+		// see https://github.com/xhd2015/xgo/issues/172
+		// var x = 5*y, y's type is not known
+		var xType string
+		if !xIsNil {
+			xType = getConstDeclValueType(expr.X)
 		}
+		var yType string
+		if !yIsNil {
+			yType = getConstDeclValueType(expr.Y)
+		}
+		// either is nil
+		if xIsNil != yIsNil {
+			if xType != "" {
+				return xType
+			}
+			return yType
+		}
+		// 5*5 -> int
+		// 5*X -> unknown
+		if xType == yType {
+			return xType
+		}
+		return ""
+		// TODO: handle SelectorExpr and iota
 	case *syntax.ParenExpr:
 		return getConstDeclValueType(expr.X)
 	}
