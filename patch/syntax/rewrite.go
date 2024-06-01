@@ -3,6 +3,7 @@ package syntax
 import (
 	"cmd/compile/internal/base"
 	"cmd/compile/internal/syntax"
+	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
 	"fmt"
 	"os"
 
@@ -96,6 +97,7 @@ func replaceIdent(root syntax.Node, match string, to string) {
 }
 
 func rewriteFuncsSource(funcDecls []*DeclInfo, pkgPath string) {
+	defer xgo_ctxt.LogSpan("rewriteFuncsSource")()
 	for _, fn := range funcDecls {
 		if !fn.Kind.IsFunc() {
 			continue

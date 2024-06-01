@@ -4,6 +4,7 @@ import (
 	"cmd/compile/internal/base"
 	"cmd/compile/internal/syntax"
 	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
+	"cmd/compile/internal/xgo_rewrite_internal/patch/info"
 	"cmd/compile/internal/xgo_rewrite_internal/patch/pkgdata"
 	"fmt"
 	"os"
@@ -12,24 +13,15 @@ import (
 )
 
 func allowVarTrap() bool {
-	pkgPath := xgo_ctxt.GetPkgPath()
-	return allowPkgVarTrap(pkgPath)
-}
-
-func allowPkgVarTrap(pkgPath string) bool {
 	// prevent all std variables
 	if base.Flag.Std {
 		return false
 	}
-	mainModule := xgo_ctxt.XgoMainModule
-	if mainModule == "" {
-		return false
-	}
+	return allowPkgVarTrap(xgo_ctxt.GetPkgPath())
+}
 
-	if strings.HasPrefix(pkgPath, mainModule) && (len(pkgPath) == len(mainModule) || pkgPath[len(mainModule)] == '/') {
-		return true
-	}
-	return false
+func allowPkgVarTrap(pkgPath string) bool {
+	return xgo_ctxt.IsPkgMainModule(pkgPath)
 }
 
 func collectVarDecls(declKind DeclKind, names []*syntax.Name, typ syntax.Expr) []*DeclInfo {
@@ -47,13 +39,12 @@ func collectVarDecls(declKind DeclKind, names []*syntax.Name, typ syntax.Expr) [
 	return decls
 }
 
-func trapVariables(pkgPath string, fileList []*syntax.File, funcDelcs []*DeclInfo) {
-	names := make(map[string]*DeclInfo, len(funcDelcs))
+func writePkgData(pkgPath string, funcDelcs []*DeclInfo) error {
+	defer xgo_ctxt.LogSpan("writePkgData")()
 	varNames := make(map[string]*pkgdata.VarInfo)
 	constNames := make(map[string]*pkgdata.ConstInfo)
 	for _, funcDecl := range funcDelcs {
 		identityName := funcDecl.IdentityName()
-		names[identityName] = funcDecl
 		if funcDecl.Kind == Kind_Var || funcDecl.Kind == Kind_VarPtr {
 			varNames[identityName] = &pkgdata.VarInfo{
 				Trap: funcDecl.FollowingTrapConst,
@@ -69,12 +60,18 @@ func trapVariables(pkgPath string, fileList []*syntax.File, funcDelcs []*DeclInf
 			constNames[identityName] = constInfo
 		}
 	}
-	err := pkgdata.WritePkgData(pkgPath, &pkgdata.PackageData{
+	return pkgdata.WritePkgData(pkgPath, &pkgdata.PackageData{
 		Consts: constNames,
 		Vars:   varNames,
 	})
-	if err != nil {
-		base.Fatalf("write pkg data: %v", err)
+}
+
+func trapVariables(fileList []*syntax.File, funcDelcs []*DeclInfo) {
+	defer xgo_ctxt.LogSpan("trapVariables")()
+	names := make(map[string]*DeclInfo, len(funcDelcs))
+	for _, funcDecl := range funcDelcs {
+		identityName := funcDecl.IdentityName()
+		names[identityName] = funcDecl
 	}
 	// iterate each file, find variable reference,
 	for _, file := range fileList {
@@ -636,12 +633,12 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 	var rhsAssign *syntax.AssignStmt
 	var isCallArg bool
 	var untypedConstType string
-	if decl.Kind == Kind_Var || decl.Kind == Kind_VarPtr {
+	if decl.Kind == info.Kind_Var || decl.Kind == info.Kind_VarPtr {
 		if !decl.FollowingTrapConst && !c.isVarOKToTrap(node) {
 			return node
 		}
 		// good to go
-	} else if decl.Kind == Kind_Const {
+	} else if decl.Kind == info.Kind_Const {
 		// untyped const(most cases) should only be used in
 		// several cases because runtime type is unknown
 		if decl.ConstDecl.Type == nil {

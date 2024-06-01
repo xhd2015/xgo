@@ -23,12 +23,15 @@ type options struct {
 
 	logCompile bool
 
-	logDebug *string
+	logDebug     *string
+	debugCompile *string
 
 	noBuildOutput   bool
 	noInstrument    bool
 	resetInstrument bool
 	noSetup         bool
+
+	optionsFromFile string
 
 	// dev only
 	debugWithDlv bool
@@ -79,6 +82,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var resetInstrument bool
 	var noSetup bool
 
+	var optionsFromFile string
+
 	var debugWithDlv bool
 	var xgoHome string
 
@@ -94,6 +99,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 
 	var logCompile bool
 	var logDebug *string
+	var debugCompile *string
 
 	var noBuildOutput bool
 
@@ -139,6 +145,10 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		{
 			Flags: []string{"--with-goroot"},
 			Value: &withGoroot,
+		},
+		{
+			Flags: []string{"--options-from-file"},
+			Value: &optionsFromFile,
 		},
 		{
 			Flags: []string{"--dump-ir"},
@@ -264,6 +274,19 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			continue
 		}
 
+		if strings.HasPrefix(arg, "--debug-compile") {
+			flag := strings.TrimPrefix(arg, "--debug-compile")
+			if flag == "" {
+				debugCompile = new(string)
+				continue
+			}
+			if strings.HasPrefix(flag, "=") {
+				s := strings.TrimPrefix(flag, "=")
+				debugCompile = &s
+				continue
+			}
+		}
+
 		argVal, ok := parseStackTraceFlag(arg)
 		if ok {
 			stackTrace = argVal
@@ -346,15 +369,19 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		dumpIR:     dumpIR,
 		dumpAST:    dumpAST,
 
-		logCompile: logCompile,
-		logDebug:   logDebug,
+		logCompile:   logCompile,
+		logDebug:     logDebug,
+		debugCompile: debugCompile,
 
 		noBuildOutput:   noBuildOutput,
 		noInstrument:    noInstrument,
 		resetInstrument: resetInstrument,
 		noSetup:         noSetup,
-		debugWithDlv:    debugWithDlv,
-		xgoHome:         xgoHome,
+
+		optionsFromFile: optionsFromFile,
+
+		debugWithDlv: debugWithDlv,
+		xgoHome:      xgoHome,
 
 		syncXgoOnly:   syncXgoOnly,
 		setupDev:      setupDev,

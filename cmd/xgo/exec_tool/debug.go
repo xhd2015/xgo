@@ -7,23 +7,54 @@ import (
 	"path/filepath"
 )
 
-func getDebugEnv(xgoCompilerEnableEnv string) map[string]string {
-	return map[string]string{
-		"COMPILER_ALLOW_IR_REWRITE":      "true",
-		"COMPILER_ALLOW_SYNTAX_REWRITE":  "true",
-		"COMPILER_DEBUG_IR_REWRITE_FUNC": os.Getenv("COMPILER_DEBUG_IR_REWRITE_FUNC"),
-		"COMPILER_DEBUG_IR_DUMP_FUNCS":   os.Getenv("COMPILER_DEBUG_IR_DUMP_FUNCS"),
-		XGO_DEBUG_DUMP_IR:                os.Getenv(XGO_DEBUG_DUMP_IR),
-		XGO_DEBUG_DUMP_IR_FILE:           os.Getenv(XGO_DEBUG_DUMP_IR_FILE),
-		XGO_DEBUG_DUMP_AST:               os.Getenv(XGO_DEBUG_DUMP_AST),
-		XGO_DEBUG_DUMP_AST_FILE:          os.Getenv(XGO_DEBUG_DUMP_AST_FILE),
-		"GOCACHE":                        os.Getenv("GOCACHE"),
-		XGO_MAIN_MODULE:                  os.Getenv(XGO_MAIN_MODULE),
-		XGO_COMPILE_PKG_DATA_DIR:         os.Getenv(XGO_COMPILE_PKG_DATA_DIR),
-		XGO_STD_LIB_TRAP_DEFAULT_ALLOW:   os.Getenv(XGO_STD_LIB_TRAP_DEFAULT_ALLOW),
-		"GOROOT":                         "../..",
-		"PATH":                           "../../bin:${env:PATH}",
-		"XGO_COMPILER_ENABLE":            xgoCompilerEnableEnv,
+type DebugCompile struct {
+	Package  string   `json:"package"`
+	Env      []string `json:"env"`
+	Compiler string   `json:"compiler"`
+	Flags    []string `json:"flags"`
+	Files    []string `json:"files"`
+}
+
+func getDebugEnvMapping(xgoCompilerEnableEnv string) map[string]string {
+	envs := getDebugEnvList(xgoCompilerEnableEnv)
+	mapping := make(map[string]string, len(envs))
+	for _, env := range envs {
+		mapping[env[0]] = env[1]
+	}
+	return mapping
+}
+
+func getDebugEnv(xgoCompilerEnableEnv string) []string {
+	envs := getDebugEnvList(xgoCompilerEnableEnv)
+	joints := make([]string, 0, len(envs))
+	for _, env := range envs {
+		joints = append(joints, env[0]+"="+env[1])
+	}
+	return joints
+}
+
+func getDebugEnvList(xgoCompilerEnableEnv string) [][2]string {
+	return [][2]string{
+		{"XGO_COMPILER_ENABLE", xgoCompilerEnableEnv},
+		{"COMPILER_ALLOW_IR_REWRITE", "true"},
+		{"COMPILER_ALLOW_SYNTAX_REWRITE", "true"},
+		{"COMPILER_DEBUG_IR_REWRITE_FUNC", os.Getenv("COMPILER_DEBUG_IR_REWRITE_FUNC")},
+		{"COMPILER_DEBUG_IR_DUMP_FUNCS", os.Getenv("COMPILER_DEBUG_IR_DUMP_FUNCS")},
+		{XGO_DEBUG_DUMP_IR, os.Getenv(XGO_DEBUG_DUMP_IR)},
+		{XGO_DEBUG_DUMP_IR_FILE, os.Getenv(XGO_DEBUG_DUMP_IR_FILE)},
+		{XGO_DEBUG_DUMP_AST, os.Getenv(XGO_DEBUG_DUMP_AST)},
+		{XGO_DEBUG_DUMP_AST_FILE, os.Getenv(XGO_DEBUG_DUMP_AST_FILE)},
+		{XGO_MAIN_MODULE, os.Getenv(XGO_MAIN_MODULE)},
+		{XGO_COMPILE_PKG_DATA_DIR, os.Getenv(XGO_COMPILE_PKG_DATA_DIR)},
+		{XGO_STD_LIB_TRAP_DEFAULT_ALLOW, os.Getenv(XGO_STD_LIB_TRAP_DEFAULT_ALLOW)},
+		{XGO_DEBUG_COMPILE_PKG, os.Getenv(XGO_DEBUG_COMPILE_PKG)},
+		{XGO_DEBUG_COMPILE_LOG_FILE, os.Getenv(XGO_DEBUG_COMPILE_LOG_FILE)},
+		{XGO_COMPILER_OPTIONS_FILE, os.Getenv(XGO_COMPILER_OPTIONS_FILE)},
+		{XGO_SRC_WD, os.Getenv(XGO_SRC_WD)},
+		{"GOROOT", os.Getenv("GOROOT")},
+		{"GOPATH", os.Getenv("GOPATH")},
+		{"PATH", os.Getenv("PATH")},
+		{"GOCACHE", os.Getenv("GOCACHE")},
 	}
 }
 
@@ -35,7 +66,7 @@ func getVscodeDebugCmd(cmd string, xgoCompilerEnableEnv string, args []string) *
 		Mode:    "exec",
 		Program: cmd,
 		Args:    args,
-		Env:     getDebugEnv(xgoCompilerEnableEnv),
+		Env:     getDebugEnvMapping(xgoCompilerEnableEnv),
 	}
 }
 

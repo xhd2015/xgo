@@ -11,6 +11,7 @@ import (
 	"cmd/compile/internal/types"
 
 	xgo_ctxt "cmd/compile/internal/xgo_rewrite_internal/patch/ctxt"
+	xgo_info "cmd/compile/internal/xgo_rewrite_internal/patch/info"
 	xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"
 	xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"
 )
@@ -216,6 +217,18 @@ func InsertTrapForFunc(fn *ir.Func, forGeneric bool) bool {
 		return false
 	}
 
+	if isClosure {
+		action := xgo_ctxt.GetAction(&xgo_info.DeclInfo{
+			Kind:    xgo_info.Kind_Func,
+			Name:    identityName,
+			Closure: true,
+		})
+		if action != "" && action != "include" {
+			// filter
+			return false
+		}
+	}
+
 	pkgPath := xgo_ctxt.GetPkgPath()
 	trap := typecheck.LookupRuntime("__xgo_trap")
 	fnPos := fn.Pos()
@@ -293,7 +306,6 @@ func CanInsertTrapOrLink(fn *ir.Func) (string, bool) {
 			return "", false
 		}
 		return linkName, false
-		// ir.Dump("after:", fn)
 	}
 	// disable all stdlib IR rewrite
 	if base.Flag.Std {

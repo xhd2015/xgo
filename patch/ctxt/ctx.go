@@ -12,6 +12,10 @@ const XgoRuntimeTracePkg = XgoModule + "/runtime/trace"
 
 const XgoLinkTrapVarForGenerated = "__xgo_link_trap_var_for_generated"
 
+func InitAfterLoad() {
+	isMainModule = IsSameModule(GetPkgPath(), XgoMainModule)
+}
+
 func SkipPackageTrap() bool {
 	pkgPath := GetPkgPath()
 	if pkgPath == "" {
@@ -102,4 +106,30 @@ func cutPkgPrefix(s string, pkg string) (suffix string, ok bool) {
 		return "", false
 	}
 	return s[n+1:], true
+}
+
+var isMainModule bool
+
+func IsMainModule() bool {
+	return isMainModule
+}
+
+func IsPkgMainModule(pkg string) bool {
+	return IsSameModule(pkg, XgoMainModule)
+}
+
+func IsSameModule(pkgPath string, modulePath string) bool {
+	if modulePath == "" {
+		return false
+	}
+	if !strings.HasPrefix(pkgPath, modulePath) {
+		return false
+	}
+	if len(pkgPath) == len(modulePath) {
+		return true
+	}
+	if pkgPath[len(modulePath)] == '/' {
+		return true
+	}
+	return false
 }

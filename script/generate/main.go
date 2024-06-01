@@ -20,12 +20,13 @@ import (
 type GenernateType string
 
 const (
-	GenernateType_CompilerPatch      GenernateType = "compiler-patch"
-	GenernateType_CompilerHelperCode GenernateType = "compiler-helper-code"
-	GenernateType_RuntimeDef         GenernateType = "runtime-def"
-	GenernateType_StackTraceDef      GenernateType = "stack-trace-def"
-	GenernateType_InstallSrc         GenernateType = "install-src"
-	GenernateType_XgoRuntime         GenernateType = "xgo-runtime"
+	GenernateType_CompilerPatch       GenernateType = "compiler-patch"
+	GenernateType_CompilerHelperCode  GenernateType = "compiler-helper-code"
+	GenernateType_CompilerPatternCode GenernateType = "compiler-pattern-code"
+	GenernateType_RuntimeDef          GenernateType = "runtime-def"
+	GenernateType_StackTraceDef       GenernateType = "stack-trace-def"
+	GenernateType_InstallSrc          GenernateType = "install-src"
+	GenernateType_XgoRuntime          GenernateType = "xgo-runtime"
 )
 
 func main() {
@@ -102,6 +103,30 @@ func generate(rootDir string, subGens SubGens) error {
 		)
 		if err != nil {
 			return err
+		}
+	}
+	if subGens.Has(GenernateType_CompilerPatternCode) {
+		// copy files
+		srcDir := filepath.Join(rootDir, "support", "pattern")
+		dstDir := filepath.Join(rootDir, "patch", "match")
+		files, err := os.ReadDir(srcDir)
+		if err != nil {
+			return err
+		}
+		for _, file := range files {
+			if file.IsDir() || !strings.HasSuffix(file.Name(), ".go") || strings.HasSuffix(file.Name(), "_test.go") {
+				continue
+			}
+			content, err := ioutil.ReadFile(filepath.Join(srcDir, file.Name()))
+			if err != nil {
+				return err
+			}
+			newContent := strings.Replace(string(content), "package pattern", "package match", 1)
+			newContent = prelude + newContent
+			err = ioutil.WriteFile(filepath.Join(dstDir, file.Name()), []byte(newContent), 0755)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	if subGens.Has(GenernateType_CompilerHelperCode) {

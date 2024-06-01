@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -127,11 +130,15 @@ func handleBuild(cmd string, args []string) error {
 	flagC := opts.flagC
 	logCompile := opts.logCompile
 	logDebugOption := opts.logDebug
+	debugCompile := opts.debugCompile
 	optXgoSrc := opts.xgoSrc
 	noBuildOutput := opts.noBuildOutput
 	noInstrument := opts.noInstrument
 	resetInstrument := opts.resetInstrument
 	noSetup := opts.noSetup
+
+	optionsFromFile := opts.optionsFromFile
+
 	debugWithDlv := opts.debugWithDlv
 	xgoHome := opts.xgoHome
 	syncXgoOnly := opts.syncXgoOnly
@@ -245,6 +252,17 @@ func handleBuild(cmd string, args []string) error {
 	if len(gcflags) > 0 {
 		buildCacheSuffix += "-gcflags"
 	}
+	if optionsFromFile != "" {
+		data, err := ioutil.ReadFile(optionsFromFile)
+		if err != nil {
+			return err
+		}
+		if len(data) > 0 {
+			h := md5.New()
+			h.Write(data)
+			buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
+		}
+	}
 	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
 	revisionFile := filepath.Join(instrumentDir, "xgo-revision.txt")
 	fullSyncRecord := filepath.Join(instrumentDir, "full-sync-record.txt")
@@ -299,7 +317,7 @@ func handleBuild(cmd string, args []string) error {
 				return err
 			}
 		}
-		resetOrRevisionChanged := resetInstrument || revisionChanged
+		resetOrRevisionChanged := resetInstrument || revisionChanged || buildCompiler
 		if isDevelopment || resetOrRevisionChanged {
 			logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
 			err = syncGoroot(goroot, instrumentGoroot, fullSyncRecord)
@@ -352,13 +370,18 @@ func handleBuild(cmd string, args []string) error {
 	close(setupDone)
 
 	if buildCompiler {
+		fmt.Printf("%s\n", compilerBin)
 		return nil
 	}
+
+	logDebug("trap stdlib: %v", trapStdlib)
 
 	// before invoking exec_tool, tail follow its log
 	if logCompile {
 		go tailLog(compileLog)
 	}
+	var debugCompilePkg string
+	var debugCompileLogFile string
 
 	execCmdEnv := os.Environ()
 	var execCmd *exec.Cmd
@@ -376,6 +399,27 @@ func handleBuild(cmd string, args []string) error {
 			if !errors.Is(err, goinfo.ErrGoModNotFound) && !errors.Is(err, goinfo.ErrGoModDoesNotHaveModule) {
 				return err
 			}
+		}
+		if debugCompile != nil {
+			if *debugCompile != "" {
+				debugCompilePkg = *debugCompile
+			} else {
+				// find the main package we are compile
+				pkgs, err := goinfo.ListPackages(projectDir, mod, remainArgs)
+				if err != nil {
+					return err
+				}
+				if len(pkgs) == 0 {
+					return fmt.Errorf("--debug-compile: no packages")
+				}
+				if len(pkgs) > 1 {
+					return fmt.Errorf("--debug-compile: need 1 package, found: %d", len(pkgs))
+				}
+				debugCompilePkg = pkgs[0]
+			}
+			debugCompileLogFile = filepath.Join(tmpDir, "debug-compile.log")
+			go tailLog(debugCompileLogFile)
+			logDebug("debug compile package: %s", debugCompilePkg)
 		}
 		if stackTrace == "on" && overlay == "" {
 			// check if xgo/runtime ready
@@ -482,6 +526,10 @@ func handleBuild(cmd string, args []string) error {
 		}
 		execCmd.Env = append(execCmd.Env, "XGO_DEBUG_VSCODE="+xgoDebugVscode)
 
+		// debug compile package
+		execCmd.Env = append(execCmd.Env, exec_tool.XGO_DEBUG_COMPILE_PKG+"="+debugCompilePkg)
+		execCmd.Env = append(execCmd.Env, exec_tool.XGO_DEBUG_COMPILE_LOG_FILE+"="+debugCompileLogFile)
+
 		// stack trace
 		if stackTrace != "" {
 			execCmd.Env = append(execCmd.Env, "XGO_STACK_TRACE="+stackTrace)
@@ -493,6 +541,22 @@ func handleBuild(cmd string, args []string) error {
 			trapStdlibEnv = "true"
 		}
 		execCmd.Env = append(execCmd.Env, "XGO_STD_LIB_TRAP_DEFAULT_ALLOW="+trapStdlibEnv)
+
+		// compiler options (make abs)
+		var absOptionsFromFile string
+		if optionsFromFile != "" {
+			absOptionsFromFile, err = filepath.Abs(optionsFromFile)
+			if err != nil {
+				return err
+			}
+		}
+		execCmd.Env = append(execCmd.Env, exec_tool.XGO_COMPILER_OPTIONS_FILE+"="+absOptionsFromFile)
+
+		wd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		execCmd.Env = append(execCmd.Env, exec_tool.XGO_SRC_WD+"="+wd)
 	}
 	logDebug("command env: %v", execCmd.Env)
 	execCmd.Stdout = os.Stdout
@@ -509,22 +573,16 @@ func handleBuild(cmd string, args []string) error {
 
 	// if dump IR is not nil, output to stdout
 	if tmpIRFile != "" {
-		err := copyToStdout(tmpIRFile)
+		// ast file not exists
+		err := checkedCopyToStdout(tmpIRFile, "--dump-ir not effective, use -a to trigger recompile or check if you package path matches")
 		if err != nil {
-			// ir file not exists
-			if errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("--dump-ir not effective, use -a to trigger recompile or check if you package path matches")
-			}
 			return err
 		}
 	}
 	if tmpASTFile != "" {
-		err := copyToStdout(tmpASTFile)
+		// ast file not exists
+		err := checkedCopyToStdout(tmpASTFile, "--dump-ast not effective, use -a to trigger recompile or check if you package path matches")
 		if err != nil {
-			// ir file not exists
-			if errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("--dump-ast not effective, use -a to trigger recompile or check if you package path matches")
-			}
 			return err
 		}
 	}
@@ -536,6 +594,18 @@ func handleBuild(cmd string, args []string) error {
 			}
 			return err
 		}
+	}
+	return nil
+}
+
+func checkedCopyToStdout(file string, msg string) error {
+	err := copyToStdout(file)
+	if err != nil {
+		// ir file not exists
+		if errors.Is(err, os.ErrNotExist) {
+			return errors.New(msg)
+		}
+		return err
 	}
 	return nil
 }

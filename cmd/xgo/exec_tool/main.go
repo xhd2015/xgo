@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -92,6 +94,9 @@ func handleCompile(cmd string, opts *options, args []string) error {
 		}
 	}
 
+	debugCompilePkg := os.Getenv(XGO_DEBUG_COMPILE_PKG)
+	debugCompileLogFile := os.Getenv(XGO_DEBUG_COMPILE_LOG_FILE)
+
 	xgoCompilerEnableEnv, ok := os.LookupEnv(XGO_COMPILER_ENABLE)
 	if !ok {
 		if opts.enable {
@@ -125,7 +130,7 @@ func handleCompile(cmd string, opts *options, args []string) error {
 				compilerBin,
 				"--",
 			}
-			envs := getDebugEnv(xgoCompilerEnableEnv)
+			envs := getDebugEnvMapping(xgoCompilerEnableEnv)
 			// dlvArgs = append(dlvArgs, compilerBin)
 			dlvArgs = append(dlvArgs, args...)
 			var strPrint []string
@@ -195,6 +200,31 @@ func handleCompile(cmd string, opts *options, args []string) error {
 			}
 		}
 	}
+	if debugCompilePkg != "" && debugCompilePkg == pkgPath {
+		envs := getDebugEnv(xgoCompilerEnableEnv)
+		flags, files := splitArgs(args)
+		str := formatDebugCompile(envs, compilerBin, flags, files)
+
+		debugOptions := &DebugCompile{
+			Package:  pkgPath,
+			Env:      envs,
+			Compiler: compilerBin,
+			Flags:    flags,
+			Files:    files,
+		}
+		err := ioutil.WriteFile(debugCompileLogFile, []byte(str), 0755)
+		if err != nil {
+			return err
+		}
+		srcWD := os.Getenv(XGO_SRC_WD)
+		err = marshalNoEscape(filepath.Join(srcWD, "debug-compile.json"), debugOptions)
+		if err != nil {
+			return err
+		}
+		for {
+			time.Sleep(1024 * time.Minute)
+		}
+	}
 	// COMPILER_ALLOW_SYNTAX_REWRITE=${COMPILER_ALLOW_SYNTAX_REWRITE:-true} COMPILER_ALLOW_IR_REWRITE=${COMPILER_ALLOW_IR_REWRITE:-true} "$shdir/compile" ${@:2}
 	runCommandExitFilter(compilerBin, args, func(cmd *exec.Cmd) {
 		cmd.Env = append(cmd.Env,
@@ -207,6 +237,46 @@ func handleCompile(cmd string, opts *options, args []string) error {
 	return nil
 }
 
+func marshalNoEscape(file string, data interface{}) error {
+	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "    ")
+	return enc.Encode(data)
+}
+
+func splitArgs(args []string) (flags []string, files []string) {
+	n := len(args)
+	i := n - 1
+	for ; i >= 0; i-- {
+		if !strings.HasSuffix(args[i], ".go") {
+			break
+		}
+	}
+	return args[:i+1], args[i+1:]
+}
+func formatDebugCompile(env []string, bin string, flags []string, files []string) string {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("var env = []string{%s}\n", formatGoList(env)))
+	b.WriteString(fmt.Sprintf("var flags = []string{%s}\n", formatGoList(flags)))
+	b.WriteString(fmt.Sprintf("var files = []string{%s}\n", formatGoList(files)))
+	b.WriteString(fmt.Sprintf("var compiler = %q\n", bin))
+
+	return b.String()
+}
+
+func formatGoList(list []string) string {
+	qlist := make([]string, 0, len(list))
+	for _, e := range list {
+		qlist = append(qlist, strconv.Quote(e))
+	}
+	return strings.Join(qlist, ", ")
+}
 func hasFlag(args []string, flag string) bool {
 	flagEq := flag + "="
 	for _, arg := range args {

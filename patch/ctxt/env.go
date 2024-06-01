@@ -5,5 +5,24 @@ import "os"
 var XgoMainModule = os.Getenv("XGO_MAIN_MODULE")
 var XgoCompilePkgDataDir = os.Getenv("XGO_COMPILE_PKG_DATA_DIR")
 
+var XGO_COMPILER_ENABLE = os.Getenv("XGO_COMPILER_ENABLE") == "true"
+
+// default true
+var XGO_COMPILER_ENABLE_SYNTAX = os.Getenv("XGO_COMPILER_ENABLE_SYNTAX") != "false"
+
+var XGO_COMPILER_SYNTAX_SKIP_INJECT_XGO_FLAGS = os.Getenv("XGO_COMPILER_SYNTAX_SKIP_INJECT_XGO_FLAGS") == "true"
+
+var XGO_COMPILER_SYNTAX_SKIP_FILL_FUNC_NAMES = os.Getenv("XGO_COMPILER_SYNTAX_SKIP_FILL_FUNC_NAMES") == "true"
+
+var XGO_COMPILER_SYNTAX_SKIP_ALL_TRAP = os.Getenv("XGO_COMPILER_SYNTAX_SKIP_ALL_TRAP") == "true"
+
+var XGO_COMPILER_SYNTAX_SKIP_VAR_TRAP = os.Getenv("XGO_COMPILER_SYNTAX_SKIP_VAR_TRAP") == "true"
+
+var XGO_COMPILER_SYNTAX_SKIP_GEN_CODE = os.Getenv("XGO_COMPILER_SYNTAX_SKIP_GEN_CODE") == "true"
+
+var XGO_COMPILER_LOG_COST = os.Getenv("XGO_COMPILER_LOG_COST") == "true"
+
+var XGO_COMPILER_OPTIONS_FILE = os.Getenv("XGO_COMPILER_OPTIONS_FILE")
+
 // enabled via: --trap-stdlib
 var XgoStdTrapDefaultAllow = os.Getenv("XGO_STD_LIB_TRAP_DEFAULT_ALLOW") == "true"
