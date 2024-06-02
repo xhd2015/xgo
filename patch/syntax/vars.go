@@ -390,6 +390,8 @@ func (c *BlockContext) recordSelectorExpr(sel *syntax.SelectorExpr) {
 	c.SelectorParent[sel.X] = sel
 }
 
+const UNKNOWN_CONST_TYPE = "xgo_unknown_const"
+
 func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]*DeclInfo, imports map[string]string) syntax.Expr {
 	if node == nil {
 		return nil
@@ -482,9 +484,12 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 			ctx.OperationParent[node.X] = node
 			ctx.OperationParent[node.Y] = node
 		}
+		origX := node.X
+		origY := node.Y
 		// x op y
 		node.X = ctx.traverseExpr(node.X, globaleNames, imports)
 		node.Y = ctx.traverseExpr(node.Y, globaleNames, imports)
+
 		// if both side are const, then the operation should also
 		// be wrapped in a const if the operation is not ==
 		if node.X != nil && node.Y != nil && !isBoolOp(node.Op) {
@@ -495,10 +500,20 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 				return ok
 			}
 			// if both are constant,skip wrapping
-			if xConst != nil && yConst != nil && (isXgoConv(node.X) || isXgoConv(node.Y)) {
-				newNode := newConv(node, xConst.Type)
-				ctx.recordConstType(newNode, xConst.Type)
-				return newNode
+			if xConst != nil && yConst != nil {
+				if xConst.Type == UNKNOWN_CONST_TYPE || yConst.Type == UNKNOWN_CONST_TYPE {
+					// if anyone is unknown, then the type is also unknown, cannot wrap it
+					// see bug https://github.com/xhd2015/xgo/issues/176
+					node.X = origX
+					node.Y = origY
+					ctx.recordConstType(node, UNKNOWN_CONST_TYPE)
+					return node
+				}
+				if isXgoConv(node.X) || isXgoConv(node.Y) {
+					newNode := newConv(node, xConst.Type)
+					ctx.recordConstType(newNode, xConst.Type)
+					return newNode
+				}
 			}
 		} else if node.Y == nil && (node.Op == syntax.Add || node.Op == syntax.Sub) {
 			if xgoConv, ok := node.X.(*syntax.XgoSimpleConvert); ok {
@@ -663,6 +678,10 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 			}
 			untypedConstType = getConstDeclValueType(decl.ConstDecl.Values)
 			if untypedConstType == "" {
+				return node
+			}
+			if untypedConstType == UNKNOWN_CONST_TYPE {
+				c.recordConstType(node, UNKNOWN_CONST_TYPE)
 				return node
 			}
 			var ok bool
@@ -853,7 +872,7 @@ func getConstDeclValueType(expr syntax.Expr) string {
 		xIsNil := expr.X == nil
 		yIsNil := expr.Y == nil
 		if xIsNil && yIsNil {
-			return ""
+			return UNKNOWN_CONST_TYPE
 		}
 		// see https://github.com/xhd2015/xgo/issues/172
 		// var x = 5*y, y's type is not known
@@ -877,12 +896,12 @@ func getConstDeclValueType(expr syntax.Expr) string {
 		if xType == yType {
 			return xType
 		}
-		return ""
+		return UNKNOWN_CONST_TYPE
 		// TODO: handle SelectorExpr and iota
 	case *syntax.ParenExpr:
 		return getConstDeclValueType(expr.X)
 	}
-	return ""
+	return UNKNOWN_CONST_TYPE
 }
 func getBasicLitConstType(kind syntax.LitKind) string {
 	switch kind {
