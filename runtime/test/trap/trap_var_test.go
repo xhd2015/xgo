@@ -1,6 +1,11 @@
 package trap
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/xhd2015/xgo/runtime/test/trap/third"
+)
 
 var ints [3]int
 
@@ -26,5 +31,21 @@ func TestUntypedUnknownConstShouldCompile(t *testing.T) {
 
 	if allocated > minimumMappingUID+mappingLen-userNsLength {
 		t.Fatalf("allocated is greater?")
+	}
+}
+
+func TestThirdPackage(t *testing.T) {
+	third.UseRenderType(third.RenderType_1)
+}
+
+const (
+	retrySleepTime = 20 * time.Millisecond
+)
+
+// see bug https://github.com/xhd2015/xgo/issues/182
+func TestArrayPointer(t *testing.T) {
+	calcTime := retrySleepTime * third.NodeHealthUpdateRetry
+	if calcTime != 100*time.Millisecond {
+		t.Fatalf("expect a to be 100ms, actual: %v", calcTime)
 	}
 }

@@ -148,14 +148,41 @@ type BlockContext struct {
 	ConstInfo map[syntax.Node]*ConstInfo
 
 	// to be inserted
-	ChildrenInsertList [][]syntax.Stmt
+	ChildrenInsertList [][]*NodeStmt
 
 	TrapNames []*NameAndDecl
 }
 
-func (c *BlockContext) PrependStmtBeforeLastChild(stmt []syntax.Stmt) {
+type NodeStmt struct {
+	// the node that introduces the
+	// list, which can be cancelled
+	Node      syntax.Node
+	Stmts     []syntax.Stmt
+	Cancelled bool
+}
+
+func (c *BlockContext) PrependStmtBeforeLastChild(node syntax.Node, stmt []syntax.Stmt) {
 	n := len(c.ChildrenInsertList)
-	c.ChildrenInsertList[n-1] = append(c.ChildrenInsertList[n-1], stmt...)
+	c.ChildrenInsertList[n-1] = append(c.ChildrenInsertList[n-1], &NodeStmt{
+		Node:  node,
+		Stmts: stmt,
+	})
+}
+func (c *BlockContext) CancelNodeStmt(node syntax.Node) {
+	n := len(c.ChildrenInsertList)
+	list := c.ChildrenInsertList[n-1]
+
+	var nodeStmt *NodeStmt
+	for _, l := range list {
+		if l.Node == node {
+			nodeStmt = l
+			break
+		}
+	}
+	if nodeStmt == nil {
+		return
+	}
+	nodeStmt.Cancelled = true
 }
 
 type ConstInfo struct {
@@ -333,7 +360,13 @@ func (ctx *BlockContext) traverseBlockStmt(node *syntax.BlockStmt, globaleNames 
 		node.List[i] = subCtx.traverseStmt(node.List[i], globaleNames, imports)
 	}
 	for i := n - 1; i >= 0; i-- {
-		node.List = insertBefore(node.List, i, subCtx.ChildrenInsertList[i])
+		for _, nodeStmt := range subCtx.ChildrenInsertList[i] {
+			if nodeStmt.Cancelled {
+				continue
+			}
+			node.List = insertBefore(node.List, i, nodeStmt.Stmts)
+		}
+
 	}
 	return node
 }
@@ -504,6 +537,8 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 				if xConst.Type == UNKNOWN_CONST_TYPE || yConst.Type == UNKNOWN_CONST_TYPE {
 					// if anyone is unknown, then the type is also unknown, cannot wrap it
 					// see bug https://github.com/xhd2015/xgo/issues/176
+					ctx.CancelNodeStmt(node.X)
+					ctx.CancelNodeStmt(node.Y)
 					node.X = origX
 					node.Y = origY
 					ctx.recordConstType(node, UNKNOWN_CONST_TYPE)
@@ -711,7 +746,6 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 		}, preStmts...)
 	}
 
-	c.PrependStmtBeforeLastChild(preStmts)
 	newName := syntax.NewName(node.Pos(), tmpVarName)
 	if explicitType != nil {
 		return &syntax.CallExpr{
@@ -725,8 +759,10 @@ func (c *BlockContext) trapValueNode(node *syntax.Name, globaleNames map[string]
 		newNode := newConv(newName, untypedConstType)
 		c.recordConstType(newNode, untypedConstType)
 		c.ConstInfo[newNode] = &ConstInfo{Type: untypedConstType}
+		c.PrependStmtBeforeLastChild(newNode, preStmts)
 		return newNode
 	}
+	c.PrependStmtBeforeLastChild(newName, preStmts)
 	return newName
 }
 
@@ -760,7 +796,8 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 				return nil, true
 			}
 			untypedConstType = constInfo.Type
-			if untypedConstType == "" {
+			if untypedConstType == "" || untypedConstType == UNKNOWN_CONST_TYPE {
+				ctx.recordConstType(node, UNKNOWN_CONST_TYPE)
 				return nil, true
 			}
 			var ok bool
@@ -773,7 +810,6 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 				if !isCallArg {
 					return nil, true
 				}
-
 			}
 		}
 	} else if varInfo, ok := pkgData.Vars[sel.Sel.Value]; ok {
@@ -784,7 +820,6 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 		return nil, true
 	}
 	preStmts, _, tmpVarName := trapVar(node, newStringLit(pkgPath), sel.Sel.Value, takeAddr)
-	ctx.PrependStmtBeforeLastChild(preStmts)
 	newName := syntax.NewName(node.Pos(), tmpVarName)
 	if explicitType != nil {
 		return &syntax.CallExpr{
@@ -797,8 +832,10 @@ func (ctx *BlockContext) trapSelector(node syntax.Expr, sel *syntax.SelectorExpr
 	if untypedConstType != "" {
 		newNode := newConv(newName, untypedConstType)
 		ctx.recordConstType(newNode, untypedConstType)
+		ctx.PrependStmtBeforeLastChild(newNode, preStmts)
 		return newNode, true
 	}
+	ctx.PrependStmtBeforeLastChild(newName, preStmts)
 	return newName, true
 }
 
@@ -928,8 +965,9 @@ func (c *BlockContext) trapAddrNode(node *syntax.Operation, nameNode *syntax.Nam
 		return node
 	}
 	preStmts, _, tmpVarName := trapVar(node, syntax.NewName(nameNode.Pos(), XgoLocalPkgName), name, true)
-	c.PrependStmtBeforeLastChild(preStmts)
-	return syntax.NewName(node.Pos(), tmpVarName)
+	newName := syntax.NewName(node.Pos(), tmpVarName)
+	c.PrependStmtBeforeLastChild(newName, preStmts)
+	return newName
 }
 
 func trapVar(expr syntax.Expr, pkgRef syntax.Expr, name string, takeAddr bool) (preStmts []syntax.Stmt, varDefStmt *syntax.AssignStmt, tmpVarName string) {

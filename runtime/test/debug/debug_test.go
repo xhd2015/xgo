@@ -12,18 +12,6 @@ import (
 	"testing"
 )
 
-const userNsLength = (1 << 16)
-const (
-	// skip the first block
-	minimumMappingUID = userNsLength
-	// allocate enough space for 2000 user namespaces
-	mappingLen = userNsLength * 2000
-)
-
 func TestArrayPointer(t *testing.T) {
-	var allocated uint32
 
-	if allocated <= minimumMappingUID+mappingLen-userNsLength {
-
-	}
 }

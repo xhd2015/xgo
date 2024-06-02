@@ -17,7 +17,7 @@ import (
 
 // usage:
 //  go run -tags dev ./cmd/xgo --debug-compile ./src   --> will generate a file called debug-compile.json
-//  go run -tags dev ./cmd/xgo build --build-compile   --> will build the compiler with -gcflags and print it's path
+//  go run -tags dev ./cmd/xgo build --build-compiler  --> will build the compiler with -gcflags and print it's path
 //  go run ./cmd/debug-compile                         --> will read debug-compile.json, and start a debug server listen on localhost:2345
 
 func main() {
