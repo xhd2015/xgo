@@ -19,15 +19,6 @@ Rational: stdlib functions like `os.ReadFile`, `io.Read` are widely used by go c
 
 So in this mode only a limited list of stdlib functions can be mocked. However, if there lacks some functions you may want to use, you can leave a comment in [Issue#6](https://github.com/xhd2015/xgo/issues/6) or fire an issue to let us know and add it.
 
-# Functions In Stdlib Calling `recover()` Cannot Be Mocked
-When a function calls `recover()`, it will capture panic when used in defer.
-
-However, since compiler treats stdlib from ordinary module differently, current implementation to support stdlib function is based on source code injection, which may causes build time to slow down, and also causes functions containing `recover()` to be invalid if rewritten, see https://github.com/xhd2015/xgo/issues/164.
-
-This will be fixed in the long run, but before that, such functions in stdlib cannot be mocked.
-
-NOTE: functions outside stdlib, even with calling `recover()`, are not affected since they are rewritten with IR, not source code.
-
 # Supported List When `--trap-stdlib=false`
 ## `os`
 - `Getenv`
