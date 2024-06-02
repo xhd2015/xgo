@@ -669,8 +669,17 @@ func (ctx *BlockContext) traverseDecl(node syntax.Decl, globaleNames map[string]
 	}
 	switch node := node.(type) {
 	case *syntax.ConstDecl:
+		for _, name := range node.NameList {
+			ctx.Add(name.Value)
+		}
 	case *syntax.TypeDecl:
+		if node.Name != nil {
+			ctx.Add(node.Name.Value)
+		}
 	case *syntax.VarDecl:
+		for _, name := range node.NameList {
+			ctx.Add(name.Value)
+		}
 		// var a int64 = N
 		if node.Values != nil {
 			if ctx.RHSVarDeclParent == nil {

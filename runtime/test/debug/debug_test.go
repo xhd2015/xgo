@@ -12,6 +12,18 @@ import (
 	"testing"
 )
 
-func TestArrayPointer(t *testing.T) {
+const (
+	pod1 = "pod1"
+)
 
+type Pod struct {
+	Name string
+}
+
+func TestConstNameCollision(t *testing.T) {
+	var pod1 *Pod
+
+	if pod1 != nil && pod1.Name != "" {
+		t.Fatalf("pod1 should be empty")
+	}
 }

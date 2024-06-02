@@ -49,3 +49,20 @@ func TestArrayPointer(t *testing.T) {
 		t.Fatalf("expect a to be 100ms, actual: %v", calcTime)
 	}
 }
+
+const (
+	pod1 = "pod1"
+)
+
+type Pod struct {
+	Name string
+}
+
+// see bug https://github.com/xhd2015/xgo/issues/183
+func TestConstNameCollision(t *testing.T) {
+	var pod1 *Pod
+
+	if pod1 != nil && pod1.Name != "" {
+		t.Fatalf("pod1 should be empty")
+	}
+}
