@@ -13,7 +13,7 @@ func TryParseFlagValue(flag string, pval *string, set func(v string), pi *int, a
 	}
 	if next {
 		if i+1 >= len(args) {
-			return false, fmt.Errorf("flag %s requires value", args[i])
+			return false, fmt.Errorf("flag %s requires value", flag)
 		}
 		val = args[i+1]
 		*pi++

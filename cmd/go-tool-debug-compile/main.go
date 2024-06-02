@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,13 +11,14 @@ import (
 	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/debug"
+	"github.com/xhd2015/xgo/support/flag"
 	"github.com/xhd2015/xgo/support/netutil"
 )
 
 // usage:
 //  go run -tags dev ./cmd/xgo --debug-compile ./src   --> will generate a file called debug-compile.json
 //  go run -tags dev ./cmd/xgo build --build-compile   --> will build the compiler with -gcflags and print it's path
-//  go run ./cmd/debug-compile --debug-with-dlv        --> will read debug-compile.json, and start a debug server listen on localhost:2345
+//  go run ./cmd/debug-compile                         --> will read debug-compile.json, and start a debug server listen on localhost:2345
 
 func main() {
 	args := os.Args[1:]
@@ -34,23 +34,12 @@ func run(args []string) error {
 	n := len(args)
 	var projectDir string
 
-	data, readErr := ioutil.ReadFile("debug-compile.json")
-	if readErr != nil {
-		if !errors.Is(readErr, os.ErrNotExist) {
-			return readErr
-		}
-	}
-	var debugCompiler *exec_tool.DebugCompile
-	if len(data) > 0 {
-		err := json.Unmarshal(data, &debugCompiler)
-		if err != nil {
-			return fmt.Errorf("parse debug-compile.json: %w", err)
-		}
-	}
+	optionsFile := "debug-compile.json"
 
 	var extraFlags []string
 	var extraEnvs []string
-	var debugWithDlv bool
+	var debugWithDlv bool = true
+	var flagHelp bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--project-dir" {
@@ -66,6 +55,13 @@ func run(args []string) error {
 		if arg == "--compiler" {
 			compilerBinary = args[i+1]
 			i++
+			continue
+		}
+		ok, err := flag.TryParseFlagValue("--compile-options-file", &optionsFile, func(v string) {}, &i, args)
+		if err != nil {
+			return err
+		}
+		if ok {
 			continue
 		}
 		if arg == "-cpuprofile" {
@@ -91,11 +87,31 @@ func run(args []string) error {
 			extraFlags = append(extraFlags, arg, args[i+1])
 			continue
 		}
-		if arg == "--debug-with-dlv" {
-			debugWithDlv = true
+		if arg == "--run-only" {
+			debugWithDlv = false
+			continue
+		}
+		if arg == "-h" || arg == "--help" {
+			flagHelp = true
 			continue
 		}
 	}
+	if flagHelp {
+		fmt.Print(strings.TrimPrefix(help, "\n"))
+		return nil
+	}
+	data, readErr := ioutil.ReadFile(optionsFile)
+	if readErr != nil {
+		return readErr
+	}
+	var debugCompiler *exec_tool.DebugCompile
+	if len(data) > 0 {
+		err := json.Unmarshal(data, &debugCompiler)
+		if err != nil {
+			return fmt.Errorf("parse compile options: %w", err)
+		}
+	}
+
 	if compilerBinary == "" {
 		compilerBinary = debugCompiler.Compiler
 	}
@@ -129,8 +145,8 @@ func dlvExecListen(dir string, env []string, compilerBinary string, args []strin
 		goroot := strings.TrimPrefix(e, "GOROOT=")
 		if goroot != "" {
 			vscodeExtra = append(vscodeExtra,
-				fmt.Sprintf("    NOTE: VSCode will map source files to workspace's goroot,"),
-				fmt.Sprintf("      To fix this, update .vscode/settings.json, set go.goroot to:"),
+				fmt.Sprintf("    NOTE: VSCode will map source files to workspace's goroot, which causes problem when debugging go compiler."),
+				fmt.Sprintf("      To fix this, update go.goroot in .vscode/settings.json to:"),
 				fmt.Sprintf("       %s", goroot),
 				fmt.Sprintf("      And set a breakpoint at:"),
 				fmt.Sprintf("       %s/src/cmd/compile/main.go", goroot),

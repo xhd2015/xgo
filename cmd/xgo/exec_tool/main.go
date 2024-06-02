@@ -14,6 +14,7 @@ import (
 	"time"
 
 	cmd_exec "github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/goinfo"
 )
 
 // invoking examples:
@@ -203,7 +204,6 @@ func handleCompile(cmd string, opts *options, args []string) error {
 	if debugCompilePkg != "" && debugCompilePkg == pkgPath {
 		envs := getDebugEnv(xgoCompilerEnableEnv)
 		flags, files := splitArgs(args)
-		str := formatDebugCompile(envs, compilerBin, flags, files)
 
 		debugOptions := &DebugCompile{
 			Package:  pkgPath,
@@ -212,12 +212,31 @@ func handleCompile(cmd string, opts *options, args []string) error {
 			Flags:    flags,
 			Files:    files,
 		}
-		err := ioutil.WriteFile(debugCompileLogFile, []byte(str), 0755)
+		srcWD := os.Getenv(XGO_SRC_WD)
+		debugCompileFile := filepath.Join(srcWD, "debug-compile.json")
+		err := marshalNoEscape(debugCompileFile, debugOptions)
 		if err != nil {
 			return err
 		}
-		srcWD := os.Getenv(XGO_SRC_WD)
-		err = marshalNoEscape(filepath.Join(srcWD, "debug-compile.json"), debugOptions)
+
+		// detect if we are running in debug mod
+		var cmdPrefix string
+		goMod, _ := goinfo.GetModPath(srcWD)
+		if goMod == "" || goMod != "github.com/xhd2015/xgo" {
+			cmdPrefix = "go install github.com/xhd2015/xgo/cmd/go-tool-debug-compile@latest\n  go-tool-debug-compile"
+		} else {
+			cmdPrefix = "go run ./cmd/go-tool-debug-compile"
+		}
+
+		var extraOptions string
+		wd, _ := os.Getwd()
+		if wd == "" || wd != srcWD {
+			extraOptions = fmt.Sprintf(" --compile-options-file %s", cmd_exec.Quote(debugCompileFile))
+		}
+
+		str := formatDebugCompile(envs, compilerBin, flags, files)
+		str = fmt.Sprintf("%s\ncompiler options written, to debug:\n  %s%s\n", str, cmdPrefix, extraOptions)
+		err = ioutil.WriteFile(debugCompileLogFile, []byte(str), 0755)
 		if err != nil {
 			return err
 		}

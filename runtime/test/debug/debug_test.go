@@ -7,19 +7,18 @@ package debug
 
 import (
 	"testing"
-	"time"
-
-	"github.com/xhd2015/xgo/runtime/mock"
 )
 
-const A = 20 * time.Second
+var ints [3]int
 
-func TestHello(t *testing.T) {
-	mock.PatchByName("github.com/xhd2015/xgo/runtime/test/debug", "A", func() time.Duration {
-		return 10 * time.Second
-	})
-	a := A
-	if a != 20*time.Second {
-		t.Fatalf("expect patch A failed because current xgo does not resolve operation type, actual: a=%v, want: %v", a, 20*time.Second)
+func TestArrayPointer(t *testing.T) {
+
+	x := &ints[0]
+	y := &ints[0]
+
+	t.Logf("x=0x%x", x)
+	t.Logf("y=0x%x", y)
+	if x != y {
+		t.Fatalf("x != y")
 	}
 }
