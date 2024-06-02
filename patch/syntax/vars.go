@@ -457,8 +457,9 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 	case *syntax.Operation:
 		// take addr?
 		if node.Op == syntax.And && node.Y == nil {
+			nodeX := deparen(node.X)
 			// &a,
-			switch x := node.X.(type) {
+			switch x := nodeX.(type) {
 			case *syntax.Name:
 				return ctx.trapAddrNode(node, x, globaleNames)
 			case *syntax.SelectorExpr:
@@ -469,6 +470,9 @@ func (ctx *BlockContext) traverseExpr(node syntax.Expr, globaleNames map[string]
 				if xIsName {
 					return node
 				}
+			case *syntax.IndexExpr:
+				// don't insert trap, see https://github.com/xhd2015/xgo/issues/177
+				return node
 			}
 		}
 		if node.X != nil && node.Y != nil {
@@ -550,6 +554,18 @@ func isBoolOp(op syntax.Operator) bool {
 	return false
 }
 
+func deparen(expr syntax.Expr) syntax.Expr {
+	if expr == nil {
+		return nil
+	}
+	for {
+		p, ok := expr.(*syntax.ParenExpr)
+		if !ok {
+			return expr
+		}
+		expr = p.X
+	}
+}
 func getConstType(xgoConv *syntax.XgoSimpleConvert) string {
 	return xgoConv.X.(*syntax.CallExpr).Fun.(*syntax.Name).Value
 }
