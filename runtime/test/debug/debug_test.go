@@ -12,18 +12,17 @@ import (
 	"testing"
 )
 
+const userNsLength = (1 << 16)
 const (
-	pod1 = "pod1"
+	minimumMappingUID = userNsLength
+	mappingLen        = userNsLength * 2000
 )
 
-type Pod struct {
-	Name string
-}
+// see bug https://github.com/xhd2015/xgo/issues/176
+func TestUntypedUnknownConstShouldCompile(t *testing.T) {
+	var allocated uint32
 
-func TestConstNameCollision(t *testing.T) {
-	var pod1 *Pod
-
-	if pod1 != nil && pod1.Name != "" {
-		t.Fatalf("pod1 should be empty")
+	if allocated > minimumMappingUID+mappingLen-userNsLength {
+		t.Fatalf("allocated is greater?")
 	}
 }

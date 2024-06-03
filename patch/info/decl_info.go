@@ -41,8 +41,10 @@ func (c DeclKind) String() string {
 }
 
 type DeclInfo struct {
-	FuncDecl  *syntax.FuncDecl
-	VarDecl   *syntax.VarDecl
+	FuncDecl *syntax.FuncDecl
+	VarDecl  *syntax.VarDecl
+
+	// when kind == CONST
 	ConstDecl *syntax.ConstDecl
 
 	// is this var decl follow a const __xgo_trap_xxx = 1?

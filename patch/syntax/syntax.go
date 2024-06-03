@@ -773,6 +773,18 @@ func generateFuncRegBody(pos syntax.Pos, funcDecls []*DeclInfo, xgoRegFunc strin
 			// there are function with name "_"
 			continue
 		}
+		// type unknown constant expr, will not be registered,
+		// see bug https://github.com/xhd2015/xgo/issues/53
+		// why not filter them earlier?
+		// because the node still needs to be marked, but effectively skipped
+		if funcDecl.Kind == info.Kind_Const && funcDecl.ConstDecl.Type == nil {
+			untypedConstType := getConstDeclValueType(funcDecl.ConstDecl.Values)
+			if untypedConstType == "" || untypedConstType == UNKNOWN_CONST_TYPE {
+				// exclude
+				continue
+			}
+		}
+
 		var fnRefName syntax.Expr
 		var varRefName syntax.Expr
 		if funcDecl.Kind.IsFunc() {
