@@ -62,3 +62,55 @@ If a go version is not found in `go-release`, we can download it with:
 ```sh
 go run ./script/download-go go1.22.1
 ```
+
+# Install xgo from source
+Just clone the repository, and run:
+```sh
+go install ./cmd/xgo
+```
+
+It's totally the same as `go install github.com/xhd2015/xgo/cmd/xgo@latest`, but for local.
+
+# Debug the go compiler
+First, build a package with `--debug-compile` flag:
+```sh
+go run -tags dev ./cmd/xgo test -c --debug-compile --project-dir runtime/test/debug
+```
+
+Then, run `go-tool-debug-compile`
+```sh
+go run ./cmd/go-tool-debug-compile
+```
+
+
+Output:
+```log
+dlv listen on localhost:2345
+Debug with IDEs:
+  > VSCode: add the following config to .vscode/launch.json configurations:
+    {
+        "configurations": [
+                {
+                        "name": "Debug dlv localhost:2345",
+                        "type": "go",
+                        "debugAdapter": "dlv-dap",
+                        "request": "attach",
+                        "mode": "remote",
+                        "port": 2345,
+                        "host": "127.0.0.1",
+                        "cwd":"./"
+                }
+        }
+    }
+    NOTE: VSCode will map source files to workspace's goroot, which causes problem when debugging go compiler.
+      To fix this, update go.goroot in .vscode/settings.json to:
+       /Users/xhd2015/.xgo/go-instrument-dev/go1.21.7_Us_xh_in_go_096be049/go1.21.7
+      And set a breakpoint at:
+       /Users/xhd2015/.xgo/go-instrument-dev/go1.21.7_Us_xh_in_go_096be049/go1.21.7/src/cmd/compile/main.go
+  > GoLand: click Add Configuration > Go Remote > localhost:2345
+  > Terminal: dlv connect localhost:2345
+```
+
+Following these instructions, using your favorite IDE like VSCode,GoLand or just terminal to debug:
+<img width="1792" alt="image" src="https://github.com/xhd2015/xgo/assets/14964938/673df393-6632-4eed-a004-400e0c70d0d1">
+
