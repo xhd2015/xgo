@@ -12,10 +12,13 @@
 
 `xgo` provides *all-in-one* test utilities for golang, including:
 
-- [Mock](#patch)
-- [Trace](#trace)
-- [Trap](#trap) 
-- [Incremental Coverage](#incremental-coverage)
+- [API](#api):
+  - [Mock](#patch)
+  - [Trace](#trace)
+  - [Trap](#trap)
+- [Tools](#tools):
+  - [Test Explorer](#test-explorer)
+  - [Incremental Coverage](#incremental-coverage)
 
 As for the monkey patching part, `xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec)).
 
@@ -427,7 +430,25 @@ func main(){
 
 Trap also have a helper function called `Direct(fn)`, which can be used to bypass any trap and mock interceptors, calling directly into the original function.
 
-## Incremental Coverage
+# Tools
+## Test Explorer
+
+The `xgo e` sub command will open a test explorer UI in the browser, provide go developers a easy way to test and debug go code.
+
+With the test explorer, `xgo test` is used instead of `go test`, to enable mocking functionalities.
+
+```sh
+$ xgo e
+Server listen at http://localhost:7070
+```
+
+<img width="1792" alt="test-explorer" src="https://github.com/xhd2015/xgo/assets/14964938/f8689a2d-b422-4101-acef-0aa41ad7e246">
+
+P.S.: `xgo e` is an alias for `xgo tool test-explorer`.
+
+For help, run `xgo e help`.
+
+# Incremental Coverage
 The `xgo tool coverage` sub command extends go's builtin `go tool cover` for better visualization.
 
 First, run `go test` or `xgo test` to get a coverage profile:

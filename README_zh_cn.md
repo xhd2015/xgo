@@ -12,10 +12,13 @@
 
 `xgo`提供了一个*全功能*的Golang测试工具集, 包括:
 
-- [Mock](#patch)
-- [Trace](#trace)
-- [Trap](#trap)
-- [增量覆盖率](#增量覆盖率)
+- [API](#api)
+  - [Mock](#patch)
+  - [Trace](#trace)
+  - [Trap](#trap)
+- [工具](#工具)
+  - [Test Explorer](#test-explorer)
+  - [增量覆盖率](#增量覆盖率)
 
 就Mock而言，`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec))。
 
@@ -416,6 +419,25 @@ func TestTrace(t *testing.T) {
 }
 ```
 结果中只会包含`B()`和`C()`.
+
+# 工具
+
+## Test Explorer
+
+子命令`xgo e`将会打开一个浏览器窗口, 提供给Go开发者一种简单快速的方式来测试和调试Go代码。
+
+使用Test Explorer时，`xgo test`将会替代`go test`来运行测试用例，以便允许对代码进行Mock。
+
+```sh
+$ xgo e
+Server listen at http://localhost:7070
+```
+
+<img width="1792" alt="test-explorer" src="https://github.com/xhd2015/xgo/assets/14964938/f8689a2d-b422-4101-acef-0aa41ad7e246">
+
+P.S.: `xgo e`是`xgo tool test-explorer`的别名。
+
+运行`xgo e help`来获取更多帮助。
 
 ## 增量覆盖率
 子命令`xgo tool coverage`扩展了go内置的`go tool cover`, 提供了更好的覆盖率可视化体验。

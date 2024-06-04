@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/support/flag"
+
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -29,17 +31,26 @@ type Options struct {
 	ProjectDir       string
 	Exclude          []string
 	Flags            []string
+
+	Config string
 }
 
 func Main(args []string, opts *Options) error {
 	if opts == nil {
 		opts = &Options{}
 	}
+	var flagHelp bool
 	n := len(args)
+	var remainArgs []string
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--" {
+			remainArgs = append(remainArgs, args[i+1:]...)
 			break
+		}
+		if arg == "-h" || arg == "--help" {
+			flagHelp = true
+			continue
 		}
 		if arg == "--go-command" {
 			if i+1 >= n {
@@ -74,10 +85,23 @@ func Main(args []string, opts *Options) error {
 			i++
 			continue
 		}
+
+		ok, err := flag.TryParseFlagValue("--config", &opts.Config, nil, &i, args)
+		if err != nil {
+			return err
+		}
+		if ok {
+			continue
+		}
 		if !strings.HasPrefix(arg, "-") {
+			remainArgs = append(remainArgs, arg)
 			continue
 		}
 		return fmt.Errorf("unrecognized flag: %s", arg)
+	}
+	if flagHelp || (len(remainArgs) > 0 && remainArgs[0] == "help") {
+		fmt.Print(strings.TrimPrefix(help, "\n"))
+		return nil
 	}
 	return handle(opts)
 }
@@ -165,15 +189,24 @@ func handle(opts *Options) error {
 	if opts == nil {
 		opts = &Options{}
 	}
-
-	configFile := filepath.Join(opts.ProjectDir, "test.config.json")
-	err := parseConfigAndValidate(configFile, opts)
-	if err != nil {
-		return err
+	var configFile string
+	configFileName := opts.Config
+	var configFileRequired bool
+	if configFileName != "none" {
+		if configFileName == "" {
+			configFile = filepath.Join(opts.ProjectDir, "test.config.json")
+		} else {
+			configFileRequired = true
+			configFile = filepath.Join(opts.ProjectDir, configFileName)
+		}
+		err := parseConfigAndValidate(configFile, opts, configFileRequired)
+		if err != nil {
+			return err
+		}
 	}
 
 	getTestConfig := func() (*TestConfig, error) {
-		conf, err := parseConfigAndMergeOptions(configFile, opts)
+		conf, err := parseConfigAndMergeOptions(configFile, opts, configFileRequired)
 		if err != nil {
 			return nil, fmt.Errorf("read test config:%w", err)
 		}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
+	test_explorer "github.com/xhd2015/xgo/cmd/xgo/test-explorer"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
@@ -71,15 +72,16 @@ func main() {
 		exec_tool.Main(args)
 		return
 	}
+	if cmd == "test-explorer" || cmd == "explorer" || cmd == "e" {
+		err := test_explorer.Main(args, &test_explorer.Options{
+			DefaultGoCommand: "xgo",
+		})
+		consumeErrAndExit(err)
+		return
+	}
 	if cmd == "tool" {
 		err := handleTool(args)
-		if err != nil {
-			if err, ok := err.(*exec.ExitError); ok {
-				os.Exit(err.ExitCode())
-			}
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
+		consumeErrAndExit(err)
 		return
 	}
 	if cmd != "build" && cmd != "run" && cmd != "test" && cmd != "exec" {
@@ -94,20 +96,14 @@ func main() {
 
 	err := handleBuild(cmd, args)
 	if err != nil {
-		var errMsg string
-		var exitCode int = 1
-		if e, ok := err.(*exec.ExitError); ok {
-			errMsg = string(e.Stderr)
-			if errMsg == "" {
-				errMsg = err.Error()
-			}
-			exitCode = e.ExitCode()
-		} else {
-			errMsg = err.Error()
+		code, stderr := parseErr(err)
+		logDebug("finished with error: %s", stderr)
+		if len(stderr) > 0 {
+			os.Stderr.Write(stderr)
+			os.Stderr.WriteString("\n")
 		}
-		logDebug("finished with error: %s", errMsg)
-		fmt.Fprintf(os.Stderr, "%v\n", errMsg)
-		os.Exit(exitCode)
+		os.Exit(code)
+		return
 	}
 	logDebug("finished successfully")
 }
@@ -758,4 +754,23 @@ func assertDir(dir string) error {
 		return fmt.Errorf("not a dir")
 	}
 	return nil
+}
+
+func parseErr(err error) (code int, stderr []byte) {
+	if err == nil {
+		return 0, nil
+	}
+	if err, ok := err.(*exec.ExitError); ok {
+		return err.ExitCode(), err.Stderr
+	}
+	return 1, []byte(err.Error())
+}
+
+func consumeErrAndExit(err error) {
+	code, stderr := parseErr(err)
+	if len(stderr) > 0 {
+		os.Stderr.Write(stderr)
+		os.Stderr.WriteString("\n")
+	}
+	os.Exit(code)
 }

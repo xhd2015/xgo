@@ -32,7 +32,10 @@ Examples of Trace:
     xgo tool trace TestSomething.json            view collected stack trace
 
 Example of Test Explorer:
-    xgo tool test-explorer                       open test explorer 
+    xgo e                                        open test explorer, alias for xgo tool test-explorer
+    xgo explorer                                 alias for xgo tool test-explorer
+    xgo test-explorer                            alias for xgo tool test-explorer
+    xgo tool test-explorer                       canonical command to open test-explorer
 
 See https://github.com/xhd2015/xgo for documentation.
 

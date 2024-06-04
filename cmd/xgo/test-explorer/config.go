@@ -123,13 +123,17 @@ func parseTestConfig(config string) (*TestConfig, error) {
 	return conf, nil
 }
 
-func parseConfigAndMergeOptions(configFile string, opts *Options) (*TestConfig, error) {
-	data, readErr := ioutil.ReadFile(configFile)
-	if readErr != nil {
-		if !errors.Is(readErr, os.ErrNotExist) {
-			return nil, readErr
+func parseConfigAndMergeOptions(configFile string, opts *Options, configFileRequired bool) (*TestConfig, error) {
+	var data []byte
+	if configFile != "" {
+		var readErr error
+		data, readErr = ioutil.ReadFile(configFile)
+		if readErr != nil {
+			if configFileRequired || !errors.Is(readErr, os.ErrNotExist) {
+				return nil, readErr
+			}
+			readErr = nil
 		}
-		readErr = nil
 	}
 	var testConfig *TestConfig
 	if len(data) > 0 {
@@ -184,8 +188,8 @@ func validateGoVersion(testConfig *TestConfig) error {
 	return nil
 }
 
-func parseConfigAndValidate(configFile string, opts *Options) error {
-	testConfig, err := parseConfigAndMergeOptions(configFile, opts)
+func parseConfigAndValidate(configFile string, opts *Options, configFileRequired bool) error {
+	testConfig, err := parseConfigAndMergeOptions(configFile, opts, configFileRequired)
 	if err != nil {
 		return err
 	}
