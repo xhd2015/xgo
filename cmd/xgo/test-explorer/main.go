@@ -33,6 +33,8 @@ type Options struct {
 	Flags            []string
 
 	Config string
+	Port   string
+	Bind   string
 }
 
 func Main(args []string, opts *Options) error {
@@ -93,6 +95,23 @@ func Main(args []string, opts *Options) error {
 		if ok {
 			continue
 		}
+		if arg == "--port" {
+			if i+1 >= n {
+				return fmt.Errorf("%s requires value", arg)
+			}
+			opts.Port = args[i+1]
+			i++
+			continue
+		}
+		if arg == "--bind" {
+			if i+1 >= n {
+				return fmt.Errorf("%s requires value", arg)
+			}
+			opts.Bind = args[i+1]
+			i++
+			continue
+		}
+
 		if !strings.HasPrefix(arg, "-") {
 			remainArgs = append(remainArgs, arg)
 			continue
@@ -281,9 +300,10 @@ func handle(opts *Options) error {
 	setupTestHandler(server, opts.ProjectDir, getTestConfig)
 	setupOpenHandler(server)
 
-	return netutil.ServePortHTTP(server, 7070, true, 500*time.Millisecond, func(port int) {
-		url = fmt.Sprintf("http://localhost:%d", port)
-		fmt.Printf("Server listen at %s\n", url)
+	host, port := netutil.GetHostAndIP(opts.Bind, opts.Port)
+	autoIncrPort := true
+	return netutil.ServePortHTTP(server, host, port, autoIncrPort, 500*time.Millisecond, func(port int) {
+		url := netutil.BuildAndDisplayURL(host, port)
 		openURL(url)
 	})
 }

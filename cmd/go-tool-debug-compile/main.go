@@ -154,7 +154,7 @@ func dlvExecListen(dir string, env []string, compilerBinary string, args []strin
 		}
 		break
 	}
-	return netutil.ServePort(2345, true, 500*time.Millisecond, func(port int) {
+	return netutil.ServePort("localhost", 2345, true, 500*time.Millisecond, func(port int) {
 		prompt := debug.FormatDlvPromptOptions(port, &debug.FormatDlvOptions{
 			VscodeExtra: vscodeExtra,
 		})

@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"runtime"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +35,7 @@ See https://github.com/xhd2015/xgo for documentation.
 func Main(args []string) {
 	var files []string
 	var port string
+	var bind string
 	n := len(args)
 
 	var showHelp bool
@@ -61,6 +61,20 @@ func Main(args []string) {
 			port = strings.TrimPrefix(arg, "--port=")
 			continue
 		}
+		// add --bind
+		if arg == "--bind" {
+			if i+1 >= n {
+				fmt.Fprintf(os.Stderr, "--bind requires arg\n")
+				os.Exit(1)
+			}
+			bind = args[i+1]
+			i++
+			continue
+		} else if strings.HasPrefix(arg, "--bind=") {
+			bind = strings.TrimPrefix(arg, "--bind=")
+			continue
+		}
+
 		if !strings.HasPrefix(arg, "-") {
 			files = append(files, arg)
 			continue
@@ -84,7 +98,10 @@ func Main(args []string) {
 	if port == "" {
 		port = os.Getenv("PORT")
 	}
-	err := serveFile(port, file)
+	if bind == "" {
+		bind = "localhost"
+	}
+	err := serveFile(bind, port, file)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -92,7 +109,7 @@ func Main(args []string) {
 
 }
 
-func serveFile(portStr string, file string) error {
+func serveFile(bindStr string, portStr string, file string) error {
 	stat, err := os.Stat(file)
 	if err != nil {
 		return err
@@ -149,22 +166,11 @@ func serveFile(portStr string, file string) error {
 		}
 		w.Write(output)
 	})
-	var autoIncrPort bool
-	var port int
-	if portStr == "" {
-		port = 7070
-		autoIncrPort = true
-	} else {
-		parsePort, err := strconv.ParseInt(portStr, 10, 64)
-		if err != nil {
-			return fmt.Errorf("bad port: %s", portStr)
-		}
-		port = int(parsePort)
-	}
-	err = netutil.ServePortHTTP(server, port, autoIncrPort, 500*time.Millisecond, func(port int) {
-		url := fmt.Sprintf("http://localhost:%d", port)
-		fmt.Printf("Server listen at %s\n", url)
 
+	host, port := netutil.GetHostAndIP(bindStr, portStr)
+	autoIncrPort := true
+	err = netutil.ServePortHTTP(server, host, port, autoIncrPort, 500*time.Millisecond, func(port int) {
+		url := netutil.BuildAndDisplayURL(host, port)
 		openURL(url)
 	})
 	if err != nil {

@@ -73,7 +73,7 @@ func debug(ctx *RunContext) error {
 	if err != nil {
 		return err
 	}
-	err = netutil.ServePort(2345, true, 500*time.Millisecond, func(port int) {
+	err = netutil.ServePort("localhost", 2345, true, 500*time.Millisecond, func(port int) {
 		fmt.Fprintln(stderr, debug_util.FormatDlvPrompt(port))
 	}, func(port int) error {
 		// dlv exec --api-version=2 --listen=localhost:2345 --accept-multiclient --headless ./debug.bin
