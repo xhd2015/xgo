@@ -1,0 +1,72 @@
+# This workflow is mainly used to debug some tricky bugs that cannot be
+# easily setup on my local machine, for example, arm64-related bugs
+# (because by the time writing I don't have an M1 or M2 mac)
+# And it's hard to setup qemu.
+
+name: Custom Test
+
+on:
+  push:
+    branches: [ "nothing" ]
+  workflow_dispatch:
+    inputs:
+      dummy:
+        default: nothing
+
+    # 'gin-gonic/gin' ok
+    # 'fatedier/frp' cannot pass even with go? need to verify
+    #
+    # NOTE: use serially job to avoid 'Job Cancelled' which could
+    # possible be due to memory exhaust
+jobs:
+
+  test-with-xgo:
+    runs-on: macos-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: xgo
+      
+      - name: Prepare Utility Scripts
+        run: |
+          cat > util.sh <<'EOF'
+          function record_exit_code {
+              local exit_code=$?
+              echo "exit code: $exit_code"
+              echo "$exit_code" > test-exit-code.txt
+          }
+          trap 'record_exit_code' EXIT
+          EOF
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      
+      - name: Install Xgo Locally
+        run: |
+          cd xgo
+          go install ./cmd/xgo
+          xgo exec --reset-instrument --log-debug go version
+          xgo revision
+      
+      - name: Dep check
+        run: |
+          go install github.com/xhd2015/go-inspect/cmd/depcheck@latest
+          cd xgo/runtime/test/issue_194_asm_func/demo
+          depcheck ./
+      
+      - name: Test with go
+        continue-on-error: true
+        run: |
+          source util.sh
+          cd xgo/runtime/test/issue_194_asm_func/demo
+          go test -v
+
+      - name: Test with xgo
+        continue-on-error: true
+        run: |
+          source util.sh
+          cd xgo/runtime/test/issue_194_asm_func/demo
+          xgo test -v

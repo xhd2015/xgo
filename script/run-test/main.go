@@ -121,6 +121,16 @@ var extraSubTests = []*TestCase{
 		windowsFlags: []string{"--trap-stdlib=false"},
 	},
 	{
+		// see https://github.com/xhd2015/xgo/issues/202
+		name: "asm_func",
+		dir:  "runtime/test/issue_194_asm_func",
+	},
+	{
+		// see https://github.com/xhd2015/xgo/issues/194
+		name: "asm_func_sonic",
+		dir:  "runtime/test/issue_194_asm_func/demo",
+	},
+	{
 		// see https://github.com/xhd2015/xgo/issues/142
 		name:         "trace_panic_peek",
 		dir:          "runtime/test/trace_panic_peek/...",

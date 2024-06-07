@@ -653,6 +653,10 @@ func extractFuncDecls(fileIndex int, f *syntax.File, file string, decl syntax.De
 }
 
 func getFuncDeclInfo(fileIndex int, f *syntax.File, file string, fn *syntax.FuncDecl) *DeclInfo {
+	if fn.Body == nil {
+		// see bug https://github.com/xhd2015/xgo/issues/202
+		return nil
+	}
 	line := fn.Pos().Line()
 	fnName := fn.Name.Value
 	// there are cases where fnName is _
