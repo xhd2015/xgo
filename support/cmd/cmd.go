@@ -141,7 +141,7 @@ func cmdExecEnv(cmd string, args []string, env []string, dir string, useStdout b
 	out, err := execCmd.Output()
 	outStr := strings.TrimSuffix(string(out), "\n")
 	if err != nil {
-		if !c.ignoreError {
+		if c != nil && !c.ignoreError {
 			return outStr, err
 		}
 		err = nil
