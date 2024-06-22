@@ -183,7 +183,7 @@ func createWorkDir(projectRoot string) (tmpRoot string, tmpProjectDir string, er
 		tmpDir = os.TempDir()
 	}
 
-	tmpRoot = filepath.Join(tmpDir, "xgo_"+fileutil.CleanSpecial(getRevision()))
+	tmpRoot = filepath.Join(tmpDir, "xgo_"+fileutil.CleanSpecial(getCoreRevision()))
 	err = os.MkdirAll(tmpRoot, 0755)
 	if err != nil {
 		return "", "", err

@@ -57,7 +57,11 @@ func main() {
 		return
 	}
 	if cmd == "revision" {
-		fmt.Println(getRevision())
+		if len(args) > 0 && args[0] == "--core" {
+			fmt.Println(getCoreRevision())
+		} else {
+			fmt.Println(getRevision())
+		}
 		return
 	}
 	if cmd == "upgrade" {
@@ -290,30 +294,27 @@ func handleBuild(cmd string, args []string) error {
 		}
 	}()
 
-	var revisionChanged bool
+	var coreRevisionChanged bool
 	if !noInstrument && !noSetup {
 		err = ensureDirs(binDir, logDir, instrumentDir, packageDataDir)
 		if err != nil {
 			return err
 		}
-		revision := getRevision()
-		if isDevelopment {
-			revision = revision + " DEV"
-		}
+		coreRevision := getCoreRevision()
 		var err error
-		revisionChanged, err = checkRevisionChanged(revisionFile, revision)
+		coreRevisionChanged, err = checkRevisionChanged(revisionFile, coreRevision)
 		if err != nil {
 			return err
 		}
 
 		if resetInstrument {
-			logDebug("revision changed, reset %s", instrumentDir)
+			logDebug("reset instrument %s", instrumentDir)
 			err := os.RemoveAll(instrumentDir)
 			if err != nil {
 				return err
 			}
 		}
-		resetOrRevisionChanged := resetInstrument || revisionChanged || buildCompiler
+		resetOrRevisionChanged := resetInstrument || buildCompiler || coreRevisionChanged
 		if isDevelopment || resetOrRevisionChanged {
 			logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
 			err = syncGoroot(goroot, instrumentGoroot, fullSyncRecord)
@@ -329,8 +330,8 @@ func handleBuild(cmd string, args []string) error {
 		}
 
 		if resetOrRevisionChanged {
-			logDebug("revision %s write to %s", revision, revisionFile)
-			err := os.WriteFile(revisionFile, []byte(revision), 0755)
+			logDebug("revision %s write to %s", coreRevision, revisionFile)
+			err := os.WriteFile(revisionFile, []byte(coreRevision), 0755)
 			if err != nil {
 				return err
 			}
@@ -440,7 +441,7 @@ func handleBuild(cmd string, args []string) error {
 		if toolExecFlag != "" {
 			buildCmdArgs = append(buildCmdArgs, toolExecFlag)
 		}
-		if flagA || compilerChanged || revisionChanged {
+		if flagA || compilerChanged || coreRevisionChanged {
 			buildCmdArgs = append(buildCmdArgs, "-a")
 		}
 		if flagV {
@@ -503,9 +504,9 @@ func handleBuild(cmd string, args []string) error {
 		execCmd.Env = append(execCmd.Env, "XGO_COMPILER_BIN="+compilerBin)
 		execCmd.Env = append(execCmd.Env, exec_tool.XGO_COMPILE_PKG_DATA_DIR+"="+packageDataDir)
 		// xgo versions
-		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_VERSION="+VERSION)
-		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_REVISION="+REVISION)
-		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_VERSION_NUMBER="+strconv.FormatInt(NUMBER, 10))
+		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_VERSION="+CORE_VERSION)
+		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_REVISION="+CORE_REVISION)
+		execCmd.Env = append(execCmd.Env, "XGO_TOOLCHAIN_VERSION_NUMBER="+strconv.FormatInt(CORE_NUMBER, 10))
 
 		// IR
 		execCmd.Env = append(execCmd.Env, "XGO_DEBUG_DUMP_IR="+dumpIR)

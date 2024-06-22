@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,11 +117,15 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 		// suffix "+1" to indicate this
 		rev := commitHash + "+1"
 
-		relVersionFiles := revision.GetVersionFiles("")
-		versionFiles := make([]string, 0, len(relVersionFiles))
+		xgoVersionRelFile := revision.GetXgoVersionFile("")
+		runtimeVersionRelFile := revision.GetRuntimeVersionFile("")
+
+		xgoRevisonFile := filepath.Join(rootDir, xgoVersionRelFile)
+		runtimeVersionFile := filepath.Join(rootDir, runtimeVersionRelFile)
+
+		relVersionFiles := []string{xgoVersionRelFile}
 		for _, relFile := range relVersionFiles {
 			file := filepath.Join(rootDir, relFile)
-			versionFiles = append(versionFiles, file)
 			content, err := revision.GetFileContent(rootDir, commitHash, relFile)
 			if err != nil {
 				return err
@@ -129,13 +134,30 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 			if err != nil {
 				return err
 			}
-			err = revision.PatchVersionFile(file, rev, !noUpdateVersion, version+1)
+			err = revision.PatchVersionFile(file, "", rev, !noUpdateVersion, version+1)
 			if err != nil {
 				return err
 			}
 		}
 
-		affectedFiles = append(affectedFiles, versionFiles...)
+		// copy xgo's core version to runtime version
+		code, err := ioutil.ReadFile(xgoRevisonFile)
+		if err != nil {
+			return err
+		}
+		coreVersion, coreRevision, coreNumber, err := revision.ParseCoreVersionConstants(string(code))
+		if err != nil {
+			return err
+		}
+		if coreVersion == "" || coreRevision == "" || coreNumber <= 0 {
+			return fmt.Errorf("invalid core version: %s", xgoVersionRelFile)
+		}
+		err = revision.PatchVersionFile(runtimeVersionFile, coreVersion, coreRevision, false, coreNumber)
+		if err != nil {
+			return err
+		}
+
+		affectedFiles = append(affectedFiles, xgoRevisonFile, runtimeVersionFile)
 	}
 
 	// run generate

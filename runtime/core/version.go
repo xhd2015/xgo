@@ -7,10 +7,10 @@ import (
 )
 
 const VERSION = "1.0.40"
-const REVISION = "cb5d3025fad60e00be0dfe8fdc7eb1bef97dedc6+1"
-const NUMBER = 267
+const REVISION = "7b0e45276bdca03c2d25c9a4f507d15e627c9664+1"
+const NUMBER = 265
 
-// these fields will be filled by compiler
+// these fields will be filled by compiler, see CORE_VERSION in cmd/xgo/version.go
 const XGO_VERSION = ""
 const XGO_REVISION = ""
 const XGO_NUMBER = 0

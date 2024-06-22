@@ -40,14 +40,14 @@ func init() {
 // assume go 1.20
 // the patch should be idempotent
 // the origGoroot is used to generate runtime defs, see https://github.com/xhd2015/xgo/issues/4#issuecomment-2017880791
-func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrRevisionChanged bool) error {
+func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrCoreRevisionChanged bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
 	if isDevelopment && xgoSrc == "" {
 		return fmt.Errorf("requires xgoSrc")
 	}
-	if !isDevelopment && !resetOrRevisionChanged {
+	if !isDevelopment && !resetOrCoreRevisionChanged {
 		return nil
 	}
 
@@ -58,7 +58,7 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 	}
 
 	// compiler
-	err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, resetOrRevisionChanged, syncWithLink)
+	err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -88,13 +88,13 @@ func replaceMarkerNewline(content []byte, marker []byte) ([]byte, error) {
 	}
 	return content[idx:], nil
 }
-func checkRevisionChanged(revisionFile string, currentRevision string) (bool, error) {
-	savedRevision, err := readOrEmpty(revisionFile)
+func checkRevisionChanged(coreRevisionFile string, currentCoreRevision string) (bool, error) {
+	savedCoreRevision, err := readOrEmpty(coreRevisionFile)
 	if err != nil {
 		return false, err
 	}
-	logDebug("current revision: %s, last revision: %s from file %s", currentRevision, savedRevision, revisionFile)
-	if savedRevision == "" || savedRevision != currentRevision {
+	logDebug("current core revision: %s, last core revision: %s from file %s", currentCoreRevision, savedCoreRevision, coreRevisionFile)
+	if savedCoreRevision == "" || savedCoreRevision != currentCoreRevision {
 		return true, nil
 	}
 	return false, nil

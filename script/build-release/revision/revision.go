@@ -2,12 +2,15 @@ package revision
 
 import (
 	"fmt"
+	"go/ast"
+	"go/token"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
+	"github.com/xhd2015/xgo/support/goparse"
 	"github.com/xhd2015/xgo/support/strutil"
 )
 
@@ -29,6 +32,26 @@ func GetFileContent(dir string, ref string, file string) (string, error) {
 		return "", fmt.Errorf("requires file")
 	}
 	return cmd.Dir(dir).Output("git", "cat-file", "-p", fmt.Sprintf("%s:%s", ref, file))
+}
+
+func ReplaceVersion(s string, version string) (string, error) {
+	if strings.Contains(version, `"`) {
+		return "", fmt.Errorf("version cannot have \": %s", version)
+	}
+	replaceLine := func(line string, index int) (string, error) {
+		qIdx := strings.Index(line[index+1:], `"`)
+		if qIdx < 0 {
+			return "", fmt.Errorf("invalid VERSION variable, missing \"")
+		}
+		qIdx += index + 1
+		endIdx := strings.Index(line[qIdx+1:], `"`)
+		if endIdx < 0 {
+			return "", fmt.Errorf("invalid VERSION variable, missing ending \"")
+		}
+		endIdx += qIdx + 1
+		return line[:qIdx+1] + version + line[endIdx:], nil
+	}
+	return replaceSequence(s, []string{"const", "VERSION", "="}, replaceLine)
 }
 
 func ReplaceRevision(s string, revision string) (string, error) {
@@ -56,7 +79,7 @@ var constNumberSeq = []string{"const", "NUMBER", "="}
 func IncrementNumber(s string) (string, error) {
 	return replaceOrIncrementNumber(s, -1)
 }
-func replaceOrIncrementNumber(s string, version int) (string, error) {
+func replaceOrIncrementNumber(s string, number int) (string, error) {
 	replaceLine := func(line string, index int) (string, error) {
 		start, end, num, err := parseNum(line[index:])
 		if err != nil {
@@ -64,11 +87,11 @@ func replaceOrIncrementNumber(s string, version int) (string, error) {
 		}
 		start += index
 		end += index
-		if version < 0 {
-			version = num + 1
+		if number < 0 {
+			number = num + 1
 		}
 
-		return line[:start] + strconv.Itoa(version) + line[end:], nil
+		return line[:start] + strconv.Itoa(number) + line[end:], nil
 	}
 	return replaceSequence(s, constNumberSeq, replaceLine)
 }
@@ -83,11 +106,15 @@ func parseNum(str string) (start int, end int, num int, err error) {
 		return 0, 0, 0, fmt.Errorf("no number found")
 	}
 
-	end = strings.LastIndexFunc(str[start+1:], isDigit)
-	if end < 0 {
-		return 0, 0, 0, fmt.Errorf("no number found")
+	if start < len(str)-1 {
+		end = strings.LastIndexFunc(str[start+1:], isDigit)
+		if end < 0 {
+			return 0, 0, 0, fmt.Errorf("no number found")
+		}
+		end += start + 2
+	} else {
+		end = start + 1
 	}
-	end += start + 2
 
 	numStr := str[start:end]
 
@@ -142,15 +169,23 @@ func replaceSequence(s string, seq []string, replaceLine func(line string, index
 	return strings.Join(lines, "\n"), nil
 }
 
-func PatchVersionFile(file string, rev string, autIncrementNumber bool, version int) error {
+func PatchVersionFile(file string, version string, rev string, autIncrementNumber bool, number int) error {
 	err := fileutil.Patch(file, func(data []byte) ([]byte, error) {
 		content := string(data)
-		newContent, err := ReplaceRevision(content, rev)
+		newContent := content
+		var err error
+		if version != "" {
+			newContent, err = ReplaceVersion(newContent, version)
+			if err != nil {
+				return nil, err
+			}
+		}
+		newContent, err = ReplaceRevision(newContent, rev)
 		if err != nil {
 			return nil, err
 		}
-		if version > 0 {
-			newContent, err = replaceOrIncrementNumber(newContent, version)
+		if number > 0 {
+			newContent, err = replaceOrIncrementNumber(newContent, number)
 			if err != nil {
 				return nil, err
 			}
@@ -168,9 +203,99 @@ func PatchVersionFile(file string, rev string, autIncrementNumber bool, version 
 	return nil
 }
 
+func ParseVersionConstants(content string) (version string, revision string, number int, err error) {
+	return parseVersionConstants(content, "VERSION", "REVISION", "NUMBER")
+}
+
+func ParseCoreVersionConstants(content string) (version string, revision string, number int, err error) {
+	return parseVersionConstants(content, "CORE_VERSION", "CORE_REVISION", "CORE_NUMBER")
+}
+
+func parseVersionConstants(content string, versionName string, revisionName string, numberName string) (version string, revision string, number int, err error) {
+	constants, err := ParseConstants(content)
+	if err != nil {
+		return
+	}
+	version, err = strconv.Unquote(constants[versionName])
+	if err != nil {
+		return
+	}
+	revision, err = strconv.Unquote(constants[revisionName])
+	if err != nil {
+		return
+	}
+	num := constants[numberName]
+	if num != "" {
+		var i int64
+		i, err = strconv.ParseInt(num, 10, 64)
+		if err != nil {
+			return
+		}
+		number = int(i)
+	}
+	return
+}
+
+// parse
+func ParseConstants(content string) (map[string]string, error) {
+	file, _, err := goparse.ParseFileCode("src.go", []byte(content))
+	if err != nil {
+		return nil, err
+	}
+
+	constants := make(map[string]string)
+	for _, decl := range file.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		if genDecl.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			constSpec, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			var names []string
+			for _, name := range constSpec.Names {
+				names = append(names, name.Name)
+			}
+			var values []string
+			for _, value := range constSpec.Values {
+				var valueLit string
+				if lit, ok := value.(*ast.BasicLit); ok {
+					valueLit = lit.Value
+				} else {
+					return nil, fmt.Errorf("unknown const spec value: %T %v", value, value)
+				}
+				values = append(values, valueLit)
+			}
+			if len(names) != len(values) {
+				return nil, fmt.Errorf("mismatch decl: names=%v,values=%v", names, values)
+			}
+
+			for i, name := range names {
+				constants[name] = values[i]
+			}
+		}
+	}
+	return constants, nil
+}
+
+func GetXgoVersionFile(rootDir string) string {
+	return filepath.Join(rootDir, "cmd", "xgo", "version.go")
+}
+func GetRuntimeVersionFile(rootDir string) string {
+	return filepath.Join(rootDir, "runtime", "core", "version.go")
+}
+
 func GetVersionFiles(rootDir string) []string {
 	return []string{
-		filepath.Join(rootDir, "cmd", "xgo", "version.go"),
-		filepath.Join(rootDir, "runtime", "core", "version.go"),
+		GetXgoVersionFile(rootDir),
+
+		// NOTE: runtime version not automatically updated,
+		// see https://github.com/xhd2015/xgo/issues/216
+		// GetRuntimeVersionFile(rootDir),
 	}
 }
