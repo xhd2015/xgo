@@ -170,7 +170,8 @@ func serveFile(bindStr string, portStr string, file string) error {
 	host, port := netutil.GetHostAndIP(bindStr, portStr)
 	autoIncrPort := true
 	err = netutil.ServePortHTTP(server, host, port, autoIncrPort, 500*time.Millisecond, func(port int) {
-		url := netutil.BuildAndDisplayURL(host, port)
+		url, extra := netutil.GetURLToOpen(host, port)
+		netutil.PrintUrls(url, extra...)
 		openURL(url)
 	})
 	if err != nil {

@@ -12,11 +12,13 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/xhd2015/xgo/support/flag"
+	"github.com/xhd2015/xgo/support/pattern"
 
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
@@ -35,6 +37,8 @@ type Options struct {
 	Config string
 	Port   string
 	Bind   string
+
+	LogConsole bool
 }
 
 func Main(args []string, opts *Options) error {
@@ -87,6 +91,10 @@ func Main(args []string, opts *Options) error {
 			i++
 			continue
 		}
+		if arg == "--log-console" {
+			opts.LogConsole = true
+			continue
+		}
 
 		ok, err := flag.TryParseFlagValue("--config", &opts.Config, nil, &i, args)
 		if err != nil {
@@ -135,6 +143,19 @@ const (
 	TestingItemKind_Case = "case"
 )
 
+func (c TestingItemKind) Order() int {
+	switch c {
+	case TestingItemKind_Dir:
+		return 0
+	case TestingItemKind_File:
+		return 1
+	case TestingItemKind_Case:
+		return 2
+	default:
+		return -1
+	}
+}
+
 type RunStatus string
 
 const (
@@ -147,22 +168,80 @@ const (
 )
 
 type TestingItem struct {
-	Name    string          `json:"name"`
-	RelPath string          `json:"relPath"`
-	File    string          `json:"file"`
-	Line    int             `json:"line"`
-	Kind    TestingItemKind `json:"kind"`
-	Error   string          `json:"error"`
+	Key          string          `json:"key"`
+	Name         string          `json:"name"`
+	BaseCaseName string          `json:"baseCaseName"` // the base case's name
+	NameUnderPkg string          `json:"nameUnderPkg"` // the name under pkg
+	RelPath      string          `json:"relPath"`
+	File         string          `json:"file"`
+	Line         int             `json:"line"`
+	Kind         TestingItemKind `json:"kind"`
+	Error        string          `json:"error"`
 
 	// only if Kind==dir
+	// indicating any file ends with _test.go
 	// go only
 	HasTestGoFiles bool `json:"hasTestGoFiles"`
 
-	// when filter is not
+	// valid for Kind==dir,file
+	// indicating any cases belongs to this item
 	// go only
-	HasTestCases bool `json:"hasTestCases"`
+	HasTestCases bool              `json:"hasTestCases"`
+	State        *TestingItemState `json:"state"`
 
 	Children []*TestingItem `json:"children"`
+}
+
+// clone excluding children
+func (c *TestingItem) CloneSelf() *TestingItem {
+	if c == nil {
+		return nil
+	}
+	return &TestingItem{
+		Key:            c.Key,
+		Name:           c.Name,
+		BaseCaseName:   c.BaseCaseName,
+		NameUnderPkg:   c.NameUnderPkg,
+		RelPath:        c.RelPath,
+		File:           c.File,
+		Line:           c.Line,
+		Kind:           c.Kind,
+		Error:          c.Error,
+		HasTestGoFiles: c.HasTestGoFiles,
+		HasTestCases:   c.HasTestCases,
+		State:          c.State.Clone(),
+	}
+}
+
+type HideType string
+
+const (
+	HideType_None     HideType = ""
+	HideType_All      HideType = "all"
+	HideType_Children HideType = "children"
+)
+
+type TestingItemState struct {
+	Selected  bool      `json:"selected"`
+	Expanded  bool      `json:"expanded"`
+	Status    RunStatus `json:"status"`
+	Debugging bool      `json:"debugging"`
+	Logs      string    `json:"logs"`
+	HideType  HideType  `json:"hideType"`
+}
+
+func (c *TestingItemState) Clone() *TestingItemState {
+	if c == nil {
+		return nil
+	}
+	return &TestingItemState{
+		Selected:  c.Selected,
+		Expanded:  c.Expanded,
+		Status:    c.Status,
+		Debugging: c.Debugging,
+		Logs:      c.Logs,
+		HideType:  c.HideType,
+	}
 }
 
 type BaseRequest struct {
@@ -252,11 +331,15 @@ func handle(opts *Options) error {
 			if dir == "" {
 				dir = opts.ProjectDir
 			}
-			root, err := scanTests(dir, true, opts.Exclude)
+			conf, err := getTestConfig()
 			if err != nil {
 				return nil, err
 			}
-			return []*TestingItem{root}, nil
+			root, err := scanTests(dir, true, conf.Exclude)
+			if err != nil {
+				return nil, err
+			}
+			return root, nil
 		})
 	})
 
@@ -295,7 +378,7 @@ func handle(opts *Options) error {
 		})
 	})
 
-	setupRunHandler(server, opts.ProjectDir, getTestConfig)
+	setupRunHandler(server, opts.ProjectDir, opts.LogConsole, getTestConfig)
 	setupDebugHandler(server, opts.ProjectDir, getTestConfig)
 	setupTestHandler(server, opts.ProjectDir, getTestConfig)
 	setupOpenHandler(server)
@@ -303,7 +386,8 @@ func handle(opts *Options) error {
 	host, port := netutil.GetHostAndIP(opts.Bind, opts.Port)
 	autoIncrPort := true
 	return netutil.ServePortHTTP(server, host, port, autoIncrPort, 500*time.Millisecond, func(port int) {
-		url := netutil.BuildAndDisplayURL(host, port)
+		url, extra := netutil.GetURLToOpen(host, port)
+		netutil.PrintUrls(url, extra...)
 		openURL(url)
 	})
 }
@@ -330,13 +414,20 @@ func parseBody(r io.Reader, req interface{}) error {
 	return json.Unmarshal(data, req)
 }
 
+func getRootName(absDir string) string {
+	return filepath.Base(absDir)
+}
+
+// needParseTests set to true when calling /list
 func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem, error) {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
 	}
+	name := getRootName(absDir)
 	root := &TestingItem{
-		Name: filepath.Base(absDir),
+		Key:  name,
+		Name: name,
 		File: absDir,
 		Kind: TestingItemKind_Dir,
 	}
@@ -350,19 +441,19 @@ func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem,
 		}
 		return parent, nil
 	}
+
+	excludePatterns := pattern.CompilePatterns(exclude)
+
 	err = fileutil.WalkRelative(absDir, func(path, relPath string, d fs.DirEntry) error {
 		if relPath == "" {
 			return nil
 		}
 		if len(exclude) > 0 {
-			var found bool
-			for _, e := range exclude {
-				if e == relPath {
-					found = true
-					break
-				}
+			matchPath := relPath
+			if filepath.Separator != '/' {
+				matchPath = strings.ReplaceAll(relPath, string(filepath.Separator), "/")
 			}
-			if found {
+			if excludePatterns.MatchAnyPrefix(matchPath) {
 				if d.IsDir() {
 					return filepath.SkipDir
 				} else {
@@ -388,8 +479,10 @@ func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem,
 			if err != nil {
 				return err
 			}
+			name := filepath.Base(relPath)
 			item := &TestingItem{
-				Name:    filepath.Base(relPath),
+				Key:     name,
+				Name:    name,
 				RelPath: relPath,
 				File:    path,
 				Kind:    TestingItemKind_Dir,
@@ -407,8 +500,10 @@ func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem,
 		if err != nil {
 			return err
 		}
+		name := filepath.Base(relPath)
 		item := &TestingItem{
-			Name:    filepath.Base(relPath),
+			Key:     name,
+			Name:    name,
 			RelPath: relPath,
 			File:    path,
 			Kind:    TestingItemKind_File,
@@ -418,7 +513,7 @@ func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem,
 		parent.Children = append(parent.Children, item)
 
 		if needParseTests {
-			tests, parseErr := parseTests(path)
+			tests, parseErr := parseTests(absDir, path)
 			if parseErr != nil {
 				item.Error = parseErr.Error()
 			} else {
@@ -427,6 +522,11 @@ func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem,
 				}
 				// TODO: what if test case name same with sub dir?
 				item.Children = append(item.Children, tests...)
+
+				if len(tests) > 0 {
+					item.HasTestCases = true
+					parent.HasTestCases = true
+				}
 			}
 		}
 		return nil
@@ -439,7 +539,47 @@ func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem,
 	// filter items without
 	// any tests
 	filterItem(root, needParseTests)
+	sortByKindAndName(root)
+	selectFirstOne(root)
 	return root, nil
+}
+
+func sortByKindAndName(item *TestingItem) {
+	if item == nil {
+		return
+	}
+	sort.Slice(item.Children, func(i, j int) bool {
+		a := item.Children[i]
+		b := item.Children[j]
+		if a.Kind != b.Kind {
+			return a.Kind.Order() < b.Kind.Order()
+		}
+		return strings.Compare(a.Name, b.Name) < 0
+	})
+	for _, child := range item.Children {
+		sortByKindAndName(child)
+	}
+}
+
+func selectFirstOne(item *TestingItem) bool {
+	if item == nil {
+		return false
+	}
+
+	if item.Kind == TestingItemKind_Case {
+		if item.State == nil {
+			item.State = &TestingItemState{}
+		}
+		item.State.Selected = true
+		return true
+	}
+
+	for _, child := range item.Children {
+		if selectFirstOne(child) {
+			return true
+		}
+	}
+	return false
 }
 
 type DetailResponse struct {

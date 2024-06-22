@@ -47,6 +47,6 @@ func FormatVscodeRemoteConfig(port int) string {
 			"host": "127.0.0.1",
 			"cwd":"./"
 		}
-	}
+	]
 }`, port, port)
 }

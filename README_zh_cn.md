@@ -98,7 +98,7 @@ func TestFuncMock(t *testing.T) {
 	}
 }
 ```
-4. 获取`xgo/runtime`的依赖:
+4. 获取`github.com/xhd2015/xgo/runtime`的依赖:
 ```sh
 go get github.com/xhd2015/xgo/runtime
 ```

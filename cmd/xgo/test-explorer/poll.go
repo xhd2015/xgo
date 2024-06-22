@@ -31,14 +31,15 @@ func setupPollHandler(server *http.ServeMux, prefix string, projectDir string, g
 			if req.Item.Name == "" {
 				return nil, netutil.ParamErrorf("requires name")
 			}
-
 			file := req.Item.File
-			isFile, err := fileutil.IsFile(file)
-			if err != nil {
-				return nil, err
-			}
-			if !isFile {
-				return nil, fmt.Errorf("cannot debug multiple tests")
+			if false {
+				isFile, err := fileutil.IsFile(file)
+				if err != nil {
+					return nil, err
+				}
+				if !isFile {
+					return nil, fmt.Errorf("cannot debug multiple tests")
+				}
 			}
 			absDir, err := filepath.Abs(projectDir)
 			if err != nil {

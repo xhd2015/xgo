@@ -1,0 +1,12 @@
+{
+    "go_cmd2": "xgo",
+    "exclude": [
+        "patch",
+        "test/*_test.go"
+    ],
+    "override": {
+        "comment": "override not currently supported",
+        "path": "test/xgo_test",
+        "go_cmd": "xgo"
+    }
+}

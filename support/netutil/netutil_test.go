@@ -19,7 +19,10 @@ func TestGetLocalHostByIPType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ips := GetLocalHostByIPType(tt.ipType)
+			ips, err := GetLocalHostByIPType(tt.ipType)
+			if err != nil {
+				t.Fatalf("get local host ip: %v", err)
+			}
 			if got := len(ips); got > 0 != tt.want {
 				t.Errorf("GetLocalHostByIPType(%v) = %v; want %v", tt.ipType, got, tt.want)
 			}
@@ -28,7 +31,10 @@ func TestGetLocalHostByIPType(t *testing.T) {
 }
 
 func TestGetHostAndIP(t *testing.T) {
-	ipv4IPs := GetLocalHostByIPType("ipv4")
+	ipv4IPs, err := GetLocalHostByIPType("ipv4")
+	if err != nil {
+		t.Fatalf("get local host ip: %v", err)
+	}
 	var tests = []struct {
 		bindStr  string
 		portStr  string
@@ -49,8 +55,11 @@ func TestGetHostAndIP(t *testing.T) {
 	}
 }
 
-func TestBuildAndDisplayURL(t *testing.T) {
-	ipv4IPs := GetLocalHostByIPType("ipv4")
+func TestGetURLToOpen(t *testing.T) {
+	ipv4IPs, err := GetLocalHostByIPType("ipv4")
+	if err != nil {
+		t.Fatalf("get local host ip: %v", err)
+	}
 	url := fmt.Sprintf("http://%s:7070", ipv4IPs[0])
 	var tests = []struct {
 		host    string
@@ -59,13 +68,13 @@ func TestBuildAndDisplayURL(t *testing.T) {
 	}{
 		{"localhost", 7070, "http://localhost:7070"},
 		{"127.0.0.1", 7070, "http://127.0.0.1:7070"},
-		{"0.0.0.0", 7070, "http://0.0.0.0:7070"},
+		{"0.0.0.0", 7070, "http://127.0.0.1:7070"},
 		{ipv4IPs[0], 7070, url},
 		{"::1", 7070, "http://::1:7070"},
 	}
 
 	for _, tt := range tests {
-		gotURL := BuildAndDisplayURL(tt.host, tt.port)
+		gotURL, _ := GetURLToOpen(tt.host, tt.port)
 		if gotURL != tt.wantURL {
 			t.Errorf("BuildAndDisplayURL(%v, %v) => %v, want %v", tt.host, tt.port, gotURL, tt.wantURL)
 		}

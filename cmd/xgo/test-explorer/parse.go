@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func resolveTests(fullSubDir string) ([]*TestingItem, error) {
+func resolveTests(absDir string, fullSubDir string) ([]*TestingItem, error) {
 	files, err := os.ReadDir(fullSubDir)
 	if err != nil {
 		return nil, err
@@ -26,7 +26,7 @@ func resolveTests(fullSubDir string) ([]*TestingItem, error) {
 			continue
 		}
 		fullFile := filepath.Join(fullSubDir, fileName)
-		tests, err := parseTests(fullFile)
+		tests, err := parseTests(absDir, fullFile)
 		if err != nil {
 			return nil, err
 		}
@@ -64,18 +64,27 @@ func filterItem(item *TestingItem, withCases bool) *TestingItem {
 	return item
 }
 
-func parseTests(file string) ([]*TestingItem, error) {
-	fset, decls, err := parseTestFuncs(file)
+func parseTests(absDir string, absFile string) ([]*TestingItem, error) {
+	fset, decls, err := parseTestFuncs(absFile)
+	if err != nil {
+		return nil, err
+	}
+	relPath, err := filepath.Rel(absDir, absFile)
 	if err != nil {
 		return nil, err
 	}
 	items := make([]*TestingItem, 0, len(decls))
 	for _, fnDecl := range decls {
+		name := fnDecl.Name.Name
 		items = append(items, &TestingItem{
-			Name: fnDecl.Name.Name,
-			File: file,
-			Line: fset.Position(fnDecl.Pos()).Line,
-			Kind: TestingItemKind_Case,
+			Key:          name,
+			Name:         name,
+			BaseCaseName: name,
+			NameUnderPkg: name,
+			RelPath:      relPath,
+			File:         absFile,
+			Line:         fset.Position(fnDecl.Pos()).Line,
+			Kind:         TestingItemKind_Case,
 		})
 	}
 	return items, nil

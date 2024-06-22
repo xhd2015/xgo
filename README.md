@@ -74,7 +74,7 @@ mkdir demo
 cd demo
 go mod init demo
 ```
-3. Add `demo_test.go` with following code:
+3. Add `demo_test.go`:
 ```go
 package demo_test
 
@@ -98,16 +98,14 @@ func TestFuncMock(t *testing.T) {
 	}
 }
 ```
-4. Get the `xgo/runtime` dependency:
+4. Get the `github.com/xhd2015/xgo/runtime` dependency:
 ```sh
 go get github.com/xhd2015/xgo/runtime
 ```
-5. Run the code:
+5. Test the code:
 ```sh
-# NOTE: xgo will take some time 
-# for the first time to setup.
-# It will be as fast as go after setup.
 xgo test -v ./
+# NOTE: xgo will take some time to setup for the first time
 ```
 
 Output:
@@ -118,26 +116,11 @@ PASS
 ok      demo
 ```
 
-If you run this with go, it would fail:
-```sh
-go test -v ./
-```
+NOTE: `xgo` is used to test your code, not just `go`. 
 
-Output:
-```sh
-WARNING: failed to link __xgo_link_on_init_finished(requires xgo).
-WARNING: failed to link __xgo_link_on_goexit(requires xgo).
-=== RUN   TestFuncMock
-WARNING: failed to link __xgo_link_set_trap(requires xgo).
-WARNING: failed to link __xgo_link_init_finished(requires xgo).
-    demo_test.go:21: expect MyFunc() to be 'mock func', actual: my func
---- FAIL: TestFuncMock (0.00s)
-FAIL
-FAIL    demo    0.771s
-FAIL
-```
+Under the hood, `xgo` preprocess your code to add mock hooks, and then calls `go` to do remaining jobs.
 
-The above demo can be found at [doc/demo](./doc/demo).
+The above code can be found at [doc/demo](./doc/demo).
 
 # API
 

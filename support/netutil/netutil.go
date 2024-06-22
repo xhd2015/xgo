@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"syscall"
 	"time"
@@ -74,11 +75,10 @@ func watchSignalWithinTimeout(timeout time.Duration, errSignal chan struct{}, ac
 }
 
 // get the local area network IP address by ipType
-func GetLocalHostByIPType(ipType string) []string {
+func GetLocalHostByIPType(ipType string) ([]string, error) {
 	addresses, err := net.InterfaceAddrs()
 	if err != nil {
-		fmt.Printf("\nnet.InterfaceAddrs failed, err: %v\n", err.Error())
-		return nil
+		return nil, err
 	}
 	// ipv4 + ipv6
 	var ips []string
@@ -94,11 +94,16 @@ func GetLocalHostByIPType(ipType string) []string {
 			}
 		}
 	}
-	if len(ips) == 0 {
-		fmt.Println("no network interface found")
-		return nil
-	}
-	return ips
+	sort.Slice(ips, func(i, j int) bool {
+		if ips[i] == "127.0.0.1" {
+			return true
+		}
+		if ips[j] == "127.0.0.1" {
+			return false
+		}
+		return ips[i] < ips[j]
+	})
+	return ips, nil
 }
 
 // provide default values for host and port
@@ -114,8 +119,8 @@ func GetHostAndIP(bindStr string, portStr string) (host string, port int) {
 		}
 	}
 
-	localIPs := GetLocalHostByIPType("all")
-	if localIPs == nil {
+	localIPs, err := GetLocalHostByIPType("all")
+	if err != nil || localIPs == nil {
 		return
 	}
 	// add default router
@@ -138,18 +143,34 @@ func GetHostAndIP(bindStr string, portStr string) (host string, port int) {
 	return
 }
 
-// build URL based on host and port
-func BuildAndDisplayURL(host string, port int) string {
-	url := fmt.Sprintf("http://%s:%d", host, port)
-	fmt.Println("Server listen at:")
-	fmt.Printf("-  Open: %s \r\n", url)
-	fmt.Printf("-  Local: http://localhost:%d \r\n", port)
-	// only print ipv4
+// get URL based on host and port
+func GetURLToOpen(host string, port int) (primary string, extra []string) {
+	addr := host
 	if host == "0.0.0.0" {
-		ipv4IPs := GetLocalHostByIPType("ipv4")
-		for _, ipv4IP := range ipv4IPs {
-			fmt.Printf("-  Network: http://%s:%d \r\n", ipv4IP, port)
+		// only get ipv4
+		ipv4IPs, err := GetLocalHostByIPType("ipv4")
+		if err == nil && len(ipv4IPs) > 0 {
+			addr = ipv4IPs[0]
+			for i := 1; i < len(ipv4IPs); i++ {
+				extra = append(extra, fmt.Sprintf("http://%s:%d", ipv4IPs[i], port))
+			}
 		}
 	}
-	return url
+	primary = fmt.Sprintf("http://%s:%d", addr, port)
+	return
+}
+
+func PrintUrls(url string, extra ...string) {
+	if len(extra) == 0 {
+		fmt.Printf("Server listen at %s\n", url)
+		return
+	}
+	if len(extra) > 0 {
+		fmt.Printf("Server listen at:\n")
+		fmt.Printf("  %s\n", url)
+		for _, remain := range extra {
+			fmt.Printf("  %s\n", remain)
+		}
+		return
+	}
 }
