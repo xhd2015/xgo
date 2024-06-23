@@ -52,10 +52,12 @@ type DestroySessionRequest struct {
 
 type runSession struct {
 	dir       string
+	absDir    string
 	goCmd     string
-	exclude   []string
 	env       []string
 	testFlags []string
+
+	pathPrefix []string
 
 	item  *TestingItem
 	path  []string
@@ -89,7 +91,7 @@ func joinTestArgs(pathArgs []string, runNames string) []string {
 	return args
 }
 
-func getTestPaths(item *TestingItem) (paths []string, itemPaths [][]string, names []string) {
+func getTestPaths(item *TestingItem, pathPrefix []string) (paths []string, itemPaths [][]string, names []string) {
 	switch item.Kind {
 	case TestingItemKind_Case:
 		testName := item.NameUnderPkg
@@ -100,7 +102,7 @@ func getTestPaths(item *TestingItem) (paths []string, itemPaths [][]string, name
 		paths = []string{relPath}
 		names = []string{testName}
 
-		fileItemPath := getCaseItemPath(item.RelPath, item.Name, item.NameUnderPkg)
+		fileItemPath := getCaseItemPath(pathPrefix, item.RelPath, item.Name, item.NameUnderPkg)
 		itemPaths = [][]string{fileItemPath}
 	case TestingItemKind_File:
 		relPath, cases := getFileSubCases(item)
@@ -111,13 +113,13 @@ func getTestPaths(item *TestingItem) (paths []string, itemPaths [][]string, name
 			names = make([]string, 0)
 		}
 
-		fileItemPath := getFileItemPath(item.RelPath)
+		fileItemPath := getFileItemPath(pathPrefix, item.RelPath)
 		itemPaths = append(itemPaths, fileItemPath)
 		for _, c := range cases {
-			itemPaths = append(itemPaths, append(fileItemPath, c))
+			itemPaths = append(itemPaths, appendCopy(fileItemPath, c))
 		}
 	default:
-		paths, itemPaths = getAllSubRelPaths(item)
+		paths, itemPaths = getAllSubRelPaths(item, pathPrefix)
 	}
 	return
 }
@@ -129,12 +131,19 @@ func splitItemPaths(relPath string) []string {
 	return strings.Split(relPath, string(filepath.Separator))
 }
 
-func getFileItemPath(relPath string) []string {
-	return splitItemPaths(relPath)
+func getFileItemPath(prefix []string, relPath string) []string {
+	return appendCopy(prefix, splitItemPaths(relPath)...)
 }
 
-func getCaseItemPath(relPath string, name string, nameUnderPkg string) []string {
-	filePaths := getFileItemPath(relPath)
+func appendCopy(list []string, incoming ...string) []string {
+	m := make([]string, len(list)+len(incoming))
+	copy(m, list)
+	copy(m[len(list):], incoming)
+	return m
+}
+
+func getCaseItemPath(prefix []string, relPath string, name string, nameUnderPkg string) []string {
+	filePaths := getFileItemPath(prefix, relPath)
 	if nameUnderPkg == "" {
 		return append(filePaths, name)
 	}
@@ -142,18 +151,18 @@ func getCaseItemPath(relPath string, name string, nameUnderPkg string) []string 
 }
 
 // emulate the ./pkg/... behavior
-func getAllSubRelPaths(t *TestingItem) (relPaths []string, itemPaths [][]string) {
+func getAllSubRelPaths(t *TestingItem, pathPrefix []string) (relPaths []string, itemPaths [][]string) {
 	if t.Kind == TestingItemKind_Case {
-		itemPaths = append(itemPaths, getCaseItemPath(t.RelPath, t.Name, t.NameUnderPkg))
+		itemPaths = append(itemPaths, getCaseItemPath(pathPrefix, t.RelPath, t.Name, t.NameUnderPkg))
 	} else {
-		itemPaths = append(itemPaths, getFileItemPath(t.RelPath))
+		itemPaths = append(itemPaths, getFileItemPath(pathPrefix, t.RelPath))
 		if t.HasTestCases && t.Kind != TestingItemKind_File {
 			relPaths = append(relPaths, t.RelPath)
 		}
 	}
 
 	for _, e := range t.Children {
-		subDirs, subItemPaths := getAllSubRelPaths(e)
+		subDirs, subItemPaths := getAllSubRelPaths(e, pathPrefix)
 		relPaths = append(relPaths, subDirs...)
 		itemPaths = append(itemPaths, subItemPaths...)
 	}

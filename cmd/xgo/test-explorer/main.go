@@ -130,7 +130,7 @@ func Main(args []string, opts *Options) error {
 		fmt.Print(strings.TrimPrefix(help, "\n"))
 		return nil
 	}
-	return handle(opts)
+	return handle(opts, remainArgs)
 }
 
 // NOTE: case can have sub childrens
@@ -283,7 +283,7 @@ func compareGoVersion(a *goinfo.GoVersion, b *goinfo.GoVersion, ignorePatch bool
 	return a.Patch - b.Patch
 }
 
-func handle(opts *Options) error {
+func handle(opts *Options, args []string) error {
 	if opts == nil {
 		opts = &Options{}
 	}
@@ -309,6 +309,22 @@ func handle(opts *Options) error {
 			return nil, fmt.Errorf("read test config:%w", err)
 		}
 		return conf, nil
+	}
+
+	if len(args) > 0 && args[0] == "test" {
+		// headless mode
+		conf, err := getTestConfig()
+		if err != nil {
+			return err
+		}
+		dir := opts.ProjectDir
+		root, err := scanTests(dir, true, conf.Exclude)
+
+		paths, _, names := getTestPaths(root, nil)
+		pathArgs := formatPathArgs(paths)
+		runNames := formatRunNames(names)
+		testArgs := joinTestArgs(pathArgs, runNames)
+		return runTest(conf.GoCmd, dir, conf.Flags, testArgs, conf.CmdEnv(), nil, nil)
 	}
 
 	server := &http.ServeMux{}

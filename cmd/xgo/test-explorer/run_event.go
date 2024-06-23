@@ -6,7 +6,7 @@ type resolver interface {
 	resolveTestingItem(pkgPath string, name string) (*TestingItem, error)
 }
 
-func buildEvent(testEvent *TestEvent, absDir string, modPath string, pm *pathMapping, r resolver) ([]*TestingItemEvent, error) {
+func buildEvent(testEvent *TestEvent, pathPrefix []string, modPath string, pm *pathMapping, r resolver) ([]*TestingItemEvent, error) {
 	var item *TestingItem
 	var status RunStatus
 
@@ -38,8 +38,7 @@ func buildEvent(testEvent *TestEvent, absDir string, modPath string, pm *pathMap
 			// dynamically generated sub case
 			item, _ = r.resolveTestingItem(testEvent.Package, baseTest)
 			if item != nil {
-				path = []string{getRootName(absDir)}
-				path = append(path, getCaseItemPath(item.RelPath, baseTest, "")...)
+				path = getCaseItemPath(pathPrefix, item.RelPath, baseTest, "")
 				if testSuffix != "" {
 					suffix := strings.Split(testSuffix, "/")
 					basePath = path
@@ -81,7 +80,7 @@ func buildEvent(testEvent *TestEvent, absDir string, modPath string, pm *pathMap
 			}
 		} else {
 			subPath := getPkgSubPath(modPath, testEvent.Package)
-			path = []string{getRootName(absDir)}
+			path = appendCopy(pathPrefix)
 			if subPath != "" {
 				path = append(path, strings.Split(subPath, "/")...)
 			}

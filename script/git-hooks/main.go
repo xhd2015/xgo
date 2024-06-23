@@ -120,7 +120,7 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 		xgoVersionRelFile := revision.GetXgoVersionFile("")
 		runtimeVersionRelFile := revision.GetRuntimeVersionFile("")
 
-		xgoRevisonFile := filepath.Join(rootDir, xgoVersionRelFile)
+		xgoRevisionFile := filepath.Join(rootDir, xgoVersionRelFile)
 		runtimeVersionFile := filepath.Join(rootDir, runtimeVersionRelFile)
 
 		relVersionFiles := []string{xgoVersionRelFile}
@@ -141,7 +141,7 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 		}
 
 		// copy xgo's core version to runtime version
-		code, err := ioutil.ReadFile(xgoRevisonFile)
+		code, err := ioutil.ReadFile(xgoRevisionFile)
 		if err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 			return err
 		}
 
-		affectedFiles = append(affectedFiles, xgoRevisonFile, runtimeVersionFile)
+		affectedFiles = append(affectedFiles, xgoRevisionFile, runtimeVersionFile)
 	}
 
 	// run generate

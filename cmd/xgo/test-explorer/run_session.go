@@ -56,12 +56,19 @@ func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, 
 				return nil, err
 			}
 
+			absDir, err := filepath.Abs(projectDir)
+			if err != nil {
+				return nil, err
+			}
+
 			runSess := &runSession{
 				dir:       projectDir,
+				absDir:    absDir,
 				goCmd:     config.GoCmd,
-				exclude:   config.Exclude,
 				env:       config.CmdEnv(),
 				testFlags: config.Flags,
+
+				pathPrefix: []string{getRootName(absDir)},
 
 				item:  req.Item,
 				path:  req.Path,
@@ -171,10 +178,9 @@ func (c *testResolver) resolveTestingItem(pkgPath string, name string) (*Testing
 
 func (c *runSession) Start() error {
 	item := c.item
-	absDir, err := filepath.Abs(c.dir)
-	if err != nil {
-		return err
-	}
+	absDir := c.absDir
+	pathPrefix := c.pathPrefix
+
 	// find all tests
 	modPath, err := goinfo.GetModPath(absDir)
 	if err != nil {
@@ -198,11 +204,7 @@ func (c *runSession) Start() error {
 		Event: Event_TestStart,
 	})
 
-	rootName := getRootName(absDir)
-	paths, itemPaths, names := getTestPaths(item)
-	for i, itemPath := range itemPaths {
-		itemPaths[i] = append([]string{rootName}, itemPath...)
-	}
+	paths, itemPaths, names := getTestPaths(item, pathPrefix)
 
 	// set initial state
 	for _, itemPath := range itemPaths {
@@ -214,7 +216,7 @@ func (c *runSession) Start() error {
 		if len(itemPaths) > 0 {
 			rootPath = itemPaths[0]
 		} else {
-			rootPath = []string{rootName}
+			rootPath = pathPrefix
 		}
 	}
 
@@ -238,7 +240,7 @@ func (c *runSession) Start() error {
 			modPath: modPath,
 		}
 		jsonTestEventBuilder := &jsonTestEventBuilder{
-			absDir:       absDir,
+			pathPrefix:   c.pathPrefix,
 			modPath:      modPath,
 			testResolver: tResolver,
 			pm:           pm,
@@ -272,7 +274,11 @@ func (c *runSession) Start() error {
 		runNames := formatRunNames(names)
 		if !debug {
 			testArgs := joinTestArgs(pathArgs, runNames)
-			err = runTest(c.goCmd, c.dir, singleCase, c.testFlags, testArgs, c.env, stdout, stderr)
+			customFlags := c.testFlags
+			if !singleCase {
+				customFlags = append([]string{"-json"}, customFlags...)
+			}
+			err = runTest(c.goCmd, c.dir, customFlags, testArgs, c.env, stdout, stderr)
 		} else {
 			err = debugTest(c.goCmd, c.dir, item.File, c.testFlags, pathArgs, runNames, stdout, stderr, nil, c.env)
 		}
@@ -386,15 +392,12 @@ func (c *pathMapping) traverse(prefix []string, f func(path []string, status Run
 	}
 }
 
-func runTest(goCmd string, dir string, singleCase bool, customFlags []string, testArgs []string, env []string, stdout io.Writer, stderr io.Writer) error {
+func runTest(goCmd string, dir string, customFlags []string, testArgs []string, env []string, stdout io.Writer, stderr io.Writer) error {
 	if goCmd == "" {
 		goCmd = "go"
 	}
 	testFlags := make([]string, 0, len(testArgs)+len(customFlags)+2)
 	testFlags = append(testFlags, "test", "-v")
-	if !singleCase {
-		testFlags = append(testFlags, "-json")
-	}
 	testFlags = append(testFlags, customFlags...)
 	testFlags = append(testFlags, testArgs...)
 
@@ -423,6 +426,7 @@ func consumeTestEvent(r io.Reader, rootItemPath []string, builder func(line []by
 }
 
 type jsonTestEventBuilder struct {
+	pathPrefix   []string
 	absDir       string
 	modPath      string
 	testResolver *testResolver
@@ -438,7 +442,7 @@ func (c *jsonTestEventBuilder) build(line []byte) ([]*TestingItemEvent, error) {
 	if err != nil {
 		return nil, err
 	}
-	return buildEvent(event, c.absDir, c.modPath, c.pm, c.testResolver)
+	return buildEvent(event, c.pathPrefix, c.modPath, c.pm, c.testResolver)
 }
 
 var failRegex = regexp.MustCompile(`^FAIL\s+([^\s]+)\s+.*$`)
