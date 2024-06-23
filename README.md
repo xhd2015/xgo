@@ -24,6 +24,10 @@ As for the monkey patching part, `xgo` works as a preprocessor for `go run`,`go 
 
 See [Quick Start](#quick-start) and [Documentation](./doc) for more details.
 
+[![Xgo Test Explorer](https://github.com/xhd2015/xgo/assets/14964938/53de1de1-85a6-41b0-9300-c4979ba0096c)](https://youtu.be/L8oPhgqtdGg)
+
+![Xgo Test Explorer](https://github.com/xhd2015/xgo/assets/14964938/2666f0c9-3a9f-45e0-a1e2-20e1bf401fa1)
+
 > *By the way, I promise you this is an interesting project.*
 
 # Installation

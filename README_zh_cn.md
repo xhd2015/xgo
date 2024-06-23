@@ -26,6 +26,10 @@
 
 更多细节, 参见[快速开始](#快速开始)和[文档](./doc)。
 
+[![Xgo Test Explorer](https://github.com/xhd2015/xgo/assets/14964938/53de1de1-85a6-41b0-9300-c4979ba0096c)](https://youtu.be/L8oPhgqtdGg)
+
+![Xgo Test Explorer](https://github.com/xhd2015/xgo/assets/14964938/2666f0c9-3a9f-45e0-a1e2-20e1bf401fa1)
+
 > *顺便说一下, 我可以向你保证这是一个有趣的项目。*
 
 # 安装
