@@ -12,7 +12,7 @@ import (
 var ErrGoModNotFound = errors.New("go.mod not found")
 var ErrGoModDoesNotHaveModule = errors.New("go.mod does not have module")
 
-func ResolveMainModule(dir string, args []string) (subPaths []string, mainModule string, err error) {
+func ResolveMainModule(dir string) (subPaths []string, mainModule string, err error) {
 	goMod, subPaths, err := findGoMod(dir)
 	if err != nil {
 		return nil, "", err

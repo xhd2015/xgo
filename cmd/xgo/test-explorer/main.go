@@ -319,6 +319,9 @@ func handle(opts *Options, args []string) error {
 		}
 		dir := opts.ProjectDir
 		root, err := scanTests(dir, true, conf.Exclude)
+		if err != nil {
+			return err
+		}
 
 		paths, _, names := getTestPaths(root, nil)
 		pathArgs := formatPathArgs(paths)

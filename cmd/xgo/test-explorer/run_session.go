@@ -133,15 +133,16 @@ func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, 
 }
 
 type testResolver struct {
-	absDir   string
-	modPath  string
-	pkgTests sync.Map
+	absDir     string
+	dirPkgPath string
+	pkgTests   sync.Map
 }
 
-func (c *testResolver) resolvePkgTestsCached(modPath string, pkgPath string) ([]*TestingItem, error) {
+func (c *testResolver) resolvePkgTestsCached(pkgPath string) ([]*TestingItem, error) {
+	dirPkgPath := c.dirPkgPath
 	var subPkgPath string
-	if modPath != pkgPath {
-		subPkgPath = getPkgSubPath(modPath, pkgPath)
+	if dirPkgPath != pkgPath {
+		subPkgPath = getPkgSubPath(dirPkgPath, pkgPath)
 		if subPkgPath == "" {
 			return nil, nil
 		}
@@ -164,7 +165,7 @@ func (c *testResolver) resolvePkgTestsCached(modPath string, pkgPath string) ([]
 }
 
 func (c *testResolver) resolveTestingItem(pkgPath string, name string) (*TestingItem, error) {
-	testingItems, err := c.resolvePkgTestsCached(c.modPath, pkgPath)
+	testingItems, err := c.resolvePkgTestsCached(pkgPath)
 	if err != nil {
 		return nil, err
 	}
@@ -176,13 +177,23 @@ func (c *testResolver) resolveTestingItem(pkgPath string, name string) (*Testing
 	return nil, nil
 }
 
+func resolveDirPkgPath(dir string) (string, error) {
+	subPaths, modPath, err := goinfo.ResolveMainModule(dir)
+	if err != nil {
+		return "", err
+	}
+	if len(subPaths) == 0 {
+		return modPath, nil
+	}
+	return modPath + "/" + strings.Join(subPaths, "/"), nil
+}
+
 func (c *runSession) Start() error {
 	item := c.item
 	absDir := c.absDir
 	pathPrefix := c.pathPrefix
 
-	// find all tests
-	modPath, err := goinfo.GetModPath(absDir)
+	dirPkgPath, err := resolveDirPkgPath(absDir)
 	if err != nil {
 		return err
 	}
@@ -236,12 +247,12 @@ func (c *runSession) Start() error {
 		eventBuilder = plainMsgBuilder
 	} else {
 		tResolver := &testResolver{
-			absDir:  absDir,
-			modPath: modPath,
+			absDir:     absDir,
+			dirPkgPath: dirPkgPath,
 		}
 		jsonTestEventBuilder := &jsonTestEventBuilder{
 			pathPrefix:   c.pathPrefix,
-			modPath:      modPath,
+			dirPkgPath:   dirPkgPath,
 			testResolver: tResolver,
 			pm:           pm,
 		}
@@ -428,7 +439,7 @@ func consumeTestEvent(r io.Reader, rootItemPath []string, builder func(line []by
 type jsonTestEventBuilder struct {
 	pathPrefix   []string
 	absDir       string
-	modPath      string
+	dirPkgPath   string
 	testResolver *testResolver
 
 	pm *pathMapping
@@ -442,7 +453,7 @@ func (c *jsonTestEventBuilder) build(line []byte) ([]*TestingItemEvent, error) {
 	if err != nil {
 		return nil, err
 	}
-	return buildEvent(event, c.pathPrefix, c.modPath, c.pm, c.testResolver)
+	return buildEvent(event, c.pathPrefix, c.dirPkgPath, c.pm, c.testResolver)
 }
 
 var failRegex = regexp.MustCompile(`^FAIL\s+([^\s]+)\s+.*$`)

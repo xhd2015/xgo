@@ -1,13 +1,4 @@
-// debug test is a convenient package
-// you can paste your minimal code your
-// to focus only the problemtic part of
-// failing code
-//
-// usage:
-//  go run -tags dev ./cmd/xgo test --project-dir runtime/test/debug
-//  go run -tags dev ./cmd/xgo test --debug-compile --project-dir runtime/test/debug
-
-package debug
+package mock_generic
 
 import (
 	"testing"
@@ -15,6 +6,7 @@ import (
 	"github.com/xhd2015/xgo/runtime/mock"
 )
 
+// see bug https://github.com/xhd2015/xgo/issues/211
 type GenericSt[T any] struct {
 	Data T
 }
@@ -26,7 +18,7 @@ func (g GenericSt[T]) GetData(param T) T {
 type Inner struct {
 }
 
-func TestGeneric(t *testing.T) {
+func TestNonPrimitiveGeneric(t *testing.T) {
 	v := GenericSt[Inner]{}
 
 	var mocked bool

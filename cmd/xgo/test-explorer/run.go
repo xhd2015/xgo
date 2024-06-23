@@ -79,7 +79,28 @@ func formatRunNames(names []string) string {
 	if names == nil {
 		return ""
 	}
-	return fmt.Sprintf("^%s$", strings.Join(names, "|"))
+	return fmt.Sprintf("^%s$", strings.Join(escapeRegexNames(names), "|"))
+}
+
+func escapeRegexNames(names []string) []string {
+	replacedNames := make([]string, 0, len(names))
+	for _, name := range names {
+		replacedNames = append(replacedNames, escapeRegexName(name))
+	}
+	return replacedNames
+}
+
+var replacer = strings.NewReplacer(
+	// ".", "\\.",
+	"{", "\\{",
+	"}", "\\}",
+	"[", "\\[",
+	"]", "\\]",
+	"|", "\\|",
+)
+
+func escapeRegexName(name string) string {
+	return replacer.Replace(name)
 }
 
 func joinTestArgs(pathArgs []string, runNames string) []string {

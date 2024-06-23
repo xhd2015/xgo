@@ -85,6 +85,14 @@ func (c *FuncInfo) DisplayName() string {
 // a/b/c.Z
 // a/b/c.Z[].X
 // a/b/c.X[]
+//
+// parse process:
+//
+//	funcGeneric
+//	funcName
+//	recvType
+//	recvGeneric
+//	pkgPath
 func ParseFuncName(fullName string) (pkgPath string, recvName string, recvPtr bool, typeGeneric string, funcGeneric string, funcName string) {
 	sepIdx := strings.LastIndex(fullName, "/")
 	pkg_recv_func_no_generic := fullName
@@ -150,9 +158,15 @@ func ParseFuncName(fullName string) (pkgPath string, recvName string, recvPtr bo
 			return
 		}
 		if dotIdx < sepIdx {
-			// no recv
-			pkgPath = recv_ptr
-			return
+			if strings.Contains(typeGeneric, "/") {
+				// recheck, see bug https://github.com/xhd2015/xgo/issues/211
+				sepIdx = strings.LastIndex(pkg_recv, "/")
+			}
+			if dotIdx < sepIdx {
+				// no recv
+				pkgPath = recv_ptr
+				return
+			}
 		}
 		pkgPath = pkg_recv[:dotIdx]
 		recv_ptr = pkg_recv[dotIdx+1:]

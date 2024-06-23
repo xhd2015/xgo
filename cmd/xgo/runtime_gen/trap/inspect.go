@@ -78,7 +78,7 @@ func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, fun
 	inspectingMap.Store(key, inspectingFunc(func(f *core.FuncInfo, recv interface{}, pc uintptr) {
 		trappingPC = pc
 		funcInfo = f
-		if needRecv {
+		if needRecv || maybeClosureGeneric {
 			// closure cannot have receiver pointer
 			recvPtr = recv
 		}
