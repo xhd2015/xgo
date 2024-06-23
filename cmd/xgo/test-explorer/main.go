@@ -573,6 +573,10 @@ func sortByKindAndName(item *TestingItem) {
 		if a.Kind != b.Kind {
 			return a.Kind.Order() < b.Kind.Order()
 		}
+		if a.Kind == TestingItemKind_Case {
+			// case does sort by index
+			return i < j
+		}
 		return strings.Compare(a.Name, b.Name) < 0
 	})
 	for _, child := range item.Children {
