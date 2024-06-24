@@ -158,7 +158,15 @@ func buildInterceptorFromPatch(recvPtr interface{}, replacer interface{}) func(c
 		dst := 0
 
 		if fn.RecvType != "" {
+			var isInstance bool
 			if recvPtr != nil {
+				if fn.Generic && trap.GenericImplIsClosure && args.NumField() == nIn {
+					// not an instance
+				} else {
+					isInstance = true
+				}
+			}
+			if isInstance {
 				// patching an instance method
 				src++
 				// replacer's does not have receiver

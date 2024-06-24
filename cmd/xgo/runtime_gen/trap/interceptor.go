@@ -51,6 +51,10 @@ func AddInterceptor(interceptor *Interceptor) func() {
 	return addInterceptor(nil, interceptor, false)
 }
 
+func AddInterceptorHead(interceptor *Interceptor) func() {
+	return addInterceptor(nil, interceptor, true)
+}
+
 // AddFuncInterceptor add func interceptor, allowing f to be re-entrant
 func AddFuncInterceptor(f interface{}, interceptor *Interceptor) func() {
 	_, fnInfo, pc, _ := InspectPC(f)
@@ -65,10 +69,6 @@ func AddFuncInfoInterceptor(f *core.FuncInfo, interceptor *Interceptor) func() {
 		panic(fmt.Errorf("func cannot be nil"))
 	}
 	return addInterceptor(f, interceptor, false)
-}
-
-func AddInterceptorHead(interceptor *Interceptor) func() {
-	return addInterceptor(nil, interceptor, true)
 }
 
 // WithInterceptor executes given f with interceptor

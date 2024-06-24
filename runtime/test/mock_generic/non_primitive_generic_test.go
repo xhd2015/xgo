@@ -31,3 +31,16 @@ func TestNonPrimitiveGeneric(t *testing.T) {
 		t.Fatalf("expected mocked, actually not")
 	}
 }
+
+func TestNonPrimitiveGenericAllInstance(t *testing.T) {
+	var mocked bool
+	mock.Patch(GenericSt[Inner].GetData, func(GenericSt[Inner], Inner) Inner {
+		mocked = true
+		return Inner{}
+	})
+	v := GenericSt[Inner]{}
+	v.GetData(Inner{})
+	if !mocked {
+		t.Fatalf("expected mocked, actually not")
+	}
+}

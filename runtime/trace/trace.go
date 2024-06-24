@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -115,7 +114,7 @@ func timeSince(t time.Time) time.Duration {
 }
 
 var enabledGlobally bool
-var interceptorRefCount int32
+var setupOnceGlobally sync.Once
 
 // Enable setup the trace interceptor
 // if called from init, the interceptor is enabled
@@ -189,20 +188,21 @@ func (c *collectOpts) Begin() func() {
 }
 
 func setupInterceptor() func() {
-	if atomic.AddInt32(&interceptorRefCount, 1) > 1 {
-		return func() {
-			atomic.AddInt32(&interceptorRefCount, -1)
-		}
+	if enabledGlobally {
+		setupOnceGlobally.Do(func() {
+			trap.AddInterceptorHead(&trap.Interceptor{
+				Pre:  handleTracePre,
+				Post: handleTracePost,
+			})
+		})
+		return func() {}
 	}
-	// collect trace
-	cancel := trap.AddInterceptorHead(&trap.Interceptor{
+
+	// setup for each goroutine
+	return trap.AddInterceptorHead(&trap.Interceptor{
 		Pre:  handleTracePre,
 		Post: handleTracePost,
 	})
-	return func() {
-		atomic.AddInt32(&interceptorRefCount, -1)
-		cancel()
-	}
 }
 
 // returns a value to be passed to post
