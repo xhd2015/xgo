@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xhd2015/xgo/script/build-release/revision"
 	"github.com/xhd2015/xgo/support/git"
 	"github.com/xhd2015/xgo/support/goparse"
 	"github.com/xhd2015/xgo/support/transform"
@@ -24,6 +25,7 @@ const (
 	GenernateType_CompilerHelperCode  GenernateType = "compiler-helper-code"
 	GenernateType_CompilerPatternCode GenernateType = "compiler-pattern-code"
 	GenernateType_RuntimeDef          GenernateType = "runtime-def"
+	GenernateType_RuntimeVersion      GenernateType = "runtime-version"
 	GenernateType_StackTraceDef       GenernateType = "stack-trace-def"
 	GenernateType_InstallSrc          GenernateType = "install-src"
 	GenernateType_XgoRuntime          GenernateType = "xgo-runtime"
@@ -91,6 +93,15 @@ func generate(rootDir string, subGens SubGens) error {
 			filepath.Join(rootDir, "cmd", "xgo", "patch", "runtime_def_gen.go"),
 			filepath.Join(rootDir, "patch", "syntax", "syntax_gen.go"),
 			filepath.Join(rootDir, "patch", "trap_gen.go"),
+		)
+		if err != nil {
+			return err
+		}
+	}
+	if subGens.Has(GenernateType_RuntimeVersion) {
+		err := generateRunTimeVersion(
+			revision.GetXgoVersionFile(rootDir),
+			revision.GetRuntimeVersionFile(rootDir),
 		)
 		if err != nil {
 			return err
@@ -226,6 +237,10 @@ func generateRunTimeDefs(file string, defFile string, syntaxFile string, trapFil
 	}
 
 	return nil
+}
+
+func generateRunTimeVersion(xgoVersionFile string, runtimeVersionFile string) error {
+	return revision.CopyCoreVersion(xgoVersionFile, runtimeVersionFile)
 }
 
 type genInfo struct {

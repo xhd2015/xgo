@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,7 +119,7 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 		xgoVersionRelFile := revision.GetXgoVersionFile("")
 		runtimeVersionRelFile := revision.GetRuntimeVersionFile("")
 
-		xgoRevisionFile := filepath.Join(rootDir, xgoVersionRelFile)
+		xgoVersionFile := filepath.Join(rootDir, xgoVersionRelFile)
 		runtimeVersionFile := filepath.Join(rootDir, runtimeVersionRelFile)
 
 		relVersionFiles := []string{xgoVersionRelFile}
@@ -139,25 +138,12 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 				return err
 			}
 		}
-
-		// copy xgo's core version to runtime version
-		code, err := ioutil.ReadFile(xgoRevisionFile)
-		if err != nil {
-			return err
-		}
-		coreVersion, coreRevision, coreNumber, err := revision.ParseCoreVersionConstants(string(code))
-		if err != nil {
-			return err
-		}
-		if coreVersion == "" || coreRevision == "" || coreNumber <= 0 {
-			return fmt.Errorf("invalid core version: %s", xgoVersionRelFile)
-		}
-		err = revision.PatchVersionFile(runtimeVersionFile, coreVersion, coreRevision, false, coreNumber)
+		err = revision.CopyCoreVersion(xgoVersionFile, runtimeVersionFile)
 		if err != nil {
 			return err
 		}
 
-		affectedFiles = append(affectedFiles, xgoRevisionFile, runtimeVersionFile)
+		affectedFiles = append(affectedFiles, xgoVersionFile, runtimeVersionFile)
 	}
 
 	// run generate

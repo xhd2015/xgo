@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"io/ioutil"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -298,4 +299,20 @@ func GetVersionFiles(rootDir string) []string {
 		// see https://github.com/xhd2015/xgo/issues/216
 		// GetRuntimeVersionFile(rootDir),
 	}
+}
+
+func CopyCoreVersion(xgoVersionFile string, runtimeVersionFile string) error {
+	// copy xgo's core version to runtime version
+	code, err := ioutil.ReadFile(xgoVersionFile)
+	if err != nil {
+		return err
+	}
+	coreVersion, coreRevision, coreNumber, err := ParseCoreVersionConstants(string(code))
+	if err != nil {
+		return err
+	}
+	if coreVersion == "" || coreRevision == "" || coreNumber <= 0 {
+		return fmt.Errorf("invalid core version: %s", xgoVersionFile)
+	}
+	return PatchVersionFile(runtimeVersionFile, coreVersion, coreRevision, false, coreNumber)
 }
