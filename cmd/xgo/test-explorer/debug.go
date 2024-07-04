@@ -91,20 +91,9 @@ func debugTest(goCmd string, dir string, file string, buildFlags []string, build
 		fmt.Fprintln(stderr, debug_util.FormatDlvPrompt(port))
 	}, func(port int) error {
 		// dlv exec --api-version=2 --listen=localhost:2345 --accept-multiclient --headless ./debug.bin
+		runArgs := append([]string{"-test.v", "-test.run", runNames}, args...)
 		return cmd.Dir(filepath.Dir(file)).Debug().Stderr(stderr).Stdout(stdout).
 			Env(env).
-			Run("dlv",
-				append([]string{
-					"exec",
-					"--api-version=2",
-					"--check-go-version=false",
-					// NOTE: --init is ignored if --headless
-					// "--init", dlvInitFile,
-					"--headless",
-					// "--allow-non-terminal-interactive=true",
-					fmt.Sprintf("--listen=localhost:%d", port),
-					tmpBin, "--", "-test.v", "-test.run", runNames,
-				}, args...)...,
-			)
+			Run("dlv", debug_util.FormatDlvArgs(tmpBin, port, runArgs)...)
 	})
 }

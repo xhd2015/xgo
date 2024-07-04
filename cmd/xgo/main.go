@@ -14,7 +14,12 @@ import (
 	"strings"
 	"time"
 
+	cmd_support "github.com/xhd2015/xgo/support/cmd"
+
+	debug_support "github.com/xhd2015/xgo/support/debug"
+
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/netutil"
 	"github.com/xhd2015/xgo/support/osinfo"
 
 	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
@@ -113,6 +118,7 @@ func main() {
 }
 
 func handleBuild(cmd string, args []string) error {
+	cmdRun := cmd == "run"
 	cmdBuild := cmd == "build"
 	cmdTest := cmd == "test"
 	cmdExec := cmd == "exec"
@@ -128,9 +134,11 @@ func handleBuild(cmd string, args []string) error {
 	flagV := opts.flagV
 	flagX := opts.flagX
 	flagC := opts.flagC
+	flagRun := opts.flagRun
 	logCompile := opts.logCompile
 	logDebugOption := opts.logDebug
 	debugCompile := opts.debugCompile
+	debug := opts.debug
 	optXgoSrc := opts.xgoSrc
 	noBuildOutput := opts.noBuildOutput
 	noInstrument := opts.noInstrument
@@ -145,7 +153,7 @@ func handleBuild(cmd string, args []string) error {
 	setupDev := opts.setupDev
 	buildCompiler := opts.buildCompiler
 	syncWithLink := opts.syncWithLink
-	debug := opts.debug
+	debugTarget := opts.debugTarget
 	vscode := opts.vscode
 	mod := opts.mod
 	gcflags := opts.gcflags
@@ -189,7 +197,7 @@ func handleBuild(cmd string, args []string) error {
 
 	var vscodeDebugFile string
 	var vscodeDebugFileSuffix string
-	if !noInstrument && debug != "" {
+	if !noInstrument && debugTarget != "" {
 		var err error
 		vscodeDebugFile, vscodeDebugFileSuffix, err = getVscodeDebugFile(tmpDir, vscode)
 		if err != nil {
@@ -249,7 +257,7 @@ func handleBuild(cmd string, args []string) error {
 	if trapStdlib {
 		buildCacheSuffix += "-trapstd"
 	}
-	if len(gcflags) > 0 {
+	if len(gcflags) > 0 || debug != nil {
 		buildCacheSuffix += "-gcflags"
 	}
 	if optionsFromFile != "" {
@@ -357,7 +365,7 @@ func handleBuild(cmd string, args []string) error {
 	if !noInstrument {
 		logDebug("build instrument tools: %s", instrumentGoroot)
 		xgoBin := os.Args[0]
-		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, "", xgoBin, debug, logCompile, noSetup, debugWithDlv)
+		compilerChanged, toolExecFlag, err = buildInstrumentTool(instrumentGoroot, realXgoSrc, compilerBin, compilerBuildID, "", xgoBin, debugTarget, logCompile, noSetup, debugWithDlv)
 		if err != nil {
 			return err
 		}
@@ -379,6 +387,30 @@ func handleBuild(cmd string, args []string) error {
 	}
 	var debugCompilePkg string
 	var debugCompileLogFile string
+
+	var runDebug bool
+	var testDebug bool
+	var buildDebug bool
+
+	var runFlagsAfterBuild []string
+	if debug != nil {
+		if cmdRun {
+			runDebug = true
+		} else if cmdTest {
+			if !flagC {
+				testDebug = true
+			} else {
+				buildDebug = true
+			}
+		} else if cmdBuild {
+			buildDebug = true
+		} else {
+			return fmt.Errorf("invalid --debug flag")
+		}
+	}
+
+	debugMode := runDebug || testDebug || buildDebug
+	var finalBuildOutput string
 
 	execCmdEnv := os.Environ()
 	var execCmd *exec.Cmd
@@ -437,7 +469,13 @@ func handleBuild(cmd string, args []string) error {
 		logDebug("resolved main module: %s", mainModule)
 		execCmdEnv = append(execCmdEnv, exec_tool.XGO_MAIN_MODULE+"="+mainModule)
 		// GOCACHE="$shdir/build-cache" PATH=$goroot/bin:$PATH GOROOT=$goroot DEBUG_PKG=$debug go build -toolexec="$shdir/exce_tool $cmd" "${build_flags[@]}" "$@"
-		buildCmdArgs := []string{cmd}
+		var buildCmdArgs []string
+		if !runDebug {
+			buildCmdArgs = []string{cmd}
+		} else {
+			buildCmdArgs = []string{"build"}
+		}
+
 		if toolExecFlag != "" {
 			buildCmdArgs = append(buildCmdArgs, toolExecFlag)
 		}
@@ -445,13 +483,24 @@ func handleBuild(cmd string, args []string) error {
 			buildCmdArgs = append(buildCmdArgs, "-a")
 		}
 		if flagV {
-			buildCmdArgs = append(buildCmdArgs, "-v")
+			if !testDebug {
+				buildCmdArgs = append(buildCmdArgs, "-v")
+			} else {
+				runFlagsAfterBuild = append(runFlagsAfterBuild, "-test.v")
+			}
 		}
 		if flagX {
 			buildCmdArgs = append(buildCmdArgs, "-x")
 		}
-		if flagC {
+		if flagC && !testDebug {
 			buildCmdArgs = append(buildCmdArgs, "-c")
+		}
+		if flagRun != "" {
+			if !testDebug {
+				buildCmdArgs = append(buildCmdArgs, "-run", flagRun)
+			} else {
+				runFlagsAfterBuild = append(runFlagsAfterBuild, "-test.run", flagRun)
+			}
 		}
 		if overlay != "" {
 			buildCmdArgs = append(buildCmdArgs, "-overlay", overlay)
@@ -462,31 +511,61 @@ func handleBuild(cmd string, args []string) error {
 		if modfile != "" {
 			buildCmdArgs = append(buildCmdArgs, "-modfile", modfile)
 		}
-
+		var hasBuildDebug bool
 		for _, f := range gcflags {
+			if f == "all=-N -l" || f == "all=-l -N" {
+				hasBuildDebug = true
+			}
 			buildCmdArgs = append(buildCmdArgs, "-gcflags="+f)
 		}
-		if cmdBuild || (cmdTest && flagC) {
+
+		if debugMode {
+			if !hasBuildDebug {
+				buildCmdArgs = append(buildCmdArgs, "-gcflags=all=-N -l")
+			}
+			if testDebug {
+				buildCmdArgs = append(buildCmdArgs, "-c")
+			}
+		}
+
+		if cmdBuild || (cmdTest && flagC) || debugMode {
 			// output
-			if noBuildOutput {
+			if !debugMode && noBuildOutput {
 				discardOut := filepath.Join(tmpDir, "discard.out")
 				buildCmdArgs = append(buildCmdArgs, "-o", discardOut)
 			} else if output != "" {
-				realOut := output
+				finalBuildOutput = output
 				if projectDir != "" {
 					// make absolute
 					absOutput, err := filepath.Abs(output)
 					if err != nil {
 						return fmt.Errorf("make output absolute: %w", err)
 					}
-					realOut = absOutput
+					finalBuildOutput = absOutput
 				}
-				buildCmdArgs = append(buildCmdArgs, "-o", realOut)
+			} else if debugMode {
+				finalBuildOutput = filepath.Join(tmpDir, "debug.bin")
+			}
+			if finalBuildOutput != "" {
+				buildCmdArgs = append(buildCmdArgs, "-o", finalBuildOutput)
 			}
 		}
-		buildCmdArgs = append(buildCmdArgs, remainArgs...)
+		if len(remainArgs) > 0 {
+			if !runDebug {
+				buildCmdArgs = append(buildCmdArgs, remainArgs...)
+			} else {
+				buildCmdArgs = append(buildCmdArgs, remainArgs[0])
+				runFlagsAfterBuild = append(runFlagsAfterBuild, remainArgs[1:]...)
+			}
+		}
+
 		if cmdTest && len(testArgs) > 0 {
-			buildCmdArgs = append(buildCmdArgs, testArgs...)
+			if !testDebug {
+				buildCmdArgs = append(buildCmdArgs, "-args")
+				buildCmdArgs = append(buildCmdArgs, testArgs...)
+			} else {
+				runFlagsAfterBuild = append(runFlagsAfterBuild, testArgs...)
+			}
 		}
 		logDebug("command: %s %v", instrumentGo, buildCmdArgs)
 		execCmd = exec.Command(instrumentGo, buildCmdArgs...)
@@ -566,6 +645,18 @@ func handleBuild(cmd string, args []string) error {
 	err = execCmd.Run()
 	if err != nil {
 		return err
+	}
+
+	if debugMode {
+		err := netutil.ServePort("localhost", 2345, true, 500*time.Millisecond, func(port int) {
+			fmt.Fprintln(os.Stderr, debug_support.FormatDlvPrompt(port))
+		}, func(port int) error {
+			// dlv exec --api-version=2 --listen=localhost:2345 --accept-multiclient --headless ./debug.bin
+			return cmd_support.Debug().Run("dlv", debug_support.FormatDlvArgs(finalBuildOutput, port, runFlagsAfterBuild)...)
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	// if dump IR is not nil, output to stdout

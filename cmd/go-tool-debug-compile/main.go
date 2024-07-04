@@ -161,19 +161,7 @@ func dlvExecListen(dir string, env []string, compilerBinary string, args []strin
 		fmt.Println(prompt)
 	}, func(port int) error {
 		// dlv exec --api-version=2 --listen=localhost:2345 --accept-multiclient --headless ./debug.bin
-		dlvArgs := []string{
-			"--api-version=2",
-			fmt.Sprintf("--listen=localhost:%d", port),
-			"--check-go-version=false",
-			"--log=true",
-			// "--accept-multiclient", // exits when client exits
-			"--headless", "exec",
-			compilerBinary,
-			"--",
-		}
-		// dlvArgs = append(dlvArgs, compilerBin)
-		dlvArgs = append(dlvArgs, args...)
-		err := cmd.Dir(dir).Env(env).Run("dlv", dlvArgs...)
+		err := cmd.Dir(dir).Env(env).Run("dlv", debug.FormatDlvArgs(compilerBinary, port, args)...)
 		if err != nil {
 			return fmt.Errorf("dlv: %w", err)
 		}

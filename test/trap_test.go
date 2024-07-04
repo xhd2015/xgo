@@ -181,7 +181,7 @@ func runAndCheckInstrumentOutput(t *testing.T, testDir string, orig func(output 
 		"-o", tmpFile,
 		"--project-dir", tmpDir,
 		// "-a", // debug
-		// "--debug", "github.com/xhd2015/xgo/runtime/core/trap", "--vscode", "../.vscode", // debug
+		// "--debug-target", "github.com/xhd2015/xgo/runtime/core/trap", "--vscode", "../.vscode", // debug
 		"--",
 		// "-gcflags=all=-N -l", // debug
 		".",

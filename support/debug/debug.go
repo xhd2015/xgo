@@ -50,3 +50,17 @@ func FormatVscodeRemoteConfig(port int) string {
 	]
 }`, port, port)
 }
+
+func FormatDlvArgs(bin string, port int, args []string) []string {
+	return append([]string{
+		"exec",
+		"--api-version=2",
+		"--check-go-version=false",
+		// NOTE: --init is ignored if --headless
+		// "--init", dlvInitFile,
+		"--headless",
+		// "--allow-non-terminal-interactive=true",
+		fmt.Sprintf("--listen=localhost:%d", port),
+		bin, "--",
+	}, args...)
+}

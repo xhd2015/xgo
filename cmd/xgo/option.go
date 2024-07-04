@@ -8,23 +8,26 @@ import (
 )
 
 type options struct {
-	flagA      bool
-	projectDir string
-	output     string
-	flagV      bool
-	flagX      bool
-	flagC      bool
-	xgoSrc     string
-	debug      string
-	vscode     string
-	withGoroot string
-	dumpIR     string
-	dumpAST    string
+	flagA       bool
+	projectDir  string
+	output      string
+	flagV       bool
+	flagX       bool
+	flagC       bool
+	flagRun     string
+	xgoSrc      string
+	debugTarget string
+	vscode      string
+	withGoroot  string
+	dumpIR      string
+	dumpAST     string
 
 	logCompile bool
 
 	logDebug     *string
 	debugCompile *string
+
+	debug *string
 
 	noBuildOutput   bool
 	noInstrument    bool
@@ -73,9 +76,10 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var flagV bool
 	var flagX bool
 	var flagC bool // -c: used by go test
+	var flagRun string
 	var projectDir string
 	var output string
-	var debug string
+	var debugTarget string
 	var vscode string
 
 	var noInstrument bool
@@ -100,6 +104,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var logCompile bool
 	var logDebug *string
 	var debugCompile *string
+	var debug *string
 
 	var noBuildOutput bool
 
@@ -131,8 +136,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			Value: &output,
 		},
 		{
-			Flags: []string{"--debug"},
-			Value: &debug,
+			Flags: []string{"--debug-target"},
+			Value: &debugTarget,
 		},
 		{
 			Flags: []string{"--vscode"},
@@ -157,6 +162,12 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		{
 			Flags: []string{"--dump-ast"},
 			Value: &dumpAST,
+		},
+		{
+			Flags: []string{"-run"},
+			Set: func(v string) {
+				flagRun = v
+			},
 		},
 		{
 			Flags: []string{"-mod"},
@@ -205,12 +216,17 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	for i := 0; i < nArg; i++ {
 		arg := args[i]
 		if !strings.HasPrefix(arg, "-") {
+			if cmd == "run" {
+				// run consumes all remain args
+				remainArgs = append(remainArgs, args[i:]...)
+				break
+			}
 			remainArgs = append(remainArgs, arg)
 			continue
 		}
 		if cmd == "test" && arg == "-args" {
 			// pass everything after -args to test binary
-			testArgs = append(testArgs, args[i:]...)
+			testArgs = append(testArgs, args[i+1:]...)
 			break
 		}
 		if arg == "--" {
@@ -274,17 +290,15 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			continue
 		}
 
-		if strings.HasPrefix(arg, "--debug-compile") {
-			flag := strings.TrimPrefix(arg, "--debug-compile")
-			if flag == "" {
-				debugCompile = new(string)
-				continue
-			}
-			if strings.HasPrefix(flag, "=") {
-				s := strings.TrimPrefix(flag, "=")
-				debugCompile = &s
-				continue
-			}
+		debugCompileVal, ok := tryParseOption("--debug-compile", args, &i)
+		if ok {
+			debugCompile = &debugCompileVal
+			continue
+		}
+		debugVal, ok := tryParseOption("--debug", args, &i)
+		if ok {
+			debug = &debugVal
+			continue
 		}
 
 		argVal, ok := parseStackTraceFlag(arg)
@@ -356,22 +370,24 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	}
 
 	return &options{
-		flagA:      flagA,
-		flagV:      flagV,
-		flagX:      flagX,
-		flagC:      flagC,
-		projectDir: projectDir,
-		output:     output,
-		xgoSrc:     xgoSrc,
-		debug:      debug,
-		vscode:     vscode,
-		withGoroot: withGoroot,
-		dumpIR:     dumpIR,
-		dumpAST:    dumpAST,
+		flagA:       flagA,
+		flagV:       flagV,
+		flagX:       flagX,
+		flagC:       flagC,
+		flagRun:     flagRun,
+		projectDir:  projectDir,
+		output:      output,
+		xgoSrc:      xgoSrc,
+		debugTarget: debugTarget,
+		vscode:      vscode,
+		withGoroot:  withGoroot,
+		dumpIR:      dumpIR,
+		dumpAST:     dumpAST,
 
 		logCompile:   logCompile,
 		logDebug:     logDebug,
 		debugCompile: debugCompile,
+		debug:        debug,
 
 		noBuildOutput:   noBuildOutput,
 		noInstrument:    noInstrument,
@@ -399,6 +415,34 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		remainArgs: remainArgs,
 		testArgs:   testArgs,
 	}, nil
+}
+
+func tryParseOption(flag string, args []string, i *int) (string, bool) {
+	v, j, ok := tryParseOptionalValue(flag, args, *i)
+	if !ok {
+		return "", false
+	}
+	*i = j
+	return v, true
+}
+
+// parse: --opt=x, --opt x, but not --opt -x
+func tryParseOptionalValue(flag string, args []string, i int) (string, int, bool) {
+	arg := args[i]
+	if !strings.HasPrefix(arg, flag) {
+		return "", i, false
+	}
+	suffix := strings.TrimPrefix(arg, flag)
+	if suffix == "" {
+		if i >= len(args) || strings.HasPrefix(args[i], "-") {
+			return "", i, true
+		}
+		return args[i+1], i + 1, true
+	}
+	if !strings.HasPrefix(suffix, "=") {
+		return "", i, false
+	}
+	return suffix[1:], i, true
 }
 
 func parseStackTraceFlag(arg string) (string, bool) {

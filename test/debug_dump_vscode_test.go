@@ -18,7 +18,7 @@ func TestDumpVscode(t *testing.T) {
 	}
 	defer os.RemoveAll(rootDir)
 
-	output, err := runXgo([]string{"--debug", "main", "--vscode", "stdout?nowait", "--no-build-output",
+	output, err := runXgo([]string{"--debug-target", "main", "--vscode", "stdout?nowait", "--no-build-output",
 		// "-a",// debug
 		"--project-dir", tmpDir, "./"}, nil)
 	if err != nil {

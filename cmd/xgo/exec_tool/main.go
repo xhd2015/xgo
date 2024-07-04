@@ -14,6 +14,7 @@ import (
 	"time"
 
 	cmd_exec "github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/debug"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
@@ -122,18 +123,8 @@ func handleCompile(cmd string, opts *options, args []string) error {
 	if isDebug {
 		// TODO: add env
 		if logCompileEnable || debugWithDlv {
-			dlvArgs := []string{"--api-version=2",
-				"--listen=localhost:2345",
-				"--check-go-version=false",
-				"--log=true",
-				// "--accept-multiclient", // exits when client exits
-				"--headless", "exec",
-				compilerBin,
-				"--",
-			}
+			dlvArgs := debug.FormatDlvArgs(compilerBin, 2345, args)
 			envs := getDebugEnvMapping(xgoCompilerEnableEnv)
-			// dlvArgs = append(dlvArgs, compilerBin)
-			dlvArgs = append(dlvArgs, args...)
 			var strPrint []string
 			envList := make([]string, 0, len(envs))
 			for k, v := range envs {
