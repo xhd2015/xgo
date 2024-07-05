@@ -2,6 +2,8 @@ package mock_stdlib
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -82,5 +84,19 @@ func TestMockTimeSleep(t *testing.T) {
 	// t.Logf("cost: %v", cost)
 	if cost > 100*time.Millisecond {
 		t.Fatalf("expect time.Sleep mocked, actual cost: %v", cost)
+	}
+}
+
+// see issue https://github.com/xhd2015/xgo/issues/225
+func TestDialer(t *testing.T) {
+	var mocked bool
+	mock.Patch((*net.Dialer).Dial, func(_ *net.Dialer, network, address string) (net.Conn, error) {
+		mocked = true
+		return nil, errors.New("dial error")
+	})
+	dialer := net.Dialer{}
+	dialer.Dial("", "")
+	if !mocked {
+		t.Fatalf("expected mocked, actually not")
 	}
 }

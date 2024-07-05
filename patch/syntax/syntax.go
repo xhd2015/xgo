@@ -577,7 +577,7 @@ func filterFuncDecls(funcDecls []*info.DeclInfo, pkgPath string) []*info.DeclInf
 		action := xgo_ctxt.GetAction(fn)
 		if action == "" {
 			// disable part of stdlibs
-			if !xgo_ctxt.AllowPkgFuncTrap(pkgPath, base.Flag.Std, fn.IdentityName()) {
+			if !xgo_ctxt.AllowPkgFuncTrap(pkgPath, base.Flag.Std, fn.IdentityName(), fn.FuncName()) {
 				action = "exclude"
 			}
 		}

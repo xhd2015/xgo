@@ -86,18 +86,18 @@ var stdBlocklist = map[string]map[string]bool{
 	},
 }
 
-func allowStdFunc(pkgPath string, funcName string) bool {
-	if isWhitelistStdFunc(pkgPath, funcName) {
+func allowStdFunc(pkgPath string, identityName string, funcName string) bool {
+	if isWhitelistStdFunc(pkgPath, identityName) {
 		return true
 	}
 	if !XgoStdTrapDefaultAllow {
 		return false
 	}
 
-	if stdBlocklist[pkgPath]["*"] || stdBlocklist[pkgPath][funcName] {
+	if stdBlocklist[pkgPath]["*"] || stdBlocklist[pkgPath][identityName] {
 		return false
 	}
-	if !types.IsExported(funcName) {
+	if funcName != "" && !types.IsExported(funcName) {
 		// unexported func
 		return false
 	}

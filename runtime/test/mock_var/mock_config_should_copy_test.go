@@ -22,8 +22,12 @@ var cfg2 Config
 
 func TestConfigAllowIntercept(t *testing.T) {
 	var buf bytes.Buffer
+	_, bufFn := trap.Inspect((*bytes.Buffer).String)
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f == bufFn {
+				return
+			}
 			buf.WriteString(fmt.Sprintf("%s\n", f.IdentityName))
 			return
 		},

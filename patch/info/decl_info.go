@@ -118,3 +118,10 @@ func (c *DeclInfo) IdentityName() string {
 	}
 	return xgo_func_name.FormatFuncRefName(c.RecvTypeName, c.RecvPtr, c.Name)
 }
+
+func (c *DeclInfo) FuncName() string {
+	if c.Interface {
+		return ""
+	}
+	return c.Name
+}

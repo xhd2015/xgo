@@ -65,9 +65,9 @@ func SkipPackageTrap() bool {
 	return false
 }
 
-func AllowPkgFuncTrap(pkgPath string, isStd bool, funcName string) bool {
+func AllowPkgFuncTrap(pkgPath string, isStd bool, identityName string, funcName string) bool {
 	if isStd {
-		return allowStdFunc(pkgPath, funcName)
+		return allowStdFunc(pkgPath, identityName, funcName)
 	}
 
 	return true
