@@ -217,7 +217,7 @@ var syntaxWalkPatch = &FilePatch{
 	},
 }
 
-var synatxParserPatch = &FilePatch{
+var syntaxParserPatch = &FilePatch{
 	FilePath: _FilePath{"src", "cmd", "compile", "internal", "syntax", "parser.go"},
 	Patches: []*Patch{
 		// {
@@ -351,7 +351,7 @@ func patchCompilerAstTypeCheck(goroot string, goVersion *goinfo.GoVersion) error
 	// var mock: comments
 	if false {
 		// this does not work, because comments are turned off
-		err = synatxParserPatch.Apply(goroot, goVersion)
+		err = syntaxParserPatch.Apply(goroot, goVersion)
 		if err != nil {
 			return err
 		}

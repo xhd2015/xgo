@@ -44,7 +44,7 @@ var compilerFiles = []_FilePath{
 	type2ExprPatch.FilePath,
 	type2AssignmentsPatch.FilePath,
 	syntaxWalkPatch.FilePath,
-	synatxParserPatch.FilePath,
+	syntaxParserPatch.FilePath,
 	noderWriterPatch.FilePath,
 	noderExprPatch.FilePath,
 	syntaxPrinterPatch.FilePath,
@@ -96,7 +96,7 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 			return fmt.Errorf("patching generic trap: %w", err)
 		}
 	}
-	err = patchSynatxNode(goroot, goVersion)
+	err = patchSyntaxNode(goroot, goVersion)
 	if err != nil {
 		return fmt.Errorf("patching syntax node:%w", err)
 	}
@@ -119,7 +119,7 @@ func getInternalPatch(goroot string, subDirs ...string) string {
 	return dir
 }
 
-func patchSynatxNode(goroot string, goVersion *goinfo.GoVersion) error {
+func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
 	if goVersion.Major > 1 || goVersion.Minor >= 22 {
 		return nil
 	}
