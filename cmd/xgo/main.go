@@ -93,6 +93,11 @@ func main() {
 		consumeErrAndExit(err)
 		return
 	}
+	if cmd == "shadow" {
+		err := handleShadow()
+		consumeErrAndExit(err)
+		return
+	}
 	if cmd != "build" && cmd != "run" && cmd != "test" && cmd != "exec" {
 		fmt.Fprintf(os.Stderr, "xgo %s: unknown command\nRun 'xgo help' for usage.\n", cmd)
 		os.Exit(1)
@@ -742,8 +747,14 @@ func getXgoHome(xgoHome string) (string, error) {
 	return absHome, nil
 }
 
+func getNakedGo() string {
+	if nakedGoReplacement != "" {
+		return nakedGoReplacement
+	}
+	return "go"
+}
 func getGoEnvRoot(dir string) (string, error) {
-	goroot, err := cmd.Dir(dir).Output("go", "env", "GOROOT")
+	goroot, err := cmd.Dir(dir).Output(getNakedGo(), "env", "GOROOT")
 	if err != nil {
 		return "", err
 	}
@@ -752,6 +763,8 @@ func getGoEnvRoot(dir string) (string, error) {
 	goroot = strings.ReplaceAll(goroot, "\r", "")
 	return goroot, nil
 }
+
+var nakedGoReplacement = os.Getenv("XGO_REAL_GO_BINARY")
 
 func checkGoroot(dir string, goroot string) (string, error) {
 	if goroot == "" {

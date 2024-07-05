@@ -230,7 +230,7 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 			actualExecToolBin := execToolBin
 			if isDevelopment {
 				// build exec tool
-				buildExecToolCmd := exec.Command("go", "build", "-o", execToolBin, "./exec_tool")
+				buildExecToolCmd := exec.Command(getNakedGo(), "build", "-o", execToolBin, "./exec_tool")
 				buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
 				buildExecToolCmd.Stdout = os.Stdout
 				buildExecToolCmd.Stderr = os.Stderr
@@ -337,7 +337,7 @@ func compareAndUpdateCompilerID(compilerFile string, compilerIDFile string) (cha
 }
 
 func getBuildID(file string) (string, error) {
-	data, err := exec.Command("go", "tool", "buildid", file).Output()
+	data, err := exec.Command(getNakedGo(), "tool", "buildid", file).Output()
 	if err != nil {
 		return "", err
 	}
