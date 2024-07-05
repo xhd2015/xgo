@@ -3,9 +3,9 @@ package main
 import "fmt"
 
 // auto updated
-const VERSION = "1.0.43"
-const REVISION = "7afca256d82933d2cfef3b13ec306cf0907ff378+1"
-const NUMBER = 281
+const VERSION = "1.0.44"
+const REVISION = "dddb80732e53d633b56437d1cd50e876c37bf1e8+1"
+const NUMBER = 282
 
 // manually updated
 const CORE_VERSION = "1.0.43"
