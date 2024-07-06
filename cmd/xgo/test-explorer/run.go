@@ -56,6 +56,7 @@ type runSession struct {
 	goCmd     string
 	env       []string
 	testFlags []string
+	progArgs  []string
 
 	pathPrefix []string
 

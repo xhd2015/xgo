@@ -67,6 +67,7 @@ func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, 
 				goCmd:     config.GoCmd,
 				env:       config.CmdEnv(),
 				testFlags: config.Flags,
+				progArgs:  config.Args,
 
 				pathPrefix: []string{getRootName(absDir)},
 
@@ -289,9 +290,9 @@ func (c *runSession) Start() error {
 			if !singleCase {
 				customFlags = append([]string{"-json"}, customFlags...)
 			}
-			err = runTest(c.goCmd, c.dir, customFlags, testArgs, c.env, stdout, stderr)
+			err = runTest(c.goCmd, c.dir, customFlags, testArgs, c.progArgs, c.env, stdout, stderr)
 		} else {
-			err = debugTest(c.goCmd, c.dir, item.File, c.testFlags, pathArgs, runNames, stdout, stderr, nil, c.env)
+			err = debugTest(c.goCmd, c.dir, item.File, c.testFlags, pathArgs, runNames, stdout, stderr, c.progArgs, c.env)
 		}
 
 		if err != nil {
@@ -403,7 +404,7 @@ func (c *pathMapping) traverse(prefix []string, f func(path []string, status Run
 	}
 }
 
-func runTest(goCmd string, dir string, customFlags []string, testArgs []string, env []string, stdout io.Writer, stderr io.Writer) error {
+func runTest(goCmd string, dir string, customFlags []string, testArgs []string, progArgs []string, env []string, stdout io.Writer, stderr io.Writer) error {
 	if goCmd == "" {
 		goCmd = "go"
 	}
@@ -411,6 +412,10 @@ func runTest(goCmd string, dir string, customFlags []string, testArgs []string, 
 	testFlags = append(testFlags, "test", "-v")
 	testFlags = append(testFlags, customFlags...)
 	testFlags = append(testFlags, testArgs...)
+	if len(progArgs) > 0 {
+		testFlags = append(testFlags, "-args")
+		testFlags = append(testFlags, progArgs...)
+	}
 
 	return cmd.Debug().Env(env).Dir(dir).Stdout(stdout).Stderr(stderr).
 		Run(goCmd, testFlags...)

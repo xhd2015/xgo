@@ -33,6 +33,7 @@ type Options struct {
 	ProjectDir       string
 	Exclude          []string
 	Flags            []string
+	Args             []string
 
 	Config string
 	Port   string
@@ -88,6 +89,15 @@ func Main(args []string, opts *Options) error {
 				return fmt.Errorf("%s requires value", arg)
 			}
 			opts.Flags = append(opts.Flags, args[i+1])
+			i++
+			continue
+		}
+		if arg == "--arg" || arg == "--args" {
+			// e.g. -parallel
+			if i+1 >= n {
+				return fmt.Errorf("%s requires value", arg)
+			}
+			opts.Args = append(opts.Args, args[i+1])
 			i++
 			continue
 		}
@@ -335,7 +345,7 @@ func handle(opts *Options, args []string) error {
 		pathArgs := formatPathArgs(paths)
 		runNames := formatRunNames(names)
 		testArgs := joinTestArgs(pathArgs, runNames)
-		return runTest(conf.GoCmd, projectDir, conf.Flags, testArgs, conf.CmdEnv(), nil, nil)
+		return runTest(conf.GoCmd, projectDir, conf.Flags, testArgs, conf.Args, conf.CmdEnv(), nil, nil)
 	}
 
 	server := &http.ServeMux{}

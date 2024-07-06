@@ -12,17 +12,18 @@ import (
 )
 
 type TestConfig struct {
-	Go      *GoConfig
-	GoCmd   string
-	Exclude []string
-	Env     map[string]interface{}
+	Go      *GoConfig              `json:"go"`
+	GoCmd   string                 `json:"go_cmd"`
+	Exclude []string               `json:"exclude"`
+	Env     map[string]interface{} `json:"env"`
 
 	// test flags passed to go test
 	// common usages:
 	//   -p=12            parallel programs
 	//   -parallel=12     parallel test cases within the same test
 	// according to our test, -p is more useful than -parallel
-	Flags []string
+	Flags []string `json:"flags"`
+	Args  []string `json:"args"`
 }
 
 func (c *TestConfig) CmdEnv() []string {
@@ -119,6 +120,14 @@ func parseTestConfig(config string) (*TestConfig, error) {
 		}
 		conf.Flags = list
 	}
+	e, ok = m["args"]
+	if ok {
+		list, err := toStringList(e)
+		if err != nil {
+			return nil, fmt.Errorf("args: %w", err)
+		}
+		conf.Args = list
+	}
 
 	return conf, nil
 }
@@ -153,6 +162,7 @@ func parseConfigAndMergeOptions(configFile string, opts *Options, configFileRequ
 	}
 	testConfig.Exclude = append(testConfig.Exclude, opts.Exclude...)
 	testConfig.Flags = append(testConfig.Flags, opts.Flags...)
+	testConfig.Args = append(testConfig.Args, opts.Args...)
 	return testConfig, nil
 }
 
