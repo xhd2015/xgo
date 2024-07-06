@@ -4,11 +4,24 @@
 package main
 
 import (
-	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
-var xgo_shadow int = "not support windows yet"
+// test on powershell:
+//  $env:path="C:\Users\xhd2015\.xgo\shadow;"+$env:path
 
 func exclude(dir string) (func(), error) {
-	return nil, fmt.Errorf("windows not supported")
+	path := os.Getenv("path")
+	list := filepath.SplitList(path)
+
+	newList, err := excludeInList(dir, path, list)
+	if err != nil {
+		return nil, err
+	}
+	os.Setenv("path", strings.Join(newList, string(filepath.ListSeparator)))
+	return func() {
+		os.Setenv("path", path)
+	}, nil
 }
