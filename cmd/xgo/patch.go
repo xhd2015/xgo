@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/xgo/support/filecopy"
+	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
@@ -315,7 +316,7 @@ func buildCompiler(goroot string, output string) error {
 }
 
 func compareAndUpdateCompilerID(compilerFile string, compilerIDFile string) (changed bool, err error) {
-	prevData, statErr := ioutil.ReadFile(compilerIDFile)
+	prevData, statErr := fileutil.ReadFile(compilerIDFile)
 	if statErr != nil {
 		if !errors.Is(statErr, os.ErrNotExist) {
 			return false, statErr

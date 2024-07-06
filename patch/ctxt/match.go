@@ -9,10 +9,6 @@ import (
 	"strings"
 )
 
-type Options struct {
-	FilterRules []match.Rule `json:"filter_rules"`
-}
-
 var opts Options
 
 func init() {

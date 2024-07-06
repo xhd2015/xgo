@@ -660,7 +660,7 @@ func getDetail(req *DetailRequest) (*DetailResponse, error) {
 	if found == nil {
 		return nil, netutil.ParamErrorf("not found: %s", req.Name)
 	}
-	content, err := ioutil.ReadFile(req.File)
+	content, err := fileutil.ReadFile(req.File)
 	if err != nil {
 		return nil, err
 	}

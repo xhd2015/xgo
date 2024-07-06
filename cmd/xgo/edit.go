@@ -5,11 +5,12 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/strutil"
 )
 
 func editFile(file string, callback func(content string) (string, error)) error {
-	bytes, err := ioutil.ReadFile(file)
+	bytes, err := fileutil.ReadFile(file)
 	if err != nil {
 		return err
 	}

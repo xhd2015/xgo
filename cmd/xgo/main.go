@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,8 +149,6 @@ func handleBuild(cmd string, args []string) error {
 	resetInstrument := opts.resetInstrument
 	noSetup := opts.noSetup
 
-	optionsFromFile := opts.optionsFromFile
-
 	debugWithDlv := opts.debugWithDlv
 	xgoHome := opts.xgoHome
 	syncXgoOnly := opts.syncXgoOnly
@@ -199,6 +196,11 @@ func handleBuild(cmd string, args []string) error {
 		return err
 	}
 	defer os.RemoveAll(tmpDir)
+
+	optionsFromFile, optionsFromFileContent, err := mergeOptionFiles(tmpDir, opts.optionsFromFile, opts.mockRules)
+	if err != nil {
+		return err
+	}
 
 	var vscodeDebugFile string
 	var vscodeDebugFileSuffix string
@@ -265,16 +267,10 @@ func handleBuild(cmd string, args []string) error {
 	if len(gcflags) > 0 || debug != nil {
 		buildCacheSuffix += "-gcflags"
 	}
-	if optionsFromFile != "" {
-		data, err := ioutil.ReadFile(optionsFromFile)
-		if err != nil {
-			return err
-		}
-		if len(data) > 0 {
-			h := md5.New()
-			h.Write(data)
-			buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
-		}
+	if optionsFromFile != "" && len(optionsFromFileContent) > 0 {
+		h := md5.New()
+		h.Write(optionsFromFileContent)
+		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
 	}
 	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
 	revisionFile := filepath.Join(instrumentDir, "xgo-revision.txt")

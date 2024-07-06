@@ -34,7 +34,11 @@ type options struct {
 	resetInstrument bool
 	noSetup         bool
 
+	// --options-from-file file
 	optionsFromFile string
+
+	// rules from command line will take higher priorities
+	mockRules []string
 
 	// dev only
 	debugWithDlv bool
@@ -87,6 +91,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var noSetup bool
 
 	var optionsFromFile string
+	var mockRules []string
 
 	var debugWithDlv bool
 	var xgoHome string
@@ -154,6 +159,12 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		{
 			Flags: []string{"--options-from-file"},
 			Value: &optionsFromFile,
+		},
+		{
+			Flags: []string{"--mock-rule"},
+			Set: func(v string) {
+				mockRules = append(mockRules, v)
+			},
 		},
 		{
 			Flags: []string{"--dump-ir"},
@@ -395,6 +406,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		noSetup:         noSetup,
 
 		optionsFromFile: optionsFromFile,
+		mockRules:       mockRules,
 
 		debugWithDlv: debugWithDlv,
 		xgoHome:      xgoHome,

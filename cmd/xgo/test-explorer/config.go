@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 
+	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
@@ -24,6 +26,8 @@ type TestConfig struct {
 	// according to our test, -p is more useful than -parallel
 	Flags []string `json:"flags"`
 	Args  []string `json:"args"`
+
+	MockRules []string `json:"mock_rules"`
 }
 
 func (c *TestConfig) CmdEnv() []string {
@@ -129,6 +133,15 @@ func parseTestConfig(config string) (*TestConfig, error) {
 		conf.Args = list
 	}
 
+	e, ok = m["mock_rules"]
+	if ok {
+		list, err := toMarshaledStrings(e)
+		if err != nil {
+			return nil, fmt.Errorf("mock_rules: %w", err)
+		}
+		conf.MockRules = list
+	}
+
 	return conf, nil
 }
 
@@ -136,7 +149,7 @@ func parseConfigAndMergeOptions(configFile string, opts *Options, configFileRequ
 	var data []byte
 	if configFile != "" {
 		var readErr error
-		data, readErr = ioutil.ReadFile(configFile)
+		data, readErr = fileutil.ReadFile(configFile)
 		if readErr != nil {
 			if configFileRequired || !errors.Is(readErr, os.ErrNotExist) {
 				return nil, readErr
@@ -155,15 +168,42 @@ func parseConfigAndMergeOptions(configFile string, opts *Options, configFileRequ
 	if testConfig == nil {
 		testConfig = &TestConfig{}
 	}
+	var goCmd string
 	if opts.GoCommand != "" {
-		testConfig.GoCmd = opts.GoCommand
-	} else if testConfig.GoCmd == "" {
-		testConfig.GoCmd = opts.DefaultGoCommand
+		goCmd = opts.GoCommand
+	} else if testConfig.GoCmd != "" {
+		goCmd = testConfig.GoCmd
+	} else {
+		goCmd = opts.DefaultGoCommand
 	}
+	testConfig.GoCmd = goCmd
 	testConfig.Exclude = append(testConfig.Exclude, opts.Exclude...)
 	testConfig.Flags = append(testConfig.Flags, opts.Flags...)
+	if goCmd == "xgo" && len(testConfig.MockRules) > 0 && getXgoSupportsMockRule() {
+		for _, mockRule := range testConfig.MockRules {
+			testConfig.Flags = append(testConfig.Flags, "--mock-rule", mockRule)
+		}
+	}
 	testConfig.Args = append(testConfig.Args, opts.Args...)
 	return testConfig, nil
+}
+
+// check if xgo version > 1.0.44
+func getXgoSupportsMockRule() bool {
+	xgoVersion, err := cmd.Output("xgo", "version")
+	if err != nil {
+		return false
+	}
+	// not 1.0., so must after 1.0.44
+	if !strings.HasPrefix(xgoVersion, "1.0.") {
+		return true
+	}
+	last := strings.TrimPrefix(xgoVersion, "1.0.")
+	lastNum, err := strconv.ParseInt(last, 10, 64)
+	if err != nil {
+		return false
+	}
+	return lastNum > 44
 }
 
 func validateGoVersion(testConfig *TestConfig) error {
@@ -221,6 +261,31 @@ func toStringList(e interface{}) ([]string, error) {
 			return nil, fmt.Errorf("elements requires string, actual: %T", x)
 		}
 		strList = append(strList, s)
+	}
+	return strList, nil
+}
+
+func toMarshaledStrings(e interface{}) ([]string, error) {
+	if e == nil {
+		return nil, nil
+	}
+	list, ok := e.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("requires []string, actual: %T", e)
+	}
+	strList := make([]string, 0, len(list))
+	for _, x := range list {
+		if x == nil {
+			continue
+		}
+		if s, ok := x.(string); ok {
+			return nil, fmt.Errorf("elements requires non string, actual: %q", s)
+		}
+		data, err := json.Marshal(x)
+		if err != nil {
+			return nil, fmt.Errorf("elements to json failed: %w", err)
+		}
+		strList = append(strList, string(data))
 	}
 	return strList, nil
 }

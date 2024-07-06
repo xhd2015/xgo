@@ -1,0 +1,8 @@
+{
+    "mock_rules": [
+        {
+            "stdlib": true,
+            "action": "exclude"
+        }
+    ]
+}

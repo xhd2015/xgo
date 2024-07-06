@@ -21,7 +21,11 @@ An example config:
         "TEST_WITH_XGO":"true"
     },
     "flags":["-p=12"],
-    "args":["--my-program-env","TEST"]
+    "args":["--my-program-env","TEST"],
+    "mock_rules":[{
+        "stdlib": true,
+        "action": "exclude"
+    }]
 }
 ```
 
@@ -65,3 +69,53 @@ A list of args that will be passed to the test binary itself.
 This option is a symptom to `go test -args <args>...`.
 
 Default: `null`.
+
+## `mock_rules`
+A list of `Rule` config to specify which packages and functions can be mocked.
+
+The `Rule` definition:
+```json
+{
+    "pkg": "",
+    "func": "",
+    "kind": "func" | "var" | "const",
+    "stdlib": true | false,
+    "main_module": true | false,
+    "action": "" || "include" | "exclude" 
+}
+```
+
+A practical example to only mock functions of main module and some RPC functions:
+```json
+{
+    "mock_rules": [
+        {
+            "main_module": true,
+            "kind": "func",
+            "action": "include"
+        },
+        {
+            "main_module": true,
+            "kind": "var,const",
+            "pkg": "github.com/xhd2015/demo/config//**",
+            "action": "include"
+        },
+        {
+            "comment": "protobuf rpc",
+            "pkg": "github.com/xhd2015/external/protobuf3.pb/**",
+            "action": "include"
+        },
+        {
+            "comment": "log",
+            "pkg": "github.com/xhd2015/external/framework_logger/impl",
+            "action": "include"
+        },
+        {
+            "any": true,
+            "action": "exclude"
+        }
+    ]
+}
+```
+
+Default: `null`
