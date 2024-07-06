@@ -11,31 +11,39 @@ import (
 )
 
 func FindGoModDir(dir string) (string, error) {
+	_, dir, err := FindGoModDirSubPath(dir)
+	return dir, err
+}
+
+func FindGoModDirSubPath(dir string) ([]string, string, error) {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	var init bool = true
-	for {
-		if !init {
+
+	// invariant: len(subPath) == level
+	var subPath []string
+	for level := 0; ; level++ {
+		if level > 0 {
+			baseName := filepath.Base(absDir)
 			parent := filepath.Dir(absDir)
 			if parent == absDir || parent == "" {
-				return "", fmt.Errorf("%s outside go module", dir)
+				return nil, "", fmt.Errorf("%s outside go module", dir)
 			}
 			absDir = parent
+			subPath = append(subPath, baseName)
 		}
 		stat, err := os.Stat(filepath.Join(absDir, "go.mod"))
-		init = false
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
-			return "", err
+			return nil, "", err
 		}
 		if stat.IsDir() {
 			continue
 		}
-		return absDir, nil
+		return subPath, absDir, nil
 	}
 }
 

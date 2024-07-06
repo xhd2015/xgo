@@ -1,5 +1,4 @@
 {
-    "go_cmd2": "xgo",
     "exclude": [
         "patch",
         "test/*_test.go"

@@ -287,15 +287,24 @@ func handle(opts *Options, args []string) error {
 	if opts == nil {
 		opts = &Options{}
 	}
+	projectDir := opts.ProjectDir
+	subPath, projectRoot, err := goinfo.FindGoModDirSubPath(projectDir)
+	if err != nil {
+		return err
+	}
 	var configFile string
 	configFileName := opts.Config
 	var configFileRequired bool
 	if configFileName != "none" {
 		if configFileName == "" {
-			configFile = filepath.Join(opts.ProjectDir, "test.config.json")
+			configFile = filepath.Join(projectRoot, "test.config.json")
 		} else {
 			configFileRequired = true
-			configFile = filepath.Join(opts.ProjectDir, configFileName)
+			if filepath.IsAbs(configFileName) {
+				configFile = configFileName
+			} else {
+				configFile = filepath.Join(projectRoot, configFileName)
+			}
 		}
 		err := parseConfigAndValidate(configFile, opts, configFileRequired)
 		if err != nil {
@@ -317,8 +326,7 @@ func handle(opts *Options, args []string) error {
 		if err != nil {
 			return err
 		}
-		dir := opts.ProjectDir
-		root, err := scanTests(dir, true, conf.Exclude)
+		root, err := scanTests(projectRoot, subPath, true, conf.Exclude)
 		if err != nil {
 			return err
 		}
@@ -327,7 +335,7 @@ func handle(opts *Options, args []string) error {
 		pathArgs := formatPathArgs(paths)
 		runNames := formatRunNames(names)
 		testArgs := joinTestArgs(pathArgs, runNames)
-		return runTest(conf.GoCmd, dir, conf.Flags, testArgs, conf.CmdEnv(), nil, nil)
+		return runTest(conf.GoCmd, projectDir, conf.Flags, testArgs, conf.CmdEnv(), nil, nil)
 	}
 
 	server := &http.ServeMux{}
@@ -345,16 +353,11 @@ func handle(opts *Options, args []string) error {
 	server.HandleFunc("/list", func(w http.ResponseWriter, r *http.Request) {
 		netutil.SetCORSHeaders(w)
 		netutil.HandleJSON(w, r, func(ctx context.Context, r *http.Request) (interface{}, error) {
-			q := r.URL.Query()
-			dir := q.Get("dir")
-			if dir == "" {
-				dir = opts.ProjectDir
-			}
 			conf, err := getTestConfig()
 			if err != nil {
 				return nil, err
 			}
-			root, err := scanTests(dir, true, conf.Exclude)
+			root, err := scanTests(projectRoot, subPath, true, conf.Exclude)
 			if err != nil {
 				return nil, err
 			}
@@ -397,9 +400,9 @@ func handle(opts *Options, args []string) error {
 		})
 	})
 
-	setupRunHandler(server, opts.ProjectDir, opts.LogConsole, getTestConfig)
-	setupDebugHandler(server, opts.ProjectDir, getTestConfig)
-	setupTestHandler(server, opts.ProjectDir, getTestConfig)
+	setupRunHandler(server, projectDir, opts.LogConsole, getTestConfig)
+	setupDebugHandler(server, projectDir, getTestConfig)
+	setupTestHandler(server, projectDir, getTestConfig)
 	setupOpenHandler(server)
 
 	host, port := netutil.GetHostAndIP(opts.Bind, opts.Port)
@@ -438,20 +441,30 @@ func getRootName(absDir string) string {
 }
 
 // needParseTests set to true when calling /list
-func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem, error) {
-	absDir, err := filepath.Abs(dir)
+func scanTests(projectRoot string, subPath []string, needParseTests bool, exclude []string) (*TestingItem, error) {
+	absDir, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return nil, err
 	}
-	name := getRootName(absDir)
+
+	var subPathJoin string
+	if len(subPath) > 0 {
+		subPathJoin = filepath.Join(subPath...)
+	}
+	walkDir := absDir
+	if subPathJoin != "" {
+		walkDir = filepath.Join(absDir, subPathJoin)
+	}
+
+	name := getRootName(walkDir)
 	root := &TestingItem{
 		Key:  name,
 		Name: name,
-		File: absDir,
+		File: walkDir,
 		Kind: TestingItemKind_Dir,
 	}
 	itemMapping := make(map[string]*TestingItem)
-	itemMapping[absDir] = root
+	itemMapping[walkDir] = root
 
 	getParent := func(path string) (*TestingItem, error) {
 		parent := itemMapping[filepath.Dir(path)]
@@ -462,15 +475,18 @@ func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem,
 	}
 
 	excludePatterns := pattern.CompilePatterns(exclude)
-
-	err = fileutil.WalkRelative(absDir, func(path, relPath string, d fs.DirEntry) error {
-		if relPath == "" {
+	err = fileutil.WalkRelative(walkDir, func(path, relPath string, d fs.DirEntry) error {
+		rootRelPath := relPath
+		if subPathJoin != "" {
+			rootRelPath = filepath.Join(subPathJoin, relPath)
+		}
+		if rootRelPath == "" {
 			return nil
 		}
 		if len(exclude) > 0 {
-			matchPath := relPath
+			matchPath := rootRelPath
 			if filepath.Separator != '/' {
-				matchPath = strings.ReplaceAll(relPath, string(filepath.Separator), "/")
+				matchPath = strings.ReplaceAll(rootRelPath, string(filepath.Separator), "/")
 			}
 			if excludePatterns.MatchAnyPrefix(matchPath) {
 				if d.IsDir() {
@@ -480,9 +496,12 @@ func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem,
 				}
 			}
 		}
+		if relPath == "" {
+			return nil
+		}
 		if d.IsDir() {
 			// vendor inside root
-			if relPath == "vendor" {
+			if rootRelPath == "vendor" {
 				return filepath.SkipDir
 			}
 
@@ -498,7 +517,7 @@ func scanTests(dir string, needParseTests bool, exclude []string) (*TestingItem,
 			if err != nil {
 				return err
 			}
-			name := filepath.Base(relPath)
+			name := filepath.Base(rootRelPath)
 			item := &TestingItem{
 				Key:     name,
 				Name:    name,
