@@ -31,7 +31,7 @@ func main() {
 		subCmd = args[0]
 	}
 	var cmdErr error
-	if subCmd == "build" || subCmd == "run" || subCmd == "test" {
+	if os.Getenv("XGO_SHADOW_BYPASS") != "true" && (subCmd == "build" || subCmd == "run" || subCmd == "test") {
 		cmdErr = runCmd("xgo", args, []string{"XGO_REAL_GO_BINARY=" + realGo})
 	} else {
 		cmdErr = runCmd(realGo, args, nil)
