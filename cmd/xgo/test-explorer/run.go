@@ -72,6 +72,9 @@ type runSession struct {
 func formatPathArgs(paths []string) []string {
 	args := make([]string, 0, len(paths))
 	for _, relPath := range paths {
+		if filepath.Separator != '/' {
+			relPath = strings.ReplaceAll(relPath, string(filepath.Separator), "/")
+		}
 		args = append(args, "./"+relPath)
 	}
 	return args
