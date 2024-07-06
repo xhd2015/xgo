@@ -441,7 +441,9 @@ Server listen at http://localhost:7070
 
 P.S.: `xgo e`是`xgo tool test-explorer`的别名。
 
-运行`xgo e help`来获取更多帮助。
+运行`xgo e help`来获取帮助。
+
+查看 [doc/test-explorer/README.md](doc/test-explorer) 获取更多配置相关信息。
 
 ## 增量覆盖率
 子命令`xgo tool coverage`扩展了go内置的`go tool cover`, 提供了更好的覆盖率可视化体验。

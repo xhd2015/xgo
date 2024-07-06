@@ -1,7 +1,7 @@
 package test_explorer
 
 const help = `
-xgo tool test-explorer is a tool used test and debug go code easily.
+xgo tool test-explorer is a tool used to test and debug go code easily.
 
 Alias:
    xgo e
@@ -26,6 +26,6 @@ Options:
 Examples:
   xgo e                  open the test explorer in browser
 
-See https://github.com/xhd2015/xgo for documentation.
+See https://github.com/xhd2015/xgo/blob/master/doc/test-explorer/README.md for documentation.
 
 `

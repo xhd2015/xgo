@@ -420,7 +420,7 @@ Trap also have a helper function called `Direct(fn)`, which can be used to bypas
 # Tools
 ## Test Explorer
 
-The `xgo e` sub command will open a test explorer UI in the browser, provide go developers an easy way to test and debug go code.
+The `xgo e` sub command will open a test explorer UI in the browser, provide an easy way to test and debug go code.
 
 With the test explorer, `xgo test` is used instead of `go test`, to enable mocking functionalities.
 
@@ -433,7 +433,9 @@ Server listen at http://localhost:7070
 
 P.S.: `xgo e` is an alias for `xgo tool test-explorer`.
 
-For help, run `xgo e help`.
+For help, run `xgo e help`. 
+
+See [doc/test-explorer/README.md](doc/test-explorer) for configuration details.
 
 # Incremental Coverage
 The `xgo tool coverage` sub command extends go's builtin `go tool cover` for better visualization.
