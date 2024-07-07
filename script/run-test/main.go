@@ -64,6 +64,7 @@ var runtimeSubTests = []string{
 
 type TestCase struct {
 	name         string
+	usePlainGo   bool //  use go instead of xgo
 	dir          string
 	flags        []string
 	windowsFlags []string
@@ -142,6 +143,11 @@ var extraSubTests = []*TestCase{
 		name:  "stdlib_recover_no_trap",
 		dir:   "runtime/test/recover_no_trap",
 		flags: []string{"--trap-stdlib"},
+	},
+	{
+		name:       "xgo_integration",
+		usePlainGo: true,
+		dir:        "test/xgo_integration",
 	},
 }
 
@@ -457,15 +463,15 @@ func listGoroots(dir string) ([]string, error) {
 }
 
 func runDefaultTest(goroot string, args []string, tests []string) error {
-	return doRunTest(goroot, testKind_default, args, tests)
+	return doRunTest(goroot, testKind_default, false, "", args, tests)
 }
 
 func runXgoTest(goroot string, args []string, tests []string) error {
-	return doRunTest(goroot, testKind_xgoTest, args, tests)
+	return doRunTest(goroot, testKind_xgoTest, false, "", args, tests)
 }
 
 func runRuntimeTest(goroot string, args []string, tests []string) error {
-	err := doRunTest(goroot, testKind_runtimeTest, args, tests)
+	err := doRunTest(goroot, testKind_runtimeTest, false, "", args, tests)
 	if err != nil {
 		return err
 	}
@@ -509,8 +515,17 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 			hasHook = statErr == nil
 		}
 		dotDir := "./" + dir
+
+		var runDir string
+		var extraArgs []string
+		if tt.usePlainGo {
+			runDir = dotDir
+		} else {
+			extraArgs = []string{"--project-dir", dotDir}
+		}
+
 		if hasHook {
-			err := doRunTest(goroot, testKind_xgoAny, amendArgs([]string{"--project-dir", dotDir, "-run", "TestPreCheck"}, nil), []string{"./hook_test.go"})
+			err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPreCheck"}...), nil), []string{"./hook_test.go"})
 			if err != nil {
 				return err
 			}
@@ -525,20 +540,20 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 		if runtime.GOOS == "windows" && tt.windowsFlags != nil {
 			testFlags = tt.windowsFlags
 		}
-		err := doRunTest(goroot, testKind_xgoAny, amendArgs([]string{"--project-dir", dotDir}, testFlags), []string{testArgDir})
+		err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(extraArgs, testFlags), []string{testArgDir})
 		if err != nil {
 			return err
 		}
 
 		if hasHook {
-			err := doRunTest(goroot, testKind_xgoAny, amendArgs([]string{"--project-dir", dotDir, "-run", "TestPostCheck"}, nil), []string{"./hook_test.go"})
+			err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPostCheck"}...), nil), []string{"./hook_test.go"})
 			if err != nil {
 				return err
 			}
 		}
 	}
 	if len(names) == 0 {
-		err := doRunTest(goroot, testKind_runtimeSubTest, args, tests)
+		err := doRunTest(goroot, testKind_runtimeSubTest, false, "", args, tests)
 		if err != nil {
 			return err
 		}
@@ -556,7 +571,7 @@ const (
 	testKind_xgoAny         testKind = "xgo-any"
 )
 
-func doRunTest(goroot string, kind testKind, args []string, tests []string) error {
+func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args []string, tests []string) error {
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
 		return err
@@ -608,7 +623,12 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 			)
 		}
 	case testKind_runtimeSubTest:
-		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test", "--project-dir", "runtime/test"}
+		if !usePlainGo {
+			testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test", "--project-dir", "runtime/test"}
+		} else {
+			testArgs = []string{"test"}
+		}
+
 		testArgs = append(testArgs, globalFlags...)
 		testArgs = append(testArgs, args...)
 		if len(tests) > 0 {
@@ -619,18 +639,38 @@ func doRunTest(goroot string, kind testKind, args []string, tests []string) erro
 			}
 		}
 	case testKind_xgoAny:
-		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test"}
+		if !usePlainGo {
+			testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test"}
+		} else {
+			testArgs = []string{"test"}
+		}
+
 		testArgs = append(testArgs, globalFlags...)
 		testArgs = append(testArgs, args...)
 		testArgs = append(testArgs, tests...)
+
 	}
 
+	// remove extra xgo flags
+	if usePlainGo {
+		n := len(testArgs)
+		i := 0
+		for j := 0; j < n; j++ {
+			if testArgs[j] == "--log-debug" || strings.HasPrefix(testArgs[j], "--log-debug=") {
+				continue
+			}
+			testArgs[i] = testArgs[j]
+			i++
+		}
+		testArgs = testArgs[:i]
+	}
 	// debug
-	// fmt.Printf("test Args: %v\n", testArgs)
+	fmt.Printf("test Args: %v\n", testArgs)
 
 	execCmd := exec.Command(filepath.Join(goroot, "bin", "go"), testArgs...)
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
+	execCmd.Dir = dir
 
 	execCmd.Env = os.Environ()
 	execCmd.Env = append(execCmd.Env, "GOROOT="+goroot)
