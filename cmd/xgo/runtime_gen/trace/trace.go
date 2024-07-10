@@ -147,11 +147,19 @@ func Begin() func() {
 	return enableLocal(&collectOpts{})
 }
 
+type CollectOptions struct {
+	// ignore args, will be set to nil
+	IgnoreArgs bool
+	// ignore result, will be set to nil
+	IgnoreResults bool
+}
+
 type collectOpts struct {
 	name          string
 	onComplete    func(root *Root)
 	filter        []func(stack *Stack) bool
 	root          *Root
+	options       *CollectOptions
 	exportOptions *ExportOptions
 }
 
@@ -171,6 +179,10 @@ func (c *collectOpts) OnComplete(f func(root *Root)) *collectOpts {
 
 func (c *collectOpts) WithFilter(f func(stack *Stack) bool) *collectOpts {
 	c.filter = append(c.filter, f)
+	return c
+}
+func (c *collectOpts) WithOptions(opts *CollectOptions) *collectOpts {
+	c.options = opts
 	return c
 }
 
@@ -250,6 +262,14 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 		localRoot = localOpts.root
 		if localRoot == nil {
 			initial = true
+		}
+		if localOpts.options != nil {
+			if localOpts.options.IgnoreArgs {
+				stack.Args = nil
+			}
+			if localOpts.options.IgnoreResults {
+				stack.Results = nil
+			}
 		}
 	}
 	if initial {

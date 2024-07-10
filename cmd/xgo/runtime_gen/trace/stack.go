@@ -41,8 +41,9 @@ type ExportOptions struct {
 	// suppress error when marshalling
 	// arguments and results
 	DisableErrSilent bool
-	SizeLimit        int // 0: default limit 16K
-	AppearanceLimit  int // 0: default limit 100
+
+	SizeLimit       int // 0: default limit 16K
+	AppearanceLimit int // 0: default limit 100
 
 	FilterStack func(stack *StackExport) *StackExport
 
