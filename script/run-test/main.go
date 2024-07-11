@@ -68,6 +68,7 @@ type TestCase struct {
 	dir          string
 	flags        []string
 	windowsFlags []string
+	env          []string
 }
 
 var extraSubTests = []*TestCase{
@@ -153,6 +154,13 @@ var extraSubTests = []*TestCase{
 		name:  "mock_rule_set",
 		dir:   "runtime/test/mock/rule",
 		flags: []string{"-run", "TestClosureWithMockRuleNoMock", "--mock-rule", `{"closure":true,"action":"exclude"}`},
+	},
+	{
+		// see https://github.com/xhd2015/xgo/issues/231
+		name:  "cross_build",
+		dir:   "runtime/test/build/simple",
+		flags: []string{"-c", "-o", "/dev/null"},
+		env:   []string{"GOOS=", "GOARCH="},
 	},
 	{
 		name:       "xgo_integration",
@@ -473,15 +481,15 @@ func listGoroots(dir string) ([]string, error) {
 }
 
 func runDefaultTest(goroot string, args []string, tests []string) error {
-	return doRunTest(goroot, testKind_default, false, "", args, tests)
+	return doRunTest(goroot, testKind_default, false, "", args, tests, nil)
 }
 
 func runXgoTest(goroot string, args []string, tests []string) error {
-	return doRunTest(goroot, testKind_xgoTest, false, "", args, tests)
+	return doRunTest(goroot, testKind_xgoTest, false, "", args, tests, nil)
 }
 
 func runRuntimeTest(goroot string, args []string, tests []string) error {
-	err := doRunTest(goroot, testKind_runtimeTest, false, "", args, tests)
+	err := doRunTest(goroot, testKind_runtimeTest, false, "", args, tests, nil)
 	if err != nil {
 		return err
 	}
@@ -513,6 +521,7 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 			continue
 		}
 		dir := tt.dir
+		env := tt.env
 		var subDirs bool
 		if strings.HasSuffix(dir, "/...") {
 			subDirs = true
@@ -535,7 +544,7 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 		}
 
 		if hasHook {
-			err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPreCheck"}...), nil), []string{"./hook_test.go"})
+			err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPreCheck"}...), nil), []string{"./hook_test.go"}, env)
 			if err != nil {
 				return err
 			}
@@ -550,20 +559,20 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 		if runtime.GOOS == "windows" && tt.windowsFlags != nil {
 			testFlags = tt.windowsFlags
 		}
-		err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(extraArgs, testFlags), []string{testArgDir})
+		err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(extraArgs, testFlags), []string{testArgDir}, env)
 		if err != nil {
 			return err
 		}
 
 		if hasHook {
-			err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPostCheck"}...), nil), []string{"./hook_test.go"})
+			err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPostCheck"}...), nil), []string{"./hook_test.go"}, env)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	if len(names) == 0 {
-		err := doRunTest(goroot, testKind_runtimeSubTest, false, "", args, tests)
+		err := doRunTest(goroot, testKind_runtimeSubTest, false, "", args, tests, nil)
 		if err != nil {
 			return err
 		}
@@ -581,7 +590,7 @@ const (
 	testKind_xgoAny         testKind = "xgo-any"
 )
 
-func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args []string, tests []string) error {
+func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args []string, tests []string, env []string) error {
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
 		return err
@@ -685,6 +694,7 @@ func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args [
 	execCmd.Env = os.Environ()
 	execCmd.Env = append(execCmd.Env, "GOROOT="+goroot)
 	execCmd.Env = append(execCmd.Env, "PATH="+filepath.Join(goroot, "bin")+string(filepath.ListSeparator)+os.Getenv("PATH"))
+	execCmd.Env = append(execCmd.Env, env...)
 
 	return execCmd.Run()
 }

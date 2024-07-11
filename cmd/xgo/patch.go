@@ -230,12 +230,7 @@ func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compi
 		if false {
 			actualExecToolBin := execToolBin
 			if isDevelopment {
-				// build exec tool
-				buildExecToolCmd := exec.Command(getNakedGo(), "build", "-o", execToolBin, "./exec_tool")
-				buildExecToolCmd.Dir = filepath.Join(xgoSrc, "cmd")
-				buildExecToolCmd.Stdout = os.Stdout
-				buildExecToolCmd.Stderr = os.Stderr
-				err = buildExecToolCmd.Run()
+				err := buildExecTool(filepath.Join(xgoSrc, "cmd"), execToolBin)
 				if err != nil {
 					return false, "", err
 				}
@@ -296,23 +291,6 @@ func findBuiltExecTool() (string, error) {
 		return execToolBin, nil
 	}
 	return "", fmt.Errorf("exec_tool not found in %s and ~/.xgo/bin", dirName)
-}
-func buildCompiler(goroot string, output string) error {
-	args := []string{"build"}
-	if isDevelopment {
-		args = append(args, "-gcflags=all=-N -l")
-	}
-	args = append(args, "-o", output, "./")
-	cmd := exec.Command(filepath.Join(goroot, "bin", "go"), args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	env, err := patchEnvWithGoroot(os.Environ(), goroot)
-	if err != nil {
-		return err
-	}
-	cmd.Env = env
-	cmd.Dir = filepath.Join(goroot, "src", "cmd", "compile")
-	return cmd.Run()
 }
 
 func compareAndUpdateCompilerID(compilerFile string, compilerIDFile string) (changed bool, err error) {

@@ -471,11 +471,11 @@ func patchRuntimeDef(origGoroot string, goroot string, goVersion *goinfo.GoVersi
 		dirs = []string{goroot, "src", "cmd", "compile", "internal", "gc"}
 	}
 	cmd.Dir = filepath.Join(dirs...)
-	cmd.Env = os.Environ()
-	cmd.Env, err = patchEnvWithGoroot(cmd.Env, origGoroot)
+	cmd.Env, err = patchEnvWithGoroot(os.Environ(), origGoroot)
 	if err != nil {
 		return err
 	}
+	cmd.Env = appendNativeBuildEnv(cmd.Env)
 
 	err = cmd.Run()
 	if err != nil {

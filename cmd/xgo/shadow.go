@@ -3,11 +3,11 @@ package main
 import (
 	"embed"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 
@@ -37,15 +37,15 @@ func handleShadow() error {
 		return err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(`module github.com/xhd2015/xgo/cmd/xgo/shadow
+	err = fileutil.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(`module github.com/xhd2015/xgo/cmd/xgo/shadow
 
 go 1.14
-`), 0755)
+`))
 	if err != nil {
 		return err
 	}
 
-	err = cmd.Dir(tmpDir).Run(getNakedGo(), "build", "-o", filepath.Join(shadowDir, "go"+osinfo.EXE_SUFFIX), "./")
+	err = cmd.Dir(tmpDir).Env(appendNativeBuildEnv(nil)).Run(getNakedGo(), "build", "-o", filepath.Join(shadowDir, "go"+osinfo.EXE_SUFFIX), "./")
 	if err != nil {
 		return err
 	}
