@@ -37,7 +37,9 @@ type options struct {
 	// --options-from-file file
 	optionsFromFile string
 
-	// rules from command line will take higher priorities
+	// --mock-rule: rules from command line
+	// amend the --options-from-file.
+	// it will take higher priority
 	mockRules []string
 
 	// dev only

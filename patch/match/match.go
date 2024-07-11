@@ -16,6 +16,7 @@ type Rule struct {
 	MainModule *bool   `json:"main_module"`
 	Generic    *bool   `json:"generic"`
 	Exported   *bool   `json:"exported"`
+	Closure    *bool   `json:"closure"`
 	Action     string  `json:"action"` // include,exclude or empty
 
 	kinds []string
@@ -103,6 +104,12 @@ func Match(rule *Rule, pkgPath string, isMainModule bool, funcDecl *info.DeclInf
 	if rule.Exported != nil {
 		hasAnyCondition = true
 		if *rule.Exported != types.IsExported(funcDecl.Name) {
+			return false
+		}
+	}
+	if rule.Closure != nil {
+		hasAnyCondition = true
+		if *rule.Closure != funcDecl.Closure {
 			return false
 		}
 	}

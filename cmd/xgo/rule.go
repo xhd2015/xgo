@@ -20,6 +20,7 @@ type Rule struct {
 	MainModule *bool   `json:"main_module"`
 	Generic    *bool   `json:"generic"`
 	Exported   *bool   `json:"exported"`
+	Closure    *bool   `json:"closure"`
 	Action     string  `json:"action"` // include,exclude or empty
 }
 

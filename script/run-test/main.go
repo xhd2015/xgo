@@ -145,6 +145,16 @@ var extraSubTests = []*TestCase{
 		flags: []string{"--trap-stdlib"},
 	},
 	{
+		name:  "mock_rule_not_set",
+		dir:   "runtime/test/mock/rule",
+		flags: []string{"-run", "TestClosureDefaultMock"},
+	},
+	{
+		name:  "mock_rule_set",
+		dir:   "runtime/test/mock/rule",
+		flags: []string{"-run", "TestClosureWithMockRuleNoMock", "--mock-rule", `{"closure":true,"action":"exclude"}`},
+	},
+	{
 		name:       "xgo_integration",
 		usePlainGo: true,
 		dir:        "test/xgo_integration",
