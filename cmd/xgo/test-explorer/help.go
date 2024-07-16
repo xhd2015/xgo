@@ -3,15 +3,18 @@ package test_explorer
 const help = `
 xgo tool test-explorer is a tool used to test and debug go code easily.
 
+Usage:
+   xgo e [options]       
+   xgo e [options] test
+
 Alias:
    xgo e
    xgo explorer
    xgo test-explorer
 
-Usage:
-   xgo tool test-explorer [options]
+By default, test-explorer opens a web UI to show all tests to be run.
 
-By default, test-explorer open a web UI to show all tests to be run.
+If invoked with 'xgo e test', all tests are automatically executed without opening the web UI.
 
 Options:
      --project-dir DIR         directory to project dir
@@ -25,6 +28,7 @@ Options:
 
 Examples:
   xgo e                  open the test explorer in browser
+  xgo e test             run all tests without opening the test explorer(used in CI)
 
 See https://github.com/xhd2015/xgo/blob/master/doc/test-explorer/README.md for documentation.
 
