@@ -26,8 +26,8 @@ func init() {
 		panic(fmt.Errorf("expect goMajor to be 1, actual:%d", goMajor))
 	}
 
-	if goMinor < 17 || goMinor > 22 {
-		panic(fmt.Errorf("expect goMinor 17~22, actual:%d", goMinor))
+	if goMinor < 17 || goMinor > 23 {
+		panic(fmt.Errorf("expect goMinor 17~23, actual:%d", goMinor))
 	}
 }
 

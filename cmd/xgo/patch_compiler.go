@@ -90,7 +90,7 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 	if err != nil {
 		return fmt.Errorf("patching noder: %w", err)
 	}
-	if goVersion.Major == 1 && (goVersion.Minor == 18 || goVersion.Minor == 19) {
+	if goVersion.Major == GO_MAJOR_1 && (goVersion.Minor == GO_VERSION_18 || goVersion.Minor == GO_VERSION_19) {
 		err := poatchIRGenericGen(goroot, goVersion)
 		if err != nil {
 			return fmt.Errorf("patching generic trap: %w", err)
@@ -120,16 +120,16 @@ func getInternalPatch(goroot string, subDirs ...string) string {
 }
 
 func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major > 1 || goVersion.Minor >= 22 {
+	if goVersion.Major > 1 || goVersion.Minor >= GO_VERSION_22 {
 		return nil
 	}
 	var fragments []string
 
 	if goVersion.Major == 1 {
-		if goVersion.Minor < 22 {
+		if goVersion.Minor <= GO_VERSION_21 {
 			fragments = append(fragments, patch.NodesGen)
 		}
-		if goVersion.Minor <= 17 {
+		if goVersion.Minor <= GO_VERSION_17 {
 			fragments = append(fragments, patch.Nodes_Inspect_117)
 		}
 	}
@@ -142,14 +142,15 @@ func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
 
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	file := filepath.Join(goroot, filepath.Join(gcMain...))
-	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= 16
-	go117 := goVersion.Major == 1 && goVersion.Minor == 17
-	go118 := goVersion.Major == 1 && goVersion.Minor == 18
-	go119 := goVersion.Major == 1 && goVersion.Minor == 19
-	go119AndUnder := goVersion.Major == 1 && goVersion.Minor <= 19
-	go120 := goVersion.Major == 1 && goVersion.Minor == 20
-	go121 := goVersion.Major == 1 && goVersion.Minor == 21
-	go122 := goVersion.Major == 1 && goVersion.Minor == 22
+	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= GO_VERSION_16
+	go117 := goVersion.Major == 1 && goVersion.Minor == GO_VERSION_17
+	go118 := goVersion.Major == 1 && goVersion.Minor == GO_VERSION_18
+	go119 := goVersion.Major == 1 && goVersion.Minor == GO_VERSION_19
+	go119AndUnder := goVersion.Major == 1 && goVersion.Minor <= GO_VERSION_19
+	go120 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_20
+	go121 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_21
+	go122 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_22
+	go123 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_23
 
 	return editFile(file, func(content string) (string, error) {
 		imports := []string{
@@ -247,7 +248,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		}else{`+flagNSwitch+`
 		}
 `)
-		} else if go122 {
+		} else if go122 || go123 {
 			// go1.22 also does not respect rewritten content when inlined
 			// NOTE: the override of LowerL is inserted after xgo_patch.Patch()
 			content = addContentAfter(content,
@@ -269,22 +270,25 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	files := []string(noderFile)
 	var noderFiles string
-	if goVersion.Major == 1 {
+	if goVersion.Major == GO_MAJOR_1 {
 		minor := goVersion.Minor
-		if minor == 16 {
+		if minor == GO_VERSION_16 {
 			files = []string(noderFile16)
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == 17 {
+		} else if minor == GO_VERSION_17 {
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == 18 {
+		} else if minor == GO_VERSION_18 {
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == 19 {
+		} else if minor == GO_VERSION_19 {
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == 20 {
+		} else if minor == GO_VERSION_20 {
 			noderFiles = patch.NoderFiles_1_20
-		} else if minor == 21 {
+		} else if minor == GO_VERSION_21 {
 			noderFiles = patch.NoderFiles_1_21
-		} else if minor == 22 {
+		} else if minor == GO_VERSION_22 {
+			noderFiles = patch.NoderFiles_1_21
+		} else if minor == GO_VERSION_23 {
+			// TODO: verify
 			noderFiles = patch.NoderFiles_1_21
 		}
 	}

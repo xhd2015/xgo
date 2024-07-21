@@ -66,7 +66,17 @@ func ParseGoVersionNumber(version string) (*GoVersion, error) {
 	verList := strings.Split(version, ".")
 	for i := 0; i < 3; i++ {
 		if i < len(verList) {
-			verInt, err := strconv.ParseInt(verList[i], 10, 64)
+			num := verList[i]
+			if i == 1 {
+				// 1.23rc1
+				idx := strings.IndexFunc(num, func(r rune) bool {
+					return r < '0' || r > '9'
+				})
+				if idx > 0 {
+					num = num[:idx]
+				}
+			}
+			verInt, err := strconv.ParseInt(num, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("unrecognized version, expect number, found: %s", version)
 			}

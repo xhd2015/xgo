@@ -9,7 +9,9 @@ import (
 
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
+	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
+	ast_patch "github.com/xhd2015/xgo/support/transform/patch"
 )
 
 var xgoAutoGenRegisterFuncHelper = _FilePath{"src", "runtime", "__xgo_autogen_register_func_helper.go"}
@@ -57,12 +59,12 @@ var runtimeFiles = []_FilePath{
 	timeSleep,
 }
 
-func patchRuntimeAndTesting(goroot string, goVersion *goinfo.GoVersion) error {
+func patchRuntimeAndTesting(origGoroot string, goroot string, goVersion *goinfo.GoVersion) error {
 	err := patchRuntimeProc(goroot, goVersion)
 	if err != nil {
 		return err
 	}
-	err = patchRuntimeTesting(goroot)
+	err = patchRuntimeTesting(origGoroot, goroot, goVersion)
 	if err != nil {
 		return err
 	}
@@ -114,8 +116,8 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	}
 
 	// func name patch
-	if goVersion.Major > 1 || goVersion.Minor > 22 {
-		panic("should check the implementation of runtime.FuncForPC(pc).Name() to ensure __xgo_get_pc_name is not wrapped in print format above go1.22")
+	if goVersion.Major > GO_MAJOR_1 || goVersion.Minor > GO_VERSION_23 {
+		panic("should check the implementation of runtime.FuncForPC(pc).Name() to ensure __xgo_get_pc_name is not wrapped in print format above go1.23,it is confirmed that in go1.21,go1.22 and go1.23 the name is wrapped in funcNameForPrint(...).")
 	}
 	if goVersion.Major > 1 || goVersion.Minor >= 21 {
 		content = append(content, []byte(patch.RuntimeGetFuncName_Go121)...)
@@ -149,14 +151,19 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 		)
 
 		procDecl := `func newproc(fn`
-		newProc := `newg := newproc1(fn, gp, pc)`
-		if goVersion.Major == 1 && goVersion.Minor <= 17 {
-			// to avoid typo check
-			const size = "s" + "i" + "z"
-			procDecl = `func newproc(` + size + ` int32`
-			newProc = `newg := newproc1(fn, argp, ` + size + `, gp, pc)`
+		newProc := `newg := newproc1(fn, gp, pc, false, waitReasonZero)`
+		if goVersion.Major == GO_MAJOR_1 {
+			if goVersion.Minor <= GO_VERSION_17 {
+				// to avoid typo check
+				const size = "s" + "i" + "z"
+				procDecl = `func newproc(` + size + ` int32`
+				newProc = `newg := newproc1(fn, argp, ` + size + `, gp, pc)`
+			} else if goVersion.Minor <= GO_VERSION_22 {
+				newProc = `newg := newproc1(fn, gp, pc)`
+			} else if goVersion.Minor <= GO_VERSION_23 {
+				newProc = `newg := newproc1(fn, gp, pc, false, waitReasonZero)`
+			}
 		}
-
 		// see https://github.com/xhd2015/xgo/issues/67
 		content = addContentAtIndex(
 			content,
@@ -206,8 +213,46 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 	return nil
 }
 
-func patchRuntimeTesting(goroot string) error {
-	return testingFilePatch.Apply(goroot, nil)
+func patchRuntimeTesting(origGoroot string, goroot string, goVersion *goinfo.GoVersion) error {
+	if goVersion.Major == GO_MAJOR_1 && goVersion.Minor <= GO_VERSION_22 {
+		return testingFilePatch.Apply(goroot, nil)
+	}
+	// go 1.23
+	srcFile := testingFilePatch.FilePath.Join(origGoroot)
+	srcCode, err := fileutil.ReadFile(srcFile)
+	if err != nil {
+		return err
+	}
+	newCode, err := ast_patch.Patch(string(srcCode), `package testing
+//prepend <define_callbacks>`+toInsertCode(patch.TestingCallbackDeclarations+patch.TestingEndCallbackDeclarations)+`
+func tRunner(t *T, fn func(t *T)) {
+   //...
+   t.start = highPrecisionTimeNow()
+   
+   //prepend <apply_callbacks>`+toInsertCode(patch.TestingStart+patch.TestingEnd)+`
+   fn(t)
+}
+	`)
+	if err != nil {
+		return err
+	}
+	err = fileutil.WriteFile(testingFilePatch.FilePath.Join(goroot), []byte(newCode))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func toInsertCode(code string) string {
+	lines := strings.Split(code, "\n")
+	for i, line := range lines {
+		if i == 0 {
+			lines[i] = " " + line
+		} else {
+			lines[i] = "// " + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // only required if need to mock time.Sleep

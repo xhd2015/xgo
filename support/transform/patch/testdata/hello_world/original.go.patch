@@ -1,0 +1,6 @@
+package main
+
+func main(){
+    //append <id> fmt.Printf("the world is patched\n")
+    fmt.Printf("hello world\n")
+}

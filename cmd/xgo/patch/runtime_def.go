@@ -44,8 +44,10 @@ func __xgo_get_pc_name_impl(pc uintptr) string {
 `
 
 // start with go1.21, the runtime.FuncForPC(pc).Name()
-// was wrapped in funcNameForPrint(...), we unwrap it
-// NOTE: when upgrading to go1.23, should check
+// is wrapped in funcNameForPrint(...), we unwrap it.
+// it is confirmed that in go1.21,go1.22 and go1.23,
+// the name is wrapped.
+// NOTE: when upgrading to go1.24, should check
 // the implementation again
 const RuntimeGetFuncName_Go121 = `
 func __xgo_get_pc_name_impl(pc uintptr) string {
@@ -200,6 +202,7 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 }
 `
 
+// only missing in go1.21 and below
 const NodesGen = `
 func (n *node) SetPos(p Pos) {
 	n.pos = p

@@ -1,0 +1,32 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go Next
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  tests-with-go-next:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest]
+        go: [ '1.23rc1' ]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      run: |
+        curl -fsSL -o go.tar.gz "https://go.dev/dl/go${{matrix.go}}.linux-amd64.tar.gz"
+        mkdir setup
+        tar -C setup -xzf go.tar.gz
+        ls setup
+        GOROOT=$PWD/setup/go PATH=$PWD/setup/go/bin:$PATH go version
+    
+    - name: Test
+      run: GOROOT=$PWD/setup/go PATH=$PWD/setup/go/bin:$PATH go run ./script/run-test --reset-instrument --debug -v

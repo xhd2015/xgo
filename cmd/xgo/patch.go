@@ -53,7 +53,7 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 	}
 
 	// runtime
-	err := patchRuntimeAndTesting(goroot, goVersion)
+	err := patchRuntimeAndTesting(origGoroot, goroot, goVersion)
 	if err != nil {
 		return err
 	}

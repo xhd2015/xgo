@@ -1,0 +1,7 @@
+package main
+
+//prepend <const_a> const a = 100
+//  // this is just a comment
+//
+//append <const_b> const b = 10
+const _ = 10

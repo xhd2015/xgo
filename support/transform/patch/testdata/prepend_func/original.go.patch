@@ -1,0 +1,6 @@
+package main
+
+//prepend <a> var a int
+func main(){
+
+}
