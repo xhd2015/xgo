@@ -71,7 +71,11 @@ func toPlainString(v interface{}) (string, bool) {
 	case reflect.String:
 		return rv.String(), true
 	case reflect.Slice:
-		if rv.Elem().Kind() == reflect.Uint8 {
+		if rv.IsNil() {
+			return "null", true
+		}
+
+		if rv.Type().Elem().Kind() == reflect.Uint8 {
 			// []byte
 			return string(rv.Bytes()), true
 		}
