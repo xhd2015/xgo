@@ -25,8 +25,12 @@ type StackExport struct {
 
 	Args    interface{}
 	Results interface{}
-	Panic   bool
-	Error   string
+
+	// is recorded as snapshot
+	Snapshot bool
+
+	Panic bool
+	Error string
 
 	Children []*StackExport
 }

@@ -69,6 +69,7 @@ type TestCase struct {
 	flags        []string
 	windowsFlags []string
 	env          []string
+	skipOnCover  bool
 }
 
 var extraSubTests = []*TestCase{
@@ -116,11 +117,33 @@ var extraSubTests = []*TestCase{
 		windowsFlags: []string{"--trap-stdlib=false"},
 	},
 	{
-		// see https://github.com/xhd2015/xgo/issues/142
 		name:         "trace",
-		dir:          "runtime/test/trace/...",
+		dir:          "runtime/test/trace",
 		flags:        []string{},
 		windowsFlags: []string{"--trap-stdlib=false"},
+	},
+	{
+		// see https://github.com/xhd2015/xgo/issues/142
+		name:         "trace",
+		dir:          "runtime/test/trace/check_trace_flag",
+		flags:        []string{},
+		windowsFlags: []string{"--trap-stdlib=false"},
+	},
+	{
+		// go run ./script/run-test/ --name trace-marshal-not-trap-stdlib
+		name:  "trace-marshal-not-trap-stdlib",
+		dir:   "runtime/test/trace/marshal/flag",
+		flags: []string{"--trap-stdlib=false"},
+	},
+	{
+		name:  "trace-marshal-exclude",
+		dir:   "runtime/test/trace/marshal/exclude",
+		flags: []string{"--mock-rule", `{"pkg":"encoding/json","name":"newTypeEncoder","action":"exclude"}`},
+	},
+	{
+		name:        "trace-snapshot",
+		dir:         "runtime/test/trace/snapshot",
+		skipOnCover: true,
 	},
 	{
 		// see https://github.com/xhd2015/xgo/issues/202
@@ -166,17 +189,6 @@ var extraSubTests = []*TestCase{
 		name:       "xgo_integration",
 		usePlainGo: true,
 		dir:        "test/xgo_integration",
-	},
-	{
-		// go run ./script/run-test/ --name trace-marshal-not-trap-stdlib
-		name:  "trace-marshal-not-trap-stdlib",
-		dir:   "runtime/test/trace/marshal/flag",
-		flags: []string{"--trap-stdlib=false"},
-	},
-	{
-		name:  "trace-marshal-exclude",
-		dir:   "runtime/test/trace/marshal/exclude",
-		flags: []string{"--mock-rule", `{"pkg":"encoding/json","name":"newTypeEncoder","action":"exclude"}`},
 	},
 }
 
@@ -530,6 +542,19 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 	for _, tt := range extraSubTests {
 		if !hasName(names, tt.name) {
 			continue
+		}
+		if tt.skipOnCover {
+			var hasCoverFlag bool
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "-cover") {
+					hasCoverFlag = true
+					break
+				}
+			}
+			if hasCoverFlag {
+				fmt.Printf("skip on cover: %s\n", tt.name)
+				continue
+			}
 		}
 		dir := tt.dir
 		env := tt.env

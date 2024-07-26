@@ -27,8 +27,12 @@ type Stack struct {
 	Begin int64 // us
 	End   int64 // us
 
-	Args     core.Object
-	Results  core.Object
+	Args    core.Object
+	Results core.Object
+
+	// is recorded as snapshot
+	Snapshot bool
+
 	Panic    bool
 	Error    error
 	Children []*Stack
@@ -177,6 +181,7 @@ func (c *Stack) Export(opts *ExportOptions) *StackExport {
 		End:      c.End,
 		Args:     args,
 		Results:  results,
+		Snapshot: c.Snapshot,
 		Panic:    c.Panic,
 		Error:    errMsg,
 		Children: ((stacks)(c.Children)).Export(opts),

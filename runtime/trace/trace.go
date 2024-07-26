@@ -155,12 +155,14 @@ type CollectOptions struct {
 }
 
 type collectOpts struct {
-	name          string
-	onComplete    func(root *Root)
-	filter        []func(stack *Stack) bool
-	root          *Root
-	options       *CollectOptions
-	exportOptions *ExportOptions
+	name            string
+	onComplete      func(root *Root)
+	filters         []func(stack *Stack) bool
+	postFilters     []func(stack *Stack)
+	snapshotFilters []func(stack *Stack) bool
+	root            *Root
+	options         *CollectOptions
+	exportOptions   *ExportOptions
 }
 
 func Options() *collectOpts {
@@ -178,7 +180,17 @@ func (c *collectOpts) OnComplete(f func(root *Root)) *collectOpts {
 }
 
 func (c *collectOpts) WithFilter(f func(stack *Stack) bool) *collectOpts {
-	c.filter = append(c.filter, f)
+	c.filters = append(c.filters, f)
+	return c
+}
+
+func (c *collectOpts) WithPostFilter(f func(stack *Stack)) *collectOpts {
+	c.postFilters = append(c.postFilters, f)
+	return c
+}
+
+func (c *collectOpts) WithSnapshot(f func(stack *Stack) bool) *collectOpts {
+	c.snapshotFilters = append(c.snapshotFilters, f)
 	return c
 }
 
@@ -256,10 +268,22 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 			initial = true
 		}
 	} else {
-		if !checkFilter(stack, localOpts.filter) {
+		if !checkFilters(stack, localOpts.filters) {
 			// do not collect trace if filtered out
 			return nil, trap.ErrSkip
 		}
+		var anySnapshot bool
+		for _, f := range localOpts.snapshotFilters {
+			if f(stack) {
+				anySnapshot = true
+				break
+			}
+		}
+		if anySnapshot {
+			stack.Snapshot = true
+			stack.Args = premarshal(stack.Args)
+		}
+
 		localRoot = localOpts.root
 		if localRoot == nil {
 			initial = true
@@ -305,7 +329,7 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 	return prevTop, nil
 }
 
-func checkFilter(stack *Stack, filters []func(stack *Stack) bool) bool {
+func checkFilters(stack *Stack, filters []func(stack *Stack) bool) bool {
 	for _, f := range filters {
 		if !f(stack) {
 			return false
@@ -333,12 +357,18 @@ func handleTracePost(ctx context.Context, f *core.FuncInfo, args core.Object, re
 			panic(fmt.Errorf("unbalanced stack"))
 		}
 		root = localOpts.root
+		for _, f := range localOpts.postFilters {
+			f(root.Top)
+		}
 	} else {
 		v, ok := stackMap.Load(key)
 		if !ok {
 			panic(fmt.Errorf("unbalanced stack"))
 		}
 		root = v.(*Root)
+	}
+	if root.Top != nil && root.Top.Snapshot {
+		root.Top.Results = premarshal(root.Top.Results)
 	}
 
 	// detect panic
@@ -542,4 +572,35 @@ func emitTrace(name string, root *Root, opts *ExportOptions) error {
 		err = WriteFile(subFile, traceOut, 0755)
 	})
 	return err
+}
+
+func premarshal(v core.Object) (res core.Object) {
+	var err error
+	var data []byte
+	defer func() {
+		if e := recover(); e != nil {
+			if pe, ok := e.(error); ok {
+				err = pe
+			} else {
+				err = fmt.Errorf("marshal %T: %v", v, e)
+			}
+		}
+		if err != nil {
+			data = []byte(`{"err":` + strconv.Quote(err.Error()) + ` }`)
+		}
+		res = &premarshaled{Object: v, data: data}
+	}()
+	data, err = MarshalAnyJSON(v)
+	return
+}
+
+type premarshaled struct {
+	core.Object
+	data []byte
+}
+
+var _ core.Object = (*premarshaled)(nil)
+
+func (c *premarshaled) MarshalJSON() ([]byte, error) {
+	return c.data, nil
 }
