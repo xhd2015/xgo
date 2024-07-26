@@ -167,6 +167,17 @@ var extraSubTests = []*TestCase{
 		usePlainGo: true,
 		dir:        "test/xgo_integration",
 	},
+	{
+		// go run ./script/run-test/ --name trace-marshal-not-trap-stdlib
+		name:  "trace-marshal-not-trap-stdlib",
+		dir:   "runtime/test/trace/marshal/flag",
+		flags: []string{"--trap-stdlib=false"},
+	},
+	{
+		name:  "trace-marshal-exclude",
+		dir:   "runtime/test/trace/marshal/exclude",
+		flags: []string{"--mock-rule", `{"pkg":"encoding/json","name":"newTypeEncoder","action":"exclude"}`},
+	},
 }
 
 func main() {

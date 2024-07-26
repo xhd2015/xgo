@@ -106,9 +106,6 @@ func diffText(expected []byte, actual []byte) (string, error) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// var jsonExpected []byte
-	// var jsonActual []byte
-
 	err = fileutil.WriteFile(filepath.Join(tmpDir, "expected"), expected)
 	if err != nil {
 		return "", err

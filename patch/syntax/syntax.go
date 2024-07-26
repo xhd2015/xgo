@@ -574,13 +574,20 @@ func filterFuncDecls(funcDecls []*info.DeclInfo, pkgPath string) []*info.DeclInf
 	for j := 0; j < n; j++ {
 		fn := funcDecls[j]
 
-		action := xgo_ctxt.GetAction(fn)
-		if action == "" {
-			// disable part of stdlibs
-			if !xgo_ctxt.AllowPkgFuncTrap(pkgPath, base.Flag.Std, fn.IdentityName(), fn.FuncName()) {
-				action = "exclude"
+		var action string
+
+		idName := fn.IdentityName()
+		funcName := fn.FuncName()
+		if !xgo_ctxt.AlwaysTrap(pkgPath, base.Flag.Std, idName, funcName) {
+			action = xgo_ctxt.GetAction(fn)
+			if action == "" {
+				// disable part of stdlibs
+				if !xgo_ctxt.AllowPkgFuncTrap(pkgPath, base.Flag.Std, idName, funcName) {
+					action = "exclude"
+				}
 			}
 		}
+
 		if action == "" || action == "include" {
 			funcDecls[i] = fn
 			i++

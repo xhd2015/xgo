@@ -181,6 +181,7 @@ func (c *collectOpts) WithFilter(f func(stack *Stack) bool) *collectOpts {
 	c.filter = append(c.filter, f)
 	return c
 }
+
 func (c *collectOpts) WithOptions(opts *CollectOptions) *collectOpts {
 	c.options = opts
 	return c

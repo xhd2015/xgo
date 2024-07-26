@@ -65,6 +65,17 @@ func SkipPackageTrap() bool {
 	return false
 }
 
+// always trap for encoding/json.newTypeEncoder
+func AlwaysTrap(pkgPath string, isStd bool, identityName string, funcName string) bool {
+	if !isStd {
+		return false
+	}
+	if pkgPath == "encoding/json" && identityName == "newTypeEncoder" {
+		return true
+	}
+	return false
+}
+
 func AllowPkgFuncTrap(pkgPath string, isStd bool, identityName string, funcName string) bool {
 	if isStd {
 		return allowStdFunc(pkgPath, identityName, funcName)
