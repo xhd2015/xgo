@@ -3,14 +3,14 @@ package main
 import "fmt"
 
 // auto updated
-const VERSION = "1.0.46"
-const REVISION = "ddb79e33f33b43c8eb97936e31212bc2f54ac3c1+1"
-const NUMBER = 300
+const VERSION = "1.0.47"
+const REVISION = "2b5b421d4069bcde6b70e76b157e98e39634672c+1"
+const NUMBER = 301
 
 // manually updated
-const CORE_VERSION = "1.0.43"
-const CORE_REVISION = "f1cf6698521d5b43da06f012ac3ba5afb1308d27+1"
-const CORE_NUMBER = 280
+const CORE_VERSION = "1.0.47"
+const CORE_REVISION = "2b5b421d4069bcde6b70e76b157e98e39634672c+1"
+const CORE_NUMBER = 301
 
 func getRevision() string {
 	return formatRevision(VERSION, REVISION, NUMBER)
