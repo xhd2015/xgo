@@ -8,10 +8,14 @@ import (
 )
 
 type PatchContent struct {
-	ID           string
-	PrependLines []string
-	AppendLines  []string
-	ReplaceLine  []string
+	Prepend *PatchLines
+	Append  *PatchLines
+	Replace *PatchLines
+}
+
+type PatchLines struct {
+	ID    string
+	Lines []string
 }
 
 func parsePatch(lines []string, node ast.Node, fset *token.FileSet) map[ast.Node]*PatchContent {
@@ -120,8 +124,12 @@ func parseComments(comments []string) (*PatchContent, error) {
 			}
 			lastCmd = cmd
 			match = true
-			if cmd.id == "" && id != "" {
-				cmd.id = id
+			if id != "" {
+				if cmd.id == "" {
+					cmd.id = id
+				} else if cmd.id != id {
+					return nil, fmt.Errorf("duplicate id: %s", line)
+				}
 			}
 			cmd.lines = append(cmd.lines, content)
 			break
@@ -130,19 +138,17 @@ func parseComments(comments []string) (*PatchContent, error) {
 			return nil, fmt.Errorf("bad instruction: %s", line)
 		}
 	}
-	var id string
+
 	for _, cmd := range cmds {
-		if id == "" && cmd.id != "" {
-			id = cmd.id
-			break
+		if len(cmd.lines) > 0 && cmd.id == "" {
+			return nil, fmt.Errorf("missing id: %s", cmd.lines[0])
 		}
 	}
 
 	return &PatchContent{
-		ID:           id,
-		PrependLines: prependCmd.lines,
-		AppendLines:  appendCmd.lines,
-		ReplaceLine:  replaceCmd.lines,
+		Prepend: &PatchLines{ID: prependCmd.id, Lines: prependCmd.lines},
+		Append:  &PatchLines{ID: appendCmd.id, Lines: appendCmd.lines},
+		Replace: &PatchLines{ID: replaceCmd.id, Lines: replaceCmd.lines},
 	}, nil
 }
 

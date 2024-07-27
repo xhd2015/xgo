@@ -22,6 +22,7 @@ func checkedShadow(t *testing.T) string {
 	}
 	return shadow
 }
+
 func TestShadowPrintPath(t *testing.T) {
 	shadow := checkedShadow(t)
 	shadowGo := filepath.Join(shadow, "go"+osinfo.EXE_SUFFIX)

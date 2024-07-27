@@ -70,7 +70,13 @@ type options struct {
 	// --strace, --strace=on, --strace=off
 	// --stack-stackTrace, --stack-stackTrace=off, --stack-stackTrace=on
 	// to be used in test mode
+	// the parsed value is either on or off, mapping:
+	//  "",true, on => on
+	//  false, off => off
+	//  other => error
 	stackTrace string
+	// --strace-dir
+	stackTraceDir string
 
 	remainArgs []string
 
@@ -120,6 +126,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var overlay string
 	var modfile string
 	var stackTrace string
+	var stackTraceDir string
 	var trapStdlib bool
 
 	var remainArgs []string
@@ -314,6 +321,22 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			continue
 		}
 
+		// strace dir
+		stackTraceDirVal, ok, err := tryParseRequiredValue("--strace-dir", args, &i)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			stackTraceDirVal, ok, err = tryParseRequiredValue("--stack-trace-dir", args, &i)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if ok {
+			stackTraceDir = stackTraceDirVal
+			continue
+		}
+
 		argVal, ok := parseStackTraceFlag(arg)
 		if ok {
 			stackTrace = argVal
@@ -419,18 +442,20 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		// default true
 		syncWithLink: syncWithLink == nil || *syncWithLink,
 
-		mod:        mod,
-		gcflags:    gcflags,
-		overlay:    overlay,
-		modfile:    modfile,
-		stackTrace: stackTrace,
-		trapStdlib: trapStdlib,
+		mod:           mod,
+		gcflags:       gcflags,
+		overlay:       overlay,
+		modfile:       modfile,
+		stackTrace:    stackTrace,
+		stackTraceDir: stackTraceDir,
+		trapStdlib:    trapStdlib,
 
 		remainArgs: remainArgs,
 		testArgs:   testArgs,
 	}, nil
 }
 
+// parse: --opt=x, --opt x, --opt, but not --opt -x
 func tryParseOption(flag string, args []string, i *int) (string, bool) {
 	v, j, ok := tryParseOptionalValue(flag, args, *i)
 	if !ok {
@@ -440,23 +465,49 @@ func tryParseOption(flag string, args []string, i *int) (string, bool) {
 	return v, true
 }
 
-// parse: --opt=x, --opt x, but not --opt -x
+// parse: --opt=x, --opt x,  even --opt -x
+func tryParseRequiredValue(flag string, args []string, i *int) (string, bool, error) {
+	v, j, ok, err := tryParseValue(flag, args, *i, false)
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
+		return "", false, nil
+	}
+	*i = j
+	return v, true, nil
+}
+
 func tryParseOptionalValue(flag string, args []string, i int) (string, int, bool) {
+	val, i, ok, err := tryParseValue(flag, args, i, true)
+	if err != nil {
+		panic(err)
+	}
+	return val, i, ok
+}
+
+func tryParseValue(flag string, args []string, i int, optional bool) (string, int, bool, error) {
 	arg := args[i]
 	if !strings.HasPrefix(arg, flag) {
-		return "", i, false
+		return "", i, false, nil
 	}
-	suffix := strings.TrimPrefix(arg, flag)
+	suffix := arg[len(flag):]
 	if suffix == "" {
-		if i >= len(args) || strings.HasPrefix(args[i], "-") {
-			return "", i, true
+		if optional {
+			if i >= len(args) || strings.HasPrefix(args[i], "-") {
+				return "", i, true, nil
+			}
+		} else {
+			if i >= len(args) {
+				return "", i, false, fmt.Errorf("%s: requires value", flag)
+			}
 		}
-		return args[i+1], i + 1, true
+		return args[i+1], i + 1, true, nil
 	}
 	if !strings.HasPrefix(suffix, "=") {
-		return "", i, false
+		return "", i, false, nil
 	}
-	return suffix[1:], i, true
+	return suffix[1:], i, true, nil
 }
 
 func parseStackTraceFlag(arg string) (string, bool) {
@@ -476,10 +527,10 @@ func parseStackTraceFlag(arg string) (string, bool) {
 		return "", false
 	}
 	val := arg[len(stackTracePrefix)+1:]
-	if val == "" || val == "on" {
+	if val == "" || val == "on" || val == "true" {
 		return "on", true
 	}
-	if val == "off" {
+	if val == "off" || val == "false" {
 		return "off", true
 	}
 	panic(fmt.Errorf("unrecognized value %s: %s, expects on|off", arg, val))

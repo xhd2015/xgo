@@ -6,13 +6,19 @@ import (
 	"go/token"
 	"strings"
 
+	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goparse"
 	"github.com/xhd2015/xgo/support/transform/astdiff"
 	"github.com/xhd2015/xgo/support/transform/edit/line"
+	"github.com/xhd2015/xgo/support/transform/patch/unpatch"
 )
 
 // see https://github.com/xhd2015/xgo/issues/169#issuecomment-2241407305
 func Patch(old string, patch string) (string, error) {
+	old, err := unpatch.Unpatch(old)
+	if err != nil {
+		return "", err
+	}
 	srcAST, srcFset, err := goparse.ParseFileCode("old.go", []byte(old))
 	if err != nil {
 		return "", err
@@ -26,7 +32,17 @@ func Patch(old string, patch string) (string, error) {
 }
 
 func PatchFile(srcFile string, patchFile string) (string, error) {
-	srcCode, srcAST, srcFset, err := goparse.Parse(srcFile)
+	srcCode, err := fileutil.ReadFile(srcFile)
+	if err != nil {
+		return "", err
+	}
+
+	unpatchedSrcCode, err := unpatch.Unpatch(string(srcCode))
+	if err != nil {
+		return "", err
+	}
+
+	srcAST, srcFset, err := goparse.ParseFileCode(srcFile, []byte(unpatchedSrcCode))
 	if err != nil {
 		return "", err
 	}
@@ -36,7 +52,7 @@ func PatchFile(srcFile string, patchFile string) (string, error) {
 		return "", err
 	}
 
-	return patchAST(string(srcCode), srcAST, srcFset, string(patchCode), patchCodeAST, patchFset)
+	return patchAST(unpatchedSrcCode, srcAST, srcFset, string(patchCode), patchCodeAST, patchFset)
 }
 
 func patchAST(srcCode string, srcAST *ast.File, srcFset *token.FileSet, patchCode string, patchAST *ast.File, patchFset *token.FileSet) (string, error) {
@@ -249,14 +265,14 @@ func patchNodes(edit *line.Edit, srcFset *token.FileSet, patchMapping map[ast.No
 		}
 
 		line := srcFset.Position(srcNode.Pos()).Line
-		if len(patch.AppendLines) > 0 {
-			edit.Append(line, patch.AppendLines)
+		if patch.Append != nil && len(patch.Append.Lines) > 0 {
+			edit.Append(line, patch.Append.ID, patch.Append.Lines)
 		}
-		if len(patch.PrependLines) > 0 {
-			edit.Prepend(line, patch.PrependLines)
+		if patch.Prepend != nil && len(patch.Prepend.Lines) > 0 {
+			edit.Prepend(line, patch.Prepend.ID, patch.Prepend.Lines)
 		}
-		if len(patch.ReplaceLine) > 0 {
-			edit.Replace(line, patch.ReplaceLine)
+		if patch.Replace != nil && len(patch.Replace.Lines) > 0 {
+			edit.Replace(line, patch.Replace.ID, patch.Replace.Lines)
 		}
 	}
 }

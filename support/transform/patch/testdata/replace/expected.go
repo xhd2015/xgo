@@ -8,5 +8,12 @@ func main() {
 
 // greet
 func greet(s string) string {
-	return "patched " + s
+	     /*<begin hello>*/
+         return "patched " +s
+        /*<end hello>*/
+        /*<begin hello>*/
+        /*<replaced>
+                return "hello " + s
+        </replaced>*/
+        /*<end hello>*/
 }

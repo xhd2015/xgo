@@ -32,9 +32,21 @@ const XGO_NUMBER = "XGO_NUMBER"
 
 // --strace
 const XGO_STACK_TRACE = "XGO_STACK_TRACE"
+const XGO_STACK_TRACE_DIR = "XGO_STACK_TRACE_DIR"
 const XGO_STD_LIB_TRAP_DEFAULT_ALLOW = "XGO_STD_LIB_TRAP_DEFAULT_ALLOW"
+
+// Deprecated: use flag_STRACE,.. instead
 const straceFlagConstName = "__xgo_injected_StraceFlag"
 const trapStdlibFlagConstName = "__xgo_injected_StdlibTrapDefaultAllow"
+
+const (
+	// --strace
+	flag_STRACE = "STRACE"
+	// --strace-dir
+	flag_STRACE_DIR = "STRACE_DIR"
+	// --trap-stdlib
+	flag_TRAP_STDLIB = "TRAP_STDLIB"
+)
 
 // this link function is considered safe as we do not allow user
 // to define such one,there will be no abuse
@@ -335,9 +347,12 @@ func registerAndTrapFuncs(fileList []*syntax.File, addFile func(name string, r i
 func injectXgoFlags(fileList []*syntax.File) {
 	pkgPath := xgo_ctxt.GetPkgPath()
 	switch pkgPath {
+	case xgo_ctxt.XgoRuntimeFlagsPkg:
+		injectXgoGeneralFlags(fileList)
 	case xgo_ctxt.XgoRuntimeCorePkg:
 		patchXgoRuntimeCoreVersions(fileList)
 	case xgo_ctxt.XgoRuntimeTracePkg:
+		// Deprecated, left here only for compatible purpose
 		injectXgoStraceFlag(fileList)
 	}
 }
@@ -408,6 +423,7 @@ func forEachConst(declList []syntax.Decl, fn func(constDecl *syntax.ConstDecl) b
 	}
 }
 
+// Deprecated: use injectXgoGeneralFlags instead
 func injectXgoStraceFlag(fileList []*syntax.File) {
 	straceFlag := os.Getenv(XGO_STACK_TRACE)
 	trapStdlibFlag := os.Getenv(XGO_STD_LIB_TRAP_DEFAULT_ALLOW)
@@ -431,6 +447,24 @@ func injectXgoStraceFlag(fileList []*syntax.File) {
 		}
 		return false
 	})
+}
+
+func injectXgoGeneralFlags(fileList []*syntax.File) {
+	for _, file := range fileList {
+		forEachConst(file.DeclList, func(constDecl *syntax.ConstDecl) bool {
+			for _, name := range constDecl.NameList {
+				switch name.Value {
+				case flag_STRACE:
+					constDecl.Values = newStringLit(os.Getenv(XGO_STACK_TRACE))
+				case flag_STRACE_DIR:
+					constDecl.Values = newStringLit(os.Getenv(XGO_STACK_TRACE_DIR))
+				case flag_TRAP_STDLIB:
+					constDecl.Values = newStringLit(os.Getenv(XGO_STD_LIB_TRAP_DEFAULT_ALLOW))
+				}
+			}
+			return false
+		})
+	}
 }
 
 func getFileIndexMapping(files []*syntax.File) map[*syntax.File]int {

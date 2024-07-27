@@ -165,6 +165,7 @@ func handleBuild(cmd string, args []string) error {
 	dumpIR := opts.dumpIR
 	dumpAST := opts.dumpAST
 	stackTrace := opts.stackTrace
+	stackTraceDir := opts.stackTraceDir
 	trapStdlib := opts.trapStdlib
 
 	if cmdExec && len(remainArgs) == 0 {
@@ -272,6 +273,22 @@ func handleBuild(cmd string, args []string) error {
 		h.Write(optionsFromFileContent)
 		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
 	}
+	if stackTrace == "on" || stackTrace == "true" {
+		v := stackTrace
+		if v == "true" {
+			v = "on"
+		} else if v == "false" {
+			v = "off"
+		}
+		buildCacheSuffix += "-strace_" + v
+	}
+	if stackTraceDir != "" && stackTraceDir != "." && stackTraceDir != "./" {
+		// this affects the flags package
+		h := md5.New()
+		h.Write([]byte(stackTraceDir))
+		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
+	}
+
 	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
 	revisionFile := filepath.Join(instrumentDir, "xgo-revision.txt")
 	fullSyncRecord := filepath.Join(instrumentDir, "full-sync-record.txt")
@@ -601,7 +618,7 @@ func handleBuild(cmd string, args []string) error {
 		if vscodeDebugFile != "" {
 			xgoDebugVscode = vscodeDebugFile + vscodeDebugFileSuffix
 		}
-		execCmd.Env = append(execCmd.Env, "XGO_DEBUG_VSCODE="+xgoDebugVscode)
+		execCmd.Env = append(execCmd.Env, exec_tool.XGO_DEBUG_VSCODE+"="+xgoDebugVscode)
 
 		// debug compile package
 		execCmd.Env = append(execCmd.Env, exec_tool.XGO_DEBUG_COMPILE_PKG+"="+debugCompilePkg)
@@ -609,7 +626,10 @@ func handleBuild(cmd string, args []string) error {
 
 		// stack trace
 		if stackTrace != "" {
-			execCmd.Env = append(execCmd.Env, "XGO_STACK_TRACE="+stackTrace)
+			execCmd.Env = append(execCmd.Env, exec_tool.XGO_STACK_TRACE+"="+stackTrace)
+		}
+		if stackTraceDir != "" {
+			execCmd.Env = append(execCmd.Env, exec_tool.XGO_STACK_TRACE_DIR+"="+stackTraceDir)
 		}
 
 		// trap stdlib
@@ -617,7 +637,7 @@ func handleBuild(cmd string, args []string) error {
 		if trapStdlib {
 			trapStdlibEnv = "true"
 		}
-		execCmd.Env = append(execCmd.Env, "XGO_STD_LIB_TRAP_DEFAULT_ALLOW="+trapStdlibEnv)
+		execCmd.Env = append(execCmd.Env, exec_tool.XGO_STD_LIB_TRAP_DEFAULT_ALLOW+"="+trapStdlibEnv)
 
 		// compiler options (make abs)
 		var absOptionsFromFile string

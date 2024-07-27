@@ -15,18 +15,18 @@ func TestPatchFile(t *testing.T) {
 	tests := []struct {
 		dir string
 	}{
-		// {
-		// 	dir: "./testdata/hello_world",
-		// },
-		// {
-		// 	dir: "./testdata/replace",
-		// },
-		// {
-		// 	dir: "./testdata/import",
-		// },
-		// {
-		// 	dir: "./testdata/const_decl",
-		// },
+		{
+			dir: "./testdata/hello_world",
+		},
+		{
+			dir: "./testdata/replace",
+		},
+		{
+			dir: "./testdata/import",
+		},
+		{
+			dir: "./testdata/const_decl",
+		},
 		{
 			dir: "./testdata/prepend_func",
 		},
@@ -62,9 +62,12 @@ func testPatchDir(t *testing.T, dir string) {
 		return
 	}
 
+	// t.Logf("result: %v", result)
+
 	// assert they are syntically the same
 	if !astdiff.FileSame(resultCode, expectedCode) {
 		result = strings.TrimSuffix(result, "\n")
+
 		expected := strings.TrimSuffix(string(expectedBytes), "\n")
 		if diff := assert.Diff(expected, result); diff != "" {
 			t.Errorf("PatchFile(): %s", diff)

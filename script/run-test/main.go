@@ -93,6 +93,11 @@ var extraSubTests = []*TestCase{
 		flags:        []string{"--strace"},
 		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
 	},
+	// trap
+	{
+		name: "trap_flags_persistent",
+		dir:  "runtime/test/trap/flags/persistent_after_build",
+	},
 	{
 		name:  "trap_with_overlay",
 		dir:   "runtime/test/trap_with_overlay",
@@ -144,6 +149,10 @@ var extraSubTests = []*TestCase{
 		name:        "trace-snapshot",
 		dir:         "runtime/test/trace/snapshot",
 		skipOnCover: true,
+	},
+	{
+		name: "trace-custom-dir",
+		dir:  "runtime/test/trace/trace_dir",
 	},
 	{
 		// see https://github.com/xhd2015/xgo/issues/202
@@ -206,6 +215,8 @@ func main() {
 	var xgoRuntimeTestOnly bool
 	var xgoRuntimeSubTestOnly bool
 	var xgoDefaultTestOnly bool
+
+	var installXgo bool
 
 	var debug bool
 	var cover bool
@@ -292,6 +303,10 @@ func main() {
 			debug = true
 			continue
 		}
+		if arg == "--install-xgo" {
+			installXgo = true
+			continue
+		}
 		if arg == "--" {
 			if i+1 < n {
 				remainArgs = append(remainArgs, args[i+1:]...)
@@ -365,6 +380,14 @@ func main() {
 	if len(goroots) == 0 {
 		fmt.Fprintf(os.Stderr, "no go select\n")
 		os.Exit(1)
+	}
+
+	if installXgo {
+		err := cmd.Run("go", "install", "./cmd/xgo")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "install xgo: %v\n", err)
+			os.Exit(1)
+		}
 	}
 	for _, goroot := range goroots {
 		begin := time.Now()
@@ -703,7 +726,6 @@ func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args [
 		testArgs = append(testArgs, globalFlags...)
 		testArgs = append(testArgs, args...)
 		testArgs = append(testArgs, tests...)
-
 	}
 
 	// remove extra xgo flags

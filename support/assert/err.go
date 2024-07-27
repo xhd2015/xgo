@@ -7,9 +7,9 @@ func tryDiffError(expected interface{}, actual interface{}) (string, bool) {
 	actualErr, actualOK := actual.(error)
 	if expectedOK != actualOK {
 		if expectedOK {
-			return fmt.Sprintf("expect: error %s, actual: %T %s", expectedErr.Error(), actual, actual), true
+			return fmt.Sprintf("expect: error %s, actual: %T %v", expectedErr.Error(), actual, actual), true
 		}
-		return fmt.Sprintf("expect: %T %s, actual: error %s", expectedErr, expectedErr, actualErr.Error()), true
+		return fmt.Sprintf("expect: %T %v, actual: error %s", expectedErr, expectedErr, actualErr.Error()), true
 	}
 	if !expectedOK {
 		return "", false

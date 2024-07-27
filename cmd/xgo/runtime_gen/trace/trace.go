@@ -13,28 +13,17 @@ import (
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/trap"
+	"github.com/xhd2015/xgo/runtime/trap/flags"
 )
 
 // hold goroutine stacks, keyed by goroutine ptr
 var stackMap sync.Map        // uintptr(goroutine) -> *Root
 var testInfoMapping sync.Map // uintptr(goroutine) -> *testInfo
 
-// persist the --strace flag when invoking xgo test
-// stack trace options:
-//
-//	on: automatically collect when test starts and ends
-const __xgo_injected_StraceFlag = ""
-
-// options:
-//
-//	true: stdlib is by default allowed
-const __xgo_injected_StdlibTrapDefaultAllow = ""
-
-var skipStdlibTraceByDefault = __xgo_injected_StdlibTrapDefaultAllow == "true"
+var skipStdlibTraceByDefault = flags.TRAP_STDLIB == "true"
 
 type testInfo struct {
-	name string
-
+	name     string
 	onFinish func()
 }
 
@@ -49,7 +38,7 @@ func init() {
 			name: name,
 		}
 		testInfoMapping.LoadOrStore(key, tInfo)
-		if __xgo_injected_StraceFlag == "on" {
+		if flags.STRACE == "on" || flags.STRACE == "true" {
 			tInfo.onFinish = Begin()
 		}
 	})
@@ -512,7 +501,20 @@ func fmtStack(root *Root, opts *ExportOptions) (data []byte, err error) {
 }
 
 func emitTraceNoErr(name string, root *Root, opts *ExportOptions) {
-	emitTrace(name, root, opts)
+	var err error
+	defer func() {
+		if e := recover(); e != nil {
+			if pe, ok := e.(error); ok {
+				err = pe
+			} else {
+				err = fmt.Errorf("panic: %v", e)
+			}
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "emit trace: name=%s %v", name, err)
+		}
+	}()
+	err = emitTrace(name, root, opts)
 }
 
 func formatTime(t time.Time, layout string) (output string) {
@@ -532,6 +534,7 @@ func emitTrace(name string, root *Root, opts *ExportOptions) error {
 	}
 	useStdout := xgoTraceOutput == "stdout"
 	subName := name
+	canUseFlagDir := true
 	if name == "" {
 		traceIDNum := int64(1)
 		ghex := fmt.Sprintf("g_%x", __xgo_link_getcurg())
@@ -542,6 +545,7 @@ func emitTrace(name string, root *Root, opts *ExportOptions) error {
 		} else if useStdout {
 			subName = fmt.Sprintf("%s/%s", ghex, traceID)
 		} else {
+			canUseFlagDir = false
 			subName = filepath.Join(xgoTraceOutput, ghex, traceID)
 		}
 	}
@@ -563,11 +567,17 @@ func emitTrace(name string, root *Root, opts *ExportOptions) error {
 	}
 
 	subFile := subName + ".json"
-	subDir := filepath.Dir(subFile)
-	err := os.MkdirAll(subDir, 0755)
-	if err != nil {
-		return err
+	if canUseFlagDir && flags.STRACE_DIR != "" {
+		subFile = filepath.Join(flags.STRACE_DIR, subFile)
+	} else {
+		subDir := filepath.Dir(subFile)
+		err := os.MkdirAll(subDir, 0755)
+		if err != nil {
+			return err
+		}
 	}
+
+	var err error
 	trap.Direct(func() {
 		err = WriteFile(subFile, traceOut, 0755)
 	})

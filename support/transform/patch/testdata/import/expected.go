@@ -1,6 +1,8 @@
 package main
-
-import 	_ "embed"
+        
+/*<begin embed>*/
+import _ "embed"
+/*<end embed>*/
 import	"fmt"
 
 

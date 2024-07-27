@@ -9,6 +9,7 @@ const XgoModule = "github.com/xhd2015/xgo"
 const XgoRuntimePkg = XgoModule + "/runtime"
 const XgoRuntimeCorePkg = XgoModule + "/runtime/core"
 const XgoRuntimeTracePkg = XgoModule + "/runtime/trace"
+const XgoRuntimeFlagsPkg = XgoRuntimePkg + "/trap/flags"
 
 const XgoLinkTrapVarForGenerated = "__xgo_link_trap_var_for_generated"
 
