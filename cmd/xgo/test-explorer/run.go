@@ -22,21 +22,23 @@ type StartSessionResult struct {
 type Event string
 
 const (
-	Event_ItemStatus Event = "item_status"
-	Event_MergeTree  Event = "merge_tree"
-	Event_Output     Event = "output"
-	Event_ErrorMsg   Event = "error_msg"
-	Event_TestStart  Event = "test_start"
-	Event_TestEnd    Event = "test_end"
+	Event_ItemStatus  Event = "item_status"
+	Event_MergeTree   Event = "merge_tree"
+	Event_Output      Event = "output"
+	Event_ErrorMsg    Event = "error_msg"
+	Event_TestStart   Event = "test_start"
+	Event_TestEnd     Event = "test_end"
+	Event_UpdateTrace Event = "update_trace"
 )
 
 type TestingItemEvent struct {
-	Event      Event        `json:"event"`
-	Item       *TestingItem `json:"item"`
-	Path       []string     `json:"path"`
-	Status     RunStatus    `json:"status"`
-	Msg        string       `json:"msg"`
-	LogConsole bool         `json:"logConsole"`
+	Event        Event         `json:"event"`
+	Item         *TestingItem  `json:"item"`
+	Path         []string      `json:"path"`
+	Status       RunStatus     `json:"status"`
+	Msg          string        `json:"msg"`
+	LogConsole   bool          `json:"logConsole"`
+	TraceRecords []*CallRecord `json:"traceRecords"`
 }
 
 type PollSessionRequest struct {
@@ -63,6 +65,7 @@ type runSession struct {
 	item  *TestingItem
 	path  []string
 	debug bool
+	trace bool // xgo stack trace
 
 	logConsole bool
 

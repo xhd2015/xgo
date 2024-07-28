@@ -5,16 +5,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/netutil"
 	"github.com/xhd2015/xgo/support/session"
@@ -24,6 +29,7 @@ type StartSessionRequest struct {
 	Item  *TestingItem `json:"item"`
 	Path  []string     `json:"path"`
 	Debug bool         `json:"debug"`
+	Trace bool         `json:"trace"`
 }
 
 // TODO: make FE call /session/destroy
@@ -44,6 +50,9 @@ func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, 
 
 			if req.Debug && req.Item.Kind != TestingItemKind_Case {
 				return nil, netutil.ParamErrorf("debug not supported: %s", req.Item.Kind)
+			}
+			if req.Trace && req.Item.Kind != TestingItemKind_Case {
+				return nil, netutil.ParamErrorf("trace not supported: %s", req.Item.Kind)
 			}
 
 			config, err := getTestConfig()
@@ -74,6 +83,7 @@ func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, 
 				item:  req.Item,
 				path:  req.Path,
 				debug: req.Debug,
+				trace: req.Trace,
 
 				logConsole: logConsole,
 				session:    ses,
@@ -193,6 +203,11 @@ func (c *runSession) Start() error {
 	item := c.item
 	absDir := c.absDir
 	pathPrefix := c.pathPrefix
+	debug := c.debug
+	trace := c.trace
+
+	begin := time.Now()
+	_ = begin
 
 	dirPkgPath, err := resolveDirPkgPath(absDir)
 	if err != nil {
@@ -240,7 +255,6 @@ func (c *runSession) Start() error {
 		}}, nil
 	}
 
-	debug := c.debug
 	var singleCase bool
 	var eventBuilder func(line []byte) ([]*TestingItemEvent, error)
 	if item.Kind == TestingItemKind_Case {
@@ -269,6 +283,35 @@ func (c *runSession) Start() error {
 	if !singleCase {
 		defStdErrReader, defStdErr = io.Pipe()
 	}
+
+	// trace
+	var traceDir string
+
+	// in go, file is ignored under a package
+	// the traceDir corresponds to the test
+	// case's dir
+	// i.e.
+	//  case = pkg/some_test.go/TestSomething/sub
+	//  traceDir = ROOT/pkg
+	//  caseSubPath = TestSomething/sub
+	var caseSubPath string
+	if singleCase && trace {
+		subPath, projectRoot, err := goinfo.FindGoModDirSubPath(absDir)
+		if err != nil {
+			return err
+		}
+		itemDir := filepath.Dir(c.item.RelPath)
+		if len(subPath) > 0 {
+			itemDir = filepath.Join(filepath.Join(subPath...), itemDir)
+		}
+		traceDir, err = getConsistentTraceDir(projectRoot, itemDir)
+		if err != nil {
+			return err
+		}
+		caseSubPath = item.NameUnderPkg
+		debugF("absDir=%s,itemRelPath=%s, traceDir=%s\n", absDir, c.item.RelPath, traceDir)
+	}
+
 	go func() {
 		var err error
 		defer func() {
@@ -284,15 +327,20 @@ func (c *runSession) Start() error {
 		}
 		pathArgs := formatPathArgs(paths)
 		runNames := formatRunNames(names)
+
+		testFlags := c.testFlags
+		if !debug && !singleCase {
+			testFlags = append([]string{"-json"}, testFlags...)
+		}
+		if traceDir != "" {
+			testFlags = append(testFlags, "--strace", "--strace-dir", traceDir)
+		}
+
 		if !debug {
 			testArgs := joinTestArgs(pathArgs, runNames)
-			customFlags := c.testFlags
-			if !singleCase {
-				customFlags = append([]string{"-json"}, customFlags...)
-			}
-			err = runTest(c.goCmd, c.dir, customFlags, testArgs, c.progArgs, c.env, stdout, stderr)
+			err = runTest(c.goCmd, c.dir, testFlags, testArgs, c.progArgs, c.env, stdout, stderr)
 		} else {
-			err = debugTest(c.goCmd, c.dir, item.File, c.testFlags, pathArgs, runNames, stdout, stderr, c.progArgs, c.env)
+			err = debugTest(c.goCmd, c.dir, item.File, testFlags, pathArgs, runNames, stdout, stderr, c.progArgs, c.env)
 		}
 
 		if err != nil {
@@ -301,6 +349,7 @@ func (c *runSession) Start() error {
 		fmt.Printf("test end\n")
 	}()
 
+	// consume stderr
 	if defStdErrReader != nil {
 		go func() {
 			defer defStdErr.Close()
@@ -330,8 +379,23 @@ func (c *runSession) Start() error {
 						Status: RunStatus_Success,
 					})
 				}
+				// read trace
+				if traceDir != "" {
+					debugF("path: %v, baseTraceCase: %v, rootPath: %v", path, caseSubPath, rootPath)
+					if suffix, ok := trimPrefix(path, rootPath); ok {
+						records := readTrace(traceDir, caseSubPath, suffix)
+						if records != nil {
+							sendEvent(&TestingItemEvent{
+								Event:        Event_UpdateTrace,
+								Path:         path,
+								TraceRecords: records,
+							})
+						}
+					}
+				}
 				return true
 			})
+
 			sendEvent(&TestingItemEvent{
 				Event: Event_TestEnd,
 			})
@@ -342,6 +406,75 @@ func (c *runSession) Start() error {
 	}()
 
 	return nil
+}
+
+func trimPrefix(path []string, root []string) ([]string, bool) {
+	if len(path) < len(root) {
+		return nil, false
+	}
+	for i, p := range root {
+		if path[i] != p {
+			return nil, false
+		}
+	}
+	return path[len(root):], true
+}
+
+func readTrace(traceDir string, baseCaseName string, subPath []string) []*CallRecord {
+	traceFile := filepath.Join(traceDir, baseCaseName, filepath.Join(subPath...)) + ".json"
+	debugF("traceFile: %s", traceFile)
+	records, err := readTraceFromFile(traceFile)
+	if err != nil {
+		return []*CallRecord{
+			{
+				Pkg:   "github.com/xhd2015/xgo/cmd/xgo/test-explorer",
+				Func:  "readTraceFromFile",
+				Error: err.Error(),
+			},
+		}
+	}
+	return records
+}
+
+func readTraceFromFile(file string) (records []*CallRecord, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			if pe, ok := e.(error); ok {
+				err = pe
+			} else {
+				err = fmt.Errorf("panic: %v", e)
+			}
+		}
+	}()
+	data, err := fileutil.ReadFile(file)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var rootExport *RootExport
+	err = json.Unmarshal(data, &rootExport)
+	if err != nil {
+		return nil, err
+	}
+	c := &traceConverter{}
+	if rootExport != nil {
+		records = c.convertStacks(rootExport.Children)
+	}
+	return records, nil
+}
+
+const debugLog = false
+
+func debugF(format string, args ...interface{}) {
+	if !debugLog {
+		return
+	}
+	if !strings.HasSuffix(format, "\n") {
+		format += "\n"
+	}
+	fmt.Fprintf(os.Stderr, format, args...)
 }
 
 type pathMapping struct {
@@ -494,4 +627,27 @@ func (c *jsonTestEventBuilder) parse(line []byte) (*TestEvent, error) {
 		Action:  TestEventAction_Fail,
 		Output:  output,
 	}, nil
+}
+
+func getConsistentTraceDir(projectDir string, subDir string) (string, error) {
+	var tmpRoot string
+	if runtime.GOOS != "windows" {
+		// prefer /tmp on unix because it is shorter
+		stat, statErr := os.Stat("/tmp")
+		if statErr == nil && stat.IsDir() {
+			tmpRoot = "/tmp"
+		}
+	}
+	pathSum, err := pathsum.PathSum("", projectDir)
+	if err != nil {
+		return "", err
+	}
+
+	fullPath := filepath.Join(tmpRoot, "xgo", "test-explorer", "trace", pathSum, subDir)
+	err = os.MkdirAll(fullPath, 0755)
+	if err != nil {
+		return "", err
+	}
+
+	return fullPath, nil
 }

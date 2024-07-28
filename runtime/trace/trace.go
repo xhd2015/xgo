@@ -568,7 +568,20 @@ func emitTrace(name string, root *Root, opts *ExportOptions) error {
 
 	subFile := subName + ".json"
 	if canUseFlagDir && flags.STRACE_DIR != "" {
+		// ensure strace dir exists
+		stat, err := os.Stat(flags.STRACE_DIR)
+		if err != nil {
+			return err
+		}
+		if !stat.IsDir() {
+			return fmt.Errorf("%s %w", flags.STRACE_DIR, os.ErrNotExist)
+		}
 		subFile = filepath.Join(flags.STRACE_DIR, subFile)
+		parentDir := filepath.Dir(subFile)
+		err = os.MkdirAll(parentDir, 0755)
+		if err != nil {
+			return err
+		}
 	} else {
 		subDir := filepath.Dir(subFile)
 		err := os.MkdirAll(subDir, 0755)

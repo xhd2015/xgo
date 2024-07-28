@@ -283,7 +283,7 @@ func handleBuild(cmd string, args []string) error {
 		buildCacheSuffix += "-strace_" + v
 	}
 	if stackTraceDir != "" && stackTraceDir != "." && stackTraceDir != "./" {
-		// this affects the flags package
+		// this affects the trap/flags package
 		h := md5.New()
 		h.Write([]byte(stackTraceDir))
 		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))

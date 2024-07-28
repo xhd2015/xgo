@@ -177,10 +177,16 @@ const (
 	RunStatus_Skip    RunStatus = "skip"
 )
 
+// TestingItem describe a test item
+// when invoked from sub dir, relPath
+// is relative to the sub dir
 type TestingItem struct {
-	Key          string          `json:"key"`
-	Name         string          `json:"name"`
-	BaseCaseName string          `json:"baseCaseName"` // the base case's name
+	Key string `json:"key"`
+	// base name, e.g.: subcase if full name is TestSomething/subcase
+	Name string `json:"name"`
+	// base case name, e.g.:  TestSomething
+	BaseCaseName string `json:"baseCaseName"` // the base case's name
+	// full name, e.g.: TestSomething/subcase
 	NameUnderPkg string          `json:"nameUnderPkg"` // the name under pkg
 	RelPath      string          `json:"relPath"`
 	File         string          `json:"file"`
