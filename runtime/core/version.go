@@ -6,9 +6,9 @@ import (
 	"os"
 )
 
-const VERSION = "1.0.47"
-const REVISION = "2b5b421d4069bcde6b70e76b157e98e39634672c+1"
-const NUMBER = 301
+const VERSION = "1.0.48"
+const REVISION = "ee7e3078596587e9734a1e6f208d258b8c6fa090+1"
+const NUMBER = 305
 
 // these fields will be filled by compiler, see CORE_VERSION in cmd/xgo/version.go
 const XGO_VERSION = ""
