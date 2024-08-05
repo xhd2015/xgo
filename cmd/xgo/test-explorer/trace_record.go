@@ -34,10 +34,6 @@ type CallRecord struct {
 	Children   []*CallRecord `json:"children"`
 }
 
-func convertTraceFileToCallRecords() []*CallRecord {
-	return nil
-}
-
 type traceConverter struct {
 }
 

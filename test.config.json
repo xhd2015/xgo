@@ -7,5 +7,8 @@
         "comment": "override not currently supported",
         "path": "test/xgo_test",
         "go_cmd": "xgo"
+    },
+    "xgo": {
+        "auto_update": false
     }
 }

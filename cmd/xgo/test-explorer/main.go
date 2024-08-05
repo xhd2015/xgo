@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -335,13 +336,15 @@ func handle(opts *Options, args []string) error {
 		}
 		return conf, nil
 	}
-
+	// headless mode
+	conf, err := getTestConfig()
+	if err != nil {
+		return err
+	}
+	if conf.Xgo != nil && conf.Xgo.AutoUpdate && os.Getenv("XGO_AUTO_UPDATE") != "never" {
+		autoUpdateXgo()
+	}
 	if len(args) > 0 && args[0] == "test" {
-		// headless mode
-		conf, err := getTestConfig()
-		if err != nil {
-			return err
-		}
 		root, err := scanTests(projectRoot, subPath, true, conf.Exclude)
 		if err != nil {
 			return err
@@ -428,6 +431,20 @@ func handle(opts *Options, args []string) error {
 		netutil.PrintUrls(url, extra...)
 		openURL(url)
 	})
+}
+
+func autoUpdateXgo() {
+	// auto update
+	done := make(chan struct{})
+	go func() {
+		cmd.Debug().Run("go", "install", "github.com/xhd2015/xgo/cmd/xgo@latest")
+		close(done)
+	}()
+	// at most wait 2 second
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+	}
 }
 
 func openURL(url string) {

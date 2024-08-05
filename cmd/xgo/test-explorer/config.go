@@ -27,7 +27,12 @@ type TestConfig struct {
 	Flags []string `json:"flags"`
 	Args  []string `json:"args"`
 
-	MockRules []string `json:"mock_rules"`
+	MockRules []string   `json:"mock_rules"`
+	Xgo       *XgoConfig `json:"xgo,omitempty"`
+}
+
+type XgoConfig struct {
+	AutoUpdate bool `json:"auto_update"`
 }
 
 func (c *TestConfig) CmdEnv() []string {
@@ -141,8 +146,25 @@ func parseTestConfig(config string) (*TestConfig, error) {
 		}
 		conf.MockRules = list
 	}
+	if e, ok := m["xgo"]; ok {
+		err := copyViaJSON(e, &conf.Xgo)
+		if err != nil {
+			return nil, fmt.Errorf("xgo: %w", err)
+		}
+	}
 
 	return conf, nil
+}
+
+func copyViaJSON(src interface{}, dst interface{}) error {
+	if src == nil {
+		return nil
+	}
+	data, err := json.Marshal(src)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, dst)
 }
 
 func parseConfigAndMergeOptions(configFile string, opts *Options, configFileRequired bool) (*TestConfig, error) {
