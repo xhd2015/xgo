@@ -4,8 +4,8 @@ import "fmt"
 
 // auto updated
 const VERSION = "1.0.48"
-const REVISION = "ee7e3078596587e9734a1e6f208d258b8c6fa090+1"
-const NUMBER = 305
+const REVISION = "e82e0eba1db860999c91f1e94af190e17e1c9ce5+1"
+const NUMBER = 306
 
 // manually updated
 const CORE_VERSION = "1.0.48"

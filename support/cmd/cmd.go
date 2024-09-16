@@ -21,6 +21,7 @@ type CmdBuilder struct {
 	dir         string
 	debug       bool
 	ignoreError bool
+	stdin       io.Reader
 	stdout      io.Writer
 	stderr      io.Writer
 }
@@ -56,6 +57,10 @@ func (c *CmdBuilder) Env(env []string) *CmdBuilder {
 }
 func (c *CmdBuilder) Dir(dir string) *CmdBuilder {
 	c.dir = dir
+	return c
+}
+func (c *CmdBuilder) Stdin(stdin io.Reader) *CmdBuilder {
+	c.stdin = stdin
 	return c
 }
 
@@ -126,6 +131,9 @@ func cmdExecEnv(cmd string, args []string, env []string, dir string, useStdout b
 
 	execCmd := exec.Command(cmd, args...)
 	execCmd.Stderr = stderr
+	if c != nil {
+		execCmd.Stdin = c.stdin
+	}
 	if len(env) > 0 {
 		execCmd.Env = os.Environ()
 		execCmd.Env = append(execCmd.Env, env...)
@@ -138,6 +146,7 @@ func cmdExecEnv(cmd string, args []string, env []string, dir string, useStdout b
 		execCmd.Stdout = os.Stdout
 		return "", execCmd.Run()
 	}
+
 	out, err := execCmd.Output()
 	outStr := strings.TrimSuffix(string(out), "\n")
 	if err != nil {
