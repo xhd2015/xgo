@@ -70,6 +70,15 @@ This option is a symptom to `go test -args <args>...`.
 
 Default: `null`.
 
+## `bypass_go_flags`
+When running test, this will add a leading `--` before the `args` list, effectively bypassing go's builtin flag parsing procedure.
+
+The reason why this is needed, is that a go built test binary will parse every flag on the command line, which terminates the program upon missing a flag, with complaining about it. However, that flag is expected to be parsed by the program itself.
+
+See https://github.com/xhd2015/xgo/issues/263.
+
+Default: false.
+
 ## `mock_rules`
 A list of `Rule` config to specify which packages and functions can be mocked.
 

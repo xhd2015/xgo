@@ -71,12 +71,13 @@ func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, 
 			}
 
 			runSess := &runSession{
-				dir:       projectDir,
-				absDir:    absDir,
-				goCmd:     config.GoCmd,
-				env:       config.CmdEnv(),
-				testFlags: config.Flags,
-				progArgs:  config.Args,
+				dir:           projectDir,
+				absDir:        absDir,
+				goCmd:         config.GoCmd,
+				env:           config.CmdEnv(),
+				testFlags:     config.Flags,
+				bypassGoFlags: config.BypassGoFlags,
+				progArgs:      config.Args,
 
 				pathPrefix: []string{getRootName(absDir)},
 
@@ -338,7 +339,7 @@ func (c *runSession) Start() error {
 
 		if !debug {
 			testArgs := joinTestArgs(pathArgs, runNames)
-			err = runTest(c.goCmd, c.dir, testFlags, testArgs, c.progArgs, c.env, stdout, stderr)
+			err = runTest(c.goCmd, c.dir, testFlags, testArgs, c.bypassGoFlags, c.progArgs, c.env, stdout, stderr)
 		} else {
 			err = debugTest(c.goCmd, c.dir, item.File, testFlags, pathArgs, runNames, stdout, stderr, c.progArgs, c.env)
 		}
@@ -537,7 +538,7 @@ func (c *pathMapping) traverse(prefix []string, f func(path []string, status Run
 	}
 }
 
-func runTest(goCmd string, dir string, customFlags []string, testArgs []string, progArgs []string, env []string, stdout io.Writer, stderr io.Writer) error {
+func runTest(goCmd string, dir string, customFlags []string, testArgs []string, bypassGoFlags bool, progArgs []string, env []string, stdout io.Writer, stderr io.Writer) error {
 	if goCmd == "" {
 		goCmd = "go"
 	}
@@ -546,7 +547,17 @@ func runTest(goCmd string, dir string, customFlags []string, testArgs []string, 
 	testFlags = append(testFlags, customFlags...)
 	testFlags = append(testFlags, testArgs...)
 	if len(progArgs) > 0 {
+		// -args after pkg can be accepted by go test
 		testFlags = append(testFlags, "-args")
+
+		// this extra '--' makes test binary skip
+		// treating flags starts with '-' as
+		// test flags and stop complaining
+		// -something provided but not defined
+		// see https://github.com/xhd2015/xgo/issues/263
+		if bypassGoFlags {
+			testFlags = append(testFlags, "--")
+		}
 		testFlags = append(testFlags, progArgs...)
 	}
 

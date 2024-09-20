@@ -58,7 +58,9 @@ type runSession struct {
 	goCmd     string
 	env       []string
 	testFlags []string
-	progArgs  []string
+
+	bypassGoFlags bool
+	progArgs      []string
 
 	pathPrefix []string
 

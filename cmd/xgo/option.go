@@ -80,7 +80,9 @@ type options struct {
 
 	remainArgs []string
 
-	testArgs []string
+	testArgs   []string
+	buildFlags []string
+	progFlags  []string
 }
 
 func parseOptions(cmd string, args []string) (*options, error) {
@@ -131,6 +133,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 
 	var remainArgs []string
 	var testArgs []string
+	var buildFlags []string
+	var progFlags []string
 	nArg := len(args)
 
 	type FlagValue struct {
@@ -220,6 +224,18 @@ func parseOptions(cmd string, args []string) (*options, error) {
 				logDebug = &v
 			},
 		},
+		{
+			Flags: []string{"--build-flag"},
+			Set: func(v string) {
+				buildFlags = append(buildFlags, v)
+			},
+		},
+		{
+			Flags: []string{"--prog-flag"},
+			Set: func(v string) {
+				progFlags = append(progFlags, v)
+			},
+		},
 	}
 
 	if isDevelopment {
@@ -254,7 +270,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			break
 		}
 		if arg == "-" {
-			return nil, fmt.Errorf("unrecognized flag:%s", arg)
+			return nil, fmt.Errorf("unrecognized flag: %s", arg)
 		}
 		if arg == "-a" {
 			flagA = true
@@ -402,7 +418,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			continue
 		}
 
-		return nil, fmt.Errorf("unrecognized flag:%s", arg)
+		return nil, fmt.Errorf("unrecognized flag: %s", arg)
 	}
 
 	return &options{
@@ -452,6 +468,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 
 		remainArgs: remainArgs,
 		testArgs:   testArgs,
+		buildFlags: buildFlags,
+		progFlags:  progFlags,
 	}, nil
 }
 

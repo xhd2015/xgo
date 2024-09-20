@@ -27,6 +27,8 @@ type TestConfig struct {
 	Flags []string `json:"flags"`
 	Args  []string `json:"args"`
 
+	BypassGoFlags bool `json:"bypass_go_flags"`
+
 	MockRules []string   `json:"mock_rules"`
 	Xgo       *XgoConfig `json:"xgo,omitempty"`
 }
@@ -136,6 +138,14 @@ func parseTestConfig(config string) (*TestConfig, error) {
 			return nil, fmt.Errorf("args: %w", err)
 		}
 		conf.Args = list
+	}
+	e, ok = m["bypass_go_flags"]
+	if ok {
+		b, err := toBoolean(e)
+		if err != nil {
+			return nil, fmt.Errorf("args: %w", err)
+		}
+		conf.BypassGoFlags = b
 	}
 
 	e, ok = m["mock_rules"]
@@ -287,6 +297,25 @@ func toStringList(e interface{}) ([]string, error) {
 	return strList, nil
 }
 
+func toBoolean(e interface{}) (bool, error) {
+	if e == nil {
+		return false, nil
+	}
+	b, ok := e.(bool)
+	if ok {
+		return b, nil
+	}
+	s, ok := e.(string)
+	if ok {
+		if s == "true" {
+			return true, nil
+		}
+		if s == "false" {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("expecting true or false, actual: %v", e)
+}
 func toMarshaledStrings(e interface{}) ([]string, error) {
 	if e == nil {
 		return nil, nil

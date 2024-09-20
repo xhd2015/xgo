@@ -132,6 +132,8 @@ func handleBuild(cmd string, args []string) error {
 	}
 	remainArgs := opts.remainArgs
 	testArgs := opts.testArgs
+	buildFlags := opts.buildFlags
+	progFlags := opts.progFlags
 	flagA := opts.flagA
 	projectDir := opts.projectDir
 	output := opts.output
@@ -568,6 +570,12 @@ func handleBuild(cmd string, args []string) error {
 				buildCmdArgs = append(buildCmdArgs, "-o", finalBuildOutput)
 			}
 		}
+		if len(buildFlags) > 0 {
+			buildCmdArgs = append(buildCmdArgs, buildFlags...)
+		}
+		if len(progFlags) > 0 {
+			runFlagsAfterBuild = append(runFlagsAfterBuild, progFlags...)
+		}
 		if len(remainArgs) > 0 {
 			if !runDebug {
 				buildCmdArgs = append(buildCmdArgs, remainArgs...)
@@ -586,6 +594,9 @@ func handleBuild(cmd string, args []string) error {
 			}
 		}
 		logDebug("command: %s %v", instrumentGo, buildCmdArgs)
+		if len(runFlagsAfterBuild) > 0 {
+			logDebug("prog flags: %v", runFlagsAfterBuild)
+		}
 		execCmd = exec.Command(instrumentGo, buildCmdArgs...)
 	} else {
 		logDebug("command: %v", remainArgs)
