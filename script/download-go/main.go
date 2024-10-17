@@ -34,14 +34,10 @@ func main() {
 		cmd = args[0]
 		if cmd == "download" {
 			var err error
-			version, targetDir, err = parseDownloadArgs(args)
+			version, targetDir, err = parseDownloadArgs(args[1:])
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
-			}
-
-			if len(args) > 1 {
-				version = args[1]
 			}
 		} else if strings.HasPrefix(cmd, "go") {
 			version = cmd
