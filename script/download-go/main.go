@@ -29,9 +29,17 @@ func main() {
 	args := os.Args[1:]
 	var cmd string
 	var version string
+	var targetDir string
 	if len(args) > 0 {
 		cmd = args[0]
 		if cmd == "download" {
+			var err error
+			version, targetDir, err = parseDownloadArgs(args)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				os.Exit(1)
+			}
+
 			if len(args) > 1 {
 				version = args[1]
 			}
@@ -45,105 +53,133 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := downloadGo(cmd, version)
+	ctx := context.Background()
+	if cmd == "list" {
+		goVersions, err := getDownloadVersions(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		for _, goVersion := range goVersions {
+			fmt.Printf("go%s\n", goVersion)
+		}
+		return
+	}
+	if cmd != "download" {
+		fmt.Fprintf(os.Stderr, "unrecognized cmd: %s\n", cmd)
+		os.Exit(1)
+	}
+	if targetDir == "" {
+		targetDir = goReleaseDir
+	}
+
+	err := downloadGo(ctx, version, targetDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }
-func downloadGo(cmd string, version string) error {
-	ctx := context.Background()
 
-	if cmd == "list" {
-		goVersions, err := getDownloadVersions(ctx)
-		if err != nil {
-			return err
-		}
-		for _, goVersion := range goVersions {
-			fmt.Printf("go%s\n", goVersion)
-		}
-	} else if cmd == "download" {
-		if version == "" {
-			return fmt.Errorf("download requires version")
-		}
-
-		goos := runtime.GOOS
-		goarch := runtime.GOARCH
-
-		// goos, err := cmdOutput("go", "env", "GOOS")
-		// if err != nil {
-		// 	fmt.Fprintf(os.Stderr, "%v\n", err)
-		// 	os.Exit(1)
-		// }
-		// goarch, err := cmdOutput("go", "env", "GOARCH")
-		// if err != nil {
-		// 	fmt.Fprintf(os.Stderr, "%v\n", err)
-		// 	os.Exit(1)
-		// }
-
-		if goos == "" {
-			return fmt.Errorf("requires GOOS")
-		}
-		if goarch == "" {
-			return fmt.Errorf("requires GOARCH")
-		}
-		nakedVersion := version
-		if strings.HasPrefix(version, "go") {
-			nakedVersion = strings.TrimPrefix(version, "go")
-		}
-		err := os.MkdirAll(goReleaseDir, 0755)
-		if err != nil {
-			return err
-		}
-
-		baseName := fmt.Sprintf(baseNameTemplate, nakedVersion, goos, goarch)
-		downloadLink := downloadLinkPrefix + baseName
-
-		goDirName := filepath.Join(goReleaseDir, "go"+nakedVersion)
-
-		_, statErr := os.Stat(goDirName)
-		if statErr == nil || !errors.Is(statErr, os.ErrNotExist) {
-			return fmt.Errorf("%s already exists", goDirName)
-		}
-
-		goVersions, goVersionErr := getDownloadVersions(ctx)
-		if goVersionErr != nil {
-			fmt.Fprintf(os.Stderr, "WARNING cannot get go version list:%v\n", goVersionErr)
-		}
-		var found bool
-		for _, goVersion := range goVersions {
-			if goVersion == nakedVersion {
-				found = true
-				break
+func parseDownloadArgs(args []string) (version string, targetDir string, err error) {
+	n := len(args)
+	for i := 0; i < n; i++ {
+		arg := args[i]
+		if arg == "--dir" {
+			if i+1 >= n {
+				err = fmt.Errorf("%s requires arg", arg)
+				return
 			}
+			targetDir = args[i+1]
+			i++
+			continue
 		}
-		if goVersionErr == nil && !found {
-			return fmt.Errorf("go%s not found", nakedVersion)
+		if strings.HasPrefix(arg, "-") {
+			err = fmt.Errorf("unrecognized flag: %s", arg)
+			return
 		}
+		version = arg
+	}
+	return
+}
 
-		fmt.Fprintf(os.Stdout, "download from %s\n", downloadLink)
-		downloadFile := filepath.Join(goReleaseDir, baseName)
-		err = curlDownload(downloadLink, downloadFile)
-		if err != nil {
-			return err
-		}
+func downloadGo(ctx context.Context, version string, downloadDir string) error {
+	if version == "" {
+		return fmt.Errorf("download requires version")
+	}
 
-		goTmpDir, err := os.MkdirTemp(".", "go")
-		if err != nil {
-			return err
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+
+	// goos, err := cmdOutput("go", "env", "GOOS")
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "%v\n", err)
+	// 	os.Exit(1)
+	// }
+	// goarch, err := cmdOutput("go", "env", "GOARCH")
+	// if err != nil {
+	// 	fmt.Fprintf(os.Stderr, "%v\n", err)
+	// 	os.Exit(1)
+	// }
+
+	if goos == "" {
+		return fmt.Errorf("requires GOOS")
+	}
+	if goarch == "" {
+		return fmt.Errorf("requires GOARCH")
+	}
+	nakedVersion := version
+	if strings.HasPrefix(version, "go") {
+		nakedVersion = strings.TrimPrefix(version, "go")
+	}
+	err := os.MkdirAll(downloadDir, 0755)
+	if err != nil {
+		return err
+	}
+
+	baseName := fmt.Sprintf(baseNameTemplate, nakedVersion, goos, goarch)
+	downloadLink := downloadLinkPrefix + baseName
+
+	goDirName := filepath.Join(downloadDir, "go"+nakedVersion)
+
+	_, statErr := os.Stat(goDirName)
+	if statErr == nil || !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("%s already exists", goDirName)
+	}
+
+	goVersions, goVersionErr := getDownloadVersions(ctx)
+	if goVersionErr != nil {
+		fmt.Fprintf(os.Stderr, "WARNING cannot get go version list:%v\n", goVersionErr)
+	}
+	var found bool
+	for _, goVersion := range goVersions {
+		if goVersion == nakedVersion {
+			found = true
+			break
 		}
-		defer os.RemoveAll(goTmpDir)
-		err = cmd_exec.Run("tar", "-C", goTmpDir, "-xzf", downloadFile)
-		if err != nil {
-			return err
-		}
-		err = os.Rename(filepath.Join(goTmpDir, "go"), goDirName)
-		if err != nil {
-			return err
-		}
-		return nil
-	} else {
-		return fmt.Errorf("unrecognized cmd: %s", cmd)
+	}
+	if goVersionErr == nil && !found {
+		return fmt.Errorf("go%s not found", nakedVersion)
+	}
+
+	fmt.Fprintf(os.Stdout, "download from %s\n", downloadLink)
+	downloadFile := filepath.Join(downloadDir, baseName)
+	err = curlDownload(downloadLink, downloadFile)
+	if err != nil {
+		return err
+	}
+
+	goTmpDir, err := os.MkdirTemp(".", "go")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(goTmpDir)
+	err = cmd_exec.Run("tar", "-C", goTmpDir, "-xzf", downloadFile)
+	if err != nil {
+		return err
+	}
+	err = os.Rename(filepath.Join(goTmpDir, "go"), goDirName)
+	if err != nil {
+		return err
 	}
 	return nil
 }
