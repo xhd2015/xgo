@@ -15,6 +15,9 @@ func FindGoModDir(dir string) (string, error) {
 	return dir, err
 }
 
+// FindGoModDirSubPath find go.mod by traversing dir bottom up,
+// upon finding a go.mod file, it returns the corresponding
+// sub path and root dir
 func FindGoModDirSubPath(dir string) ([]string, string, error) {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {

@@ -30,6 +30,17 @@ func ResolveMainModule(dir string) (subPaths []string, mainModule string, err er
 	return subPaths, modPath, nil
 }
 
+func ResolveModulePkgPath(dir string) (mainModPath string, pkgPath string, err error) {
+	subPaths, mainModule, err := ResolveMainModule(dir)
+	if err != nil {
+		return "", "", err
+	}
+	if len(subPaths) == 0 {
+		return mainModule, mainModule, nil
+	}
+	return mainModule, mainModule + "/" + strings.Join(subPaths, "/"), nil
+}
+
 func isRelative(arg string) bool {
 	if arg == "" {
 		// pwd
@@ -60,20 +71,22 @@ func findGoMod(dir string) (file string, subPaths []string, err error) {
 		return "", nil, err
 	}
 	iterDir := absDir
+	var nextIterDir string
 	init := true
 	for {
 		if init {
 			init = false
 		} else {
 			subPaths = append(subPaths, filepath.Base(iterDir))
-			nextIterDir := filepath.Dir(iterDir)
-			if iterDir == string(filepath.Separator) || nextIterDir == iterDir {
-				// until root
-				// TODO: what about windows?
-				return "", nil, ErrGoModNotFound
-			}
 			iterDir = nextIterDir
 		}
+		nextIterDir = filepath.Dir(iterDir)
+		if iterDir == string(filepath.Separator) || nextIterDir == iterDir {
+			// until root
+			// TODO: what about windows?
+			return "", nil, ErrGoModNotFound
+		}
+
 		file := filepath.Join(iterDir, "go.mod")
 		stat, err := os.Stat(file)
 		if err != nil {
@@ -86,8 +99,15 @@ func findGoMod(dir string) (file string, subPaths []string, err error) {
 			continue
 		}
 		// a valid go.mod found
-		return file, subPaths, nil
+		return file, reverse(subPaths), nil
 	}
+}
+func reverse(list []string) []string {
+	n := len(list)
+	for i, j := 0, n-1; i < j; i, j = i+1, j-1 {
+		list[i], list[j] = list[j], list[i]
+	}
+	return list
 }
 
 func parseModPath(goModContent string) string {

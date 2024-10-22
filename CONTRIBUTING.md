@@ -128,6 +128,7 @@ Here is a guide on how to make a new release:
 - run `git commit -m "release v1.0.49"`, this will run git hooks that updates `REVISION` and `NUMBER`, and copies `CORE_VERSION`,`CORE_REVISION`,`CORE_NUMBER` to [runtime/core/version.go](runtime/core/version.go) so that if a runtime is running with an older xgo, it will print warnings.
 - run `git tag v1.0.49`, if there is runtime update, run `git tag runtime/v1.0.49`.
 - run `git push --tags`.
+- ask maintainer to push to master 
 - go to github release page to draft a new release
 - run `go run ./script/build-release`, run this in a standalone worktree if necessary.
 - upload built binaries.
