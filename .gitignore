@@ -32,3 +32,6 @@ cover*.out
 /tmp
 
 debug-compile.json
+
+/script/vendir/example/src/vendor
+/script/vendir/example/internal/third_party_vendir
