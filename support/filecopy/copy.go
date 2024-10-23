@@ -18,6 +18,8 @@ type Options struct {
 	ignoreSubPaths []string
 	ignoreSuffix   []string
 	includeSuffix  []string
+
+	noRm bool
 }
 
 func NewOptions() *Options {
@@ -48,8 +50,26 @@ func (c *Options) IncludeSuffix(suffix ...string) *Options {
 	return c
 }
 
+func (c *Options) Copy(srcDir string, targetDir string) error {
+	var cloneOpts *Options
+	if c == nil {
+		cloneOpts = &Options{noRm: true}
+	} else {
+		clone := *c
+		cloneOpts = &clone
+		cloneOpts.noRm = true
+	}
+	return copyReplaceDir(srcDir, targetDir, cloneOpts)
+}
+
 func (c *Options) CopyReplaceDir(srcDir string, targetDir string) error {
 	return copyReplaceDir(srcDir, targetDir, c)
+}
+
+func Copy(srcDir string, targetDir string) error {
+	return copyReplaceDir(srcDir, targetDir, &Options{
+		noRm: true,
+	})
 }
 
 // Replace the target dir with files copy
@@ -58,12 +78,13 @@ func CopyReplaceDir(srcDir string, targetDir string, useLink bool) error {
 		useLink: useLink,
 	})
 }
+
 func copyReplaceDir(srcDir string, targetDir string, opts *Options) error {
-	if opts == nil {
-		opts = &Options{}
-	}
 	if srcDir == "" {
 		return fmt.Errorf("requires srcDir")
+	}
+	if opts == nil {
+		opts = &Options{}
 	}
 
 	var filterSubPath func(subPath string, isDir bool) bool
@@ -116,9 +137,12 @@ func copyReplaceDir(srcDir string, targetDir string, opts *Options) error {
 	if parent == targetAbsDir {
 		return fmt.Errorf("unable to override %v", targetDir)
 	}
-	err = os.RemoveAll(targetAbsDir)
-	if err != nil {
-		return err
+	if !opts.noRm {
+		// remove target
+		err = os.RemoveAll(targetAbsDir)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = os.MkdirAll(filepath.Dir(targetAbsDir), 0755)
@@ -281,6 +305,7 @@ func CopyFile(src string, dst string) error {
 	return copyFile(src, dst, false, nil)
 }
 
+// CopyFileAll copy src to dst, creates dir if necessary
 func CopyFileAll(src string, dst string) error {
 	return copyFile(src, dst, true, nil)
 }
