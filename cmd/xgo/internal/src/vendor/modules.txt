@@ -1,0 +1,16 @@
+# github.com/xhd2015/go-coverage v1.0.41
+## explicit; go 1.16
+github.com/xhd2015/go-coverage/code
+github.com/xhd2015/go-coverage/cover
+github.com/xhd2015/go-coverage/diff/vscode
+github.com/xhd2015/go-coverage/git
+github.com/xhd2015/go-coverage/git/gitops
+github.com/xhd2015/go-coverage/merge
+github.com/xhd2015/go-coverage/model
+github.com/xhd2015/go-coverage/profile
+github.com/xhd2015/go-coverage/sh
+# github.com/xhd2015/lines-annotation v0.0.3 => /Users/xhd2015/Projects/xhd2015/lines-annotation
+## explicit; go 1.18
+github.com/xhd2015/lines-annotation/model
+github.com/xhd2015/lines-annotation/model/coverage
+# github.com/xhd2015/lines-annotation => /Users/xhd2015/Projects/xhd2015/lines-annotation

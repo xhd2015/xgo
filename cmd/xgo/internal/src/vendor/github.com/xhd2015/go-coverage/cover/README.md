@@ -1,0 +1,2 @@
+# About LISCENSE of the code
+The [cover.go](cover.go) is taken from go's source file, and slight modifications are made to make it suiteble not only for adding counters, but also for extracting blocks, please respect the LISCENSE.
