@@ -194,13 +194,31 @@ func handleBuild(cmd string, args []string) error {
 	logDebug("effective GOROOT: %s", goroot)
 
 	// create a tmp dir for communication with exec_tool
-	tmpDir, err := os.MkdirTemp("", "xgo-"+cmd)
+	tmpRoot, err := getTmpDir()
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpDir)
+	// the xgoTmpDir can be thought as a shortly-stable cache dir
+	//  - it won't gets deleted in a short period
+	//  - the system will reclaim it if out of storage
+	// it will hold:
+	//  - instrumentation
+	//  - build cache
+	xgoTmpDir := filepath.Join(tmpRoot, "xgo")
+	logDebug("xgoTmpDir: %s", xgoTmpDir)
+	err = os.MkdirAll(xgoTmpDir, 0755)
+	if err != nil {
+		return err
+	}
+	// sessionTmpDir is specifically for this run session
+	sessionTmpDir, err := os.MkdirTemp(xgoTmpDir, "session-"+cmd+"-")
+	logDebug("sessionTmpDir: %s", sessionTmpDir)
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(sessionTmpDir)
 
-	optionsFromFile, optionsFromFileContent, err := mergeOptionFiles(tmpDir, opts.optionsFromFile, opts.mockRules)
+	optionsFromFile, optionsFromFileContent, err := mergeOptionFiles(sessionTmpDir, opts.optionsFromFile, opts.mockRules)
 	if err != nil {
 		return err
 	}
@@ -209,7 +227,7 @@ func handleBuild(cmd string, args []string) error {
 	var vscodeDebugFileSuffix string
 	if !noInstrument && debugTarget != "" {
 		var err error
-		vscodeDebugFile, vscodeDebugFileSuffix, err = getVscodeDebugFile(tmpDir, vscode)
+		vscodeDebugFile, vscodeDebugFileSuffix, err = getVscodeDebugFile(sessionTmpDir, vscode)
 		if err != nil {
 			return err
 		}
@@ -219,10 +237,10 @@ func handleBuild(cmd string, args []string) error {
 	var tmpASTFile string
 	if !noInstrument {
 		if dumpIR != "" {
-			tmpIRFile = filepath.Join(tmpDir, "dump-ir")
+			tmpIRFile = filepath.Join(sessionTmpDir, "dump-ir")
 		}
 		if dumpAST != "" {
-			tmpASTFile = filepath.Join(tmpDir, "dump-ast")
+			tmpASTFile = filepath.Join(sessionTmpDir, "dump-ast")
 		}
 	}
 
@@ -240,17 +258,17 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	// abs xgo dir
-	xgoDir, err := getXgoHome(xgoHome)
+	xgoDir, err := getOrMakeAbsXgoHome(xgoHome)
 	if err != nil {
 		return err
 	}
 	binDir := filepath.Join(xgoDir, "bin")
-	logDir := filepath.Join(xgoDir, "log")
+	logDir := filepath.Join(xgoTmpDir, "log")
 	instrumentSuffix := ""
 	if isDevelopment {
 		instrumentSuffix = "-dev"
 	}
-	instrumentDir := filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
+	instrumentDir := filepath.Join(xgoTmpDir, "go-instrument"+instrumentSuffix, mappedGorootName)
 	logDebug("instrument dir: %s", instrumentDir)
 
 	exeSuffix := osinfo.EXE_SUFFIX
@@ -466,7 +484,7 @@ func handleBuild(cmd string, args []string) error {
 				}
 				debugCompilePkg = pkgs[0]
 			}
-			debugCompileLogFile = filepath.Join(tmpDir, "debug-compile.log")
+			debugCompileLogFile = filepath.Join(sessionTmpDir, "debug-compile.log")
 			go tailLog(debugCompileLogFile)
 			logDebug("debug compile package: %s", debugCompilePkg)
 		}
@@ -551,7 +569,7 @@ func handleBuild(cmd string, args []string) error {
 		if cmdBuild || (cmdTest && flagC) || debugMode {
 			// output
 			if !debugMode && noBuildOutput {
-				discardOut := filepath.Join(tmpDir, "discard.out")
+				discardOut := filepath.Join(sessionTmpDir, "discard.out")
 				buildCmdArgs = append(buildCmdArgs, "-o", discardOut)
 			} else if output != "" {
 				finalBuildOutput = output
@@ -564,7 +582,7 @@ func handleBuild(cmd string, args []string) error {
 					finalBuildOutput = absOutput
 				}
 			} else if debugMode {
-				finalBuildOutput = filepath.Join(tmpDir, "debug.bin")
+				finalBuildOutput = filepath.Join(sessionTmpDir, "debug.bin")
 			}
 			if finalBuildOutput != "" {
 				buildCmdArgs = append(buildCmdArgs, "-o", finalBuildOutput)
@@ -749,8 +767,8 @@ func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error)
 	return goVersion, nil
 }
 
-// getXgoHome returns absolute path to xgo homoe
-func getXgoHome(xgoHome string) (string, error) {
+// getOrMakeAbsXgoHome returns absolute path to xgo homoe
+func getOrMakeAbsXgoHome(xgoHome string) (string, error) {
 	if xgoHome == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -772,6 +790,23 @@ func getXgoHome(xgoHome string) (string, error) {
 		return "", fmt.Errorf("not found --xgo-home %s: %w", xgoHome, err)
 	}
 	return absHome, nil
+}
+
+// getTmpDir for build caches
+func getTmpDir() (string, error) {
+	if runtime.GOOS != "windows" {
+		// the publicly known /tmp dir
+		const KNOWN_TMP = "/tmp"
+		info, err := os.Stat(KNOWN_TMP)
+		if err == nil && info.IsDir() {
+			return KNOWN_TMP, nil
+		}
+	}
+	tmpDir := os.TempDir()
+	if tmpDir == "" {
+		return "", fmt.Errorf("cannot get tmp dir")
+	}
+	return tmpDir, nil
 }
 
 func getNakedGo() string {

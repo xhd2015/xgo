@@ -116,7 +116,9 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 		// suffix "+1" to indicate this
 		rev := commitHash + "+1"
 
+		// cmd/xgo/version.go
 		xgoVersionRelFile := revision.GetXgoVersionFile("")
+		// runtime/core/version.go
 		runtimeVersionRelFile := revision.GetRuntimeVersionFile("")
 
 		xgoVersionFile := filepath.Join(rootDir, xgoVersionRelFile)

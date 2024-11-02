@@ -15,7 +15,7 @@ import (
 var shadowFS embed.FS
 
 func handleShadow() error {
-	xgoHome, err := getXgoHome("")
+	xgoHome, err := getOrMakeAbsXgoHome("")
 	if err != nil {
 		return err
 	}

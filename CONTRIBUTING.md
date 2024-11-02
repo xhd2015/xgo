@@ -114,3 +114,22 @@ Debug with IDEs:
 Following these instructions, using your favorite IDE like VSCode,GoLand or just terminal to debug:
 <img width="1792" alt="image" src="https://github.com/xhd2015/xgo/assets/14964938/673df393-6632-4eed-a004-400e0c70d0d1">
 
+# Release xgo
+Each new release will have two tags, for example: `v1.0.49` and `runtime/v1.0.49`.
+
+The general rule is to make these two tags remain the same with each other, and with the one in [cmd/xgo/version.go](cmd/xgo/version.go).
+
+Here is a guide on how to make a new release:
+- update `VERSION` in [cmd/xgo/version.go](cmd/xgo/version.go).
+- update `CORE_VERSION` to match `VERSION` if there is a change in this version that makes `cmd/xgo` depends on the newest runtime, otherwise, keep in untouched.
+- run `go generate`.
+- check whether `CORE_REVISION`,`CORE_NUMBER` matches `REVISION`,`NUMBER` if `CORE_VERSION` is updated to the same with `VERSION`, if not, run `go generate` again and check, and manually update if necessary.
+- run `git add -A`.
+- run `git commit -m "release v1.0.49"`, this will run git hooks that copies `CORE_VERSION`,`CORE_REVISION`,`CORE_NUMBER` to [runtime/core/version.go](runtime/core/version.go) so that if a runtime is running with an older xgo, it will print warnings.
+- run `git tag v1.0.49 && git tag runtime/v1.0.49`.
+- run `git push --tags`.
+- go to github release page to draft a new release
+- run `go run ./script/build-release`, run this in a standalone worktree if necessary.
+- upload built binaries.
+- update release notes.
+- release.
