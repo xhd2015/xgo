@@ -23,8 +23,8 @@ func ListPackages(dir string, mod string, args []string) ([]string, error) {
 	return lines, nil
 }
 
-// ListRelatvieFiles list all go files, return a list of relative paths
-func ListRelatvieFiles(dir string, args []string) ([]string, error) {
+// ListRelativeFiles list all go files, return a list of relative paths
+func ListRelativeFiles(dir string, args []string) ([]string, error) {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
