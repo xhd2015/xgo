@@ -76,7 +76,7 @@ func __xgo_link_on_init_finished(f func()) {
 // Skip serves as mark to tell xgo not insert
 // trap instructions for the function that
 // calls Skip()
-// NOTE: the function body is intenionally leave empty
+// NOTE: the function body is intentionally leave empty
 // as trap.Skip() is just a mark that makes
 // sense at compile time.
 func Skip() {}
