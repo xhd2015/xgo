@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coverage</title>
+    <style>
+        /*this is just a fix*/
+        div.block-line {
+            height: 20px;
+        }
+    </style>
+    <!--available in CN and Global-->
+    <script src="https://cdn.jsdelivr.net/npm/coverage-visualizer@0.0.3/index.js"></script>
+    <!--for local dev -->
+    <!-- <script src="http://127.0.0.1:8080/build/open-web.js"></script> -->
+    <script>
+        window.onload = function () {
+            const { xgo, renderReact } = Open
+            renderReact(root, xgo.Coverage, {
+                dataController: xgo.newHTTPAPIDataController("http://localhost:8000")
+            })
+        }
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+</body>
+
+</html>

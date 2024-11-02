@@ -32,3 +32,9 @@ cover*.out
 /tmp
 
 debug-compile.json
+
+# not required packed modules
+/cmd/xgo/internal/vendir/github.com/xhd2015/go-coverage/diff/vscode/node_modules
+
+
+/cmd/xgo/internal/src/vendor

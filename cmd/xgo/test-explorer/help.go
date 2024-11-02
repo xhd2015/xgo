@@ -24,6 +24,9 @@ Options:
      --exclude DIR             exclude a sub path from showing in the explorer UI
      --config FILE             test config file used to add persistent options, default: test.config.json.
                                if FILE is 'none', test config file is not read.
+     --coverage[=true|false]   enable or disable coverage(default: true)
+     --coverage-profile FILE   write coverage to FILE if not disabled
+  -v,--verbose                 print verbose info
   -h,--help                    show help
 
 Examples:

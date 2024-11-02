@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
+	"github.com/xhd2015/xgo/cmd/xgo/test-explorer/icov"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -33,7 +34,7 @@ type StartSessionRequest struct {
 }
 
 // TODO: make FE call /session/destroy
-func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, getTestConfig func() (*TestConfig, error)) {
+func setupSessionHandler(server *http.ServeMux, projectDir string, logConsole bool, getTestConfig func() (*TestConfig, error), covController icov.Controller, coverageFlags []string) {
 	sessionManager := session.NewSessionManager()
 
 	server.HandleFunc("/session/start", func(w http.ResponseWriter, r *http.Request) {
@@ -51,8 +52,11 @@ func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, 
 			if req.Debug && req.Item.Kind != TestingItemKind_Case {
 				return nil, netutil.ParamErrorf("debug not supported: %s", req.Item.Kind)
 			}
-			if req.Trace && req.Item.Kind != TestingItemKind_Case {
-				return nil, netutil.ParamErrorf("trace not supported: %s", req.Item.Kind)
+
+			trace := req.Trace
+			if trace && req.Item.Kind != TestingItemKind_Case {
+				trace = false
+				// return nil, netutil.ParamErrorf("trace not supported: %s", req.Item.Kind)
 			}
 
 			config, err := getTestConfig()
@@ -75,7 +79,7 @@ func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, 
 				absDir:        absDir,
 				goCmd:         config.GoCmd,
 				env:           config.CmdEnv(),
-				testFlags:     config.Flags,
+				testFlags:     appendCopy(config.Flags, coverageFlags...),
 				bypassGoFlags: config.BypassGoFlags,
 				progArgs:      config.Args,
 
@@ -84,10 +88,11 @@ func setupRunHandler(server *http.ServeMux, projectDir string, logConsole bool, 
 				item:  req.Item,
 				path:  req.Path,
 				debug: req.Debug,
-				trace: req.Trace,
+				trace: trace,
 
-				logConsole: logConsole,
-				session:    ses,
+				logConsole:    logConsole,
+				session:       ses,
+				covController: covController,
 			}
 			err = runSess.Start()
 			if err != nil {
@@ -241,6 +246,13 @@ func (c *runSession) Start() error {
 
 	rootPath := c.path
 	if len(rootPath) == 0 {
+		// trigger clear coverage
+		if c.covController != nil {
+			err := c.covController.Clear()
+			if err != nil {
+				return fmt.Errorf("clear coverage: %w", err)
+			}
+		}
 		if len(itemPaths) > 0 {
 			rootPath = itemPaths[0]
 		} else {

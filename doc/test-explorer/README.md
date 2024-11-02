@@ -25,7 +25,13 @@ An example config:
     "mock_rules":[{
         "stdlib": true,
         "action": "exclude"
-    }]
+    }],
+    "xgo":{
+        "auto_update": true
+    },
+    "coverage": {
+        "diff_with": "origin/master"
+    }
 }
 ```
 
@@ -128,3 +134,25 @@ A practical example to only mock functions of main module and some RPC functions
 ```
 
 Default: `null`
+
+## `xgo`
+Configuration of xgo behavior.
+
+Definition:
+```json
+{
+    "auto_update": true | false(default)
+}
+```
+
+## `coverage`
+Definition:
+```json
+{
+    "disabled": true
+}
+```
+
+By default, if `coverage` is missing or `null`, then coverage is enabled.
+
+Setting `"coverage": false` or `"coverage":{"disabled": true}` will disable it.

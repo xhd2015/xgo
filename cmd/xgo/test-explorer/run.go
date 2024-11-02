@@ -7,11 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/cmd/xgo/test-explorer/icov"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/session"
 )
 
-func setupTestHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
+// Deprecated
+func setupRunHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
 	setupPollHandler(server, "/run", projectDir, getTestConfig, run)
 }
 
@@ -71,7 +73,8 @@ type runSession struct {
 
 	logConsole bool
 
-	session session.Session
+	covController icov.Controller
+	session       session.Session
 }
 
 func formatPathArgs(paths []string) []string {

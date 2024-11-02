@@ -18,6 +18,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/cmd/xgo/coverage/cov_control"
+	"github.com/xhd2015/xgo/cmd/xgo/internal/vendir/github.com/xhd2015/gitops/git"
+	"github.com/xhd2015/xgo/cmd/xgo/internal/vendir/github.com/xhd2015/lines-annotation/load/loadcov"
+	"github.com/xhd2015/xgo/cmd/xgo/test-explorer/icov"
 	"github.com/xhd2015/xgo/support/flag"
 	"github.com/xhd2015/xgo/support/pattern"
 
@@ -36,11 +40,19 @@ type Options struct {
 	Flags            []string
 	Args             []string
 
+	// can be true,false
+	Coverage string
+	// --coverage-profile string
+	CoverageProfile  string
+	CoverageDiffWith string
+
 	Config string
 	Port   string
 	Bind   string
 
 	LogConsole bool
+
+	Verbose bool
 }
 
 func Main(args []string, opts *Options) error {
@@ -100,6 +112,41 @@ func Main(args []string, opts *Options) error {
 			}
 			opts.Args = append(opts.Args, args[i+1])
 			i++
+			continue
+		}
+		if arg == "--coverage" {
+			opts.Coverage = "true"
+			continue
+		}
+		if strings.HasPrefix(arg, "--coverage=") {
+			v := strings.TrimPrefix(arg, "--coverage=")
+			if v == "true" {
+				opts.Coverage = "true"
+			} else if v == "false" {
+				opts.Coverage = "false"
+			} else {
+				return fmt.Errorf("invalid: %s", arg)
+			}
+			continue
+		}
+		if arg == "--coverage-profile" {
+			if i+1 >= n {
+				return fmt.Errorf("%s requires value", arg)
+			}
+			opts.CoverageProfile = args[i+1]
+			i++
+			continue
+		}
+		if arg == "--coverage-diff-with" {
+			if i+1 >= n {
+				return fmt.Errorf("%s requires value", arg)
+			}
+			opts.CoverageDiffWith = args[i+1]
+			i++
+			continue
+		}
+		if arg == "-v" || arg == "--verbose" {
+			opts.Verbose = true
 			continue
 		}
 		if arg == "--log-console" {
@@ -341,20 +388,61 @@ func handle(opts *Options, args []string) error {
 	if err != nil {
 		return err
 	}
+	// create coverage controller
+	var covController icov.Controller
+	if conf.Coverage == nil || !conf.Coverage.Disabled {
+		var diffWith string
+		var profile string
+		if conf.Coverage != nil {
+			profile = conf.Coverage.Profile
+			diffWith = conf.Coverage.DiffWith
+		}
+		if diffWith == "" {
+			diffWith = "origin/master"
+		}
+		covController, err = cov_control.New(projectDir, nil, diffWith, profile)
+		if err != nil {
+			return fmt.Errorf("init coverage: %w", err)
+		}
+	}
 	if conf.Xgo != nil && conf.Xgo.AutoUpdate && os.Getenv("XGO_AUTO_UPDATE") != "never" {
 		autoUpdateXgo()
 	}
-	if len(args) > 0 && args[0] == "test" {
-		root, err := scanTests(projectRoot, subPath, true, conf.Exclude)
+	var coverageFlags []string
+	if covController != nil {
+		// example: -cover -coverpkg xxx -coverprofile coverage.out
+		modPath, err := goinfo.GetModPath(projectDir)
 		if err != nil {
 			return err
 		}
+		coverageFlags = append(coverageFlags, "-cover", "-coverpkg", modPath+"/...")
+		profilePath, err := covController.GetCoverageProfilePath()
+		if err != nil {
+			return err
+		}
+		if profilePath != "" {
+			// -cover -coverpkg
+			coverageFlags = append(coverageFlags, "-coverprofile", profilePath)
+		}
+	}
+	if len(args) > 0 && args[0] == "test" {
+		// headless mod
+		remainArgs := args[1:]
+		var testArgs []string
+		if len(remainArgs) > 0 {
+			testArgs = remainArgs
+		} else {
+			root, err := scanTests(projectRoot, subPath, true, conf.Exclude)
+			if err != nil {
+				return err
+			}
+			paths, _, names := getTestPaths(root, nil)
+			pathArgs := formatPathArgs(paths)
+			runNames := formatRunNames(names)
+			testArgs = joinTestArgs(pathArgs, runNames)
+		}
 
-		paths, _, names := getTestPaths(root, nil)
-		pathArgs := formatPathArgs(paths)
-		runNames := formatRunNames(names)
-		testArgs := joinTestArgs(pathArgs, runNames)
-		return runTest(conf.GoCmd, projectDir, conf.Flags, testArgs, conf.BypassGoFlags, conf.Args, conf.CmdEnv(), nil, nil)
+		return runTest(conf.GoCmd, projectDir, appendCopy(conf.Flags, coverageFlags...), testArgs, conf.BypassGoFlags, conf.Args, conf.CmdEnv(), nil, nil)
 	}
 
 	server := &http.ServeMux{}
@@ -383,6 +471,36 @@ func handle(opts *Options, args []string) error {
 			return root, nil
 		})
 	})
+
+	var actualPort int
+
+	var covOpts loadcov.LoadAllOptions
+	if covController != nil {
+		profilePath, err := covController.GetCoverageProfilePath()
+		if err != nil {
+			return err
+		}
+		var diffWith string
+		var include []string
+		var exclude []string
+		if conf.Coverage != nil {
+			diffWith = conf.Coverage.DiffWith
+			include = conf.Coverage.Include
+			exclude = conf.Coverage.Exclude
+		}
+		if diffWith == "" {
+			diffWith = "origin/master"
+		}
+		covOpts = loadcov.LoadAllOptions{
+			Dir:      projectDir,
+			Args:     nil,
+			Profiles: []string{profilePath},
+			Ref:      git.COMMIT_WORKING,
+			DiffBase: diffWith,
+			Include:  include,
+			Exclude:  exclude,
+		}
+	}
 
 	server.HandleFunc("/detail", func(w http.ResponseWriter, r *http.Request) {
 		netutil.SetCORSHeaders(w)
@@ -419,14 +537,20 @@ func handle(opts *Options, args []string) error {
 		})
 	})
 
-	setupRunHandler(server, projectDir, opts.LogConsole, getTestConfig)
-	setupDebugHandler(server, projectDir, getTestConfig)
-	setupTestHandler(server, projectDir, getTestConfig)
+	setupSessionHandler(server, projectDir, opts.LogConsole, getTestConfig, covController, coverageFlags)
+	setupCoverageHandler(server, covController, covOpts, func() int {
+		return actualPort
+	})
 	setupOpenHandler(server)
 
+	// deprecated
+	setupDebugHandler(server, projectDir, getTestConfig)
+	setupRunHandler(server, projectDir, getTestConfig)
 	host, port := netutil.GetHostAndIP(opts.Bind, opts.Port)
+
 	autoIncrPort := true
 	return netutil.ServePortHTTP(server, host, port, autoIncrPort, 500*time.Millisecond, func(port int) {
+		actualPort = port
 		url, extra := netutil.GetURLToOpen(host, port)
 		netutil.PrintUrls(url, extra...)
 		openURL(url)

@@ -29,12 +29,22 @@ type TestConfig struct {
 
 	BypassGoFlags bool `json:"bypass_go_flags"`
 
-	MockRules []string   `json:"mock_rules"`
-	Xgo       *XgoConfig `json:"xgo,omitempty"`
+	MockRules []string        `json:"mock_rules"`
+	Xgo       *XgoConfig      `json:"xgo,omitempty"`
+	Coverage  *CoverageConfig `json:"coverage,omitempty"`
 }
 
 type XgoConfig struct {
 	AutoUpdate bool `json:"auto_update"`
+}
+
+// by default enabled
+type CoverageConfig struct {
+	Disabled bool     `json:"disabled"`
+	DiffWith string   `json:"diff_with"`
+	Profile  string   `json:"profile"`
+	Include  []string `json:"include"`
+	Exclude  []string `json:"exclude"`
 }
 
 func (c *TestConfig) CmdEnv() []string {
@@ -156,13 +166,25 @@ func parseTestConfig(config string) (*TestConfig, error) {
 		}
 		conf.MockRules = list
 	}
-	if e, ok := m["xgo"]; ok {
+	if e, ok := m["xgo"]; ok && e != nil {
 		err := copyViaJSON(e, &conf.Xgo)
 		if err != nil {
 			return nil, fmt.Errorf("xgo: %w", err)
 		}
 	}
-
+	if e, ok := m["coverage"]; ok && e != nil {
+		if b, ok := e.(bool); ok {
+			if !b {
+				// false means explicitly disable coverage
+				conf.Coverage = &CoverageConfig{Disabled: true}
+			}
+		} else {
+			err := copyViaJSON(e, &conf.Coverage)
+			if err != nil {
+				return nil, fmt.Errorf("coverage: %w", err)
+			}
+		}
+	}
 	return conf, nil
 }
 
@@ -217,6 +239,24 @@ func parseConfigAndMergeOptions(configFile string, opts *Options, configFileRequ
 		}
 	}
 	testConfig.Args = append(testConfig.Args, opts.Args...)
+
+	if opts.Coverage == "false" {
+		if testConfig.Coverage == nil {
+			testConfig.Coverage = &CoverageConfig{Disabled: true}
+		} else {
+			testConfig.Coverage.Disabled = true
+		}
+	} else {
+		if testConfig.Coverage == nil {
+			testConfig.Coverage = &CoverageConfig{}
+		}
+		if opts.CoverageProfile != "" {
+			testConfig.Coverage.Profile = opts.CoverageProfile
+		}
+		if opts.CoverageDiffWith != "" {
+			testConfig.Coverage.DiffWith = opts.CoverageDiffWith
+		}
+	}
 	return testConfig, nil
 }
 

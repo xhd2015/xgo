@@ -27,6 +27,8 @@ go test -tags dev -run TestHelloWorld -v ./test
 
 NOTE: when developing, always add `-tags dev` to tell go that we are building in dev mode.
 
+In dev mode, instead of copying itself, xgo will link itself to the compiler source root, so that debugging the compiler is way much easier.
+
 If you want to check instrumented GOROOT, run:
 ```sh
 go run ./script/setup-dev
@@ -121,7 +123,7 @@ The general rule is to make these two tags remain the same with each other, and 
 
 Here is a guide on how to make a new release:
 - update `VERSION` in [cmd/xgo/version.go](cmd/xgo/version.go).
-- update `CORE_VERSION` to match `VERSION` if there is a change in this version that makes `cmd/xgo` depends on the newest runtime, otherwise, keep in untouched.
+- update `CORE_VERSION` to match `VERSION` if there is a change in this version that makes `cmd/xgo` depends on the newest runtime, otherwise, keep it untouched.
 - run `go generate ./...`.
 - check whether `CORE_REVISION`,`CORE_NUMBER` matches `REVISION`,`NUMBER` if `CORE_VERSION` is updated to the same with `VERSION`, if not, run `go generate ./...` again and check, and manually update if necessary.
 - run `git add -A`.

@@ -32,7 +32,7 @@ type DebugDestroyRequest struct {
 	ID string `json:"id"`
 }
 
-// deprecated
+// Deprecated
 func setupDebugHandler(server *http.ServeMux, projectDir string, getTestConfig func() (*TestConfig, error)) {
 	setupPollHandler(server, "/debug", projectDir, getTestConfig, debug)
 }

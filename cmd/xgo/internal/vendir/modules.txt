@@ -1,0 +1,105 @@
+# github.com/dlclark/regexp2 v1.7.0
+## explicit; go 1.13
+github.com/dlclark/regexp2
+github.com/dlclark/regexp2/syntax
+# github.com/dop251/goja v0.0.0-20221229151140-b95230a9dbad
+## explicit; go 1.16
+github.com/dop251/goja
+github.com/dop251/goja/ast
+github.com/dop251/goja/file
+github.com/dop251/goja/ftoa
+github.com/dop251/goja/ftoa/internal/fast
+github.com/dop251/goja/parser
+github.com/dop251/goja/token
+github.com/dop251/goja/unistring
+# github.com/go-sourcemap/sourcemap v2.1.3+incompatible
+## explicit
+github.com/go-sourcemap/sourcemap
+github.com/go-sourcemap/sourcemap/internal/base64vlq
+# github.com/xhd2015/gitops v0.0.10
+## explicit; go 1.14
+github.com/xhd2015/gitops/git
+github.com/xhd2015/gitops/git/fetch
+github.com/xhd2015/gitops/git/worktree
+github.com/xhd2015/gitops/model
+# github.com/xhd2015/go-coverage v1.0.44
+## explicit; go 1.16
+github.com/xhd2015/go-coverage/ast
+github.com/xhd2015/go-coverage/code
+github.com/xhd2015/go-coverage/cover
+github.com/xhd2015/go-coverage/diff/myers
+github.com/xhd2015/go-coverage/diff/vscode
+github.com/xhd2015/go-coverage/diff/vscode/goja
+github.com/xhd2015/go-coverage/git
+github.com/xhd2015/go-coverage/git/gitops
+github.com/xhd2015/go-coverage/line
+github.com/xhd2015/go-coverage/merge
+github.com/xhd2015/go-coverage/model
+github.com/xhd2015/go-coverage/profile
+github.com/xhd2015/go-coverage/sh
+github.com/xhd2015/go-coverage/util
+# github.com/xhd2015/go-inspect v0.0.49
+## explicit; go 1.13
+github.com/xhd2015/go-inspect/sh
+github.com/xhd2015/go-inspect/sh/process
+# github.com/xhd2015/lines-annotation v0.0.7
+## explicit; go 1.18
+github.com/xhd2015/lines-annotation/ast
+github.com/xhd2015/lines-annotation/ast/ast2ann
+github.com/xhd2015/lines-annotation/compute
+github.com/xhd2015/lines-annotation/compute/coverage
+github.com/xhd2015/lines-annotation/filter
+github.com/xhd2015/lines-annotation/load
+github.com/xhd2015/lines-annotation/load/git
+github.com/xhd2015/lines-annotation/load/loadcov
+github.com/xhd2015/lines-annotation/merge
+github.com/xhd2015/lines-annotation/model
+github.com/xhd2015/lines-annotation/model/coverage
+github.com/xhd2015/lines-annotation/model/filter
+github.com/xhd2015/lines-annotation/model/lang
+github.com/xhd2015/lines-annotation/path
+github.com/xhd2015/lines-annotation/path/filter
+# github.com/xhd2015/xgo v1.0.51-0.20241102105517-b55990d76807 => ../../../..
+## explicit; go 1.18
+github.com/xhd2015/xgo/support/cmd
+github.com/xhd2015/xgo/support/coverage
+github.com/xhd2015/xgo/support/filecopy
+github.com/xhd2015/xgo/support/fileutil
+github.com/xhd2015/xgo/support/goinfo
+github.com/xhd2015/xgo/support/osinfo
+github.com/xhd2015/xgo/support/pattern
+# golang.org/x/mod v0.7.0
+## explicit; go 1.17
+golang.org/x/mod/semver
+# golang.org/x/sys v0.3.0
+## explicit; go 1.17
+golang.org/x/sys/execabs
+# golang.org/x/text v0.5.0
+## explicit; go 1.17
+golang.org/x/text/cases
+golang.org/x/text/collate
+golang.org/x/text/internal
+golang.org/x/text/internal/colltab
+golang.org/x/text/internal/language
+golang.org/x/text/internal/language/compact
+golang.org/x/text/internal/tag
+golang.org/x/text/language
+golang.org/x/text/transform
+golang.org/x/text/unicode/norm
+golang.org/x/text/unicode/rangetable
+# golang.org/x/tools v0.4.0
+## explicit; go 1.18
+golang.org/x/tools/go/gcexportdata
+golang.org/x/tools/go/internal/packagesdriver
+golang.org/x/tools/go/packages
+golang.org/x/tools/internal/event
+golang.org/x/tools/internal/event/core
+golang.org/x/tools/internal/event/keys
+golang.org/x/tools/internal/event/label
+golang.org/x/tools/internal/gcimporter
+golang.org/x/tools/internal/gocommand
+golang.org/x/tools/internal/packagesinternal
+golang.org/x/tools/internal/pkgbits
+golang.org/x/tools/internal/typeparams
+golang.org/x/tools/internal/typesinternal
+# github.com/xhd2015/xgo => ../../../..

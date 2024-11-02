@@ -20,12 +20,12 @@ func Main(args []string) {
 		fmt.Print(strings.TrimPrefix(help, "\n"))
 		return
 	}
-	if cmd != "merge" && cmd != "compact" && cmd != "serve" {
+	if cmd != "merge" && cmd != "compact" && cmd != "serve" && cmd != "load" {
 		fmt.Fprintf(os.Stderr, "unrecognized cmd: %s\n", cmd)
 		return
 	}
-	if cmd == "serve" {
-		err := handleServe(args)
+	if cmd == "serve" || cmd == "load" {
+		err := handleServe(cmd, args)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
