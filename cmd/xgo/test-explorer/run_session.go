@@ -341,7 +341,7 @@ func (c *runSession) Start() error {
 			testArgs := joinTestArgs(pathArgs, runNames)
 			err = runTest(c.goCmd, c.dir, testFlags, testArgs, c.bypassGoFlags, c.progArgs, c.env, stdout, stderr)
 		} else {
-			err = debugTest(c.goCmd, c.dir, item.File, testFlags, pathArgs, runNames, stdout, stderr, c.progArgs, c.env)
+			err = debugTest(c.goCmd, c.dir, item.File, testFlags, pathArgs, c.bypassGoFlags, runNames, stdout, stderr, c.progArgs, c.env)
 		}
 
 		if err != nil {

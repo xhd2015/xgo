@@ -50,14 +50,14 @@ func debug(ctx *RunContext) error {
 	args := ctx.Args
 	env := ctx.Env
 
-	err := debugTest(goCmd, projectDir, file, buildFlags, []string{"./" + filepath.Dir(relPath)}, fmt.Sprintf("^%s$", name), stdout, stderr, args, env)
+	err := debugTest(goCmd, projectDir, file, buildFlags, []string{"./" + filepath.Dir(relPath)}, false, fmt.Sprintf("^%s$", name), stdout, stderr, args, env)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func debugTest(goCmd string, dir string, file string, buildFlags []string, buildArgs []string, runNames string, stdout io.Writer, stderr io.Writer, args []string, env []string) error {
+func debugTest(goCmd string, dir string, file string, buildFlags []string, buildArgs []string, bypassGoFlags bool, runNames string, stdout io.Writer, stderr io.Writer, args []string, env []string) error {
 	if goCmd == "" {
 		goCmd = "go"
 	}
@@ -91,7 +91,12 @@ func debugTest(goCmd string, dir string, file string, buildFlags []string, build
 		fmt.Fprintln(stderr, debug_util.FormatDlvPrompt(port))
 	}, func(port int) error {
 		// dlv exec --api-version=2 --listen=localhost:2345 --accept-multiclient --headless ./debug.bin
-		runArgs := append([]string{"-test.v", "-test.run", runNames}, args...)
+		runArgs := make([]string, 0, 3+len(args))
+		runArgs = append(runArgs, "-test.v", "-test.run", runNames)
+		if bypassGoFlags {
+			runArgs = append(runArgs, "--")
+		}
+		runArgs = append(runArgs, args...)
 		return cmd.Dir(filepath.Dir(file)).Debug().Stderr(stderr).Stdout(stdout).
 			Env(env).
 			Run("dlv", debug_util.FormatDlvArgs(tmpBin, port, runArgs)...)
