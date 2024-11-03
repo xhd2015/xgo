@@ -5,9 +5,9 @@ import "fmt"
 // REVISION and NUMBER are auto updated when run 'git commit'
 // VERSION is manually updated when needed a new tag
 // see also runtime/core/version.go
-const VERSION = "1.0.50"
-const REVISION = "b55990d768074515cf62519e985f139dc14912e4+1"
-const NUMBER = 318
+const VERSION = "1.0.51"
+const REVISION = "f43d1801162be8396dd5b73a27b529253a121a88+1"
+const NUMBER = 319
 
 // the matching runtime/core's version
 // manually updated
