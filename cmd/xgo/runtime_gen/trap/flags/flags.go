@@ -1,5 +1,17 @@
 package flags
 
+// to inject these flags, see patch/syntax/syntax.go, search for flag_MAIN_MODULE
+// this package exists to make flags passed to xgo to be persisted in building and running.
+
+// flag: none
+// env: XGO_MAIN_MODULE
+// description:
+//
+//	auto detected by xgo in the beginning of building.
+//	can be used prior to ask runtime/debug's info:
+//	var mainModulePath = runtime/debug.ReadBuildInfo().Main.Path
+const MAIN_MODULE = ""
+
 // flag: --strace
 // env: XGO_STACK_TRACE
 // description:
@@ -20,6 +32,21 @@ const STRACE = ""
 //
 //	directory, default current dir
 const STRACE_DIR = ""
+
+// flag: --strace-snapshot-main-module
+// env: XGO_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT
+// description:
+//
+//	collecting main module's trace in snapshot mode,
+//	while other's are non snapshot mode
+//
+//	snapshot mode: args are serialized before executing
+//	the function, and results are serilaized after return.
+//	this is useful if an object will be modified in later
+//	process.
+//
+// values: true or false
+const STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT = ""
 
 // flag: --trap-stdlib
 // env: XGO_STD_LIB_TRAP_DEFAULT_ALLOW

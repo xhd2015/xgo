@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
@@ -149,6 +150,9 @@ var extraSubTests = []*TestCase{
 		name:        "trace-snapshot",
 		dir:         "runtime/test/trace/snapshot",
 		skipOnCover: true,
+		// TODO: let program configure it
+		env: []string{exec_tool.XGO_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT + "=false"},
+		// flags:       []string{"--strace-snapshot-main-module-default=false"},
 	},
 	{
 		name: "trace-custom-dir",

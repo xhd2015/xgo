@@ -30,9 +30,12 @@ const XGO_VERSION = "XGO_VERSION"
 const XGO_REVISION = "XGO_REVISION"
 const XGO_NUMBER = "XGO_NUMBER"
 
+const XGO_MAIN_MODULE = "XGO_MAIN_MODULE"
+
 // --strace
 const XGO_STACK_TRACE = "XGO_STACK_TRACE"
 const XGO_STACK_TRACE_DIR = "XGO_STACK_TRACE_DIR"
+const XGO_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT = "XGO_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT"
 const XGO_STD_LIB_TRAP_DEFAULT_ALLOW = "XGO_STD_LIB_TRAP_DEFAULT_ALLOW"
 
 // Deprecated: use flag_STRACE,.. instead
@@ -40,10 +43,14 @@ const straceFlagConstName = "__xgo_injected_StraceFlag"
 const trapStdlibFlagConstName = "__xgo_injected_StdlibTrapDefaultAllow"
 
 const (
+	// auto detected
+	flag_MAIN_MODULE = "MAIN_MODULE"
 	// --strace
 	flag_STRACE = "STRACE"
 	// --strace-dir
 	flag_STRACE_DIR = "STRACE_DIR"
+	// --strace-snapshot-main-module
+	flag_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT = "STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT"
 	// --trap-stdlib
 	flag_TRAP_STDLIB = "TRAP_STDLIB"
 )
@@ -454,10 +461,14 @@ func injectXgoGeneralFlags(fileList []*syntax.File) {
 		forEachConst(file.DeclList, func(constDecl *syntax.ConstDecl) bool {
 			for _, name := range constDecl.NameList {
 				switch name.Value {
+				case flag_MAIN_MODULE:
+					constDecl.Values = newStringLit(os.Getenv(XGO_MAIN_MODULE))
 				case flag_STRACE:
 					constDecl.Values = newStringLit(os.Getenv(XGO_STACK_TRACE))
 				case flag_STRACE_DIR:
 					constDecl.Values = newStringLit(os.Getenv(XGO_STACK_TRACE_DIR))
+				case flag_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT:
+					constDecl.Values = newStringLit(os.Getenv(XGO_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT))
 				case flag_TRAP_STDLIB:
 					constDecl.Values = newStringLit(os.Getenv(XGO_STD_LIB_TRAP_DEFAULT_ALLOW))
 				}

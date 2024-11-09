@@ -77,6 +77,8 @@ type options struct {
 	stackTrace string
 	// --strace-dir
 	stackTraceDir string
+	// --strace-snapshot-main-module-default
+	straceSnapshotMainModuleDefault string
 
 	remainArgs []string
 
@@ -129,6 +131,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var modfile string
 	var stackTrace string
 	var stackTraceDir string
+	var straceSnapshotMainModuleDefault string
 	var trapStdlib bool
 
 	var remainArgs []string
@@ -358,6 +361,11 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			stackTrace = argVal
 			continue
 		}
+		stackTraceMainModuleDefaultFlag, val := flag.TrySingleFlag([]string{"--strace-snapshot-main-module-default"}, arg)
+		if stackTraceMainModuleDefaultFlag != "" {
+			straceSnapshotMainModuleDefault = val
+			continue
+		}
 
 		// supported flag: --trap-stdlib, --trap-stdlib=false, --trap-stdlib=true
 		trapStdlibFlag, trapStdlibVal := flag.TrySingleFlag([]string{"--trap-stdlib"}, arg)
@@ -458,13 +466,14 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		// default true
 		syncWithLink: syncWithLink == nil || *syncWithLink,
 
-		mod:           mod,
-		gcflags:       gcflags,
-		overlay:       overlay,
-		modfile:       modfile,
-		stackTrace:    stackTrace,
-		stackTraceDir: stackTraceDir,
-		trapStdlib:    trapStdlib,
+		mod:                             mod,
+		gcflags:                         gcflags,
+		overlay:                         overlay,
+		modfile:                         modfile,
+		stackTrace:                      stackTrace,
+		stackTraceDir:                   stackTraceDir,
+		straceSnapshotMainModuleDefault: straceSnapshotMainModuleDefault,
+		trapStdlib:                      trapStdlib,
 
 		remainArgs: remainArgs,
 		testArgs:   testArgs,

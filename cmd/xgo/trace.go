@@ -29,6 +29,10 @@ type importResult struct {
 var runtimeGenFS embed.FS
 
 // TODO: may apply tags
+// importRuntimeDep detect if the target package already
+// has github.com/xhd2015/xgo/runtime as dependency,
+// if not, dynamically modify the go.mod to include that,
+// and add a blank import in the main package
 func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, modRootRel []string, mainModule string, mod string, args []string) (*importResult, error) {
 	if mainModule == "" {
 		// only work with module
@@ -64,7 +68,6 @@ func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goin
 		return nil, err
 	}
 
-	pkgArgs := getPkgArgs(args)
 	tmpRoot, tmpProjectDir, err := createWorkDir(projectRoot)
 	if err != nil {
 		return nil, err
@@ -84,6 +87,7 @@ func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goin
 		}
 	}
 
+	pkgArgs := getPkgArgs(args)
 	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, tmpProjectDir)
 	if err != nil {
 		return nil, err
@@ -171,8 +175,10 @@ type Overlay struct {
 
 type dependencyInfo struct {
 	modReplace map[string]string
-	mod        string
-	modfile    string // alternative go.mod
+	// the -mod flag
+	mod string
+	// the -modfile flag
+	modfile string // alternative go.mod
 }
 
 func createWorkDir(projectRoot string) (tmpRoot string, tmpProjectDir string, err error) {

@@ -20,7 +20,7 @@ An example config:
     "env":{
         "TEST_WITH_XGO":"true"
     },
-    "flags":["-p=12"],
+    "flags":["-p=4"],
     "args":["--my-program-env","TEST"],
     "mock_rules":[{
         "stdlib": true,
@@ -149,10 +149,17 @@ Definition:
 Definition:
 ```json
 {
-    "disabled": true
+    "disabled": true|false,
+    "diff_with": "origin/master",
+    "include": [...],
+    "exclude": [...]
 }
 ```
 
 By default, if `coverage` is missing or `null`, then coverage is enabled.
+
+If set `diff_with` to `none`, then incremental coverage will be disabled.
+
+`include` and `exclude` specify which files will be included or excluded in coverage display.
 
 Setting `"coverage": false` or `"coverage":{"disabled": true}` will disable it.

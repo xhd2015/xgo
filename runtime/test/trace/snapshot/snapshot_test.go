@@ -13,6 +13,12 @@ import (
 // NOTE: do not run with -cover, because
 // extra function will be included in trace
 
+// TODO: this test currently fails, but
+// it is not so urgent to fix it, so
+// I'll keep it here.
+// once I got enough time to do, I'll
+// try my best.
+// see related https://github.com/xhd2015/xgo/issues/281
 func TestNoSnapshot(t *testing.T) {
 	test(t, noSnapshotExpect, nil)
 }

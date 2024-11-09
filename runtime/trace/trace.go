@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,7 +29,18 @@ type testInfo struct {
 	onFinish func()
 }
 
+var effectMainModule string
+
 func init() {
+	if flags.MAIN_MODULE != "" {
+		// fmt.Fprintf(os.Stderr, "DEBUG main module from flags: %s\n", flags.MAIN_MODULE)
+		effectMainModule = flags.MAIN_MODULE
+	} else {
+		buildInfo, _ := debug.ReadBuildInfo()
+		if buildInfo != nil {
+			effectMainModule = buildInfo.Main.Path
+		}
+	}
 	__xgo_link_on_test_start(func(t *testing.T, fn func(t *testing.T)) {
 		name := t.Name()
 		if name == "" {
@@ -266,6 +279,15 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 			if f(stack) {
 				anySnapshot = true
 				break
+			}
+		}
+
+		// check if allow main module to be defaultly snapshoted
+		if !anySnapshot && flags.STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT != "false" && effectMainModule != "" && strings.HasPrefix(f.Pkg, effectMainModule) {
+			// main_module or main_module/*
+			if len(f.Pkg) == len(effectMainModule) || f.Pkg[len(effectMainModule)] == '/' {
+				// fmt.Fprintf(os.Stderr, "DEBUG main module snapshot: %s of %s\n", f.Pkg, effectMainModule)
+				anySnapshot = true
 			}
 		}
 		if anySnapshot {

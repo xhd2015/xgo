@@ -16,11 +16,19 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Prepare typo config
+      run: |
+        # Don't correct the word "Incrimental"
+        echo -ne '[files]\nextend-exclude = ["**/vendir/**/*"]\n[default.extend-words]\nIncrimental = "Incrimental"\n' > /tmp/typo-config.toml
+        cat /tmp/typo-config.toml
+
     - name: Check spelling of files
       uses: crate-ci/typos@master
       continue-on-error: false
       with: 
         files: ./
+        config: /tmp/typo-config.toml
+        isolated: true
 
     - name: Set up Go1.17
       uses: actions/setup-go@v4

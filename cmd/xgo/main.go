@@ -168,6 +168,7 @@ func handleBuild(cmd string, args []string) error {
 	dumpAST := opts.dumpAST
 	stackTrace := opts.stackTrace
 	stackTraceDir := opts.stackTraceDir
+	straceSnapshotMainModuleDefault := opts.straceSnapshotMainModuleDefault
 	trapStdlib := opts.trapStdlib
 
 	if cmdExec && len(remainArgs) == 0 {
@@ -293,7 +294,9 @@ func handleBuild(cmd string, args []string) error {
 		h.Write(optionsFromFileContent)
 		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
 	}
+	var enableStackTrace bool
 	if stackTrace == "on" || stackTrace == "true" {
+		enableStackTrace = true
 		v := stackTrace
 		if v == "true" {
 			v = "on"
@@ -659,6 +662,9 @@ func handleBuild(cmd string, args []string) error {
 		}
 		if stackTraceDir != "" {
 			execCmd.Env = append(execCmd.Env, exec_tool.XGO_STACK_TRACE_DIR+"="+stackTraceDir)
+		}
+		if enableStackTrace && straceSnapshotMainModuleDefault != "" {
+			execCmd.Env = append(execCmd.Env, exec_tool.XGO_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT+"="+straceSnapshotMainModuleDefault)
 		}
 
 		// trap stdlib
