@@ -30,20 +30,37 @@ const (
 	GenernateType_RuntimeVersion      GenernateType = "runtime-version"
 	GenernateType_StackTraceDef       GenernateType = "stack-trace-def"
 	GenernateType_InstallSrc          GenernateType = "install-src"
-	GenernateType_XgoRuntime          GenernateType = "xgo-runtime"
+	GenernateType_XgoRuntimeGen       GenernateType = "cmd/xgo/runtime_gen"
 )
+
+var allGenerateTypes = []GenernateType{
+	GenernateType_DotAll,
+	GenernateType_CompilerPatch,
+	GenernateType_CompilerHelperCode,
+	GenernateType_CompilerPatternCode,
+	GenernateType_RuntimeDef,
+	GenernateType_RuntimeVersion,
+	GenernateType_StackTraceDef,
+	GenernateType_InstallSrc,
+	GenernateType_XgoRuntimeGen,
+}
 
 func main() {
 	args := os.Args[1:]
 
 	var rootDir string
 	var subGens []GenernateType
+	var list bool
 	n := len(args)
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--root-dir" {
 			rootDir = args[i+1]
 			i++
+			continue
+		}
+		if arg == "--list" {
+			list = true
 			continue
 		}
 		if !strings.HasPrefix(arg, "-") {
@@ -54,6 +71,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	if list {
+		for _, genType := range allGenerateTypes {
+			fmt.Println(genType)
+		}
+		return
+	}
 	err := generate(rootDir, subGens)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -172,7 +195,7 @@ func generate(rootDir string, subGens SubGens) error {
 			return err
 		}
 	}
-	if subGens.Has(GenernateType_XgoRuntime) {
+	if subGens.Has(GenernateType_XgoRuntimeGen) {
 		err := genXgoRuntime(rootDir)
 		if err != nil {
 			return err

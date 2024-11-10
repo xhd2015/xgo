@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const VERSION = "1.0.49"
+const VERSION = "1.0.52"
 const REVISION = "37977b002ee8cc375e071b7ac23e8bb67a2de64d+1"
 const NUMBER = 308
 

@@ -5,15 +5,15 @@ import "fmt"
 // REVISION and NUMBER are auto updated when run 'git commit'
 // VERSION is manually updated when needed a new tag
 // see also runtime/core/version.go
-const VERSION = "1.0.51"
-const REVISION = "7f408a387574ea73849b2cb3d82fe3b2c44f885a+1"
-const NUMBER = 323
+const VERSION = "1.0.52"
+const REVISION = "a6f0088f2e43fe837c905792459dfca4e1022a0b+1"
+const NUMBER = 324
 
 // the matching runtime/core's version
 // manually updated
-const CORE_VERSION = "1.0.49"
-const CORE_REVISION = "37977b002ee8cc375e071b7ac23e8bb67a2de64d+1"
-const CORE_NUMBER = 308
+const CORE_VERSION = "1.0.52"
+const CORE_REVISION = "a6f0088f2e43fe837c905792459dfca4e1022a0b+1"
+const CORE_NUMBER = 324
 
 func getRevision() string {
 	return formatRevision(VERSION, REVISION, NUMBER)
