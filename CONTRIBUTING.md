@@ -50,17 +50,30 @@ go run ./script/run-test
 
 This will run all tests with all go versions found at the directory `go-release`.
 
+If there isn't any, the default go is used.
+
+Run a specific test:
+```sh
+# list all tests runnable by names
+go run ./script/run-test --list
+
+# run test by name
+go run ./script/run-test --name trace-snapshot
+# -a: reset caches
+go run ./script/run-test --name trace-snapshot -run TestNoSnapshot -v --debug -a
+```
+
 We can also explicitly specify all expected go versions we want to pass:
 ```sh
-go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1
+go run ./script/run-test --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1
 ```
 
 If there were testing cache, we can force the test to re-run by adding a `-count=1` flag:
 ```sh
-go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
+go run ./script/run-test --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1
 ```
 
-If a go version is not found in `go-release`, we can download it with:
+If a go version is not found in `go-release`, it can be downloaded via:
 ```sh
 go run ./script/download-go go1.22.1
 ```

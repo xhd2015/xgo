@@ -155,16 +155,24 @@ type CollectOptions struct {
 	// ignore result, will be set to nil
 	IgnoreResults bool
 }
+type flagType int
+
+const (
+	flagType_default flagType = 0
+	flagType_true    flagType = 1
+	flagType_false   flagType = 2
+)
 
 type collectOpts struct {
-	name            string
-	onComplete      func(root *Root)
-	filters         []func(stack *Stack) bool
-	postFilters     []func(stack *Stack)
-	snapshotFilters []func(stack *Stack) bool
-	root            *Root
-	options         *CollectOptions
-	exportOptions   *ExportOptions
+	name                      string
+	onComplete                func(root *Root)
+	filters                   []func(stack *Stack) bool
+	postFilters               []func(stack *Stack)
+	snapshotFilters           []func(stack *Stack) bool
+	disableSnapshotMainModule flagType
+	root                      *Root
+	options                   *CollectOptions
+	exportOptions             *ExportOptions
 }
 
 func Options() *collectOpts {
@@ -193,6 +201,19 @@ func (c *collectOpts) WithPostFilter(f func(stack *Stack)) *collectOpts {
 
 func (c *collectOpts) WithSnapshot(f func(stack *Stack) bool) *collectOpts {
 	c.snapshotFilters = append(c.snapshotFilters, f)
+	return c
+}
+
+func (c *collectOpts) DisableSnapshotMainModule(v ...bool) *collectOpts {
+	b := true
+	if len(v) > 0 {
+		b = v[0]
+	}
+	flagType := flagType_false
+	if b {
+		flagType = flagType_true
+	}
+	c.disableSnapshotMainModule = flagType
 	return c
 }
 
@@ -263,36 +284,33 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 	var globalRoot interface{}
 	var localRoot *Root
 	var initial bool
+
+	var snapshotTrace bool
+	var checkMainModuleSnapshot bool
 	if localOpts == nil {
 		var globalLoaded bool
 		globalRoot, globalLoaded = stackMap.Load(key)
 		if !globalLoaded {
 			initial = true
 		}
+		checkMainModuleSnapshot = flags.STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT != "false"
 	} else {
 		if !checkFilters(stack, localOpts.filters) {
 			// do not collect trace if filtered out
 			return nil, trap.ErrSkip
 		}
-		var anySnapshot bool
 		for _, f := range localOpts.snapshotFilters {
 			if f(stack) {
-				anySnapshot = true
+				snapshotTrace = true
 				break
 			}
 		}
 
 		// check if allow main module to be defaultly snapshoted
-		if !anySnapshot && flags.STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT != "false" && effectMainModule != "" && strings.HasPrefix(f.Pkg, effectMainModule) {
-			// main_module or main_module/*
-			if len(f.Pkg) == len(effectMainModule) || f.Pkg[len(effectMainModule)] == '/' {
-				// fmt.Fprintf(os.Stderr, "DEBUG main module snapshot: %s of %s\n", f.Pkg, effectMainModule)
-				anySnapshot = true
+		if !snapshotTrace && localOpts.disableSnapshotMainModule != flagType_true {
+			if (localOpts.disableSnapshotMainModule == flagType_default && flags.STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT != "false") || localOpts.disableSnapshotMainModule == flagType_false {
+				checkMainModuleSnapshot = true
 			}
-		}
-		if anySnapshot {
-			stack.Snapshot = true
-			stack.Args = premarshal(stack.Args)
 		}
 
 		localRoot = localOpts.root
@@ -308,6 +326,20 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 			}
 		}
 	}
+	if checkMainModuleSnapshot {
+		if effectMainModule != "" && strings.HasPrefix(f.Pkg, effectMainModule) {
+			// main_module or main_module/*
+			if len(f.Pkg) == len(effectMainModule) || f.Pkg[len(effectMainModule)] == '/' {
+				// fmt.Fprintf(os.Stderr, "DEBUG main module snapshot: %s of %s\n", f.Pkg, effectMainModule)
+				snapshotTrace = true
+			}
+		}
+	}
+	if snapshotTrace {
+		stack.Snapshot = true
+		stack.Args = premarshal(stack.Args)
+	}
+
 	if initial {
 		// initial stack
 		root := &Root{

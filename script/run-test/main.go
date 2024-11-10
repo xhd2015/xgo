@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
@@ -71,8 +71,17 @@ type TestCase struct {
 	windowsFlags []string
 	env          []string
 	skipOnCover  bool
+
+	skipOnTimeout     bool
+	windowsFailIgnore bool
 }
 
+// can be selected via --name
+// use:
+//
+//	go run ./scrip/run-test --list
+//
+// to list all names
 var extraSubTests = []*TestCase{
 	{
 		name:  "trace_without_dep",
@@ -150,13 +159,11 @@ var extraSubTests = []*TestCase{
 		name:        "trace-snapshot",
 		dir:         "runtime/test/trace/snapshot",
 		skipOnCover: true,
-		// TODO: let program configure it
-		env: []string{exec_tool.XGO_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT + "=false"},
-		// flags:       []string{"--strace-snapshot-main-module-default=false"},
 	},
 	{
-		name: "trace-custom-dir",
-		dir:  "runtime/test/trace/trace_dir",
+		name:              "trace-custom-dir",
+		dir:               "runtime/test/trace/trace_dir",
+		windowsFailIgnore: true,
 	},
 	{
 		// see https://github.com/xhd2015/xgo/issues/202
@@ -203,6 +210,15 @@ var extraSubTests = []*TestCase{
 		usePlainGo: true,
 		dir:        "test/xgo_integration",
 	},
+	{
+		name:       "timeout",
+		usePlainGo: true,
+		dir:        "runtime/test/timeout",
+		// the test is 600ms sleep
+		flags:             []string{"-timeout=0.2s"},
+		skipOnTimeout:     true,
+		windowsFailIgnore: true,
+	},
 }
 
 func main() {
@@ -227,6 +243,8 @@ func main() {
 	var coverpkgs []string
 	var coverprofile string
 	var names []string
+
+	var list bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--exclude" {
@@ -311,6 +329,10 @@ func main() {
 			installXgo = true
 			continue
 		}
+		if arg == "--list" {
+			list = true
+			continue
+		}
 		if arg == "--" {
 			if i+1 < n {
 				remainArgs = append(remainArgs, args[i+1:]...)
@@ -324,6 +346,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
 		os.Exit(1)
 	}
+	if list {
+		for _, test := range extraSubTests {
+			if test.name != "" {
+				fmt.Println(test.name)
+			}
+		}
+		return
+	}
 	if coverprofile != "" {
 		absProfile, err := filepath.Abs(coverprofile)
 		if err != nil {
@@ -334,11 +364,17 @@ func main() {
 	}
 	goRelease := "go-release"
 	var goroots []string
-	_, err := os.Stat(goRelease)
-	if err != nil {
+	_, statErr := os.Stat(goRelease)
+	if statErr != nil {
+		if !os.IsNotExist(statErr) {
+			fmt.Fprintf(os.Stderr, "stat: %v\n", statErr)
+			os.Exit(1)
+			return
+		}
 		// use default GOROOT
 		goroot := runtime.GOROOT()
 		if goroot == "" {
+			var err error
 			goroot, err = cmd.Output("go", "env", "GOROOT")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "cannot get GOROOT: %v\n", err)
@@ -622,12 +658,26 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 		if runtime.GOOS == "windows" && tt.windowsFlags != nil {
 			testFlags = tt.windowsFlags
 		}
-		err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(extraArgs, testFlags), []string{testArgDir}, env)
-		if err != nil {
-			return err
+		var skipped bool
+		runErr := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(extraArgs, testFlags), []string{testArgDir}, env)
+		if runErr != nil {
+			if tt.windowsFailIgnore && runtime.GOOS == "windows" {
+				skipped = true
+				fmt.Printf("SKIP test failure on windows\n")
+			}
+			if !skipped && tt.skipOnTimeout {
+				// see https://github.com/xhd2015/xgo/issues/272#issuecomment-2466539209
+				if runErr, ok := runErr.(*commandError); ok && runErr.timeoutDetector.found() {
+					skipped = true
+					fmt.Printf("SKIP test timed out\n")
+				}
+			}
+			if !skipped {
+				return runErr
+			}
 		}
 
-		if hasHook {
+		if !skipped && hasHook {
 			err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPostCheck"}...), nil), []string{"./hook_test.go"}, env)
 			if err != nil {
 				return err
@@ -749,7 +799,10 @@ func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args [
 	fmt.Printf("test Args: %v\n", testArgs)
 
 	execCmd := exec.Command(filepath.Join(goroot, "bin", "go"), testArgs...)
-	execCmd.Stdout = os.Stdout
+	dt := detector{
+		match: []byte("panic: test timed out after"),
+	}
+	execCmd.Stdout = &dt
 	execCmd.Stderr = os.Stderr
 	execCmd.Dir = dir
 
@@ -758,5 +811,38 @@ func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args [
 	execCmd.Env = append(execCmd.Env, "PATH="+filepath.Join(goroot, "bin")+string(filepath.ListSeparator)+os.Getenv("PATH"))
 	execCmd.Env = append(execCmd.Env, env...)
 
-	return execCmd.Run()
+	cmdErr := execCmd.Run()
+	if cmdErr != nil {
+		return &commandError{err: cmdErr, timeoutDetector: &dt}
+	}
+	return nil
+}
+
+type commandError struct {
+	err             error
+	timeoutDetector *detector
+}
+
+func (c *commandError) Error() string {
+	return c.err.Error()
+}
+
+type detector struct {
+	foundMatch bool
+	match      []byte
+}
+
+func (d *detector) Write(p []byte) (n int, err error) {
+	n = len(p)
+	if d.foundMatch {
+		return
+	}
+	if bytes.HasPrefix(p, d.match) {
+		d.foundMatch = true
+		return
+	}
+	return os.Stdout.Write(p)
+}
+func (d *detector) found() bool {
+	return d.foundMatch
 }

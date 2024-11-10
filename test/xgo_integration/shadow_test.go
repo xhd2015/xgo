@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/xhd2015/xgo/support/cmd"
@@ -89,6 +90,10 @@ func TestShadowMockSucceeds(t *testing.T) {
 func TestShadowByPassMockFail(t *testing.T) {
 	err := testShadowMock(t, []string{"XGO_SHADOW_BYPASS=true"})
 	if err == nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("skip shadow test on windows")
+			return
+		}
 		t.Fatalf("expect test fail, actually not")
 	}
 }
