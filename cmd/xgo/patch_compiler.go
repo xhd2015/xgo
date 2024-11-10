@@ -427,6 +427,29 @@ func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, s
 	return nil
 }
 
+// according to https://pkg.go.dev/embed
+//
+//	'separator is a forward slash, even on Windows systems'
+func joinEmbedPath(paths []string) string {
+	return strings.Join(paths, "/")
+}
+func concatEmbedPath(a string, b string) string {
+	if a == "" {
+		return b
+	}
+	if b == "" {
+		return a
+	}
+	return a + "/" + b
+}
+
+func embedPathToFsPath(embedPath string) string {
+	if filepath.Separator == '/' {
+		return embedPath
+	}
+	return strings.ReplaceAll(embedPath, "/", string(filepath.Separator))
+}
+
 func copyEmbedDir(srcFS embed.FS, subName string, dstDir string) error {
 	return fs.WalkDir(srcFS, subName, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -435,8 +458,8 @@ func copyEmbedDir(srcFS embed.FS, subName string, dstDir string) error {
 		if path == subName {
 			return os.MkdirAll(dstDir, 0755)
 		}
-		// TODO: test on Windows if "/" works
-		dstPath := filepath.Join(dstDir, path[len(subName)+len("/"):])
+		// join without prefix `subName`, also works on windows
+		dstPath := filepath.Join(dstDir, embedPathToFsPath(path[len(subName)+len("/"):]))
 		if d.IsDir() {
 			return os.MkdirAll(dstPath, 0755)
 		}

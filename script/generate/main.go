@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/script/build-release/revision"
+	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/git"
 	"github.com/xhd2015/xgo/support/goparse"
 	"github.com/xhd2015/xgo/support/transform"
@@ -21,6 +22,7 @@ import (
 type GenernateType string
 
 const (
+	GenernateType_DotAll              GenernateType = "./..."
 	GenernateType_CompilerPatch       GenernateType = "compiler-patch"
 	GenernateType_CompilerHelperCode  GenernateType = "compiler-helper-code"
 	GenernateType_CompilerPatternCode GenernateType = "compiler-pattern-code"
@@ -80,6 +82,12 @@ func generate(rootDir string, subGens SubGens) error {
 			return err
 		}
 		rootDir = resolvedRoot
+	}
+	if subGens.Has(GenernateType_DotAll) {
+		err := cmd.Dir(rootDir).Run("go", "generate", "./...")
+		if err != nil {
+			return err
+		}
 	}
 	if subGens.Has(GenernateType_CompilerPatch) {
 		err := generateCompilerPatch(rootDir)

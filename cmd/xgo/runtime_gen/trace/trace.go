@@ -32,6 +32,14 @@ type testInfo struct {
 var effectMainModule string
 
 func init() {
+	if false {
+		// debug
+		fmt.Fprintf(os.Stderr, "flags.MAIN_MODULE: %s\n", flags.MAIN_MODULE)
+		fmt.Fprintf(os.Stderr, "flags.STRACE: %s\n", flags.STRACE)
+		fmt.Fprintf(os.Stderr, "flags.STRACE_DIR: %s\n", flags.STRACE_DIR)
+		fmt.Fprintf(os.Stderr, "flags.STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT: %s\n", flags.STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT)
+		fmt.Fprintf(os.Stderr, "flags.TRAP_STDLIB: %s\n", flags.TRAP_STDLIB)
+	}
 	if flags.MAIN_MODULE != "" {
 		// fmt.Fprintf(os.Stderr, "DEBUG main module from flags: %s\n", flags.MAIN_MODULE)
 		effectMainModule = flags.MAIN_MODULE

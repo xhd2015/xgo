@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -33,7 +34,7 @@ var runtimeGenFS embed.FS
 // has github.com/xhd2015/xgo/runtime as dependency,
 // if not, dynamically modify the go.mod to include that,
 // and add a blank import in the main package
-func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, modRootRel []string, mainModule string, mod string, args []string) (*importResult, error) {
+func importRuntimeDep(test bool, mayHaveCover bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, modRootRel []string, mainModule string, mod string, args []string) (*importResult, error) {
 	if mainModule == "" {
 		// only work with module
 		return nil, nil
@@ -88,10 +89,11 @@ func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goin
 	}
 
 	pkgArgs := getPkgArgs(args)
-	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, tmpProjectDir)
+	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, mayHaveCover, tmpProjectDir)
 	if err != nil {
 		return nil, err
 	}
+
 	replace := make(map[string]string, len(modReplace)+len(fileReplace))
 	for k, v := range modReplace {
 		replace[k] = v
@@ -104,6 +106,7 @@ func importRuntimeDep(test bool, goroot string, goBinary string, goVersion *goin
 	if err != nil {
 		return nil, err
 	}
+	logDebug("mod replace: %d, go file replace: %d, overlay: %s", len(modReplace), len(fileReplace), overlayFile)
 	res.overlayFile = overlayFile
 
 	return res, nil
@@ -226,21 +229,39 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			return nil, err
 		}
 	} else {
-		files := []string{"core", "trap", "trace", "go.mod"}
-		allExists := true
-		for _, file := range files {
-			if !exists(filepath.Join(tmpRuntime, file)) {
-				allExists = false
-				break
+		var skipCopy bool
+
+		const runtimeGenRoot = "runtime_gen"
+		// compare version
+		versionFilePath := []string{"core", "version.go"}
+
+		fsVersionFile := filepath.Join(tmpRuntime, filepath.Join(versionFilePath...))
+		fsVersion, readFsVersionErr := os.ReadFile(fsVersionFile)
+		if readFsVersionErr != nil {
+			if !os.IsNotExist(readFsVersionErr) {
+				return nil, readFsVersionErr
 			}
 		}
+		if len(fsVersion) > 0 {
+			genFSVersion, err := runtimeGenFS.ReadFile(concatEmbedPath(runtimeGenRoot, joinEmbedPath(versionFilePath)))
+			if err != nil {
+				return nil, err
+			}
+			// you need to run go run ./script/generate to sync runtime and cmd/xgo/runtime_gen
+			if bytes.Equal(fsVersion, genFSVersion) {
+				logDebug("fs and embed runtime version same, skip extracting from xgo")
+				skipCopy = true
+			}
+		}
+
 		//  cache copy
-		if !allExists {
+		if !skipCopy {
+			logDebug("extracting runtime from xgo to %s", tmpRuntime)
 			err := os.RemoveAll(tmpRuntime)
 			if err != nil {
 				return nil, err
 			}
-			err = copyEmbedDir(runtimeGenFS, "runtime_gen", tmpRuntime)
+			err = copyEmbedDir(runtimeGenFS, runtimeGenRoot, tmpRuntime)
 			if err != nil {
 				return nil, err
 			}
@@ -350,6 +371,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 		}
 	}
 
+	logDebug("require %s v%s, replaced: %s", RUNTIME_MODULE, VERSION, tmpRuntime)
 	err = cmd.Env([]string{
 		"GOROOT=" + goroot,
 	}).Run(goBinary, "mod", "edit",
@@ -357,6 +379,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 		fmt.Sprintf("-replace=%s=%s", RUNTIME_MODULE, tmpRuntime),
 		tmpGoMod,
 	)
+	logDebug("replaced go.mod: %s", tmpGoMod)
 	if err != nil {
 		return nil, err
 	}
@@ -431,7 +454,7 @@ func createOverlayFile(tmpProjectDir string, replace map[string]string) (string,
 	return overlayFile, nil
 }
 
-func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs []string, test bool, tmpProjectDir string) (replace map[string]string, err error) {
+func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs []string, test bool, mayHaveCover bool, tmpProjectDir string) (replace map[string]string, err error) {
 	// list files, add init
 	// NOTE: go build tag applies,
 	// ignored files will be placed to IgnoredGoFiles
@@ -462,7 +485,7 @@ func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs 
 	replace = make(map[string]string)
 	for _, pkg := range pkgs {
 		if pkg.Standard {
-			// skip standarding packages
+			// skip std packages
 			continue
 		}
 		type pkgInfo struct {
@@ -477,9 +500,14 @@ func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs 
 		// it is a catch-all workaround
 		// when there is no source files, then we add to all tests
 		// the fact is: go allows duplicate blank imports
+
+		var hasGoFiles bool
 		if len(pkg.GoFiles) > 0 {
+			hasGoFiles = true
 			pkgInfos = append(pkgInfos, pkgInfo{pkg.Imports, pkg.GoFiles, false})
-		} else {
+		}
+		if !hasGoFiles || mayHaveCover {
+			// mayHaveCover: see https://github.com/xhd2015/xgo/issues/285
 			pkgInfos = append(pkgInfos, pkgInfo{nil, pkg.TestGoFiles, true})
 			pkgInfos = append(pkgInfos, pkgInfo{nil, pkg.XTestGoFiles, true})
 		}

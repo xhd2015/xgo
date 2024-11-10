@@ -28,7 +28,7 @@ type frameVisitor func(file string, line int, name string, offset uintptr)
 // synchronized.
 type SyncMarker int
 
-//go:generate stringer -type=SyncMarker -trimprefix=Sync
+// removed go:generate stringer -type=SyncMarker -trimprefix=Sync
 
 const (
 	_ SyncMarker = iota

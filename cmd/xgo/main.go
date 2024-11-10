@@ -492,8 +492,20 @@ func handleBuild(cmd string, args []string) error {
 			logDebug("debug compile package: %s", debugCompilePkg)
 		}
 		if stackTrace == "on" && overlay == "" {
+			// coverage and trace auto loading may conflict,
+			// see https://github.com/xhd2015/xgo/issues/285
+			var mayHaveCover bool
+			// example:
+			//    -cover -coverpkg github.com/xhd2015/xgo/... -coverprofile cover.out
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "-cover") {
+					mayHaveCover = true
+					break
+				}
+			}
+
 			// check if xgo/runtime ready
-			impResult, impRuntimeErr := importRuntimeDep(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, subPaths, mainModule, mod, remainArgs)
+			impResult, impRuntimeErr := importRuntimeDep(cmdTest, mayHaveCover, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, subPaths, mainModule, mod, remainArgs)
 			if impRuntimeErr != nil {
 				// can be silently ignored
 				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", RUNTIME_TRACE_PKG, RUNTIME_TRACE_PKG, impRuntimeErr)
