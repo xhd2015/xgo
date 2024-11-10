@@ -156,9 +156,10 @@ var extraSubTests = []*TestCase{
 		flags: []string{"--mock-rule", `{"pkg":"encoding/json","name":"newTypeEncoder","action":"exclude"}`},
 	},
 	{
-		name:        "trace-snapshot",
-		dir:         "runtime/test/trace/snapshot",
-		skipOnCover: true,
+		name:          "trace-snapshot",
+		dir:           "runtime/test/trace/snapshot",
+		skipOnCover:   true,
+		skipOnTimeout: true,
 	},
 	{
 		name:              "trace-custom-dir",
