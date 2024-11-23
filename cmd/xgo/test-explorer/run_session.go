@@ -246,17 +246,21 @@ func (c *runSession) Start() error {
 
 	rootPath := c.path
 	if len(rootPath) == 0 {
+		if len(itemPaths) > 0 {
+			rootPath = itemPaths[0]
+		} else {
+			rootPath = pathPrefix
+		}
+	}
+
+	// the root path
+	if len(rootPath) == len(pathPrefix) {
 		// trigger clear coverage
 		if c.covController != nil {
 			err := c.covController.Clear()
 			if err != nil {
 				return fmt.Errorf("clear coverage: %w", err)
 			}
-		}
-		if len(itemPaths) > 0 {
-			rootPath = itemPaths[0]
-		} else {
-			rootPath = pathPrefix
 		}
 	}
 
