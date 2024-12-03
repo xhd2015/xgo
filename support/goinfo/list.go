@@ -43,18 +43,22 @@ func ListRelativeFiles(dir string, args []string) ([]string, error) {
 			// the abs dir
 			Dir string
 			// the file names
-			GoFiles []string
+			GoFiles     []string
+			TestGoFiles []string
 		}
 		err := dec.Decode(&pkg)
 		if err != nil {
 			return nil, err
 		}
-		if len(pkg.GoFiles) > 0 {
+		goFiles := make([]string, 0, len(pkg.GoFiles)+len(pkg.TestGoFiles))
+		goFiles = append(goFiles, pkg.GoFiles...)
+		goFiles = append(goFiles, pkg.TestGoFiles...)
+		if len(goFiles) > 0 {
 			absPkgDir, err := filepath.Abs(pkg.Dir)
 			if err != nil {
 				return nil, err
 			}
-			for _, goFile := range pkg.GoFiles {
+			for _, goFile := range goFiles {
 				if !strings.HasSuffix(goFile, ".go") {
 					// some cache files
 					continue
