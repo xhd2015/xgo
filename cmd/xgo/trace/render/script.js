@@ -154,11 +154,40 @@ function toggleTraceList(id, toggle, collapsed) {
     traceList.classList.remove("collapsed")
 }
 
+// copy functionality
+function onClickCopyIcon(event) {
+    if (!selectedID) {
+        return
+    }
+    const trace = traces[selectedID]
+    if (!trace) {
+        return
+    }
+    // execute code --goto file:line
+    const file = trace.FuncInfo?.File
+    const line = trace.FuncInfo?.Line
+    if (!file) {
+        return
+    }
+
+    event.stopPropagation();
+    navigator.clipboard.writeText(`${file}:${line}`).then(() => {
+        const icon = document.getElementById("copy-icon")
+        icon.classList.add("checked")
+        setTimeout(() => {
+            icon.classList.remove("checked")
+        }, 500);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
+}
+
 // event listeners
 window.onClickHead = onClickHead
 window.onClickToggle = onClickToggle
 window.onClickExpandAll = onClickExpandAll
 window.onClickVscodeIcon = onClickVscodeIcon
+window.onClickCopyIcon = onClickCopyIcon
 
 // for debugging
 window.traces = traces

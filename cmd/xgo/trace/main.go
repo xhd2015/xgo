@@ -155,22 +155,16 @@ func serveFile(bindStr string, portStr string, file string, fileFormat string) e
 				return
 			}
 			stack = convert(record)
+			w.Header().Set("Content-Type", "text/html")
+			render.RenderStacks([]*render.Stack{stack}, file, w)
 		} else if fileFormat == "stack" {
-			var err error
-			stack, err = parseStack(file)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				io.WriteString(w, fmt.Sprintf("%v", err))
-				return
-			}
+			w.Header().Set("Content-Type", "text/html")
+			render.RenderFile(file, w)
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
 			io.WriteString(w, fmt.Sprintf("unrecognized format: %s, available formats: empty,stack", fileFormat))
 			return
 		}
-
-		w.Header().Set("Content-Type", "text/html")
-		render.RenderHTML(stack, file, w)
 	})
 	server.HandleFunc("/openVscodeFile", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

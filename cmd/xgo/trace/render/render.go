@@ -1,12 +1,54 @@
 package render
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
+	"time"
 )
 
-func RenderHTML(root *Stack, file string, w io.Writer) {
+func RenderFile(file string, w io.Writer) error {
+	reader, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+
+	decoder := json.NewDecoder(reader)
+	var stacks []*Stack
+	for {
+		var stack *Stack
+		err = decoder.Decode(&stack)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			stack = &Stack{
+				Begin: time.Now().Format(time.RFC3339),
+				Children: []*StackEntry{
+					{
+						Error: fmt.Sprintf("parse stack: %v", err),
+					},
+				},
+			}
+		}
+		stacks = append(stacks, stack)
+	}
+	return RenderStacks(stacks, file, w)
+}
+
+func RenderStacks(stacks []*Stack, file string, w io.Writer) (err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			if pe, ok := e.(error); ok {
+				err = pe
+			} else {
+				err = fmt.Errorf("panic:%v", e)
+			}
+		}
+	}()
+
 	h := func(s string) {
 		_, err := io.WriteString(w, s)
 		if err != nil {
@@ -33,13 +75,6 @@ func RenderHTML(root *Stack, file string, w io.Writer) {
 	h(styles)
 	h(`</style>`)
 
-	top := &StackEntry{
-		FuncInfo: &FuncInfo{
-			Name: "<root>",
-		},
-		Children: root.Children,
-	}
-
 	h("<script>")
 	h("window.onload = function(){")
 	h(" const traces = {}")
@@ -62,7 +97,23 @@ func RenderHTML(root *Stack, file string, w io.Writer) {
 			walk(child)
 		}
 	}
-	walk(top)
+	var tops []*StackEntry
+	for _, stack := range stacks {
+		top := &StackEntry{
+			FuncInfo: &FuncInfo{
+				Name: "<root>",
+			},
+			Children: stack.Children,
+		}
+		walk(top)
+		tops = append(tops, top)
+	}
+
+	if len(tops) > 1 {
+		for i, top := range tops {
+			top.FuncInfo.Name = fmt.Sprintf("<root_%d>", i)
+		}
+	}
 
 	h(script)
 	h("}")
@@ -76,7 +127,9 @@ func RenderHTML(root *Stack, file string, w io.Writer) {
 	h(`</div>`)
 	// h(fmt.Sprintf(`<ul id="%s" class="trace-list">`, getTraceListID(traceIDMapping[top])))
 	h(`<ul class="trace-list">`)
-	renderItem(h, top, traceIDMapping)
+	for _, top := range tops {
+		renderItem(h, top, traceIDMapping)
+	}
 	h("</ul>")
 	h(`</div>`)
 
@@ -86,10 +139,14 @@ func RenderHTML(root *Stack, file string, w io.Writer) {
 
 	vscode = `<div id="vscode-icon" class="vscode-icon" onclick="onClickVscodeIcon(arguments[0])">` + vscode + `</div>`
 
+	// Create copy icon with same replacements as vscode icon
+	copyChecked := fmt.Sprintf(`<span class="copy-icon-action">%s</span><span class="copy-icon-checked">%s</span>`, copyIconSVG, checkedIconSVG)
+	copy := `<div id="copy-icon" class="copy-icon" onclick="onClickCopyIcon(arguments[0])">` + copyChecked + `</div>`
+
 	h(`<div class="detail">`)
 	h(`<div id="detail-info">
 	   <div class="label-value"> <label>Pkg:</label>	   <div id="detail-info-pkg"> </div> </div>
-	   <div class="label-value"> <label>Func:</label>    <div id="detail-info-func"> </div> ` + vscode + `</div>
+	   <div class="label-value"> <label>Func:</label>    <div id="detail-info-func"> </div> ` + copy + vscode + `</div>
 	</div>`)
 	h(`<label>Request</label>`)
 	h(`<textarea id="detail-request"  placeholder="request..."></textarea>`)
@@ -102,4 +159,5 @@ func RenderHTML(root *Stack, file string, w io.Writer) {
 	h("</div>")
 	h(`</body>
 	</html>`)
+	return nil
 }

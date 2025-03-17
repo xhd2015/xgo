@@ -151,3 +151,26 @@
 .toggle.right>.toggle-icon-right {
     display: initial;
 }
+
+.copy-icon {
+    display: inline-block;
+    cursor: pointer;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+.copy-icon svg {
+    vertical-align: middle;
+}
+
+.copy-icon .copy-icon-checked {
+    display: none;
+}
+
+.copy-icon.checked .copy-icon-action {
+    display: none;
+}
+
+.copy-icon.checked .copy-icon-checked {
+    display: inline-block;
+}
