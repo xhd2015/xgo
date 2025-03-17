@@ -10,7 +10,7 @@ const (
 )
 
 type Stack struct {
-	// current executed function
+	Format   string
 	Begin    string
 	Children []*StackEntry
 }

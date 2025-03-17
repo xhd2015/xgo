@@ -9,22 +9,39 @@ import (
 	"time"
 )
 
-func RenderFile(file string, w io.Writer) error {
+func ReadStacks(file string) ([]*Stack, bool, error) {
+	return readStacks(file, false)
+}
+
+func readStacks(file string, force bool) ([]*Stack, bool, error) {
 	reader, err := os.Open(file)
 	if err != nil {
-		return err
+		return nil, false, err
 	}
 
-	decoder := json.NewDecoder(reader)
 	var stacks []*Stack
+	decoder := json.NewDecoder(reader)
+	// decode first
+	var stack Stack
+	err = decoder.Decode(&stack)
+	if err != nil {
+		if err == io.EOF {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
+	if !force && stack.Format != "stack" {
+		return nil, false, nil
+	}
+	stacks = append(stacks, &stack)
 	for {
-		var stack *Stack
+		var stack Stack
 		err = decoder.Decode(&stack)
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
-			stack = &Stack{
+			stack = Stack{
 				Begin: time.Now().Format(time.RFC3339),
 				Children: []*StackEntry{
 					{
@@ -33,7 +50,15 @@ func RenderFile(file string, w io.Writer) error {
 				},
 			}
 		}
-		stacks = append(stacks, stack)
+		stacks = append(stacks, &stack)
+	}
+	return stacks, true, nil
+}
+
+func RenderFile(file string, w io.Writer) error {
+	stacks, _, err := readStacks(file, true)
+	if err != nil {
+		return err
 	}
 	return RenderStacks(stacks, file, w)
 }

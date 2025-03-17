@@ -39,7 +39,6 @@ func Main(args []string) {
 	var files []string
 	var port string
 	var bind string
-	var fileFormat string
 
 	n := len(args)
 
@@ -64,18 +63,6 @@ func Main(args []string) {
 			continue
 		} else if strings.HasPrefix(arg, "--port=") {
 			port = strings.TrimPrefix(arg, "--port=")
-			continue
-		}
-		if arg == "--format" {
-			if i+1 >= n {
-				fmt.Fprintf(os.Stderr, "--format requires arg\n")
-				os.Exit(1)
-			}
-			fileFormat = args[i+1]
-			i++
-			continue
-		} else if strings.HasPrefix(arg, "--format=") {
-			fileFormat = strings.TrimPrefix(arg, "--format=")
 			continue
 		}
 		// add --bind
@@ -111,10 +98,6 @@ func Main(args []string) {
 		fmt.Fprintf(os.Stderr, "xgo tool trace requires exactly 1 file, given: %v", files)
 		os.Exit(1)
 	}
-	if fileFormat != "" && fileFormat != "stack" {
-		fmt.Fprintf(os.Stderr, "unrecognized format: %s, available formats: empty,stack", fileFormat)
-		os.Exit(1)
-	}
 	file := files[0]
 	if port == "" {
 		port = os.Getenv("PORT")
@@ -122,7 +105,7 @@ func Main(args []string) {
 	if bind == "" {
 		bind = "localhost"
 	}
-	err := serveFile(bind, port, file, fileFormat)
+	err := serveFile(bind, port, file)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -130,7 +113,7 @@ func Main(args []string) {
 
 }
 
-func serveFile(bindStr string, portStr string, file string, fileFormat string) error {
+func serveFile(bindStr string, portStr string, file string) error {
 	stat, err := os.Stat(file)
 	if err != nil {
 		return err
@@ -147,7 +130,14 @@ func serveFile(bindStr string, portStr string, file string, fileFormat string) e
 			}
 		}()
 		var stack *render.Stack
-		if fileFormat == "" {
+
+		stacks, ok, err := render.ReadStacks(file)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			io.WriteString(w, fmt.Sprintf("%v", err))
+			return
+		}
+		if !ok {
 			record, err := parseRecord(file)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -155,16 +145,10 @@ func serveFile(bindStr string, portStr string, file string, fileFormat string) e
 				return
 			}
 			stack = convert(record)
-			w.Header().Set("Content-Type", "text/html")
-			render.RenderStacks([]*render.Stack{stack}, file, w)
-		} else if fileFormat == "stack" {
-			w.Header().Set("Content-Type", "text/html")
-			render.RenderFile(file, w)
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			io.WriteString(w, fmt.Sprintf("unrecognized format: %s, available formats: empty,stack", fileFormat))
-			return
+			stacks = []*render.Stack{stack}
 		}
+		w.Header().Set("Content-Type", "text/html")
+		render.RenderStacks(stacks, file, w)
 	})
 	server.HandleFunc("/openVscodeFile", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
