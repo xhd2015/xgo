@@ -56,7 +56,7 @@ function onClickHead(id) {
         vscodeIcon.classList.add("disabled")
     }
     infoPkg.innerText = traceData.FuncInfo?.Pkg || ""
-    infoFunc.innerText = traceData.FuncInfo?.IdentityName || ""
+    infoFunc.innerText = traceData.FuncInfo?.Name || ""
     req.value = JSON.stringify(traceData.Args, null, "    ")
     if (traceData.Error) {
         let msg = traceData.Error
