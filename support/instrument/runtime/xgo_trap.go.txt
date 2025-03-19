@@ -45,3 +45,14 @@ func XgoGetCurG() *__xgo_g {
 	}
 	return curg.__xgo_g
 }
+
+// Peek panic without recover
+// check gorecover() for implementation details
+func XgoPeekPanic() interface{} {
+	gp := getg()
+	p := gp._panic
+	if p == nil || p.goexit || p.recovered {
+		return nil
+	}
+	return p.arg
+}

@@ -117,10 +117,19 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 
 	return func() {
 		cur.EndNs = time.Now().UnixNano() - stack.Begin.UnixNano()
+		var hasPanic bool
+		if pe := runtime.XgoPeekPanic(); pe != nil {
+			hasPanic = true
+			cur.Panic = true
+			cur.Error = fmt.Sprint(pe)
+		}
+
 		cur.Results = json.RawMessage(marshalNoError(StructValue(results)))
-		resErr := tryGetLastError(results)
-		if resErr != nil {
-			cur.Error = resErr.Error()
+		if !hasPanic {
+			resErr := tryGetLastError(results)
+			if resErr != nil {
+				cur.Error = resErr.Error()
+			}
 		}
 
 		stack.Top = oldTop
