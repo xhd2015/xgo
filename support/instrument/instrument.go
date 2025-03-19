@@ -6,12 +6,13 @@ import (
 
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/instrument/inject"
+	"github.com/xhd2015/xgo/support/instrument/runtime"
 )
 
 // create an overlay: file -> content
 type Overlay map[string]string
 
-func InstrumentRuntimeTrap(projectRoot string, buildArgs []string) (Overlay, error) {
+func InstrumentUserCode(projectRoot string, buildArgs []string) (Overlay, error) {
 	projectRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return nil, err
@@ -37,4 +38,8 @@ func InstrumentRuntimeTrap(projectRoot string, buildArgs []string) (Overlay, err
 	}
 
 	return overlay, nil
+}
+
+func InstrumentRuntime(goroot string) error {
+	return runtime.InstrumentRuntime(goroot)
 }

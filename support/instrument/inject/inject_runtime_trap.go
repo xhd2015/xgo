@@ -108,7 +108,15 @@ func InjectRuntimeTrap(filePath string) ([]byte, bool, error) {
 	editor.Insert(file.Name.End(), `;import __xgo_trap_runtime "runtime"`)
 
 	// Return the modified content - convert string back to []byte
-	return []byte(editor.String()), true, nil
+
+	editedCode := editor.String()
+	return []byte(fmtLineDirective(filePath, 1) + "\n" + editedCode), true, nil
+}
+
+// for line directive, checking https://github.com/golang/go/blob/24b395119b4df7f16915b9f01a6aded647b79bbd/src/cmd/compile/doc.go#L171
+// this tells the compiler, next lineNo is `line`
+func fmtLineDirective(srcFile string, line int) string {
+	return fmt.Sprintf("//line %s:%d", srcFile, line)
 }
 
 func formatField(name string) string {
