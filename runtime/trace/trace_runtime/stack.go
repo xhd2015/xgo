@@ -33,8 +33,12 @@ type StackEntry struct {
 	FuncName string
 	File     string
 	Line     int
-	Args     interface{}
-	Results  interface{}
+
+	Panic bool
+	Error string
+
+	Args    interface{}
+	Results interface{}
 }
 
 type stackKeyType struct{}

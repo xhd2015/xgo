@@ -1,6 +1,7 @@
 package trace_runtime
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -105,7 +106,7 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 	}
 
 	// fmt.Fprintf(os.Stderr, "%sargs: %s\n", prefix, string(argsJSON))
-	marshalArgs := args
+	marshalArgs := tryRemoveFirstCtx(args)
 	if recv.Ptr != nil {
 		marshalArgs = make([]runtime.XgoField, len(args)+1)
 		marshalArgs[0] = recv
@@ -116,8 +117,11 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 
 	return func() {
 		cur.EndNs = time.Now().UnixNano() - stack.Begin.UnixNano()
-
 		cur.Results = json.RawMessage(marshalNoError(StructValue(results)))
+		resErr := tryGetLastError(results)
+		if resErr != nil {
+			cur.Error = resErr.Error()
+		}
 
 		stack.Top = oldTop
 		stack.Depth--
@@ -138,6 +142,36 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 			DetachStack()
 		}
 	}
+}
+
+func tryRemoveFirstCtx(args []runtime.XgoField) []runtime.XgoField {
+	if len(args) == 0 {
+		return args
+	}
+	if _, ok := args[0].Ptr.(*context.Context); ok {
+		return args[1:]
+	}
+	return args
+}
+
+func tryGetLastError(results []runtime.XgoField) error {
+	if len(results) == 0 {
+		return nil
+	}
+	res := results[len(results)-1]
+	if res.Ptr == nil {
+		return nil
+	}
+	if ptrErr, ok := res.Ptr.(*error); ok {
+		if ptrErr == nil {
+			return nil
+		}
+		return *ptrErr
+	}
+	if err, ok := res.Ptr.(error); ok {
+		return err
+	}
+	return nil
 }
 
 func marshalNoError(v interface{}) (result []byte) {
