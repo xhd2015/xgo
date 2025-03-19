@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/xgo/cmd/xgo/trace/render"
+	"github.com/xhd2015/xgo/cmd/xgo/trace/render/stack_model"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/netutil"
 )
@@ -129,7 +130,7 @@ func serveFile(bindStr string, portStr string, file string) error {
 				io.WriteString(w, fmt.Sprintf("<pre>panic: %v\n%s</pre>", e, stack))
 			}
 		}()
-		var stack *render.Stack
+		var stack *stack_model.Stack
 
 		stacks, ok, err := render.ReadStacks(file)
 		if err != nil {
@@ -145,7 +146,7 @@ func serveFile(bindStr string, portStr string, file string) error {
 				return
 			}
 			stack = convert(record)
-			stacks = []*render.Stack{stack}
+			stacks = []*stack_model.Stack{stack}
 		}
 		w.Header().Set("Content-Type", "text/html")
 		render.RenderStacks(stacks, file, w)
@@ -217,12 +218,12 @@ func parseRecord(file string) (*RootExport, error) {
 	return root, nil
 }
 
-func parseStack(file string) (*render.Stack, error) {
+func parseStack(file string) (*stack_model.Stack, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	var stack *render.Stack
+	var stack *stack_model.Stack
 	err = json.Unmarshal(data, &stack)
 	if err != nil {
 		return nil, err

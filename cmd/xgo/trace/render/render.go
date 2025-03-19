@@ -7,22 +7,24 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/xhd2015/xgo/cmd/xgo/trace/render/stack_model"
 )
 
-func ReadStacks(file string) ([]*Stack, bool, error) {
+func ReadStacks(file string) ([]*stack_model.Stack, bool, error) {
 	return readStacks(file, false)
 }
 
-func readStacks(file string, force bool) ([]*Stack, bool, error) {
+func readStacks(file string, force bool) ([]*stack_model.Stack, bool, error) {
 	reader, err := os.Open(file)
 	if err != nil {
 		return nil, false, err
 	}
 
-	var stacks []*Stack
+	var stacks []*stack_model.Stack
 	decoder := json.NewDecoder(reader)
 	// decode first
-	var stack Stack
+	var stack stack_model.Stack
 	err = decoder.Decode(&stack)
 	if err != nil {
 		if err == io.EOF {
@@ -35,15 +37,15 @@ func readStacks(file string, force bool) ([]*Stack, bool, error) {
 	}
 	stacks = append(stacks, &stack)
 	for {
-		var stack Stack
+		var stack stack_model.Stack
 		err = decoder.Decode(&stack)
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
-			stack = Stack{
+			stack = stack_model.Stack{
 				Begin: time.Now().Format(time.RFC3339),
-				Children: []*StackEntry{
+				Children: []*stack_model.StackEntry{
 					{
 						Error: fmt.Sprintf("parse stack: %v", err),
 					},
@@ -63,7 +65,7 @@ func RenderFile(file string, w io.Writer) error {
 	return RenderStacks(stacks, file, w)
 }
 
-func RenderStacks(stacks []*Stack, file string, w io.Writer) (err error) {
+func RenderStacks(stacks []*stack_model.Stack, file string, w io.Writer) (err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			if pe, ok := e.(error); ok {
@@ -104,10 +106,10 @@ func RenderStacks(stacks []*Stack, file string, w io.Writer) (err error) {
 	h("window.onload = function(){")
 	h(" const traces = {}")
 	h(" const ids = []")
-	traceIDMapping := make(map[*StackEntry]int64)
+	traceIDMapping := make(map[*stack_model.StackEntry]int64)
 	nextID := int64(1)
-	var walk func(stack *StackEntry)
-	walk = func(stack *StackEntry) {
+	var walk func(stack *stack_model.StackEntry)
+	walk = func(stack *stack_model.StackEntry) {
 		id := nextID
 		nextID++
 		traceIDMapping[stack] = id
@@ -122,10 +124,10 @@ func RenderStacks(stacks []*Stack, file string, w io.Writer) (err error) {
 			walk(child)
 		}
 	}
-	var tops []*StackEntry
+	var tops []*stack_model.StackEntry
 	for _, stack := range stacks {
-		top := &StackEntry{
-			FuncInfo: &FuncInfo{
+		top := &stack_model.StackEntry{
+			FuncInfo: &stack_model.FuncInfo{
 				Name: "<root>",
 			},
 			Children: stack.Children,
