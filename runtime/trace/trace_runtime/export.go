@@ -37,6 +37,8 @@ func ExportStackEntry(entry *StackEntry) *stack_model.StackEntry {
 		EndNs:    entry.EndNs,
 		Args:     entry.Args,
 		Results:  entry.Results,
+		Panic:    entry.Panic,
+		Error:    entry.Error,
 		Children: ExportStackEntries(entry.Children),
 	}
 }
@@ -55,12 +57,13 @@ func ExportFuncInfo(entry *StackEntry) *stack_model.FuncInfo {
 }
 
 func splitFuncPkg(funcName string) (string, string) {
-	pkg, recvName, recvPtr, typeGeneric, funcGeneric, funcName := core.ParseFuncName(funcName)
+	pkg, recvName, recvPtr, typeGeneric, funcGeneric, basicName := core.ParseFuncName(funcName)
 
 	_ = recvName
 	_ = recvPtr
 	_ = typeGeneric
 	_ = funcGeneric
+	_ = basicName
 
 	if pkg == "" {
 		return "", funcName
