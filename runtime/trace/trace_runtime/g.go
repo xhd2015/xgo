@@ -10,7 +10,8 @@ type G struct {
 	goid       uint64
 	parentGoID uint64
 
-	gls map[interface{}]interface{}
+	gls                 map[interface{}]interface{}
+	looseJsonMarshaling bool
 }
 
 func GetG() *G {

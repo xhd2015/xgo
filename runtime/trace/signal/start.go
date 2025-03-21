@@ -4,6 +4,7 @@ type StartXgoTraceConfig struct {
 	OutputFile string
 }
 
-func StartXgoTrace(config StartXgoTraceConfig, fn func() error) error {
+// the request is only for recording purepose
+func StartXgoTrace(config StartXgoTraceConfig, request interface{}, fn func() (interface{}, error)) (interface{}, error) {
 	return fn()
 }

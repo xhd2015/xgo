@@ -32,6 +32,7 @@ type __xgo_g struct {
 	parentGoID int64
 
 	gls map[interface{}]interface{}
+	looseJsonMarshaling bool
 }
 
 func XgoGetCurG() *__xgo_g {
@@ -55,4 +56,8 @@ func XgoPeekPanic() interface{} {
 		return nil
 	}
 	return p.arg
+}
+
+func XgoIsLooseJsonMarshaling() bool {
+	return XgoGetCurG().looseJsonMarshaling
 }
