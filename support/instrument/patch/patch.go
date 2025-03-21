@@ -1,15 +1,14 @@
-package main
+package patch
 
 import (
 	"fmt"
-	"io/ioutil"
 	"strings"
 
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/strutil"
 )
 
-func editFile(file string, callback func(content string) (string, error)) error {
+func EditFile(file string, callback func(content string) (string, error)) error {
 	bytes, err := fileutil.ReadFile(file)
 	if err != nil {
 		return err
@@ -22,11 +21,11 @@ func editFile(file string, callback func(content string) (string, error)) error 
 	if newContent == content {
 		return nil
 	}
-	return ioutil.WriteFile(file, []byte(newContent), 0755)
+	return fileutil.WriteFile(file, []byte(newContent))
 }
 
-// Deprecated: use addContentAtIndex instead
-func addCodeAfterImports(code string, beginMark string, endMark string, contents []string) string {
+// Deprecated: use AddContentAtIndex instead
+func AddCodeAfterImports(code string, beginMark string, endMark string, contents []string) string {
 	idx := indexSeq(code, []string{"import", "(", "\n"}, false)
 	if idx < 0 {
 		panic(fmt.Errorf("import not found"))
@@ -34,17 +33,16 @@ func addCodeAfterImports(code string, beginMark string, endMark string, contents
 	return insertContentNoDuplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
 }
 
-// Deprecated: use addContentAtIndex instead
-func addContentBefore(content string, beginMark string, endMark string, seq []string, addContent string) string {
-	return addContentAt(content, beginMark, endMark, seq, addContent, true)
+// Deprecated: use AddContentAtIndex instead
+func AddContentBefore(content string, beginMark string, endMark string, seq []string, addContent string) string {
+	return UpdateContent(content, beginMark, endMark, seq, 0, true, addContent)
 }
 
-// Deprecated: use addContentAtIndex instead
-func addContentAfter(content string, beginMark string, endMark string, seq []string, addContent string) string {
+// Deprecated: use AddContentAtIndex instead
+func AddContentAfter(content string, beginMark string, endMark string, seq []string, addContent string) string {
 	return addContentAt(content, beginMark, endMark, seq, addContent, false)
 }
 
-// Deprecated: use addContentAtIndex instead
 func addContentAt(content string, beginMark string, endMark string, seq []string, addContent string, begin bool) string {
 	idx := indexSeq(content, seq, begin)
 	if idx < 0 {
@@ -53,11 +51,21 @@ func addContentAt(content string, beginMark string, endMark string, seq []string
 	return insertContentNoDuplicate(content, beginMark, endMark, idx, addContent)
 }
 
-func addContentAtIndex(content string, beginMark string, endMark string, seq []string, i int, before bool, addContent string) string {
-	offset, endOffset := strutil.SequenceOffset(content, seq, i, before)
+type UpdatePosition bool
+
+const (
+	UpdatePosition_After  UpdatePosition = false
+	UpdatePosition_Before UpdatePosition = true
+)
+
+// UpdateContent add content before or after the `i`'s anchor in `seq`
+// two lines will be automatically added after `beginMark`, and before `endMark`, so you don't need to include a line in `addContent`
+func UpdateContent(content string, beginMark string, endMark string, seq []string, i int, position UpdatePosition, addContent string) string {
+	offset, endOffset := strutil.SequenceOffset(content, seq, i, bool(position))
 	if offset < 0 {
 		panic(fmt.Errorf("sequence missing: %v", seq))
 	}
+	// ensure sequence is unique
 	anotherOff, _ := strutil.SequenceOffset(content[endOffset:], seq, i, false)
 	if anotherOff >= 0 {
 		panic(fmt.Errorf("sequence duplicate: %v", seq))
@@ -65,7 +73,7 @@ func addContentAtIndex(content string, beginMark string, endMark string, seq []s
 	return insertContentNoDuplicate(content, beginMark, endMark, offset, addContent)
 }
 
-func replaceContentAfter(content string, beginMark string, endMark string, seq []string, target string, replaceContent string) string {
+func ReplaceContentAfter(content string, beginMark string, endMark string, seq []string, target string, replaceContent string) string {
 	if replaceContent == "" {
 		return content
 	}
