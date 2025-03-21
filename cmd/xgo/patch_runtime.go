@@ -11,6 +11,7 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
+	instrument_patch "github.com/xhd2015/xgo/support/instrument/patch"
 	ast_patch "github.com/xhd2015/xgo/support/transform/patch"
 )
 
@@ -24,9 +25,9 @@ var testingFilePatch = &FilePatch{
 	FilePath: _FilePath{"src", "testing", "testing.go"},
 	Patches: []*Patch{
 		{
-			Mark:         "declare_testing_callback_v2",
-			InsertIndex:  0,
-			InsertBefore: true,
+			Mark:           "declare_testing_callback_v2",
+			InsertIndex:    0,
+			UpdatePosition: true,
 			Anchors: []string{
 				"func tRunner(t *T, fn func",
 				"{",
@@ -35,9 +36,9 @@ var testingFilePatch = &FilePatch{
 			Content: patch.TestingCallbackDeclarations + patch.TestingEndCallbackDeclarations,
 		},
 		{
-			Mark:         "call_testing_callback_v2",
-			InsertIndex:  4,
-			InsertBefore: true,
+			Mark:           "call_testing_callback_v2",
+			InsertIndex:    4,
+			UpdatePosition: true,
 			Anchors: []string{
 				"func tRunner(t *T, fn func",
 				"{",
@@ -140,11 +141,11 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 		"close(main_init_done)",
 		"\n",
 	}
-	err := editFile(procFile, func(content string) (string, error) {
-		content = addContentAfter(content, "/*<begin set_init_finished_mark>*/", "/*<end set_init_finished_mark>*/", anchors, patch.RuntimeProcPatch)
+	err := instrument_patch.EditFile(procFile, func(content string) (string, error) {
+		content = instrument_patch.AddContentAfter(content, "/*<begin set_init_finished_mark>*/", "/*<end set_init_finished_mark>*/", anchors, patch.RuntimeProcPatch)
 
 		// goexit1() is called for every exited goroutine
-		content = addContentAfter(content,
+		content = instrument_patch.AddContentAfter(content,
 			"/*<begin add_go_exit_callback>*/", "/*<end add_go_exit_callback>*/",
 			[]string{"func goexit1() {", "\n"},
 			patch.RuntimeProcGoroutineExitPatch,
@@ -165,7 +166,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 			}
 		}
 		// see https://github.com/xhd2015/xgo/issues/67
-		content = addContentAtIndex(
+		content = instrument_patch.UpdateContent(
 			content,
 			"/*<begin declare_xgo_newg>*/", "/*<end declare_xgo_newg>*/",
 			[]string{
@@ -177,7 +178,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 			true,
 			"var xgo_newg *g",
 		)
-		content = addContentAtIndex(
+		content = instrument_patch.UpdateContent(
 			content,
 			"/*<begin set_xgo_newg>*/", "/*<end set_xgo_newg>*/",
 			[]string{
@@ -191,7 +192,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 			"xgo_newg = newg",
 		)
 
-		content = addContentAtIndex(content,
+		content = instrument_patch.UpdateContent(content,
 			"/*<begin add_go_newproc_callback>*/", "/*<end add_go_newproc_callback>*/",
 			[]string{
 				procDecl,
@@ -218,7 +219,7 @@ func patchRuntimeTesting(origGoroot string, goroot string, goVersion *goinfo.GoV
 		return testingFilePatch.Apply(goroot, nil)
 	}
 	// go 1.23
-	srcFile := testingFilePatch.FilePath.Join(origGoroot)
+	srcFile := testingFilePatch.FilePath.JoinPrefix(origGoroot)
 	srcCode, err := fileutil.ReadFile(srcFile)
 	if err != nil {
 		return err
@@ -236,7 +237,7 @@ func tRunner(t *T, fn func(t *T)) {
 	if err != nil {
 		return err
 	}
-	err = fileutil.WriteFile(testingFilePatch.FilePath.Join(goroot), []byte(newCode))
+	err = fileutil.WriteFile(testingFilePatch.FilePath.JoinPrefix(goroot), []byte(newCode))
 	if err != nil {
 		return err
 	}
@@ -260,8 +261,8 @@ func patchRuntimeTime(goroot string) error {
 	runtimeTimeFile := filepath.Join(goroot, filepath.Join(runtimeTime...))
 	timeSleepFile := filepath.Join(goroot, filepath.Join(timeSleep...))
 
-	err := editFile(runtimeTimeFile, func(content string) (string, error) {
-		content = replaceContentAfter(content,
+	err := instrument_patch.EditFile(runtimeTimeFile, func(content string) (string, error) {
+		content = instrument_patch.ReplaceContentAfter(content,
 			"/*<begin redirect_runtime_sleep>*/", "/*<end redirect_runtime_sleep>*/",
 			[]string{},
 			"//go:linkname timeSleep time.Sleep\nfunc timeSleep(ns int64) {",
@@ -273,8 +274,8 @@ func patchRuntimeTime(goroot string) error {
 		return err
 	}
 
-	err = editFile(timeSleepFile, func(content string) (string, error) {
-		content = replaceContentAfter(content,
+	err = instrument_patch.EditFile(timeSleepFile, func(content string) (string, error) {
+		content = instrument_patch.ReplaceContentAfter(content,
 			"/*<begin replace_sleep_with_runtimesleep>*/", "/*<end replace_sleep_with_runtimesleep>*/",
 			[]string{},
 			"func Sleep(d Duration)",

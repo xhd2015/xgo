@@ -14,6 +14,8 @@ func IndexSequenceAt(s string, sequence []string, begin bool) int {
 	return off
 }
 
+// - `offset` is the begin offset of the `i`'s anchor
+// - `endOffset` is the end offset, which is the last anchor's starting offset plus its length
 func SequenceOffset(s string, sequence []string, i int, begin bool) (offset int, endOffset int) {
 	return indexSequence(s, sequence, i, begin)
 }

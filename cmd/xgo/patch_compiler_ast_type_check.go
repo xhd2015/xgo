@@ -72,9 +72,9 @@ if xgoConv, ok := x.expr.(*syntax.XgoSimpleConvert); ok {
 
 func getExprInternalPatch(mark string, rawCall string, checkGoVersion func(goVersion *goinfo.GoVersion) bool) *Patch {
 	return &Patch{
-		Mark:         mark,
-		InsertIndex:  5,
-		InsertBefore: true,
+		Mark:           mark,
+		InsertIndex:    5,
+		UpdatePosition: true,
 		Anchors: []string{
 			`(check *Checker) exprInternal`,
 			"\n",
@@ -116,9 +116,9 @@ var type2ExprPatch = &FilePatch{
 			},
 		},
 		{
-			Mark:         "type2_binary_convert_type_xgo_simple_convert",
-			InsertIndex:  2,
-			InsertBefore: true,
+			Mark:           "type2_binary_convert_type_xgo_simple_convert",
+			InsertIndex:    2,
+			UpdatePosition: true,
 			Anchors: []string{
 				`func (check *Checker) binary(x *operand`,
 				"\n",
@@ -132,9 +132,9 @@ var type2ExprPatch = &FilePatch{
 			},
 		},
 		{
-			Mark:         "type2_binary_convert_type_xgo_simple_convert_can_mix",
-			InsertIndex:  2,
-			InsertBefore: true,
+			Mark:           "type2_binary_convert_type_xgo_simple_convert_can_mix",
+			InsertIndex:    2,
+			UpdatePosition: true,
 			Anchors: []string{
 				`func (check *Checker) binary(x *operand`,
 				"\n",
@@ -164,9 +164,9 @@ var type2AssignmentsPatch = &FilePatch{
 	FilePath: _FilePath{"src", "cmd", "compile", "internal", "types2", "assignments.go"},
 	Patches: []*Patch{
 		{
-			Mark:         "type2_assignment_rewrite_xgo_simple_convert",
-			InsertIndex:  1,
-			InsertBefore: true,
+			Mark:           "type2_assignment_rewrite_xgo_simple_convert",
+			InsertIndex:    1,
+			UpdatePosition: true,
 			Anchors: []string{
 				`func (check *Checker) assignment(`,
 				`switch x.mode {`,
@@ -199,9 +199,9 @@ var syntaxWalkPatch = &FilePatch{
 	FilePath: _FilePath{"src", "cmd", "compile", "internal", "syntax", "walk.go"},
 	Patches: []*Patch{
 		{
-			Mark:         "syntax_walk_xgo_simple_convert",
-			InsertIndex:  4,
-			InsertBefore: true,
+			Mark:           "syntax_walk_xgo_simple_convert",
+			InsertIndex:    4,
+			UpdatePosition: true,
 			Anchors: []string{
 				`func (w walker) node(n Node) {`,
 				`case *RangeClause:`,
@@ -233,9 +233,9 @@ var syntaxParserPatch = &FilePatch{
 		// },
 		{
 			// NOTE: dependency injection
-			Mark:         "syntax_parser_record_comment_declare",
-			InsertIndex:  0,
-			InsertBefore: true,
+			Mark:           "syntax_parser_record_comment_declare",
+			InsertIndex:    0,
+			UpdatePosition: true,
 			Anchors: []string{
 				`func (p *parser) init(file *PosBase,`,
 			},
@@ -266,9 +266,9 @@ var noderWriterPatch = &FilePatch{
 	FilePath: _FilePath{"src", "cmd", "compile", "internal", "noder", "writer.go"},
 	Patches: []*Patch{
 		{
-			Mark:         "noder_write_xgo_simple_convert",
-			InsertIndex:  3,
-			InsertBefore: true,
+			Mark:           "noder_write_xgo_simple_convert",
+			InsertIndex:    3,
+			UpdatePosition: true,
 			Anchors: []string{
 				`func (w *writer) expr(expr syntax.Expr) {`,
 				`switch expr := expr.(type) {`,
@@ -287,9 +287,9 @@ var noderExprPatch = &FilePatch{
 	FilePath: _FilePath{"src", "cmd", "compile", "internal", "noder", "expr.go"},
 	Patches: []*Patch{
 		{
-			Mark:         "noder_expr_const_expr_op_xgo_simple_convert",
-			InsertIndex:  1,
-			InsertBefore: true,
+			Mark:           "noder_expr_const_expr_op_xgo_simple_convert",
+			InsertIndex:    1,
+			UpdatePosition: true,
 			Anchors: []string{
 				`func constExprOp(expr syntax.Expr) ir.Op {`,
 				`case *syntax.BasicLit:`,
@@ -310,9 +310,9 @@ var syntaxPrinterPatch = &FilePatch{
 	FilePath: _FilePath{"src", "cmd", "compile", "internal", "syntax", "printer.go"},
 	Patches: []*Patch{
 		{
-			Mark:         "noder_syntax_print_xgo_simple_convert",
-			InsertIndex:  1,
-			InsertBefore: true,
+			Mark:           "noder_syntax_print_xgo_simple_convert",
+			InsertIndex:    1,
+			UpdatePosition: true,
 			Anchors: []string{
 				`func (p *printer) printRawNode(n Node) {`,
 				`case *BasicLit:`,
@@ -343,7 +343,7 @@ type XgoSimpleConvert struct {
 
 func patchCompilerAstTypeCheck(goroot string, goVersion *goinfo.GoVersion) error {
 	// always generate xgo_extra file
-	syntaxExtraFile := syntaxExtra.Join(goroot)
+	syntaxExtraFile := syntaxExtra.JoinPrefix(goroot)
 	err := os.WriteFile(syntaxExtraFile, []byte(syntaxExtraPatch), 0755)
 	if err != nil {
 		return err

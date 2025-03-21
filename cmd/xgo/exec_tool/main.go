@@ -60,12 +60,7 @@ func Main(args []string) {
 	}
 
 	// on Windows, cmd ends with .exe
-	baseName := filepath.Base(cmd)
-	isCompile := baseName == "compile"
-	if !isCompile && runtime.GOOS == "windows" {
-		isCompile = baseName == "compile.exe"
-	}
-	if !isCompile {
+	if !isCompileCommand(cmd) {
 		// invoke the process as is
 		runCommandExit(cmd, toolArgs)
 		return
@@ -75,6 +70,18 @@ func Main(args []string) {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
+}
+
+func isCompileCommand(cmd string) bool {
+	// on Windows, cmd ends with .exe
+	baseName := filepath.Base(cmd)
+	if baseName == "compile" {
+		return true
+	}
+	if runtime.GOOS == "windows" && baseName == "compile.exe" {
+		return true
+	}
+	return false
 }
 
 func handleCompile(cmd string, opts *options, args []string) error {
@@ -236,7 +243,7 @@ func handleCompile(cmd string, opts *options, args []string) error {
 		}
 	}
 	// COMPILER_ALLOW_SYNTAX_REWRITE=${COMPILER_ALLOW_SYNTAX_REWRITE:-true} COMPILER_ALLOW_IR_REWRITE=${COMPILER_ALLOW_IR_REWRITE:-true} "$shdir/compile" ${@:2}
-	runCommandExitFilter(compilerBin, args, func(cmd *exec.Cmd) {
+	runCustomizeCommandExit(compilerBin, args, func(cmd *exec.Cmd) {
 		cmd.Env = append(cmd.Env,
 			"XGO_COMPILER_ENABLE="+xgoCompilerEnableEnv,
 			// "XGO_COMPILER_ENABLE=false",
@@ -309,9 +316,9 @@ func findArgAfterFlag(args []string, flag string) string {
 }
 
 func runCommandExit(name string, args []string) {
-	runCommandExitFilter(name, args, nil)
+	runCustomizeCommandExit(name, args, nil)
 }
-func runCommandExitFilter(name string, args []string, f func(cmd *exec.Cmd)) {
+func runCustomizeCommandExit(name string, args []string, f func(cmd *exec.Cmd)) {
 	err := runCommand(name, args, true, f)
 	if err != nil {
 		panic(fmt.Errorf("unexpected err: %w", err))

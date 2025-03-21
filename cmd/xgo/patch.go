@@ -14,6 +14,7 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/instrument/patch"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 
@@ -24,11 +25,7 @@ import (
 // NOTE: do not remove files, always add files,
 // these old files may exists in older version
 // so can be cleared by newer xgo
-type _FilePath []string
-
-func (c _FilePath) Join(s ...string) string {
-	return filepath.Join(filepath.Join(s...), filepath.Join(c...))
-}
+type _FilePath = patch.FilePath
 
 var affectedFiles []_FilePath
 
@@ -186,13 +183,13 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 }
 
 func partialCopy(goroot string, instrumentGoroot string) error {
-	err := os.RemoveAll(xgoRewriteInternal.Join(instrumentGoroot))
+	err := os.RemoveAll(xgoRewriteInternal.JoinPrefix(instrumentGoroot))
 	if err != nil {
 		return err
 	}
 	for _, affectedFile := range affectedFiles {
-		srcFile := affectedFile.Join(goroot)
-		dstFile := affectedFile.Join(instrumentGoroot)
+		srcFile := affectedFile.JoinPrefix(goroot)
+		dstFile := affectedFile.JoinPrefix(instrumentGoroot)
 
 		err := filecopy.CopyFileAll(srcFile, dstFile)
 		if err != nil {

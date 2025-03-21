@@ -4,18 +4,19 @@ import (
 	"fmt"
 
 	"github.com/xhd2015/xgo/support/goinfo"
+	instrument_patch "github.com/xhd2015/xgo/support/instrument/patch"
 )
 
 type FilePatch struct {
-	FilePath _FilePath
+	FilePath instrument_patch.FilePath
 	Patches  []*Patch
 }
 
 type Patch struct {
 	Mark string
 
-	InsertIndex  int // insert before which anchor, 0: insert at head, -1: tail
-	InsertBefore bool
+	InsertIndex    int // insert before which anchor, 0: insert at head, -1: tail
+	UpdatePosition instrument_patch.UpdatePosition
 	// anchor should be unique
 	// appears exactly once
 	Anchors []string
@@ -36,7 +37,7 @@ func (c *FilePatch) Apply(goroot string, goVersion *goinfo.GoVersion) error {
 	if len(c.Patches) == 0 {
 		return nil
 	}
-	file := c.FilePath.Join(goroot)
+	file := c.FilePath.JoinPrefix(goroot)
 
 	// validate patch mark
 	seenMark := make(map[string]bool, len(c.Patches))
@@ -56,14 +57,14 @@ func (c *FilePatch) Apply(goroot string, goVersion *goinfo.GoVersion) error {
 		seenMark[patch.Mark] = true
 	}
 
-	return editFile(file, func(content string) (string, error) {
+	return instrument_patch.EditFile(file, func(content string) (string, error) {
 		for _, patch := range c.Patches {
 			if patch.CheckGoVersion != nil && !patch.CheckGoVersion(goVersion) {
 				continue
 			}
 			beginMark := fmt.Sprintf("/*<begin %s>*/", patch.Mark)
 			endMark := fmt.Sprintf("/*<end %s>*/", patch.Mark)
-			content = addContentAtIndex(content, beginMark, endMark, patch.Anchors, patch.InsertIndex, patch.InsertBefore, patch.Content)
+			content = instrument_patch.UpdateContent(content, beginMark, endMark, patch.Anchors, patch.InsertIndex, patch.UpdatePosition, patch.Content)
 		}
 		return content, nil
 	})

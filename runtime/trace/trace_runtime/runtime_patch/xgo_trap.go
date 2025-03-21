@@ -1,0 +1,47 @@
+package runtime
+
+var __xgo_trap func(recv XgoField, args []XgoField, results []XgoField) func()
+
+var __do_nothing = func() {}
+
+type XgoField struct {
+	Name string
+	Ptr  interface{}
+}
+
+func XgoTrap(recv XgoField, args []XgoField, results []XgoField) func() {
+	if __xgo_trap == nil {
+		return __do_nothing
+	}
+	return __xgo_trap(recv, args, results)
+}
+
+func XgoSetTrap(trap func(recv XgoField, args []XgoField, results []XgoField) func()) {
+	if __xgo_trap != nil {
+		panic("__xgo_trap already set")
+	}
+	__xgo_trap = trap
+}
+
+// __xgo_g is a wrapper around the runtime.G struct
+// to avoid exposing the runtime.G struct to the user
+// and to avoid having to import the runtime package
+// in the user's code.
+type __xgo_g struct {
+	goid       int64
+	parentGoID int64
+
+	gls map[interface{}]interface{}
+}
+
+func XgoGetCurG() *__xgo_g {
+	curg := getg().m.curg
+	if curg.__xgo_g == nil {
+		curg.__xgo_g = &__xgo_g{
+			goid: curg.goid,
+			// parentGoID: curg.parentGoid,
+			gls: make(map[interface{}]interface{}),
+		}
+	}
+	return curg.__xgo_g
+}
