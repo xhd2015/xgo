@@ -1,22 +1,20 @@
 package runtime
 
-var __xgo_trap func(recv XgoField, args []XgoField, results []XgoField) func()
-
-var __do_nothing = func() {}
+var __xgo_trap func(recv XgoField, args []XgoField, results []XgoField) (func(),bool)
 
 type XgoField struct {
 	Name string
 	Ptr  interface{}
 }
 
-func XgoTrap(recv XgoField, args []XgoField, results []XgoField) func() {
+func XgoTrap(recv XgoField, args []XgoField, results []XgoField) (func(),bool) {
 	if __xgo_trap == nil {
-		return __do_nothing
+		return nil,false
 	}
 	return __xgo_trap(recv, args, results)
 }
 
-func XgoSetTrap(trap func(recv XgoField, args []XgoField, results []XgoField) func()) {
+func XgoSetTrap(trap func(recv XgoField, args []XgoField, results []XgoField) (func(),bool)) {
 	if __xgo_trap != nil {
 		panic("__xgo_trap already set")
 	}
@@ -32,6 +30,7 @@ type __xgo_g struct {
 	parentGoID int64
 
 	gls map[interface{}]interface{}
+	looseJsonMarshaling bool
 }
 
 func XgoGetCurG() *__xgo_g {
@@ -44,4 +43,19 @@ func XgoGetCurG() *__xgo_g {
 		}
 	}
 	return curg.__xgo_g
+}
+
+// Peek panic without recover
+// check gorecover() for implementation details
+func XgoPeekPanic() interface{} {
+	gp := getg()
+	p := gp._panic
+	if p == nil || p.goexit || p.recovered {
+		return nil
+	}
+	return p.arg
+}
+
+func XgoIsLooseJsonMarshaling() bool {
+	return XgoGetCurG().looseJsonMarshaling
 }

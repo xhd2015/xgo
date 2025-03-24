@@ -30,12 +30,12 @@ func AddCodeAfterImports(code string, beginMark string, endMark string, contents
 	if idx < 0 {
 		panic(fmt.Errorf("import not found"))
 	}
-	return insertContentNoDuplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
+	return insertContentLinesNoDuplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
 }
 
 // Deprecated: use AddContentAtIndex instead
 func AddContentBefore(content string, beginMark string, endMark string, seq []string, addContent string) string {
-	return UpdateContent(content, beginMark, endMark, seq, 0, true, addContent)
+	return UpdateContentLines(content, beginMark, endMark, seq, 0, true, addContent)
 }
 
 // Deprecated: use AddContentAtIndex instead
@@ -48,7 +48,7 @@ func addContentAt(content string, beginMark string, endMark string, seq []string
 	if idx < 0 {
 		panic(fmt.Errorf("sequence not found: %v", seq))
 	}
-	return insertContentNoDuplicate(content, beginMark, endMark, idx, addContent)
+	return insertContentLinesNoDuplicate(content, beginMark, endMark, idx, addContent)
 }
 
 type UpdatePosition bool
@@ -58,9 +58,17 @@ const (
 	UpdatePosition_Before UpdatePosition = true
 )
 
-// UpdateContent add content before or after the `i`'s anchor in `seq`
+// UpdateContentLines add content before or after the `i`'s anchor in `seq`
 // two lines will be automatically added after `beginMark`, and before `endMark`, so you don't need to include a line in `addContent`
+func UpdateContentLines(content string, beginMark string, endMark string, seq []string, i int, position UpdatePosition, addContent string) string {
+	return updateContent(content, beginMark, endMark, seq, i, position, addContent, "\n")
+}
+
 func UpdateContent(content string, beginMark string, endMark string, seq []string, i int, position UpdatePosition, addContent string) string {
+	return updateContent(content, beginMark, endMark, seq, i, position, addContent, "")
+}
+
+func updateContent(content string, beginMark string, endMark string, seq []string, i int, position UpdatePosition, addContent string, separator string) string {
 	offset, endOffset := strutil.SequenceOffset(content, seq, i, bool(position))
 	if offset < 0 {
 		panic(fmt.Errorf("sequence missing: %v", seq))
@@ -70,7 +78,7 @@ func UpdateContent(content string, beginMark string, endMark string, seq []strin
 	if anotherOff >= 0 {
 		panic(fmt.Errorf("sequence duplicate: %v", seq))
 	}
-	return insertContentNoDuplicate(content, beginMark, endMark, offset, addContent)
+	return insertContentNoDuplicate(content, beginMark, endMark, offset, addContent, separator)
 }
 
 func ReplaceContentAfter(content string, beginMark string, endMark string, seq []string, target string, replaceContent string) string {
@@ -98,11 +106,15 @@ func ReplaceContentAfter(content string, beginMark string, endMark string, seq [
 
 // signature example: /*<begin ident>*/ {content} /*<end ident>*/
 // insert content at index
-func insertContentNoDuplicate(content string, beginMark string, endMark string, idx int, insertContent string) string {
+func insertContentLinesNoDuplicate(content string, beginMark string, endMark string, idx int, insertContent string) string {
+	return insertContentNoDuplicate(content, beginMark, endMark, idx, insertContent, "\n")
+}
+
+func insertContentNoDuplicate(content string, beginMark string, endMark string, idx int, insertContent string, separator string) string {
 	if insertContent == "" {
 		return content
 	}
-	closuerContent := beginMark + "\n" + insertContent + "\n" + endMark + "\n"
+	closuerContent := beginMark + separator + insertContent + separator + endMark + separator
 	content, ok := tryReplaceWithMark(content, beginMark, endMark, closuerContent)
 	if ok {
 		return content
@@ -123,9 +135,6 @@ func tryReplaceWithMark(content string, beginMark string, endMark string, closur
 		return content, false
 	}
 	lastIdx := endIdx + len(endMark)
-	if lastIdx+1 < len(content) && content[lastIdx+1] == '\n' {
-		lastIdx++
-	}
 	return content[:beginIdx] + closureContent + content[lastIdx:], true
 }
 

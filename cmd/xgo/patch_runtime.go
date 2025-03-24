@@ -166,7 +166,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 			}
 		}
 		// see https://github.com/xhd2015/xgo/issues/67
-		content = instrument_patch.UpdateContent(
+		content = instrument_patch.UpdateContentLines(
 			content,
 			"/*<begin declare_xgo_newg>*/", "/*<end declare_xgo_newg>*/",
 			[]string{
@@ -178,7 +178,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 			true,
 			"var xgo_newg *g",
 		)
-		content = instrument_patch.UpdateContent(
+		content = instrument_patch.UpdateContentLines(
 			content,
 			"/*<begin set_xgo_newg>*/", "/*<end set_xgo_newg>*/",
 			[]string{
@@ -192,7 +192,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 			"xgo_newg = newg",
 		)
 
-		content = instrument_patch.UpdateContent(content,
+		content = instrument_patch.UpdateContentLines(content,
 			"/*<begin add_go_newproc_callback>*/", "/*<end add_go_newproc_callback>*/",
 			[]string{
 				procDecl,

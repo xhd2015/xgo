@@ -6,8 +6,8 @@ import "fmt"
 // VERSION is manually updated when needed a new tag
 // see also runtime/core/version.go
 const VERSION = "1.0.52"
-const REVISION = "ac4d8f9b90d4577da6f6989d222a5cf6759aed15+1"
-const NUMBER = 331
+const REVISION = "55362640ec7780b1ed01d588294e40b57b934c80+1"
+const NUMBER = 332
 
 // the matching runtime/core's version
 // manually updated
