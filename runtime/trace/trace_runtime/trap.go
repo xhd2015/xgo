@@ -22,7 +22,7 @@ func SetupTrap() {
 // 	Ptr  interface{}
 // }
 
-func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoField) func() {
+func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoField) (func(),bool) {
 	// skip 2: <user func> -> runtime.XgoTrap -> trap
 	const SKIP = 2
 
@@ -37,7 +37,7 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 	var isStart bool
 	if stack == nil {
 		if fnName != constants.START_XGO_TRACE {
-			return nothing
+			return nil,false
 		}
 		isStart = true
 		stack = &Stack{
@@ -97,7 +97,7 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 		}
 		if outputFile == "" {
 			DetachStack()
-			return nothing
+			return nil,false
 		}
 		stack.OutputFile = outputFile
 	}
@@ -146,5 +146,5 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 			// fmt.Fprintf(os.Stderr, "trace end\n")
 			DetachStack()
 		}
-	}
+	},false
 }

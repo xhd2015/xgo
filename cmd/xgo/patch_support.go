@@ -64,7 +64,7 @@ func (c *FilePatch) Apply(goroot string, goVersion *goinfo.GoVersion) error {
 			}
 			beginMark := fmt.Sprintf("/*<begin %s>*/", patch.Mark)
 			endMark := fmt.Sprintf("/*<end %s>*/", patch.Mark)
-			content = instrument_patch.UpdateContent(content, beginMark, endMark, patch.Anchors, patch.InsertIndex, patch.UpdatePosition, patch.Content)
+			content = instrument_patch.UpdateContentLines(content, beginMark, endMark, patch.Anchors, patch.InsertIndex, patch.UpdatePosition, patch.Content)
 		}
 		return content, nil
 	})

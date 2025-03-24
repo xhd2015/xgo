@@ -326,7 +326,7 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 
 		// expose the trimFilename func for recording
 		if goVersion.Major == 1 && goVersion.Minor <= 17 {
-			content = instrument_patch.UpdateContent(content,
+			content = instrument_patch.UpdateContentLines(content,
 				"/*<begin expose_abs_filename>*/", "/*<end expose_abs_filename>*/",
 				[]string{
 					`func absFilename(name string) string {`,
@@ -336,7 +336,7 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 				"func init(){ xgo_syntax.AbsFilename = absFilename;}\n",
 			)
 		} else {
-			content = instrument_patch.UpdateContent(content,
+			content = instrument_patch.UpdateContentLines(content,
 				"/*<begin expose_trim_filename>*/", "/*<end expose_trim_filename>*/",
 				[]string{
 					`func trimFilename(b *syntax.PosBase) string {`,

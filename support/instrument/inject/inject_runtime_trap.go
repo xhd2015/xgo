@@ -95,9 +95,21 @@ func InjectRuntimeTrap(filePath string) ([]byte, bool, error) {
 		// Only process functions with a body
 		// Get position right after the opening brace
 		pos := funcDecl.Body.Lbrace + 1
+		line := fset.Position(pos).Line
 
-		// Insert the trap statement with a semicolon
-		editor.Insert(pos, fmt.Sprintf("defer __xgo_trap_runtime.XgoTrap(%s,[]__xgo_trap_runtime.XgoField{%s},[]__xgo_trap_runtime.XgoField{%s})();", receiverAddr, strings.Join(paramAddrs, ","), strings.Join(resultAddrs, ",")))
+		// Insert the trap statement with a semicolon:
+		//     post, stop := XgoTrap(&recv, &args, &results)
+		//     if post != nil {
+		//          defer post()
+		//     }
+		//     if stop {
+		//        return
+		//     }
+		editor.Insert(pos, fmt.Sprintf("__xgo_post_%d, __xgo_stop_%d := __xgo_trap_runtime.XgoTrap(%s,[]__xgo_trap_runtime.XgoField{%s},[]__xgo_trap_runtime.XgoField{%s});if __xgo_post_%d!=nil { defer __xgo_post_%d(); };if __xgo_stop_%d { return; };",
+			line, line,
+			receiverAddr, strings.Join(paramAddrs, ","), strings.Join(resultAddrs, ","),
+			line, line, line,
+		))
 		hasInsertedTrap = true
 		return true
 	})
@@ -107,14 +119,13 @@ func InjectRuntimeTrap(filePath string) ([]byte, bool, error) {
 
 	editor.Insert(file.Name.End(), `;import __xgo_trap_runtime "runtime"`)
 
-	// Return the modified content - convert string back to []byte
-
+	// prefix the modified content with line directive
 	editedCode := editor.String()
 	return []byte(fmtLineDirective(filePath, 1) + "\n" + editedCode), true, nil
 }
 
-// for line directive, checking https://github.com/golang/go/blob/24b395119b4df7f16915b9f01a6aded647b79bbd/src/cmd/compile/doc.go#L171
-// this tells the compiler, next lineNo is `line`
+// for line directive, check https://github.com/golang/go/blob/24b395119b4df7f16915b9f01a6aded647b79bbd/src/cmd/compile/doc.go#L171
+// this tells the compiler, next line's line number is `line`
 func fmtLineDirective(srcFile string, line int) string {
 	return fmt.Sprintf("//line %s:%d", srcFile, line)
 }

@@ -87,8 +87,8 @@ func instrumentRuntime2(goroot string, goMajor int, goMinor int) error {
 				"}\n",
 			},
 			1,
-			true,
-			"    __xgo_g *__xgo_g",
+			patch.UpdatePosition_Before,
+			"__xgo_g *__xgo_g;",
 		)
 		return content, nil
 	})
@@ -103,19 +103,20 @@ func instrumentJsonEncoding(goroot string, goMajor int, goMinor int) error {
 			"/*<begin instrument_json_encoding_import_runtime>*/",
 			"/*<end instrument_json_encoding_import_runtime>*/",
 			[]string{
-				"import (",
-				")\n",
+				"package json",
+				"\n",
 			},
-			1,
-			patch.UpdatePosition_Before,
-			"    __xgo_runtime \"runtime\"",
+			0,
+			patch.UpdatePosition_After,
+			";import __xgo_runtime \"runtime\"",
 		)
 		content = patch.UpdateContent(content,
 			"/*<begin instrument_json_encoding_unsupported_type_encoder>*/",
 			"/*<end instrument_json_encoding_unsupported_type_encoder>*/",
 			[]string{
 				"func unsupportedTypeEncoder(",
-				") {\n",
+				") {",
+				"\n",
 			},
 			1,
 			patch.UpdatePosition_After,
@@ -131,7 +132,8 @@ func instrumentJsonEncoding(goroot string, goMajor int, goMinor int) error {
 					fmt.Sprintf("%s) encode", encoder),
 					"if",
 					"e.ptrLevel > startDetectingCyclesAfter",
-					"if _, ok := e.ptrSeen[ptr]; ok {\n",
+					"if _, ok := e.ptrSeen[ptr]; ok {",
+					"\n",
 				},
 				3,
 				patch.UpdatePosition_After,
@@ -142,12 +144,12 @@ func instrumentJsonEncoding(goroot string, goMajor int, goMinor int) error {
 	})
 }
 
-const unsupportedTypeIgnore = `if __xgo_runtime.XgoIsLooseJsonMarshaling() {
-    e.WriteString(fmt.Sprintf("{%q:%q}", v.Type().String(), "?"))
-    return
-}`
+const unsupportedTypeIgnore = `if __xgo_runtime.XgoIsLooseJsonMarshaling() {` +
+	`    e.WriteString(fmt.Sprintf("{%q:%q}", v.Type().String(), "?"));` +
+	`    return;` +
+	`}`
 
-const cyclicIgnore = `if __xgo_runtime.XgoIsLooseJsonMarshaling() {
-	e.WriteString(fmt.Sprintf("{%q:%q}", v.Type().String(), "cyclic..."))
-	return
-}`
+const cyclicIgnore = `if __xgo_runtime.XgoIsLooseJsonMarshaling() {` +
+	`   e.WriteString(fmt.Sprintf("{%q:%q}", v.Type().String(), "cyclic..."));` +
+	`   return;` +
+	`}`
