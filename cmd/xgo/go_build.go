@@ -6,16 +6,6 @@ import (
 	"path/filepath"
 )
 
-const GO_MAJOR_1 = 1
-const GO_VERSION_16 = 16 // unsupported
-const GO_VERSION_17 = 17
-const GO_VERSION_18 = 18
-const GO_VERSION_19 = 19
-const GO_VERSION_20 = 20
-const GO_VERSION_21 = 21
-const GO_VERSION_22 = 22
-const GO_VERSION_23 = 23
-
 // Deprecated: since xgo v1.1.0, xgo does not instrument the compiler anymore
 func buildCompiler(goroot string, output string) error {
 	args := []string{"build"}

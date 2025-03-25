@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -52,8 +51,7 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 
 	// instrument runtime
 	err := runtime.InstrumentRuntime(goroot, runtime.InstrumentRuntimeOptions{
-		Force:                 isDevelopment || resetOrCoreRevisionChanged,
-		InstrumentVersionMark: VERSION,
+		Mode: runtime.InstrumentMode_ForceAndIgnoreMark,
 	})
 	if err != nil {
 		return err
@@ -76,28 +74,6 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 	return nil
 }
 
-func replaceBuildIgnore(content []byte) ([]byte, error) {
-	const buildIgnore = "//go:build ignore"
-
-	// buggy: content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
-	return replaceMarkerNewline(content, []byte(buildIgnore))
-}
-
-// content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
-func replaceMarkerNewline(content []byte, marker []byte) ([]byte, error) {
-	idx := bytes.Index(content, marker)
-	if idx < 0 {
-		return nil, fmt.Errorf("missing %s", string(marker))
-	}
-	idx += len(marker)
-	if idx < len(content) && content[idx] == '\r' {
-		idx++
-	}
-	if idx < len(content) && content[idx] == '\n' {
-		idx++
-	}
-	return content[idx:], nil
-}
 func checkRevisionChanged(coreRevisionFile string, currentCoreRevision string) (bool, error) {
 	savedCoreRevision, err := readOrEmpty(coreRevisionFile)
 	if err != nil {

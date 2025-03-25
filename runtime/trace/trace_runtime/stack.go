@@ -1,12 +1,15 @@
 package trace_runtime
 
-import "time"
+import (
+	"time"
+)
 
 type Stack struct {
 	Begin time.Time
 	MaxID int
 
-	OutputFile string
+	hasStartedTracing bool
+	OutputFile        string
 
 	Roots []*StackEntry
 	Top   *StackEntry
@@ -14,8 +17,10 @@ type Stack struct {
 
 	Data map[interface{}]interface{}
 
-	OnEnter func(entry *StackEntry, pc uintptr, args StackArgs)
-	OnExit  func(entry *StackEntry, pc uintptr, results []Field)
+	// pc->mock
+	mock map[uintptr][]*mockHolder
+
+	inspecting func(pc uintptr, recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{})
 }
 
 type StackEntryData map[interface{}]interface{}
@@ -34,8 +39,9 @@ type StackEntry struct {
 	File     string
 	Line     int
 
-	Panic bool
-	Error string
+	HitMock bool
+	Panic   bool
+	Error   string
 
 	Args    interface{}
 	Results interface{}
@@ -51,8 +57,8 @@ func AttachStack(stack *Stack) {
 		panic("requires stack")
 	}
 	curg := GetG()
-	st := curg.Get(stackKey)
-	if st != nil {
+	prevStack := curg.Get(stackKey)
+	if prevStack != nil {
 		panic("stack already attached")
 	}
 
@@ -65,6 +71,17 @@ func GetStack() *Stack {
 		return nil
 	}
 	return stack.(*Stack)
+}
+
+func GetOrAttachStack() *Stack {
+	g := GetG()
+	prevStack := g.Get(stackKey)
+	if prevStack != nil {
+		return prevStack.(*Stack)
+	}
+	stack := &Stack{}
+	g.Set(stackKey, stack)
+	return stack
 }
 
 func DetachStack() {

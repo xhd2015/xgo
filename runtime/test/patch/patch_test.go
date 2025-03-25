@@ -8,14 +8,8 @@ import (
 	"github.com/xhd2015/xgo/runtime/mock"
 )
 
-func greet(s string) string {
-	return "hello " + s
-}
-
-func greetVaradic(s ...string) string {
-	return "hello " + strings.Join(s, ",")
-}
-
+// go install github.com/xhd2015/kool@latest
+// kool with-go1.19.13 go run -tags dev ./cmd/xgo test --log-debug --project-dir runtime/test -run TestPatchSimpleFunc ./patch
 func TestPatchSimpleFunc(t *testing.T) {
 	mock.Patch(greet, func(s string) string {
 		return "mock " + s
@@ -38,15 +32,7 @@ func TestPatchVaradicFunc(t *testing.T) {
 	}
 }
 
-type struct_ struct {
-	s string
-}
-
-func (c *struct_) greet() string {
-	return "hello " + c.s
-}
-
-func TestPatchMethod(t *testing.T) {
+func TestPatchMethodShouldMatchSameReceiver(t *testing.T) {
 	ins := &struct_{
 		s: "world",
 	}
@@ -54,6 +40,36 @@ func TestPatchMethod(t *testing.T) {
 		return "mock " + ins.s
 	})
 
+	res := ins.greet()
+	if res != "mock world" {
+		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)
+	}
+}
+
+func TestPatchMethodShouldNotMatchDifferentReceiver(t *testing.T) {
+	ins := &struct_{
+		s: "world",
+	}
+	mock.Patch(ins.greet, func() string {
+		return "mock " + ins.s
+	})
+
+	ins2 := &struct_{
+		s: "world",
+	}
+	res := ins2.greet()
+	if res != "hello world" {
+		t.Fatalf("expect patched result to be %q, actual: %q", "hello world", res)
+	}
+}
+
+func TestPatchTypeMethod(t *testing.T) {
+	mock.Patch((*struct_).greet, func(s *struct_) string {
+		return "mock " + s.s
+	})
+	ins := &struct_{
+		s: "world",
+	}
 	res := ins.greet()
 	if res != "mock world" {
 		t.Fatalf("expect patched result to be %q, actual: %q", "mock world", res)

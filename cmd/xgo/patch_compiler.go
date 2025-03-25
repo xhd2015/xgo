@@ -91,7 +91,7 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 	if err != nil {
 		return fmt.Errorf("patching noder: %w", err)
 	}
-	if goVersion.Major == GO_MAJOR_1 && (goVersion.Minor == GO_VERSION_18 || goVersion.Minor == GO_VERSION_19) {
+	if goVersion.Major == goinfo.GO_MAJOR_1 && (goVersion.Minor == goinfo.GO_VERSION_18 || goVersion.Minor == goinfo.GO_VERSION_19) {
 		err := poatchIRGenericGen(goroot, goVersion)
 		if err != nil {
 			return fmt.Errorf("patching generic trap: %w", err)
@@ -121,16 +121,16 @@ func getInternalPatch(goroot string, subDirs ...string) string {
 }
 
 func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major > 1 || goVersion.Minor >= GO_VERSION_22 {
+	if goVersion.Major > 1 || goVersion.Minor >= goinfo.GO_VERSION_22 {
 		return nil
 	}
 	var fragments []string
 
 	if goVersion.Major == 1 {
-		if goVersion.Minor <= GO_VERSION_21 {
+		if goVersion.Minor <= goinfo.GO_VERSION_21 {
 			fragments = append(fragments, patch.NodesGen)
 		}
-		if goVersion.Minor <= GO_VERSION_17 {
+		if goVersion.Minor <= goinfo.GO_VERSION_17 {
 			fragments = append(fragments, patch.Nodes_Inspect_117)
 		}
 	}
@@ -143,15 +143,15 @@ func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
 
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	file := filepath.Join(goroot, filepath.Join(gcMain...))
-	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= GO_VERSION_16
-	go117 := goVersion.Major == 1 && goVersion.Minor == GO_VERSION_17
-	go118 := goVersion.Major == 1 && goVersion.Minor == GO_VERSION_18
-	go119 := goVersion.Major == 1 && goVersion.Minor == GO_VERSION_19
-	go119AndUnder := goVersion.Major == 1 && goVersion.Minor <= GO_VERSION_19
-	go120 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_20
-	go121 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_21
-	go122 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_22
-	go123 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_23
+	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= goinfo.GO_VERSION_16
+	go117 := goVersion.Major == 1 && goVersion.Minor == goinfo.GO_VERSION_17
+	go118 := goVersion.Major == 1 && goVersion.Minor == goinfo.GO_VERSION_18
+	go119 := goVersion.Major == 1 && goVersion.Minor == goinfo.GO_VERSION_19
+	go119AndUnder := goVersion.Major == 1 && goVersion.Minor <= goinfo.GO_VERSION_19
+	go120 := goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor == goinfo.GO_VERSION_20
+	go121 := goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor == goinfo.GO_VERSION_21
+	go122 := goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor == goinfo.GO_VERSION_22
+	go123 := goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor == goinfo.GO_VERSION_23
 
 	return instrument_patch.EditFile(file, func(content string) (string, error) {
 		imports := []string{
@@ -271,24 +271,24 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	files := []string(noderFile)
 	var noderFiles string
-	if goVersion.Major == GO_MAJOR_1 {
+	if goVersion.Major == goinfo.GO_MAJOR_1 {
 		minor := goVersion.Minor
-		if minor == GO_VERSION_16 {
+		if minor == goinfo.GO_VERSION_16 {
 			files = []string(noderFile16)
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == GO_VERSION_17 {
+		} else if minor == goinfo.GO_VERSION_17 {
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == GO_VERSION_18 {
+		} else if minor == goinfo.GO_VERSION_18 {
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == GO_VERSION_19 {
+		} else if minor == goinfo.GO_VERSION_19 {
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == GO_VERSION_20 {
+		} else if minor == goinfo.GO_VERSION_20 {
 			noderFiles = patch.NoderFiles_1_20
-		} else if minor == GO_VERSION_21 {
+		} else if minor == goinfo.GO_VERSION_21 {
 			noderFiles = patch.NoderFiles_1_21
-		} else if minor == GO_VERSION_22 {
+		} else if minor == goinfo.GO_VERSION_22 {
 			noderFiles = patch.NoderFiles_1_21
-		} else if minor == GO_VERSION_23 {
+		} else if minor == goinfo.GO_VERSION_23 {
 			// TODO: verify
 			noderFiles = patch.NoderFiles_1_21
 		}

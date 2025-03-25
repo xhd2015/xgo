@@ -14,6 +14,7 @@ import (
 	"time"
 
 	cmd_support "github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/instrument"
 	"github.com/xhd2015/xgo/support/instrument/overlay"
 
 	debug_support "github.com/xhd2015/xgo/support/debug"
@@ -527,6 +528,10 @@ func handleBuild(cmd string, args []string) error {
 				overlayFS.Override(k, v)
 			}
 		}
+		err = instrument.LinkRuntime(projectDir, overlayFS)
+		if err != nil {
+			return err
+		}
 
 		err = InstrumentUserCode(projectDir, overlayFS, mainModule)
 		if err != nil {
@@ -575,6 +580,12 @@ func handleBuild(cmd string, args []string) error {
 				err = goOverlay.Write(overlayFile)
 				if err != nil {
 					return err
+				}
+				if projectDir != "" {
+					overlayFile, err = filepath.Abs(overlayFile)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}

@@ -10,7 +10,7 @@ import (
 	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
-//go:embed xgo_trap.go.txt
+//go:embed xgo_trap_template.go
 var xgoTrapFile string
 
 var instrumentMarkPath = patch.FilePath{"xgo_trap_instrument_mark.txt"}
@@ -19,8 +19,16 @@ var runtime2Path = patch.FilePath{"src", "runtime", "runtime2.go"}
 
 var jsonEncodingPath = patch.FilePath{"src", "encoding", "json", "encode.go"}
 
+type InstrumentMode int
+
+const (
+	InstrumentMode_UseMark InstrumentMode = iota
+	InstrumentMode_Force
+	InstrumentMode_ForceAndIgnoreMark
+)
+
 type InstrumentRuntimeOptions struct {
-	Force                 bool
+	Mode                  InstrumentMode
 	InstrumentVersionMark string
 }
 
@@ -45,7 +53,7 @@ func InstrumentRuntime(goroot string, opts InstrumentRuntimeOptions) error {
 	}
 
 	markFile := instrumentMarkPath.JoinPrefix(goroot)
-	if !opts.Force {
+	if opts.Mode == InstrumentMode_UseMark {
 		markContent, statErr := os.ReadFile(markFile)
 		if statErr != nil {
 			if !os.IsNotExist(statErr) {
@@ -74,12 +82,25 @@ func InstrumentRuntime(goroot string, opts InstrumentRuntimeOptions) error {
 		return fmt.Errorf("instrument json encoding: %w", err)
 	}
 
-	err = os.WriteFile(xgoTrapFilePath.JoinPrefix(goroot), []byte(xgoTrapFile), 0644)
+	// instrument xgo_trap.go
+	xgoTrapFileStripped, err := patch.RemoveBuildIgnore([]byte(xgoTrapFile))
+	if err != nil {
+		return fmt.Errorf("remove build ignore: %w", err)
+	}
+	xgoTrapFileStripped = AppendGetFuncNameImpl(goVersion, xgoTrapFileStripped)
+
+	err = os.WriteFile(xgoTrapFilePath.JoinPrefix(goroot), xgoTrapFileStripped, 0644)
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(markFile, []byte(instrumentMark), 0644)
+	if opts.Mode != InstrumentMode_ForceAndIgnoreMark {
+		err := os.WriteFile(markFile, []byte(instrumentMark), 0644)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func instrumentRuntime2(goroot string, goMajor int, goMinor int) error {

@@ -1,0 +1,15 @@
+package goinfo
+
+const (
+	GO_MAJOR_1    = 1
+	GO_VERSION_16 = 16 // unsupported
+	GO_VERSION_17 = 17
+	GO_VERSION_18 = 18
+	GO_VERSION_19 = 19
+	GO_VERSION_20 = 20
+	GO_VERSION_21 = 21
+	GO_VERSION_22 = 22
+	GO_VERSION_23 = 23
+	GO_VERSION_24 = 24
+	GO_VERSION_25 = 25
+)

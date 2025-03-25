@@ -11,18 +11,11 @@ import (
 	"github.com/xhd2015/xgo/runtime/trace/constants"
 )
 
-func nothing() {}
-
-func SetupTrap() {
-	runtime.XgoSetTrap(trap)
+func init() {
+	Runtime_XgoSetTrap(trap)
 }
 
-// type XgoField struct {
-// 	Name string
-// 	Ptr  interface{}
-// }
-
-func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoField) (func(),bool) {
+func trap(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool) {
 	// skip 2: <user func> -> runtime.XgoTrap -> trap
 	const SKIP = 2
 
@@ -33,19 +26,45 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 
 	fnName := funcInfo.Name()
 
-	stack := GetStack()
+	var mock func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{})
+
 	var isStart bool
-	if stack == nil {
+
+	stack := GetStack()
+	if stack != nil {
+		if stack.inspecting != nil {
+			stack.inspecting(pc, recvName, recvPtr, argNames, args, resultNames, results)
+			return nil, true
+		}
+		wantPtr, mockFn := stack.getLastMock(funcInfo.Entry())
+		if mockFn != nil && (wantPtr == nil || (recvPtr != nil && sameReceiver(recvPtr, wantPtr))) {
+			mock = mockFn
+		}
+		if !stack.hasStartedTracing {
+			if fnName == constants.START_XGO_TRACE {
+				stack.hasStartedTracing = true
+				isStart = true
+			}
+		}
+		if !stack.hasStartedTracing {
+			// without tracing, mock becomes simpler
+			if mock != nil {
+				mock(recvName, recvPtr, argNames, args, resultNames, results)
+				return nil, true
+			}
+			return nil, false
+		}
+	} else {
 		if fnName != constants.START_XGO_TRACE {
-			return nil,false
+			return nil, false
 		}
 		isStart = true
 		stack = &Stack{
-			Begin: time.Now(),
+			Begin:             time.Now(),
+			hasStartedTracing: true,
 		}
 		AttachStack(stack)
 	}
-
 	var cur *StackEntry
 	var oldTop *StackEntry
 
@@ -67,21 +86,18 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 		oldTop.Children = append(oldTop.Children, cur)
 	}
 	stack.Top = cur
-	if stack.OnEnter != nil {
-		stack.OnEnter(cur, pc, nil)
-	}
 
 	if isStart {
 		var outputFile string
-		var config runtime.XgoField
-		for _, field := range args {
-			if field.Name == "config" {
-				config = field
+		var config interface{}
+		for i, arg := range args {
+			if argNames[i] == "config" {
+				config = arg
 				break
 			}
 		}
-		if config.Ptr != nil {
-			rvalue := reflect.ValueOf(config.Ptr)
+		if config != nil {
+			rvalue := reflect.ValueOf(config)
 			if rvalue.Kind() == reflect.Ptr {
 				rvalue = rvalue.Elem()
 			}
@@ -97,45 +113,46 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 		}
 		if outputFile == "" {
 			DetachStack()
-			return nil,false
+			return nil, false
 		}
 		stack.OutputFile = outputFile
 	}
 
 	// fmt.Fprintf(os.Stderr, "%sargs: %s\n", prefix, string(argsJSON))
-	argsNoCtx := tryRemoveFirstCtx(args)
+	argNamesNoCtx, argsNoCtx := tryRemoveFirstCtx(argNames, args)
+	marshalNames := argNamesNoCtx
 	marshalArgs := argsNoCtx
-	if recv.Ptr != nil {
-		marshalArgs = make([]runtime.XgoField, 1+len(argsNoCtx))
-		marshalArgs[0] = recv
+	if recvPtr != nil {
+		marshalNames = make([]string, 1+len(argNamesNoCtx))
+		marshalArgs = make([]interface{}, 1+len(argsNoCtx))
+		marshalNames[0] = recvName
+		marshalArgs[0] = recvPtr
+		copy(marshalNames[1:], argNamesNoCtx)
 		copy(marshalArgs[1:], argsNoCtx)
 	}
-	cur.Args = json.RawMessage(marshalNoError(StructValue(marshalArgs)))
+	cur.Args = json.RawMessage(marshalNoError(newStructValue(marshalNames, marshalArgs)))
 	stack.Depth++
 
-	return func() {
+	hitMock := mock != nil
+	post := func() {
 		cur.EndNs = time.Now().UnixNano() - stack.Begin.UnixNano()
+		cur.HitMock = hitMock
 		var hasPanic bool
-		if pe := runtime.XgoPeekPanic(); pe != nil {
+		if pe := Runtime_XgoPeekPanic(); pe != nil {
 			hasPanic = true
 			cur.Panic = true
 			cur.Error = fmt.Sprint(pe)
 		}
 
-		resultsNoErr, resErr := trySplitLastError(results)
-		cur.Results = json.RawMessage(marshalNoError(StructValue(resultsNoErr)))
+		resultNamesNoErr, resultsNoErr, resErr := trySplitLastError(resultNames, results)
+		cur.Results = json.RawMessage(marshalNoError(newStructValue(resultNamesNoErr, resultsNoErr)))
 		if !hasPanic && resErr != nil {
 			cur.Error = resErr.Error()
 		}
 
 		stack.Top = oldTop
 		stack.Depth--
-		// fmt.Fprintf(os.Stderr, "%sreturn %s\n", prefix, fnName)
-		if stack.OnExit != nil {
-			// TODO: result
-			stack.OnExit(cur, pc, nil)
-		}
-		if oldTop == nil {
+		if isStart {
 			exportedStack := ExportStack(stack)
 			exportedStackJSON := marshalNoError(exportedStack)
 			err := os.WriteFile(stack.OutputFile, exportedStackJSON, 0644)
@@ -146,5 +163,11 @@ func trap(recv runtime.XgoField, args []runtime.XgoField, results []runtime.XgoF
 			// fmt.Fprintf(os.Stderr, "trace end\n")
 			DetachStack()
 		}
-	},false
+	}
+	if hitMock {
+		defer post()
+		mock(recvName, recvPtr, argNames, args, resultNames, results)
+		return nil, true
+	}
+	return post, false
 }

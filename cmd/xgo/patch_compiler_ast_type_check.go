@@ -322,7 +322,7 @@ var syntaxPrinterPatch = &FilePatch{
 			p.printRawNode(n.X)
 			`,
 			CheckGoVersion: func(goVersion *goinfo.GoVersion) bool {
-				return goVersion.Major == GO_MAJOR_1 && goVersion.Minor <= GO_VERSION_23
+				return goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor <= goinfo.GO_VERSION_23
 			},
 		},
 	},
@@ -383,13 +383,13 @@ func patchCompilerForConstTrap(goroot string, goVersion *goinfo.GoVersion) error
 	if err != nil {
 		return err
 	}
-	if goVersion.Major == GO_MAJOR_1 && goVersion.Minor <= GO_VERSION_21 {
+	if goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor <= goinfo.GO_VERSION_21 {
 		err = noderExprPatch.Apply(goroot, goVersion)
 		if err != nil {
 			return err
 		}
 	}
-	if goVersion.Major == GO_MAJOR_1 && goVersion.Minor <= GO_VERSION_23 {
+	if goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor <= goinfo.GO_VERSION_23 {
 		err = syntaxPrinterPatch.Apply(goroot, goVersion)
 		if err != nil {
 			return err

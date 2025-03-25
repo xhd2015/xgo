@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"strconv"
 	"strings"
 
 	"github.com/xhd2015/xgo/support/edit/goedit"
@@ -86,7 +87,7 @@ func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File) bool {
 			receiverName = name
 		}
 
-		receiverAddr := formatField(receiverName)
+		receiverName, receiverAddr := toNameAddr(receiverName)
 		// Process parameter names
 		modifiedParamNames, paraNames := processParamNames(funcDecl, fset, editor)
 		if modifiedParamNames {
@@ -98,8 +99,8 @@ func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File) bool {
 			hasResNamesModified = true
 		}
 
-		paramAddrs := toAddrs(paraNames)
-		resultAddrs := toAddrs(resNames)
+		paramNames, paramAddrs := toNameAddrs(paraNames)
+		resultNames, resultAddrs := toNameAddrs(resNames)
 
 		// Only process functions with a body
 		// Get position right after the opening brace
@@ -107,16 +108,19 @@ func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File) bool {
 		line := fset.Position(pos).Line
 
 		// Insert the trap statement with a semicolon:
-		//     post, stop := XgoTrap(&recv, &args, &results)
+		//     post, stop := XgoTrap(recvName, &recv,argNames, &args,resultNames, &results)
 		//     if post != nil {
 		//          defer post()
 		//     }
 		//     if stop {
 		//        return
 		//     }
-		editor.Insert(pos, fmt.Sprintf("__xgo_post_%d, __xgo_stop_%d := __xgo_trap_runtime.XgoTrap(%s,[]__xgo_trap_runtime.XgoField{%s},[]__xgo_trap_runtime.XgoField{%s});if __xgo_post_%d!=nil { defer __xgo_post_%d(); };if __xgo_stop_%d { return; };",
+		// trap: func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool)
+		editor.Insert(pos, fmt.Sprintf("__xgo_post_%d, __xgo_stop_%d := __xgo_trap_runtime.XgoTrap(%s,%s,[]string{%s},[]interface{}{%s},[]string{%s},[]interface{}{%s});if __xgo_post_%d!=nil { defer __xgo_post_%d(); };if __xgo_stop_%d { return; };",
 			line, line,
-			receiverAddr, strings.Join(paramAddrs, ","), strings.Join(resultAddrs, ","),
+			receiverName, receiverAddr,
+			strings.Join(paramNames, ","), strings.Join(paramAddrs, ","),
+			strings.Join(resultNames, ","), strings.Join(resultAddrs, ","),
 			line, line, line,
 		))
 		hasInsertedTrap = true
@@ -136,19 +140,21 @@ func fmtLineDirective(srcFile string, line int) string {
 	return fmt.Sprintf("//line %s:%d", srcFile, line)
 }
 
-func formatField(name string) string {
+func toNameAddr(name string) (string, string) {
 	if name == "" {
-		return "__xgo_trap_runtime.XgoField{}"
+		return `""`, "nil"
 	}
-	return fmt.Sprintf("__xgo_trap_runtime.XgoField{%q,&%s}", name, name)
+	return strconv.Quote(name), "&" + name
 }
 
-func toAddrs(names []string) []string {
+func toNameAddrs(names []string) ([]string, []string) {
+	varNames := make([]string, len(names))
 	addrs := make([]string, len(names))
 	for i, name := range names {
-		addrs[i] = fmt.Sprintf("{%q,&%s}", name, name)
+		varNames[i] = strconv.Quote(name)
+		addrs[i] = "&" + name
 	}
-	return addrs
+	return varNames, addrs
 }
 
 // processReceiverNames processes a function declaration's receiver list,
