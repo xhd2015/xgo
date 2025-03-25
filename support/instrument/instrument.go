@@ -6,40 +6,42 @@ import (
 
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/instrument/inject"
+	"github.com/xhd2015/xgo/support/instrument/overlay"
 	"github.com/xhd2015/xgo/support/instrument/runtime"
 )
 
-// create an overlay: file -> content
+// create an overlay: abs file -> content
 type Overlay map[string]string
 
-func InstrumentUserCode(projectRoot string, buildArgs []string) (Overlay, error) {
+func InstrumentUserCode(projectRoot string, overlayFS overlay.Overlay, buildArgs []string) error {
 	projectRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	overlay := make(Overlay)
+	// overlay := make(Overlay)
 
 	files, err := goinfo.ListRelativeFiles(projectRoot, buildArgs)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, file := range files {
 		if strings.HasSuffix(file, "_test.go") {
 			continue
 		}
-		content, ok, err := inject.InjectRuntimeTrap(file)
+		absFile := overlay.AbsFile(filepath.Join(projectRoot, file))
+		content, ok, err := inject.InjectRuntimeTrap(absFile, overlayFS)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !ok {
 			continue
 		}
-		overlay[filepath.Join(projectRoot, file)] = string(content)
+		overlayFS.OverrideContent(absFile, string(content))
 	}
 
-	return overlay, nil
+	return nil
 }
 
-func InstrumentRuntime(goroot string) error {
-	return runtime.InstrumentRuntime(goroot)
+func InstrumentRuntime(goroot string, opts runtime.InstrumentRuntimeOptions) error {
+	return runtime.InstrumentRuntime(goroot, opts)
 }

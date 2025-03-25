@@ -97,3 +97,7 @@ func (b *Buffer) Bytes() []byte {
 func (b *Buffer) String() string {
 	return string(b.Bytes())
 }
+
+func (b *Buffer) HasEdits() bool {
+	return len(b.q) > 0
+}

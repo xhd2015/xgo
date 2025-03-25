@@ -5,10 +5,10 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"strings"
 
 	"github.com/xhd2015/xgo/support/edit/goedit"
+	"github.com/xhd2015/xgo/support/instrument/overlay"
 )
 
 const (
@@ -23,19 +23,17 @@ const (
 // Returns the modified content.
 // insert runtime.XgoTrap(), example:
 //
-//	func add(a, b int) int {
-//		return a+b
-//	}
+//		func add(a, b int) int {
+//			return a+b
+//		}
 //
-//  -->
+//	 -->
 //
-//	func add(a, b int) int {defer runtime.XgoTrap()();
-//		return a+b
-//	}
-
-func InjectRuntimeTrap(filePath string) ([]byte, bool, error) {
-	// Read the file content
-	content, err := os.ReadFile(filePath)
+//		func add(a, b int) int {defer runtime.XgoTrap()();
+//			return a+b
+//		}
+func InjectRuntimeTrap(filePath overlay.AbsFile, overlayFS overlay.Overlay) ([]byte, bool, error) {
+	_, content, err := overlayFS.Read(filePath)
 	if err != nil {
 		return nil, false, err
 	}
@@ -44,7 +42,7 @@ func InjectRuntimeTrap(filePath string) ([]byte, bool, error) {
 	fset := token.NewFileSet()
 
 	// Parse the file
-	file, err := parser.ParseFile(fset, filePath, content, parser.ParseComments)
+	file, err := parser.ParseFile(fset, string(filePath), content, parser.ParseComments)
 	if err != nil {
 		return nil, false, err
 	}
@@ -52,6 +50,17 @@ func InjectRuntimeTrap(filePath string) ([]byte, bool, error) {
 	// Create a new editor - convert content to string for goedit.New
 	editor := goedit.New(fset, string(content))
 
+	hasEdited := EditInjectRuntimeTrap(editor, file)
+	if !hasEdited {
+		return nil, false, nil
+	}
+	// prefix the modified content with line directive
+	editor.Buffer().Insert(0, fmtLineDirective(string(filePath), 1)+"\n")
+	return editor.Buffer().Bytes(), true, nil
+}
+
+func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File) bool {
+	fset := editor.Fset()
 	var hasInsertedTrap bool
 	var hasAmendedReceiverName bool
 	var hasResNamesModified bool
@@ -114,14 +123,11 @@ func InjectRuntimeTrap(filePath string) ([]byte, bool, error) {
 		return true
 	})
 	if !hasInsertedTrap && !hasAmendedReceiverName && !hasResNamesModified && !hasParamNamesModified {
-		return nil, false, nil
+		return false
 	}
 
 	editor.Insert(file.Name.End(), `;import __xgo_trap_runtime "runtime"`)
-
-	// prefix the modified content with line directive
-	editedCode := editor.String()
-	return []byte(fmtLineDirective(filePath, 1) + "\n" + editedCode), true, nil
+	return true
 }
 
 // for line directive, check https://github.com/golang/go/blob/24b395119b4df7f16915b9f01a6aded647b79bbd/src/cmd/compile/doc.go#L171

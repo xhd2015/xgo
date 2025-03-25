@@ -15,6 +15,7 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/instrument/overlay"
 )
 
 const RUNTIME_MODULE = "github.com/xhd2015/xgo/runtime"
@@ -94,12 +95,12 @@ func importRuntimeDep(test bool, mayHaveCover bool, goroot string, goBinary stri
 		return nil, err
 	}
 
-	replace := make(map[string]string, len(modReplace)+len(fileReplace))
+	replace := make(map[overlay.AbsFile]overlay.AbsFile, len(modReplace)+len(fileReplace))
 	for k, v := range modReplace {
-		replace[k] = v
+		replace[overlay.AbsFile(k)] = overlay.AbsFile(v)
 	}
 	for k, v := range fileReplace {
-		replace[k] = v
+		replace[overlay.AbsFile(k)] = overlay.AbsFile(v)
 	}
 
 	overlayFile, err := createOverlayFile(tmpProjectDir, replace)
@@ -170,10 +171,6 @@ func checkNeedLoadDep(goroot string, goBinary string, projectRoot string, vendor
 		return true, nil
 	}
 	return false, nil
-}
-
-type Overlay struct {
-	Replace map[string]string
 }
 
 type dependencyInfo struct {
@@ -440,14 +437,10 @@ func isLocalReplace(modPath string) bool {
 	return false
 }
 
-func createOverlayFile(tmpProjectDir string, replace map[string]string) (string, error) {
-	overlay := Overlay{Replace: replace}
-	overlayData, err := json.Marshal(overlay)
-	if err != nil {
-		return "", err
-	}
+func createOverlayFile(tmpProjectDir string, replace map[overlay.AbsFile]overlay.AbsFile) (string, error) {
 	overlayFile := filepath.Join(tmpProjectDir, "overlay.json")
-	err = os.WriteFile(overlayFile, overlayData, 0755)
+	goOverlay := overlay.GoOverlay{Replace: replace}
+	err := goOverlay.Write(overlayFile)
 	if err != nil {
 		return "", err
 	}

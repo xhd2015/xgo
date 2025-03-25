@@ -15,6 +15,7 @@ import (
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/instrument/patch"
+	"github.com/xhd2015/xgo/support/instrument/runtime"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 
@@ -49,16 +50,27 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 		return nil
 	}
 
-	// runtime
-	err := patchRuntimeAndTesting(origGoroot, goroot, goVersion)
+	// instrument runtime
+	err := runtime.InstrumentRuntime(goroot, runtime.InstrumentRuntimeOptions{
+		Force:                 isDevelopment || resetOrCoreRevisionChanged,
+		InstrumentVersionMark: VERSION,
+	})
 	if err != nil {
 		return err
 	}
 
-	// compiler
-	err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
-	if err != nil {
-		return err
+	if V_DEPRECATED {
+		// runtime
+		err := patchRuntimeAndTesting(origGoroot, goroot, goVersion)
+		if err != nil {
+			return err
+		}
+
+		// patch compiler
+		err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -112,6 +124,7 @@ func readOrEmpty(file string) (string, error) {
 	return s, nil
 }
 
+// syncGoroot copies goroot to instrumentGoroot
 // NOTE: flagA never cause goroot to reset
 func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile string) error {
 	// check if src goroot has src/runtime
@@ -165,7 +178,7 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 		// need copy, delete target dst dir first
 		// TODO: use git worktree add if .git exists
 		err = filecopy.NewOptions().
-			Concurrent(2). // 10 is too much
+			Concurrent(1). // 10 is too much
 			CopyReplaceDir(goroot, instrumentGoroot)
 		if err != nil {
 			return err
@@ -211,6 +224,8 @@ func statNoErr(f string) bool {
 	_, err := os.Stat(f)
 	return err == nil
 }
+
+// Deprecated:
 func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, xgoBin string, debugPkg string, logCompile bool, noSetup bool, debugWithDlv bool) (compilerChanged bool, toolExecFlag string, err error) {
 	var execToolCmd []string
 	if !noSetup {

@@ -13,16 +13,19 @@ import (
 //go:embed xgo_trap.go.txt
 var xgoTrapFile string
 
-const instrumentMark = "v0.0.1"
-
 var instrumentMarkPath = patch.FilePath{"xgo_trap_instrument_mark.txt"}
 var xgoTrapFilePath = patch.FilePath{"src", "runtime", "xgo_trap.go"}
 var runtime2Path = patch.FilePath{"src", "runtime", "runtime2.go"}
 
 var jsonEncodingPath = patch.FilePath{"src", "encoding", "json", "encode.go"}
 
+type InstrumentRuntimeOptions struct {
+	Force                 bool
+	InstrumentVersionMark string
+}
+
 // only support go1.19 for now
-func InstrumentRuntime(goroot string) error {
+func InstrumentRuntime(goroot string, opts InstrumentRuntimeOptions) error {
 	srcDir := filepath.Join(goroot, "src")
 
 	srcStat, statErr := os.Stat(srcDir)
@@ -36,15 +39,22 @@ func InstrumentRuntime(goroot string) error {
 		return fmt.Errorf("GOROOT/src is not a directory, please use newer go distribution: %s", srcDir)
 	}
 
-	markFile := instrumentMarkPath.JoinPrefix(goroot)
-	markContent, statErr := os.ReadFile(markFile)
-	if statErr != nil {
-		if !os.IsNotExist(statErr) {
-			return statErr
-		}
+	instrumentMark := opts.InstrumentVersionMark
+	if instrumentMark == "" {
+		instrumentMark = "v0.0.1"
 	}
-	if string(markContent) == instrumentMark {
-		return nil
+
+	markFile := instrumentMarkPath.JoinPrefix(goroot)
+	if !opts.Force {
+		markContent, statErr := os.ReadFile(markFile)
+		if statErr != nil {
+			if !os.IsNotExist(statErr) {
+				return statErr
+			}
+		}
+		if string(markContent) == instrumentMark {
+			return nil
+		}
 	}
 	goVersionStr, err := goinfo.GetGoVersionOutput(filepath.Join(goroot, "bin", "go"))
 	if err != nil {

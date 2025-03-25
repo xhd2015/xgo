@@ -155,7 +155,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 		newProc := `newg := newproc1(fn, gp, pc, false, waitReasonZero)`
 		if goVersion.Major == GO_MAJOR_1 {
 			if goVersion.Minor <= GO_VERSION_17 {
-				// to avoid typo check
+				// to bypass typo check
 				const size = "s" + "i" + "z"
 				procDecl = `func newproc(` + size + ` int32`
 				newProc = `newg := newproc1(fn, argp, ` + size + `, gp, pc)`

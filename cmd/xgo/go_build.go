@@ -16,6 +16,7 @@ const GO_VERSION_21 = 21
 const GO_VERSION_22 = 22
 const GO_VERSION_23 = 23
 
+// Deprecated: since xgo v1.1.0, xgo does not instrument the compiler anymore
 func buildCompiler(goroot string, output string) error {
 	args := []string{"build"}
 	if isDevelopment {
