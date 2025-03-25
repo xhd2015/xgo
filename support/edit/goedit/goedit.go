@@ -18,6 +18,10 @@ func New(fset *token.FileSet, content string) *Edit {
 	}
 }
 
+func (c *Edit) Fset() *token.FileSet {
+	return c.fset
+}
+
 func (c *Edit) Delete(start token.Pos, end token.Pos) {
 	c.buf.Delete(c.offsetOf(start), c.offsetOf(end))
 }
@@ -28,6 +32,10 @@ func (c *Edit) Insert(start token.Pos, content string) {
 
 func (c *Edit) Replace(start token.Pos, end token.Pos, content string) {
 	c.buf.Replace(c.offsetOf(start), c.offsetOf(end), content)
+}
+
+func (c *Edit) Buffer() *edit.Buffer {
+	return c.buf
 }
 
 func (c *Edit) String() string {

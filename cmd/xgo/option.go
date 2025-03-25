@@ -303,7 +303,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			setupDev = true
 			continue
 		}
-		if arg == "--build-compiler" {
+		if V_DEPRECATED && arg == "--build-compiler" {
 			buildCompiler = true
 			continue
 		}
@@ -329,10 +329,12 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			continue
 		}
 
-		debugCompileVal, ok := tryParseOption("--debug-compile", args, &i)
-		if ok {
-			debugCompile = &debugCompileVal
-			continue
+		if V_DEPRECATED {
+			debugCompileVal, ok := tryParseOption("--debug-compile", args, &i)
+			if ok {
+				debugCompile = &debugCompileVal
+				continue
+			}
 		}
 		debugVal, ok := tryParseOption("--debug", args, &i)
 		if ok {
