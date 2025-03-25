@@ -23,8 +23,19 @@ func ListPackages(dir string, mod string, args []string) ([]string, error) {
 	return lines, nil
 }
 
+// ListFiles list all go files, return a list of absolute paths
+// go list -e -json ./pkg
+func ListFiles(dir string, args []string) ([]string, error) {
+	return lisFiles(dir, false, args)
+}
+
 // ListRelativeFiles list all go files, return a list of relative paths
+// go list -e -json ./pkg
 func ListRelativeFiles(dir string, args []string) ([]string, error) {
+	return lisFiles(dir, true, args)
+}
+
+func lisFiles(dir string, relativeOnly bool, args []string) ([]string, error) {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
@@ -35,7 +46,7 @@ func ListRelativeFiles(dir string, args []string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var relFiles []string
+	var resultFiles []string
 	dec := json.NewDecoder(strings.NewReader(res))
 	for dec.More() {
 		// check 'go help list'
@@ -69,17 +80,20 @@ func ListRelativeFiles(dir string, args []string) ([]string, error) {
 					// in most cases this goFile is not absolute
 					absGoFile = filepath.Join(absPkgDir, goFile)
 				}
-
-				// this is just for compatibility
-				if !strings.HasPrefix(absGoFile, absDir) {
+				if relativeOnly {
+					// this is just for compatibility
+					if !strings.HasPrefix(absGoFile, absDir) {
+						continue
+					}
+					relFile := strings.TrimPrefix(absGoFile[len(absDir):], string(filepath.Separator))
+					if relFile != "" {
+						resultFiles = append(resultFiles, relFile)
+					}
 					continue
 				}
-				relFile := strings.TrimPrefix(absGoFile[len(absDir):], string(filepath.Separator))
-				if relFile != "" {
-					relFiles = append(relFiles, relFile)
-				}
+				resultFiles = append(resultFiles, absGoFile)
 			}
 		}
 	}
-	return relFiles, nil
+	return resultFiles, nil
 }

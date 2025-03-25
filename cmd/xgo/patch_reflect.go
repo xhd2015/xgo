@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/support/goinfo"
+	instrument_patch "github.com/xhd2015/xgo/support/instrument/patch"
 	"github.com/xhd2015/xgo/support/transform"
 )
 
@@ -33,7 +34,7 @@ func addReflectFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		return err
 	}
 
-	content, err = replaceBuildIgnore(content)
+	content, err = instrument_patch.RemoveBuildIgnore(content)
 	if err != nil {
 		return fmt.Errorf("file %s: %w", filepath.Base(dstFile), err)
 	}

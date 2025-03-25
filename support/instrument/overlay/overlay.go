@@ -57,10 +57,14 @@ func (o Overlay) Read(absFile AbsFile) (hitContent bool, content string, err err
 }
 
 func (o Overlay) MakeGoOverlay(overlayDir string) (*GoOverlay, error) {
+	absOverlayDir, err := filepath.Abs(overlayDir)
+	if err != nil {
+		return nil, err
+	}
 	replace := make(Replace, len(o))
 	for absFile, fo := range o {
 		if fo.hasOverriddenContent {
-			writeFile := filepath.Join(overlayDir, string(absFile))
+			writeFile := filepath.Join(absOverlayDir, string(absFile))
 			err := os.MkdirAll(filepath.Dir(writeFile), 0755)
 			if err != nil {
 				return nil, err

@@ -4,38 +4,37 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"runtime"
 	"runtime/debug"
 	"strings"
 )
 
-func tryRemoveFirstCtx(args []runtime.XgoField) []runtime.XgoField {
+func tryRemoveFirstCtx(argNames []string, args []interface{}) ([]string, []interface{}) {
 	if len(args) == 0 {
-		return args
+		return argNames, args
 	}
-	if _, ok := args[0].Ptr.(*context.Context); ok {
-		return args[1:]
+	if _, ok := args[1].(*context.Context); ok {
+		return argNames[1:], args[1:]
 	}
-	return args
+	return argNames, args
 }
 
-func trySplitLastError(results []runtime.XgoField) ([]runtime.XgoField, error) {
+func trySplitLastError(resultNames []string, results []interface{}) ([]string, []interface{}, error) {
 	n := len(results)
 	if n == 0 {
-		return results, nil
+		return resultNames, results, nil
 	}
 	res := results[n-1]
-	if res.Ptr == nil {
-		return results, nil
+	if res == nil {
+		return resultNames, results, nil
 	}
 
-	if ptrErr, ok := res.Ptr.(*error); ok {
+	if ptrErr, ok := res.(*error); ok {
 		if ptrErr == nil {
-			return results[:n-1], nil
+			return resultNames[:n-1], results[:n-1], nil
 		}
-		return results[:n-1], *ptrErr
+		return resultNames[:n-1], results[:n-1], *ptrErr
 	}
-	return results, nil
+	return resultNames, results, nil
 }
 
 func marshalNoError(v interface{}) (result []byte) {
@@ -69,16 +68,26 @@ func marshalNoError(v interface{}) (result []byte) {
 	return
 }
 
-type StructValue []runtime.XgoField
+type structValue struct {
+	Names  []string
+	Values []interface{}
+}
 
-func (c StructValue) MarshalJSON() ([]byte, error) {
-	fields := make([]string, len(c))
-	for i, v := range c {
-		val, err := json.Marshal(v.Ptr)
+func newStructValue(names []string, values []interface{}) *structValue {
+	return &structValue{
+		Names:  names,
+		Values: values,
+	}
+}
+
+func (c *structValue) MarshalJSON() ([]byte, error) {
+	fields := make([]string, len(c.Names))
+	for i, name := range c.Names {
+		val, err := json.Marshal(c.Values[i])
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal field %s: %w", v.Name, err)
+			return nil, fmt.Errorf("failed to marshal field %s: %w", name, err)
 		}
-		fields[i] = fmt.Sprintf("%q: %s", v.Name, val)
+		fields[i] = fmt.Sprintf("%q: %s", name, val)
 	}
 	return []byte(fmt.Sprintf("{%s}", strings.Join(fields, ","))), nil
 }

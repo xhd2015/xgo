@@ -100,7 +100,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		return false, err
 	}
 
-	content, err = replaceBuildIgnore(content)
+	content, err = instrument_patch.RemoveBuildIgnore(content)
 	if err != nil {
 		return false, fmt.Errorf("file %s: %w", filepath.Base(dstFile), err)
 	}
@@ -116,8 +116,14 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		content = bytes.ReplaceAll(content, entryPatchBytes, []byte("fn.entry"))
 	}
 
+	content = AppendGetFuncNameImpl(goVersion, content)
+
+	return true, os.WriteFile(dstFile, content, 0755)
+}
+
+func AppendGetFuncNameImpl(goVersion *goinfo.GoVersion, content []byte) []byte {
 	// func name patch
-	if goVersion.Major > GO_MAJOR_1 || goVersion.Minor > GO_VERSION_23 {
+	if goVersion.Major > goinfo.GO_MAJOR_1 || goVersion.Minor > goinfo.GO_VERSION_23 {
 		panic("should check the implementation of runtime.FuncForPC(pc).Name() to ensure __xgo_get_pc_name is not wrapped in print format above go1.23,it is confirmed that in go1.21,go1.22 and go1.23 the name is wrapped in funcNameForPrint(...).")
 	}
 	if goVersion.Major > 1 || goVersion.Minor >= 21 {
@@ -128,8 +134,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 			content = append(content, []byte(patch.RuntimeGetFuncName_Go117_120)...)
 		}
 	}
-
-	return true, os.WriteFile(dstFile, content, 0755)
+	return content
 }
 
 func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
@@ -153,15 +158,15 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 
 		procDecl := `func newproc(fn`
 		newProc := `newg := newproc1(fn, gp, pc, false, waitReasonZero)`
-		if goVersion.Major == GO_MAJOR_1 {
-			if goVersion.Minor <= GO_VERSION_17 {
+		if goVersion.Major == goinfo.GO_MAJOR_1 {
+			if goVersion.Minor <= goinfo.GO_VERSION_17 {
 				// to bypass typo check
 				const size = "s" + "i" + "z"
 				procDecl = `func newproc(` + size + ` int32`
 				newProc = `newg := newproc1(fn, argp, ` + size + `, gp, pc)`
-			} else if goVersion.Minor <= GO_VERSION_22 {
+			} else if goVersion.Minor <= goinfo.GO_VERSION_22 {
 				newProc = `newg := newproc1(fn, gp, pc)`
-			} else if goVersion.Minor <= GO_VERSION_23 {
+			} else if goVersion.Minor <= goinfo.GO_VERSION_23 {
 				newProc = `newg := newproc1(fn, gp, pc, false, waitReasonZero)`
 			}
 		}
@@ -215,7 +220,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 }
 
 func patchRuntimeTesting(origGoroot string, goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major == GO_MAJOR_1 && goVersion.Minor <= GO_VERSION_22 {
+	if goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor <= goinfo.GO_VERSION_22 {
 		return testingFilePatch.Apply(goroot, nil)
 	}
 	// go 1.23

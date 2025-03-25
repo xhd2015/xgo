@@ -1,10 +1,12 @@
 package signal
 
+import _ "github.com/xhd2015/xgo/runtime/trace/trace_runtime"
+
 type StartXgoTraceConfig struct {
-	OutputFile string
+	OutputFile string `json:"OutputFile,omitempty"`
 }
 
-// the request is only for recording purepose
-func StartXgoTrace(config StartXgoTraceConfig, request interface{}, fn func() (interface{}, error)) (interface{}, error) {
+// the `request` and `response` are only for recording purpose
+func StartXgoTrace(config StartXgoTraceConfig, request interface{}, fn func() (interface{}, error)) (response interface{}, err error) {
 	return fn()
 }

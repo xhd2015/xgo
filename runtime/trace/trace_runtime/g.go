@@ -1,10 +1,5 @@
 package trace_runtime
 
-import (
-	"runtime"
-	"unsafe"
-)
-
 // keep in sync with runtime.__xgo_g
 type G struct {
 	goid       uint64
@@ -15,7 +10,7 @@ type G struct {
 }
 
 func GetG() *G {
-	return (*G)(unsafe.Pointer(runtime.XgoGetCurG()))
+	return (*G)(Runtime_XgoGetCurG())
 }
 
 func (g *G) GoID() uint64 {

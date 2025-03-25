@@ -38,3 +38,6 @@ debug-compile.json
 
 
 /cmd/xgo/internal/src/vendor
+**/.xgo/gen
+
+__debug_bin*
