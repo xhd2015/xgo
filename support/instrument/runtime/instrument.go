@@ -16,6 +16,7 @@ var xgoTrapFile string
 var instrumentMarkPath = patch.FilePath{"xgo_trap_instrument_mark.txt"}
 var xgoTrapFilePath = patch.FilePath{"src", "runtime", "xgo_trap.go"}
 var runtime2Path = patch.FilePath{"src", "runtime", "runtime2.go"}
+var procPath = patch.FilePath{"src", "runtime", "proc.go"}
 
 var jsonEncodingPath = patch.FilePath{"src", "encoding", "json", "encode.go"}
 
@@ -77,19 +78,25 @@ func InstrumentRuntime(goroot string, opts InstrumentRuntimeOptions) error {
 	if err != nil {
 		return fmt.Errorf("instrument runtime2: %w", err)
 	}
+
+	err = instrumentProc(goroot, goVersion)
+	if err != nil {
+		return fmt.Errorf("instrument proc: %w", err)
+	}
+
 	err = instrumentJsonEncoding(goroot, goVersion.Major, goVersion.Minor)
 	if err != nil {
 		return fmt.Errorf("instrument json encoding: %w", err)
 	}
 
 	// instrument xgo_trap.go
-	xgoTrapFileStripped, err := patch.RemoveBuildIgnore([]byte(xgoTrapFile))
+	xgoTrapFileStripped, err := patch.RemoveBuildIgnore(xgoTrapFile)
 	if err != nil {
 		return fmt.Errorf("remove build ignore: %w", err)
 	}
 	xgoTrapFileStripped = AppendGetFuncNameImpl(goVersion, xgoTrapFileStripped)
 
-	err = os.WriteFile(xgoTrapFilePath.JoinPrefix(goroot), xgoTrapFileStripped, 0644)
+	err = os.WriteFile(xgoTrapFilePath.JoinPrefix(goroot), []byte(xgoTrapFileStripped), 0644)
 	if err != nil {
 		return err
 	}
@@ -119,7 +126,7 @@ func instrumentRuntime2(goroot string, goMajor int, goMinor int) error {
 			},
 			1,
 			patch.UpdatePosition_Before,
-			"__xgo_g *__xgo_g;",
+			"__xgo_g __xgo_g;",
 		)
 		return content, nil
 	})

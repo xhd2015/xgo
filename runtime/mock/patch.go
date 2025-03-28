@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/xhd2015/xgo/runtime/trace/trace_runtime"
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
+	"github.com/xhd2015/xgo/runtime/trap"
 )
 
 // Patch replaces `fn` with `replacer` in current goroutine.
@@ -15,12 +16,52 @@ import (
 // this function returns a clean up function that can be
 // used to clear the replacer.
 func Patch(fn interface{}, replacer interface{}) func() {
-	recvPtr, _, trappingPC := trace_runtime.InspectPC(fn)
-	handler := buildMockHandler(recvPtr, replacer)
-	return trace_runtime.PushMockHandler(trappingPC, recvPtr, handler)
+	fnv := reflect.ValueOf(fn)
+	if fnv.Kind() == reflect.Ptr {
+		// variable
+		rv := reflect.ValueOf(replacer)
+		isPtr := checkVarType(fnv.Type(), rv.Type(), true)
+		handler := func(name string, res interface{}) {
+			fnRes := rv.Call([]reflect.Value{})
+			reflect.ValueOf(res).Elem().Set(fnRes[0])
+		}
+		if !isPtr {
+			return trap.PushVarMockHandler(fnv.Pointer(), handler)
+		}
+		return trap.PushVarPtrMockHandler(fnv.Pointer(), handler)
+	} else if fnv.Kind() == reflect.Func {
+		// func
+	} else {
+		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
+	}
+
+	recvPtr, _, trappingPC := trap.InspectPC(fn)
+	handler := buildPatchHandler(recvPtr, fn, replacer)
+	return trap.PushMockHandler(trappingPC, recvPtr, handler)
 }
 
-func buildMockHandler(recvPtr interface{}, replacer interface{}) func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) {
+// return `true` if hit ptr type
+func checkVarType(varType reflect.Type, replacerType reflect.Type, supportPtr bool) bool {
+	wantValueType := reflect.FuncOf(nil, []reflect.Type{varType.Elem()}, false)
+	if replacerType.Kind() != reflect.Func {
+		panic(fmt.Errorf("replacer should have type: %s, actual: %s", wantValueType.String(), replacerType.String()))
+	}
+
+	targetTypeStr, replacerTypeStr, match := checkFuncTypeMatch(wantValueType, replacerType, false)
+	if match {
+		return false
+	}
+	if supportPtr {
+		wantPtrType := reflect.FuncOf(nil, []reflect.Type{varType}, false)
+		_, _, matchPtr := checkFuncTypeMatch(wantPtrType, replacerType, false)
+		if matchPtr {
+			return true
+		}
+	}
+	panic(fmt.Errorf("replacer should have type: %s, actual: %s", targetTypeStr, replacerTypeStr))
+}
+
+func buildPatchHandler(recvPtr interface{}, fn interface{}, replacer interface{}) func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool {
 	v := reflect.ValueOf(replacer)
 	t := v.Type()
 	if t.Kind() != reflect.Func {
@@ -29,11 +70,14 @@ func buildMockHandler(recvPtr interface{}, replacer interface{}) func(recvName s
 	if v.IsNil() {
 		panic("replacer is nil")
 	}
+	if t != reflect.TypeOf(fn) {
+		panic(fmt.Errorf("replacer should have type: %T, actual: %T", fn, replacer))
+	}
 	nIn := t.NumIn()
 
 	// first arg ctx: true => [recv,args[1:]...]
 	// first arg ctx: false => [recv, args[0:]...]
-	return func(recvName string, actRecvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) {
+	return func(recvName string, actRecvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool {
 		// assemble arguments
 		callArgs := make([]reflect.Value, nIn)
 		callIdx := 0
@@ -72,11 +116,24 @@ func buildMockHandler(recvPtr interface{}, replacer interface{}) func(recvName s
 		}
 
 		// call the function
+		var callOld bool
 		var res []reflect.Value
-		if !t.IsVariadic() {
-			res = v.Call(callArgs)
-		} else {
-			res = v.CallSlice(callArgs)
+		func() {
+			defer func() {
+				if e := runtime.XgoPeekPanic(); e != nil {
+					if pe, ok := e.(error); ok && pe == errCallOld {
+						callOld = true
+					}
+				}
+			}()
+			if !t.IsVariadic() {
+				res = v.Call(callArgs)
+			} else {
+				res = v.CallSlice(callArgs)
+			}
+		}()
+		if callOld {
+			return false
 		}
 
 		// assign result
@@ -85,5 +142,6 @@ func buildMockHandler(recvPtr interface{}, replacer interface{}) func(recvName s
 		for i := 0; i < resLen; i++ {
 			reflect.ValueOf(results[i]).Elem().Set(res[i])
 		}
+		return true
 	}
 }

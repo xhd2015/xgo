@@ -1,9 +1,13 @@
 package signal
 
-import _ "github.com/xhd2015/xgo/runtime/trace/trace_runtime"
+import (
+	_ "github.com/xhd2015/xgo/runtime/trap"
+	"github.com/xhd2015/xgo/runtime/trap/stack_model"
+)
 
 type StartXgoTraceConfig struct {
-	OutputFile string `json:"OutputFile,omitempty"`
+	OnFinish   func(stack stack_model.IStack) `json:"-"`
+	OutputFile string                         `json:"OutputFile,omitempty"`
 }
 
 // the `request` and `response` are only for recording purpose

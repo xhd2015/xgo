@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
 	instrument_patch "github.com/xhd2015/xgo/support/instrument/patch"
+	runtime_patch "github.com/xhd2015/xgo/support/instrument/runtime"
 	ast_patch "github.com/xhd2015/xgo/support/transform/patch"
 )
 
@@ -95,10 +95,11 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	}
 
 	dstFile := filepath.Join(goroot, filepath.Join(xgoTrap...))
-	content, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_trap.go"})
+	bytes, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_trap.go"})
 	if err != nil {
 		return false, err
 	}
+	content := string(bytes)
 
 	content, err = instrument_patch.RemoveBuildIgnore(content)
 	if err != nil {
@@ -108,46 +109,28 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	// the func.entry is a field, not a function
 	if goVersion.Major == 1 && goVersion.Minor <= 17 {
 		entryPatch := "fn.entry() /*>=go1.18*/"
-		entryPatchBytes := []byte(entryPatch)
-		idx := bytes.Index(content, entryPatchBytes)
+		idx := strings.Index(content, entryPatch)
 		if idx < 0 {
 			return false, fmt.Errorf("expect %q in xgo_trap.go, actually not found", entryPatch)
 		}
-		content = bytes.ReplaceAll(content, entryPatchBytes, []byte("fn.entry"))
+		content = strings.ReplaceAll(content, entryPatch, "fn.entry")
 	}
 
-	content = AppendGetFuncNameImpl(goVersion, content)
+	content = runtime_patch.AppendGetFuncNameImpl(goVersion, content)
 
-	return true, os.WriteFile(dstFile, content, 0755)
-}
-
-func AppendGetFuncNameImpl(goVersion *goinfo.GoVersion, content []byte) []byte {
-	// func name patch
-	if goVersion.Major > goinfo.GO_MAJOR_1 || goVersion.Minor > goinfo.GO_VERSION_23 {
-		panic("should check the implementation of runtime.FuncForPC(pc).Name() to ensure __xgo_get_pc_name is not wrapped in print format above go1.23,it is confirmed that in go1.21,go1.22 and go1.23 the name is wrapped in funcNameForPrint(...).")
-	}
-	if goVersion.Major > 1 || goVersion.Minor >= 21 {
-		content = append(content, []byte(patch.RuntimeGetFuncName_Go121)...)
-	} else if goVersion.Major == 1 {
-		if goVersion.Minor >= 17 {
-			// go1.17,go1.18,go1.19
-			content = append(content, []byte(patch.RuntimeGetFuncName_Go117_120)...)
-		}
-	}
-	return content
+	return true, os.WriteFile(dstFile, []byte(content), 0755)
 }
 
 func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 	procFile := filepath.Join(goroot, filepath.Join(runtimeProc...))
-	anchors := []string{
-		"func main() {",
-		"doInit(", "runtime_inittask", ")", // first doInit for runtime
-		"doInit(", // second init for main
-		"close(main_init_done)",
-		"\n",
-	}
 	err := instrument_patch.EditFile(procFile, func(content string) (string, error) {
-		content = instrument_patch.AddContentAfter(content, "/*<begin set_init_finished_mark>*/", "/*<end set_init_finished_mark>*/", anchors, patch.RuntimeProcPatch)
+		content = instrument_patch.AddContentAfter(content, "/*<begin set_init_finished_mark>*/", "/*<end set_init_finished_mark>*/", []string{
+			"func main() {",
+			"doInit(", "runtime_inittask", ")", // first doInit for runtime
+			"doInit(", // second init for main
+			"close(main_init_done)",
+			"\n",
+		}, patch.RuntimeProcPatch)
 
 		// goexit1() is called for every exited goroutine
 		content = instrument_patch.AddContentAfter(content,
@@ -156,62 +139,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 			patch.RuntimeProcGoroutineExitPatch,
 		)
 
-		procDecl := `func newproc(fn`
-		newProc := `newg := newproc1(fn, gp, pc, false, waitReasonZero)`
-		if goVersion.Major == goinfo.GO_MAJOR_1 {
-			if goVersion.Minor <= goinfo.GO_VERSION_17 {
-				// to bypass typo check
-				const size = "s" + "i" + "z"
-				procDecl = `func newproc(` + size + ` int32`
-				newProc = `newg := newproc1(fn, argp, ` + size + `, gp, pc)`
-			} else if goVersion.Minor <= goinfo.GO_VERSION_22 {
-				newProc = `newg := newproc1(fn, gp, pc)`
-			} else if goVersion.Minor <= goinfo.GO_VERSION_23 {
-				newProc = `newg := newproc1(fn, gp, pc, false, waitReasonZero)`
-			}
-		}
-		// see https://github.com/xhd2015/xgo/issues/67
-		content = instrument_patch.UpdateContentLines(
-			content,
-			"/*<begin declare_xgo_newg>*/", "/*<end declare_xgo_newg>*/",
-			[]string{
-				procDecl,
-				`systemstack(func() {`,
-				newProc,
-			},
-			1,
-			true,
-			"var xgo_newg *g",
-		)
-		content = instrument_patch.UpdateContentLines(
-			content,
-			"/*<begin set_xgo_newg>*/", "/*<end set_xgo_newg>*/",
-			[]string{
-				procDecl,
-				`systemstack(func() {`,
-				newProc,
-				"\n",
-			},
-			3,
-			false,
-			"xgo_newg = newg",
-		)
-
-		content = instrument_patch.UpdateContentLines(content,
-			"/*<begin add_go_newproc_callback>*/", "/*<end add_go_newproc_callback>*/",
-			[]string{
-				procDecl,
-				`systemstack(func() {`,
-				newProc,
-				"\n",
-				"})",
-				"}",
-			},
-			5,
-			true,
-			patch.RuntimeProcGoroutineCreatedPatch,
-		)
-		return content, nil
+		return runtime_patch.InstrumentGoroutineCreation(goVersion, content)
 	})
 	if err != nil {
 		return err

@@ -8,8 +8,53 @@ import (
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
+// check 'go help list'
+type Package struct {
+	// the abs dir
+	Dir        string
+	Name       string
+	ImportPath string
+	// the file names
+	// e.g.: main.go, option.go
+	GoFiles     []string
+	TestGoFiles []string
+}
+
+type LoadPackageOptions struct {
+	Dir     string
+	Mod     string
+	ModFile string // -modfile flag
+}
+
+// go list -e -json ./pkg
+func ListPackages(args []string, opts LoadPackageOptions) ([]*Package, error) {
+	flags := []string{"list", "-e", "-json"}
+	if opts.Mod != "" {
+		flags = append(flags, "-mod="+opts.Mod)
+	}
+	if opts.ModFile != "" {
+		flags = append(flags, "-modfile="+opts.ModFile)
+	}
+	flags = append(flags, args...)
+	output, err := cmd.Dir(opts.Dir).Output("go", flags...)
+	if err != nil {
+		return nil, err
+	}
+	var pkgs []*Package
+	dec := json.NewDecoder(strings.NewReader(output))
+	for dec.More() {
+		var pkg Package
+		err := dec.Decode(&pkg)
+		if err != nil {
+			return nil, err
+		}
+		pkgs = append(pkgs, &pkg)
+	}
+	return pkgs, nil
+}
+
 // go list ./pkg
-func ListPackages(dir string, mod string, args []string) ([]string, error) {
+func ListPackagePaths(dir string, mod string, args []string) ([]string, error) {
 	flags := []string{"list"}
 	if mod != "" {
 		flags = append(flags, "-mod="+mod)
@@ -52,7 +97,8 @@ func lisFiles(dir string, relativeOnly bool, args []string) ([]string, error) {
 		// check 'go help list'
 		var pkg struct {
 			// the abs dir
-			Dir string
+			Dir        string
+			ImportPath string
 			// the file names
 			GoFiles     []string
 			TestGoFiles []string

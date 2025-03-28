@@ -57,7 +57,7 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 		return err
 	}
 
-	if V_DEPRECATED {
+	if V1_0_0 {
 		// runtime
 		err := patchRuntimeAndTesting(origGoroot, goroot, goVersion)
 		if err != nil {

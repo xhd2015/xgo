@@ -45,3 +45,8 @@ func (md *moduledata) funcName(nameOff int32) string {
 	return gostringnocopy(&md.funcnametab[nameOff])
 }
 `
+
+const RuntimeProcGoroutineCreatedPatch = `for _, fn := range __xgo_on_gonewproc_callbacks {
+	fn(uintptr(unsafe.Pointer(xgo_newg)))
+}
+`

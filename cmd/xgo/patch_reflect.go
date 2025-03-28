@@ -29,10 +29,11 @@ var reflectFiles = []_FilePath{
 
 func addReflectFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc string) error {
 	dstFile := filepath.Join(goroot, filepath.Join(xgoReflectFile...))
-	content, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_reflect.go"})
+	bytes, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_reflect.go"})
 	if err != nil {
 		return err
 	}
+	content := string(bytes)
 
 	content, err = instrument_patch.RemoveBuildIgnore(content)
 	if err != nil {
@@ -51,8 +52,8 @@ func addReflectFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	// fmt.Printf("typCode: %s\n", typeCode)
 
 	// concat all code
-	content = bytes.Join([][]byte{content, []byte(valCode), []byte(typeCode)}, []byte("\n"))
-	return os.WriteFile(dstFile, content, 0755)
+	content = content + "\n" + valCode + "\n" + typeCode
+	return os.WriteFile(dstFile, []byte(content), 0755)
 }
 
 const xgoGetAllMethodByName = "__xgo_get_all_method_by_name"

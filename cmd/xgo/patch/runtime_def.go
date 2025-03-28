@@ -1,17 +1,10 @@
 package patch
 
-import "github.com/xhd2015/xgo/support/instrument/runtime"
-
 const RuntimeProcPatch = `__xgo_is_init_finished = true
 for _, fn := range __xgo_on_init_finished_callbacks {
 	fn()
 }
 __xgo_on_init_finished_callbacks = nil
-`
-
-const RuntimeProcGoroutineCreatedPatch = `for _, fn := range __xgo_on_gonewproc_callbacks {
-	fn(uintptr(unsafe.Pointer(xgo_newg)))
-}
 `
 
 // added after goroutine exit1
@@ -38,12 +31,6 @@ const TestingEnd = `for _,__xgo_on_test_end:=range __xgo_link_get_test_ends(){
 	defer (__xgo_on_test_end.(func(*T,func(*T))))(t,fn)
 }
 `
-
-const RuntimeGetFuncName_Go117_120 = runtime.RuntimeGetFuncName_Go117_120
-
-const RuntimeGetFuncName_Go121 = runtime.RuntimeGetFuncName_Go121
-
-const RuntimeGetFuncName_Go120_Unused = runtime.RuntimeGetFuncName_Go120_Unused
 
 const NoderFiles_1_17 = `	// auto gen
 if os.Getenv("XGO_COMPILER_ENABLE")=="true" {

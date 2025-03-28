@@ -13,7 +13,7 @@ func EditFile(file string, callback func(content string) (string, error)) error 
 	if err != nil {
 		return err
 	}
-	content := string(bytes)
+	content := CleanPatch(string(bytes))
 	newContent, err := callback(content)
 	if err != nil {
 		return err

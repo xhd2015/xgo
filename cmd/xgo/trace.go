@@ -19,7 +19,7 @@ import (
 )
 
 const RUNTIME_MODULE = "github.com/xhd2015/xgo/runtime"
-const RUNTIME_TRACE_PKG = RUNTIME_MODULE + "/trace"
+const RUNTIME_TRACE_PKG = "github.com/xhd2015/xgo/runtime/trace"
 
 type importResult struct {
 	overlayFile string
@@ -30,12 +30,35 @@ type importResult struct {
 //go:embed runtime_gen
 var runtimeGenFS embed.FS
 
+func getProjectRoot(projectDir string, modRootRel []string) string {
+	projectRoot := projectDir
+	n := len(modRootRel)
+	for i := 0; i < n; i++ {
+		projectRoot = filepath.Dir(projectRoot)
+	}
+	return projectRoot
+}
+
+// projectRoot is the directory containing go.mod
+func getVendorDir(projectRoot string) (string, error) {
+	// not forcing mod
+	vendor := filepath.Join(projectRoot, "vendor")
+	_, statErr := os.Stat(vendor)
+	if statErr != nil {
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return "", statErr
+		}
+		return "", nil
+	}
+	return vendor, nil
+}
+
 // TODO: may apply tags
-// importRuntimeDep detect if the target package already
+// importRuntimeDepGenOverlay detect if the target package already
 // has github.com/xhd2015/xgo/runtime as dependency,
 // if not, dynamically modify the go.mod to include that,
 // and add a blank import in the main package
-func importRuntimeDep(test bool, mayHaveCover bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, modRootRel []string, mainModule string, mod string, args []string) (*importResult, error) {
+func importRuntimeDepGenOverlay(test bool, mayHaveCover bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, projectRoot string, mainModule string, mod string, args []string) (*importResult, error) {
 	if mainModule == "" {
 		// only work with module
 		return nil, nil
@@ -44,22 +67,11 @@ func importRuntimeDep(test bool, mayHaveCover bool, goroot string, goBinary stri
 	if err != nil {
 		return nil, err
 	}
-	projectRoot := projectDir
-	n := len(modRootRel)
-	for i := 0; i < n; i++ {
-		projectRoot = filepath.Dir(projectRoot)
-	}
 	var vendorDir string
 	if mod == "vendor" || mod == "" {
-		// not forcing mod
-		testVendorDir := filepath.Join(projectRoot, "vendor")
-		_, statErr := os.Stat(testVendorDir)
-		if statErr != nil {
-			if !errors.Is(statErr, os.ErrNotExist) {
-				return nil, statErr
-			}
-		} else {
-			vendorDir = testVendorDir
+		vendorDir, err = getVendorDir(projectDir)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if mod == "vendor" && vendorDir == "" {
@@ -70,6 +82,7 @@ func importRuntimeDep(test bool, mayHaveCover bool, goroot string, goBinary stri
 		return nil, err
 	}
 
+	// TODO: use .xgo/gen
 	tmpRoot, tmpProjectDir, err := createWorkDir(projectRoot)
 	if err != nil {
 		return nil, err
@@ -78,6 +91,7 @@ func importRuntimeDep(test bool, mayHaveCover bool, goroot string, goBinary stri
 	var modReplace map[string]string
 	res := &importResult{}
 	if needLoad {
+		logDebug("loading dependency")
 		overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, vendorDir, tmpRoot, tmpProjectDir)
 		if err != nil {
 			return nil, err
@@ -166,8 +180,8 @@ func checkNeedLoadDep(goroot string, goBinary string, projectRoot string, vendor
 	if effectiveMod != "vendor" {
 		return false, nil
 	}
-	// check if vendor/${trace} exists
-	if !isDir(filepath.Join(vendorDir, RUNTIME_TRACE_PKG)) {
+	// check if vendor/${trace}/trace.go exists
+	if !isFile(filepath.Join(vendorDir, RUNTIME_TRACE_PKG, "trace.go")) {
 		return true, nil
 	}
 	return false, nil
@@ -575,6 +589,14 @@ func isDir(path string) bool {
 		return false
 	}
 	return stat.IsDir()
+}
+
+func isFile(path string) bool {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !stat.IsDir()
 }
 
 // see go-release/go1.22.2/src/cmd/go/internal/list/list.go

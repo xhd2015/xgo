@@ -91,7 +91,3 @@ func TestPatchNilArg(t *testing.T) {
 		t.Fatalf("expect arg ctx to be nil, actual: %v", argCtx)
 	}
 }
-
-func nilCtx(a int, ctx context.Context) {
-	panic("nilCtx should be mocked")
-}
