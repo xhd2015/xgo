@@ -7,10 +7,6 @@ import (
 	"github.com/xhd2015/xgo/runtime/mock"
 )
 
-func toErr(s string) error {
-	return fmt.Errorf("err: %v", s)
-}
-
 func TestPatchShouldWorkWithErrReturn(t *testing.T) {
 	mock.Patch(toErr, func(s string) error {
 		return fmt.Errorf("mock: %v", s)

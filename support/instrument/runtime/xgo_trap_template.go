@@ -16,11 +16,28 @@ var _ = unsafe.Pointer(nil)
 // just raw string,interface{},[]string, []interface{} are needed
 var __xgo_trap func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool)
 
+var __xgo_var_trap func(name string, varAddr interface{}, res interface{})
+var __xgo_var_ptr_trap func(name string, varAddr interface{}, res interface{})
+
 func XgoTrap(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool) {
 	if __xgo_trap == nil {
 		return nil, false
 	}
 	return __xgo_trap(recvName, recvPtr, argNames, args, resultNames, results)
+}
+
+func XgoTrapVar(name string, varAddr interface{}, res interface{}) {
+	if __xgo_var_trap == nil {
+		return
+	}
+	__xgo_var_trap(name, varAddr, res)
+}
+
+func XgoTrapVarPtr(name string, varAddr interface{}, res interface{}) {
+	if __xgo_var_ptr_trap == nil {
+		return
+	}
+	__xgo_var_ptr_trap(name, varAddr, res)
 }
 
 func XgoSetTrap(trap func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool)) {
@@ -30,28 +47,33 @@ func XgoSetTrap(trap func(recvName string, recvPtr interface{}, argNames []strin
 	__xgo_trap = trap
 }
 
+func XgoSetVarTrap(trap func(name string, varAddr interface{}, res interface{})) {
+	if __xgo_var_trap != nil {
+		panic("__xgo_var_trap already set")
+	}
+	__xgo_var_trap = trap
+}
+
+func XgoSetVarPtrTrap(trap func(name string, varAddr interface{}, res interface{})) {
+	if __xgo_var_ptr_trap != nil {
+		panic("__xgo_var_ptr_trap already set")
+	}
+	__xgo_var_ptr_trap = trap
+}
+
 // __xgo_g is a wrapper around the runtime.G struct
 // to avoid exposing the runtime.G struct to the user
 // and to avoid having to import the runtime package
 // in the user's code.
 type __xgo_g struct {
-	goid       int64
-	parentGoID int64
-
 	gls                 map[interface{}]interface{}
 	looseJsonMarshaling bool
 }
 
 func XgoGetCurG() unsafe.Pointer {
 	curg := getg().m.curg
-	if curg.__xgo_g == nil {
-		curg.__xgo_g = &__xgo_g{
-			goid: curg.goid,
-			// parentGoID: curg.parentGoid,
-			gls: make(map[interface{}]interface{}),
-		}
-	}
-	return unsafe.Pointer(curg.__xgo_g)
+	// println("get g:", hex(uintptr(unsafe.Pointer(curg))))
+	return unsafe.Pointer(&curg.__xgo_g)
 }
 
 // Peek panic without recover
@@ -67,11 +89,34 @@ func XgoPeekPanic() interface{} {
 
 func XgoIsLooseJsonMarshaling() bool {
 	curg := getg().m.curg
-	return curg.__xgo_g != nil && curg.__xgo_g.looseJsonMarshaling
+	return curg.__xgo_g.looseJsonMarshaling
 }
 
 // XgoGetFullPCName returns full name
 // without ellipsis
 func XgoGetFullPCName(pc uintptr) string {
 	return __xgo_get_pc_name_impl(pc)
+}
+
+// goroutine creation
+var __xgo_on_create_g_callbacks []func(g unsafe.Pointer, childG unsafe.Pointer)
+
+func XgoOnCreateG(callback func(g unsafe.Pointer, childG unsafe.Pointer)) {
+	__xgo_on_create_g_callbacks = append(__xgo_on_create_g_callbacks, callback)
+}
+
+func __xgo_callback_on_create_g(curg *g, newg *g) {
+	// newg might be reused from an already exited goroutine
+	// so here we need to explicity clear the __xgo_g
+	// clear
+	newg.__xgo_g = __xgo_g{}
+	if len(__xgo_on_create_g_callbacks) == 0 {
+		return
+	}
+	// println("new g:", hex(uintptr(unsafe.Pointer(newg))), "from g:", hex(uintptr(unsafe.Pointer(curg))))
+	curg_p := unsafe.Pointer(&curg.__xgo_g)
+	newg_p := unsafe.Pointer(&newg.__xgo_g)
+	for _, callback := range __xgo_on_create_g_callbacks {
+		callback(curg_p, newg_p)
+	}
 }

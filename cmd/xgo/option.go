@@ -41,7 +41,6 @@ type options struct {
 	// amend the --options-from-file.
 	// it will take higher priority
 	mockRules []string
-
 	// dev only
 	debugWithDlv bool
 	xgoHome      string
@@ -64,6 +63,10 @@ type options struct {
 
 	// --trap-stdlib
 	trapStdlib bool
+
+	// --trap pkg
+	// where pkg cannot be runtime
+	trap []string
 
 	// xgo test --trace
 
@@ -133,6 +136,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var stackTraceDir string
 	var straceSnapshotMainModuleDefault string
 	var trapStdlib bool
+	var trap []string
 
 	var remainArgs []string
 	var testArgs []string
@@ -239,6 +243,12 @@ func parseOptions(cmd string, args []string) (*options, error) {
 				progFlags = append(progFlags, v)
 			},
 		},
+		{
+			Flags: []string{"--trap"},
+			Set: func(v string) {
+				trap = append(trap, v)
+			},
+		},
 	}
 
 	if isDevelopment {
@@ -303,7 +313,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			setupDev = true
 			continue
 		}
-		if V_DEPRECATED && arg == "--build-compiler" {
+		if V1_0_0 && arg == "--build-compiler" {
 			buildCompiler = true
 			continue
 		}
@@ -329,7 +339,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			continue
 		}
 
-		if V_DEPRECATED {
+		if V1_0_0 {
 			debugCompileVal, ok := tryParseOption("--debug-compile", args, &i)
 			if ok {
 				debugCompile = &debugCompileVal
@@ -476,6 +486,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		stackTraceDir:                   stackTraceDir,
 		straceSnapshotMainModuleDefault: straceSnapshotMainModuleDefault,
 		trapStdlib:                      trapStdlib,
+		trap:                            trap,
 
 		remainArgs: remainArgs,
 		testArgs:   testArgs,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/xhd2015/xgo/runtime/legacy"
 	"github.com/xhd2015/xgo/runtime/mock"
 )
 
@@ -38,6 +39,9 @@ func TestPatchMethodByNameUnmatchSignature(t *testing.T) {
 		})
 	})
 	expectS1 := "replacer should have type: func() string, actual: func(*patch.struct_) string"
+	if !legacy.V1_0_0 {
+		expectS1 = "PatchMethodByName is deprecated and no longer supported, use Patch instead"
+	}
 	if s1 != expectS1 {
 		t.Fatalf("expect s1 to be %q, actual: %q", expectS1, s1)
 	}
@@ -48,6 +52,9 @@ func TestPatchMethodByNameUnmatchSignature(t *testing.T) {
 		})
 	})
 	expectS2 := "replacer should have type: func(*patch.struct_) string, actual: func() string"
+	if !legacy.V1_0_0 {
+		expectS2 = "PatchByName is deprecated and no longer supported, use Patch instead"
+	}
 	if s2 != expectS2 {
 		t.Fatalf("expect s2 to be %q, actual: %q", expectS2, s2)
 	}

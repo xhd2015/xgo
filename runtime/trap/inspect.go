@@ -3,88 +3,40 @@ package trap
 import (
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 
-	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/functab"
+	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
 )
 
 const methodSuffix = "-fm"
 
-// Inspect make a call to f to capture its receiver pointer if it
-// is bound method
-// It can be used to get the unwrapped innermost function of a method
-// wrapper.
-// if f is a bound method, then guaranteed that recvPtr cannot be nil
-func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo) {
-	recvPtr, funcInfo, _, _ = InspectPC(f)
-	return
-}
-
-type inspectingFunc func(f *core.FuncInfo, recv interface{}, pc uintptr)
-
-func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
+// InspectPC inspects the function and returns the receiver pointer, function PC and trapping PC.
+// for ordinary function, `funcPC` is the same with `trappingPC`
+// for method,`funcPC` and `trappingPC` are different, `funcPC` is the PC of the method, and `trappingPC` is the PC of the general type method
+// TODO: add InspectVar to check if a variable can be trapped
+func InspectPC(f interface{}) (recvPtr interface{}, funcPC uintptr, trappingPC uintptr) {
 	fn := reflect.ValueOf(f)
-	// try as a variable
-	if fn.Kind() == reflect.Ptr {
-		// a variable
-		funcInfo = functab.InfoVar(f)
-		return nil, funcInfo, 0, 0
-	}
 	if fn.Kind() != reflect.Func {
-		panic(fmt.Errorf("Inspect requires func, given: %s", fn.Kind().String()))
+		panic(fmt.Errorf("requires func, given: %s", fn.Kind().String()))
 	}
 	funcPC = fn.Pointer()
 
-	// funcs, closures and type functions can be found directly by PC
-	var maybeClosureGeneric bool
-	funcInfo = functab.InfoPC(funcPC)
-	if funcInfo != nil {
-		if !funcInfo.Closure || !GenericImplIsClosure {
-			return nil, funcInfo, funcPC, 0
-		}
-		maybeClosureGeneric = true
+	fullName := xgo_runtime.XgoGetFullPCName(funcPC)
+	if !strings.HasSuffix(fullName, methodSuffix) {
+		return nil, funcPC, funcPC
 	}
 
-	// for go1.18, go1.19, generic implementation
-	// is implemented as closure, so we need to distinguish
-	// between true closure and generic function
-	var origFullName string
-	var needRecv bool
-	if !maybeClosureGeneric {
-		origFullName = __xgo_link_get_pc_name(funcPC)
-		fullName := origFullName
-
-		if strings.HasSuffix(fullName, methodSuffix) {
-			needRecv = true
-			fullName = fullName[:len(fullName)-len(methodSuffix)]
-		}
-
-		funcInfo = functab.GetFuncByFullName(fullName)
-		if funcInfo == nil {
-			return nil, nil, funcPC, 0
-		}
-		if funcInfo.Closure && GenericImplIsClosure {
-			// maybe closure generic
-			maybeClosureGeneric = true
-		} else if !needRecv && !funcInfo.Generic {
-			// plain function(not method, not generic)
-			return nil, funcInfo, funcPC, 0
-		}
-	}
-
-	key := uintptr(__xgo_link_getcurg())
-	ensureTrapInstall()
-	inspectingMap.Store(key, inspectingFunc(func(f *core.FuncInfo, recv interface{}, pc uintptr) {
-		trappingPC = pc
-		funcInfo = f
-		if needRecv || maybeClosureGeneric {
-			// closure cannot have receiver pointer
-			recvPtr = recv
-		}
-	}))
-	defer inspectingMap.Delete(key)
+	// retrieve recieve ptr
 	callFn := func() {
+		stack := GetOrAttachStack()
+		stack.inspecting = func(pc uintptr, recvName string, actRecvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) {
+			trappingPC = runtime.FuncForPC(pc).Entry()
+			recvPtr = actRecvPtr
+		}
+		defer func() {
+			stack.inspecting = nil
+		}()
 		fnType := fn.Type()
 		nargs := fnType.NumIn()
 		args := make([]reflect.Value, nargs)
@@ -98,11 +50,5 @@ func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, fun
 		}
 	}
 	callFn()
-	if needRecv && recvPtr == nil {
-		if origFullName == "" {
-			origFullName = __xgo_link_get_pc_name(funcPC)
-		}
-		panic(fmt.Errorf("failed to retrieve instance pointer for method: %s", origFullName))
-	}
-	return recvPtr, funcInfo, funcPC, trappingPC
+	return recvPtr, funcPC, trappingPC
 }

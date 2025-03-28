@@ -3,6 +3,8 @@ package overlay
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
 type AbsFile string
@@ -69,7 +71,8 @@ func (o Overlay) MakeGoOverlay(overlayDir string) (*GoOverlay, error) {
 			if err != nil {
 				return nil, err
 			}
-			err = os.WriteFile(writeFile, []byte(fo.Content), 0644)
+			content := patch.FmtLineDirective(string(absFile), 1) + "\n" + fo.Content
+			err = os.WriteFile(writeFile, []byte(content), 0644)
 			if err != nil {
 				return nil, err
 			}

@@ -3,62 +3,84 @@ package instrument
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/xhd2015/xgo/support/goinfo"
-	"github.com/xhd2015/xgo/support/instrument/inject"
+	"github.com/xhd2015/xgo/support/instrument/edit"
+	"github.com/xhd2015/xgo/support/instrument/instrument_func"
+	"github.com/xhd2015/xgo/support/instrument/instrument_var"
+	"github.com/xhd2015/xgo/support/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/support/instrument/overlay"
 	"github.com/xhd2015/xgo/support/instrument/runtime"
 )
 
+var ErrLinkFileNotFound = fmt.Errorf("xgo: link file not found")
+
 // create an overlay: abs file -> content
 type Overlay map[string]string
 
-func LinkRuntime(projectRoot string, overlayFS overlay.Overlay) error {
-	files, err := goinfo.ListFiles(projectRoot, []string{inject.XGO_RUNTIME_PKG})
+func LinkXgoRuntime(projectDir string, overlayFS overlay.Overlay, modfile string, xgoVersion string, xgoRevision string, xgoNumber int, collectTestTrace bool, collectTestTraceDir string) error {
+	packages, err := goinfo.ListPackages([]string{
+		instrument_xgo_runtime.RUNTIME_INTERNAL_RUNTIME_PKG,
+		instrument_xgo_runtime.RUNTIME_CORE_PKG,
+		instrument_xgo_runtime.RUNTIME_TRAP_FLAGS_PKG,
+	}, goinfo.LoadPackageOptions{
+		Dir:     projectDir,
+		ModFile: modfile,
+	})
 	if err != nil {
 		// TODO: handle the case where error indicates the package is not found
 		return err
 	}
-	var linkFile string
-	for _, file := range files {
-		if strings.HasSuffix(file, inject.LINK_FILE) {
-			linkFile = file
-			break
+	var foundLink bool
+	for _, pkg := range packages {
+		for _, file := range pkg.GoFiles {
+			switch file {
+			case instrument_xgo_runtime.RUNTIME_LINK_FILE:
+				if pkg.ImportPath == instrument_xgo_runtime.RUNTIME_INTERNAL_RUNTIME_PKG {
+					foundLink = true
+					absFile := overlay.AbsFile(filepath.Join(pkg.Dir, file))
+					overlayFS.OverrideContent(absFile, instrument_xgo_runtime.GetLinkRuntimeCode())
+				}
+			case instrument_xgo_runtime.VERSION_FILE:
+				if pkg.ImportPath == instrument_xgo_runtime.RUNTIME_CORE_PKG {
+					absFile := overlay.AbsFile(filepath.Join(pkg.Dir, file))
+					_, content, err := overlayFS.Read(absFile)
+					if err != nil {
+						return err
+					}
+					versionContent := instrument_xgo_runtime.ReplaceVersion(content, xgoVersion, xgoRevision, xgoNumber)
+					overlayFS.OverrideContent(absFile, versionContent)
+				}
+			case instrument_xgo_runtime.FLAG_FILE:
+				if pkg.ImportPath == instrument_xgo_runtime.RUNTIME_TRAP_FLAGS_PKG && collectTestTrace {
+					absFile := overlay.AbsFile(filepath.Join(pkg.Dir, file))
+					_, content, err := overlayFS.Read(absFile)
+					if err != nil {
+						return err
+					}
+					flagsContent := instrument_xgo_runtime.InjectFlags(content, collectTestTrace, collectTestTraceDir)
+					overlayFS.OverrideContent(absFile, flagsContent)
+				}
+			}
 		}
 	}
-	if linkFile == "" {
-		return fmt.Errorf("link file not found")
+	if !foundLink {
+		return ErrLinkFileNotFound
 	}
-	overlayFS.OverrideContent(overlay.AbsFile(linkFile), inject.GetLinkRuntimeCode())
 	return nil
 }
 
-func InstrumentUserCode(projectRoot string, overlayFS overlay.Overlay, buildArgs []string) error {
-	projectRoot, err := filepath.Abs(projectRoot)
-	if err != nil {
-		return err
-	}
+func InstrumentVarTrap(packages *edit.Packages) error {
+	instrument_var.Instrument(packages)
+	return nil
+}
 
-	files, err := goinfo.ListRelativeFiles(projectRoot, buildArgs)
-	if err != nil {
-		return err
+func InstrumentFuncTrap(packages *edit.Packages) error {
+	for _, pkg := range packages.Packages {
+		for _, file := range pkg.Files {
+			instrument_func.EditInjectRuntimeTrap(file.Edit, file.File.Syntax)
+		}
 	}
-	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") {
-			continue
-		}
-		absFile := overlay.AbsFile(filepath.Join(projectRoot, file))
-		content, ok, err := inject.InjectRuntimeTrap(absFile, overlayFS)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			continue
-		}
-		overlayFS.OverrideContent(absFile, string(content))
-	}
-
 	return nil
 }
 

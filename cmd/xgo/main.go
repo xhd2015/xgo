@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	cmd_support "github.com/xhd2015/xgo/support/cmd"
-	"github.com/xhd2015/xgo/support/instrument"
 	"github.com/xhd2015/xgo/support/instrument/overlay"
 
 	debug_support "github.com/xhd2015/xgo/support/debug"
@@ -42,9 +42,8 @@ import (
 var closeDebug func()
 
 // since xgo V1_0.1.0, xgo does not instrument the compiler anymore
-const V1_0 = false
 
-const V_DEPRECATED = V1_0
+const V1_0_0 = false
 
 func main() {
 	args := os.Args[1:]
@@ -178,6 +177,7 @@ func handleBuild(cmd string, args []string) error {
 	stackTraceDir := opts.stackTraceDir
 	straceSnapshotMainModuleDefault := opts.straceSnapshotMainModuleDefault
 	trapStdlib := opts.trapStdlib
+	trapPkgs := opts.trap
 
 	if cmdExec && len(remainArgs) == 0 {
 		return fmt.Errorf("exec requires command")
@@ -328,10 +328,7 @@ func handleBuild(cmd string, args []string) error {
 		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
 	}
 
-	var buildCacheDir string
-	if V1_0 {
-		buildCacheDir = filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
-	}
+	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
 
 	revisionFile := filepath.Join(instrumentDir, "xgo-revision.txt")
 	fullSyncRecord := filepath.Join(instrumentDir, "full-sync-record.txt")
@@ -383,6 +380,13 @@ func handleBuild(cmd string, args []string) error {
 				return err
 			}
 		}
+		if resetInstrument || flagA {
+			logDebug("reset overlay %s", localXgoGenDir)
+			err := os.RemoveAll(localXgoGenDir)
+			if err != nil {
+				return err
+			}
+		}
 		resetOrRevisionChanged := resetInstrument || buildCompiler || coreRevisionChanged
 		if isDevelopment || resetOrRevisionChanged {
 			logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
@@ -423,7 +427,7 @@ func handleBuild(cmd string, args []string) error {
 
 	var compilerChanged bool
 	var toolExecFlag string
-	if V_DEPRECATED {
+	if V1_0_0 {
 		if !noInstrument {
 			logDebug("build instrument tools: %s", instrumentGoroot)
 			xgoBin := os.Args[0]
@@ -437,7 +441,7 @@ func handleBuild(cmd string, args []string) error {
 	}
 	close(setupDone)
 
-	if V_DEPRECATED && buildCompiler {
+	if V1_0_0 && buildCompiler {
 		fmt.Printf("%s\n", compilerBin)
 		return nil
 	}
@@ -501,7 +505,7 @@ func handleBuild(cmd string, args []string) error {
 				debugCompilePkg = *debugCompile
 			} else {
 				// find the main package we are compile
-				pkgs, err := goinfo.ListPackages(projectDir, mod, remainArgs)
+				pkgs, err := goinfo.ListPackagePaths(projectDir, mod, remainArgs)
 				if err != nil {
 					return err
 				}
@@ -518,6 +522,36 @@ func handleBuild(cmd string, args []string) error {
 			logDebug("debug compile package: %s", debugCompilePkg)
 		}
 
+		projectRoot := getProjectRoot(projectDir, subPaths)
+		if enableStackTrace && overlayFile == "" {
+			// coverage and trace auto loading may conflict,
+			// see https://github.com/xhd2015/xgo/issues/285
+			var mayHaveCover bool
+			// example:
+			//    -cover -coverpkg github.com/xhd2015/xgo/... -coverprofile cover.out
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "-cover") {
+					mayHaveCover = true
+					break
+				}
+			}
+
+			// check if xgo/runtime ready
+			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, mayHaveCover, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, mainModule, mod, remainArgs)
+			if impRuntimeErr != nil {
+				// can be silently ignored
+				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", RUNTIME_TRACE_PKG, RUNTIME_TRACE_PKG, impRuntimeErr)
+			} else if impResult != nil {
+				overlayFile = impResult.overlayFile
+				if impResult.mod != "" {
+					mod = impResult.mod
+				}
+				if impResult.modfile != "" {
+					modfile = impResult.modfile
+				}
+			}
+		}
+
 		overlayFS := overlay.MakeOverlay()
 		if overlayFile != "" {
 			goOverlay, err := overlay.ReadGoOverlay(overlayFile)
@@ -528,45 +562,23 @@ func handleBuild(cmd string, args []string) error {
 				overlayFS.Override(k, v)
 			}
 		}
-		err = instrument.LinkRuntime(projectDir, overlayFS)
-		if err != nil {
-			return err
-		}
-
-		err = InstrumentUserCode(projectDir, overlayFS, mainModule)
-		if err != nil {
-			return err
-		}
-
-		if stackTrace == "on" && overlayFile == "" {
-			if V_DEPRECATED {
-				// coverage and trace auto loading may conflict,
-				// see https://github.com/xhd2015/xgo/issues/285
-				var mayHaveCover bool
-				// example:
-				//    -cover -coverpkg github.com/xhd2015/xgo/... -coverprofile cover.out
-				for _, arg := range args {
-					if strings.HasPrefix(arg, "-cover") {
-						mayHaveCover = true
-						break
-					}
-				}
-
-				// check if xgo/runtime ready
-				impResult, impRuntimeErr := importRuntimeDep(cmdTest, mayHaveCover, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, subPaths, mainModule, mod, remainArgs)
-				if impRuntimeErr != nil {
-					// can be silently ignored
-					fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", RUNTIME_TRACE_PKG, RUNTIME_TRACE_PKG, impRuntimeErr)
-				} else if impResult != nil {
-					overlayFile = impResult.overlayFile
-					if impResult.mod != "" {
-						mod = impResult.mod
-					}
-					if impResult.modfile != "" {
-						modfile = impResult.modfile
-					}
-				}
+		var opts FileOptions
+		if len(optionsFromFileContent) > 0 {
+			err = json.Unmarshal(optionsFromFileContent, &opts)
+			if err != nil {
+				return err
 			}
+		}
+
+		var collectTestTrace bool
+		var collectTestTraceDir string
+		if cmdTest && enableStackTrace {
+			collectTestTrace = true
+			collectTestTraceDir = stackTraceDir
+		}
+		err = instrumentUserSpace(projectDir, projectRoot, mod, modfile, mainModule, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir)
+		if err != nil {
+			return err
 		}
 
 		if len(overlayFS) > 0 {
@@ -709,8 +721,11 @@ func handleBuild(cmd string, args []string) error {
 		}
 		execCmd = exec.Command(remainArgs[0], remainArgs[1:]...)
 	}
-	if !noInstrument && V1_0 {
+	if !noInstrument {
 		execCmdEnv = append(execCmdEnv, "GOCACHE="+buildCacheDir)
+	}
+
+	if !noInstrument && V1_0_0 {
 		execCmdEnv = append(execCmdEnv, "XGO_COMPILER_BIN="+compilerBin)
 		execCmdEnv = append(execCmdEnv, exec_tool.XGO_COMPILE_PKG_DATA_DIR+"="+packageDataDir)
 		// xgo versions
@@ -991,7 +1006,7 @@ func ensureDirs(binDir string, logDir string, instrumentDir string, packageDataD
 	if err != nil {
 		return fmt.Errorf("create %s: %w", filepath.Base(instrumentDir), err)
 	}
-	if V1_0 {
+	if V1_0_0 {
 		// only needed for older xgo
 		err = os.MkdirAll(packageDataDir, 0755)
 		if err != nil {
