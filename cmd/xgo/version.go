@@ -4,13 +4,14 @@ import "fmt"
 
 // REVISION and NUMBER are auto updated when run 'git commit'
 // VERSION is manually updated when needed a new tag
-// see also runtime/core/version.go
-const VERSION = "1.0.52"
-const REVISION = "c56ce78026c7f7c8cb0929ea96e4dc4abaf9cb20+1"
-const NUMBER = 326
+// if you did not install git hooks, you can manually update them
+const VERSION = "1.0.53"
+const REVISION = "8f67555ebd1c3c3ab2202b0d310a7ba4f16ac5e4+1"
+const NUMBER = 336
 
-// the matching runtime/core's version
+// the wanted runtime/core's version
 // manually updated
+// see runtime/core/version.go
 const CORE_VERSION = "1.0.52"
 const CORE_REVISION = "a6f0088f2e43fe837c905792459dfca4e1022a0b+1"
 const CORE_NUMBER = 324

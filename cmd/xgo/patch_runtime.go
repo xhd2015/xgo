@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +10,8 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/instrument/instrument_runtime"
+	instrument_patch "github.com/xhd2015/xgo/support/instrument/patch"
 	ast_patch "github.com/xhd2015/xgo/support/transform/patch"
 )
 
@@ -24,9 +25,9 @@ var testingFilePatch = &FilePatch{
 	FilePath: _FilePath{"src", "testing", "testing.go"},
 	Patches: []*Patch{
 		{
-			Mark:         "declare_testing_callback_v2",
-			InsertIndex:  0,
-			InsertBefore: true,
+			Mark:           "declare_testing_callback_v2",
+			InsertIndex:    0,
+			UpdatePosition: instrument_patch.UpdatePosition_Before,
 			Anchors: []string{
 				"func tRunner(t *T, fn func",
 				"{",
@@ -35,9 +36,9 @@ var testingFilePatch = &FilePatch{
 			Content: patch.TestingCallbackDeclarations + patch.TestingEndCallbackDeclarations,
 		},
 		{
-			Mark:         "call_testing_callback_v2",
-			InsertIndex:  4,
-			InsertBefore: true,
+			Mark:           "call_testing_callback_v2",
+			InsertIndex:    4,
+			UpdatePosition: instrument_patch.UpdatePosition_Before,
 			Anchors: []string{
 				"func tRunner(t *T, fn func",
 				"{",
@@ -94,12 +95,13 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	}
 
 	dstFile := filepath.Join(goroot, filepath.Join(xgoTrap...))
-	content, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_trap.go"})
+	bytes, err := readXgoSrc(xgoSrc, []string{"trap_runtime", "xgo_trap.go"})
 	if err != nil {
 		return false, err
 	}
+	content := string(bytes)
 
-	content, err = replaceBuildIgnore(content)
+	content, err = instrument_patch.RemoveBuildIgnore(content)
 	if err != nil {
 		return false, fmt.Errorf("file %s: %w", filepath.Base(dstFile), err)
 	}
@@ -107,105 +109,37 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 	// the func.entry is a field, not a function
 	if goVersion.Major == 1 && goVersion.Minor <= 17 {
 		entryPatch := "fn.entry() /*>=go1.18*/"
-		entryPatchBytes := []byte(entryPatch)
-		idx := bytes.Index(content, entryPatchBytes)
+		idx := strings.Index(content, entryPatch)
 		if idx < 0 {
 			return false, fmt.Errorf("expect %q in xgo_trap.go, actually not found", entryPatch)
 		}
-		content = bytes.ReplaceAll(content, entryPatchBytes, []byte("fn.entry"))
+		content = strings.ReplaceAll(content, entryPatch, "fn.entry")
 	}
 
-	// func name patch
-	if goVersion.Major > GO_MAJOR_1 || goVersion.Minor > GO_VERSION_23 {
-		panic("should check the implementation of runtime.FuncForPC(pc).Name() to ensure __xgo_get_pc_name is not wrapped in print format above go1.23,it is confirmed that in go1.21,go1.22 and go1.23 the name is wrapped in funcNameForPrint(...).")
-	}
-	if goVersion.Major > 1 || goVersion.Minor >= 21 {
-		content = append(content, []byte(patch.RuntimeGetFuncName_Go121)...)
-	} else if goVersion.Major == 1 {
-		if goVersion.Minor >= 17 {
-			// go1.17,go1.18,go1.19
-			content = append(content, []byte(patch.RuntimeGetFuncName_Go117_120)...)
-		}
-	}
+	content = instrument_runtime.AppendGetFuncNameImpl(goVersion, content)
 
-	return true, os.WriteFile(dstFile, content, 0755)
+	return true, os.WriteFile(dstFile, []byte(content), 0755)
 }
 
 func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 	procFile := filepath.Join(goroot, filepath.Join(runtimeProc...))
-	anchors := []string{
-		"func main() {",
-		"doInit(", "runtime_inittask", ")", // first doInit for runtime
-		"doInit(", // second init for main
-		"close(main_init_done)",
-		"\n",
-	}
-	err := editFile(procFile, func(content string) (string, error) {
-		content = addContentAfter(content, "/*<begin set_init_finished_mark>*/", "/*<end set_init_finished_mark>*/", anchors, patch.RuntimeProcPatch)
+	err := instrument_patch.EditFile(procFile, func(content string) (string, error) {
+		content = instrument_patch.AddContentAfter(content, "/*<begin set_init_finished_mark>*/", "/*<end set_init_finished_mark>*/", []string{
+			"func main() {",
+			"doInit(", "runtime_inittask", ")", // first doInit for runtime
+			"doInit(", // second init for main
+			"close(main_init_done)",
+			"\n",
+		}, patch.RuntimeProcPatch)
 
 		// goexit1() is called for every exited goroutine
-		content = addContentAfter(content,
+		content = instrument_patch.AddContentAfter(content,
 			"/*<begin add_go_exit_callback>*/", "/*<end add_go_exit_callback>*/",
 			[]string{"func goexit1() {", "\n"},
 			patch.RuntimeProcGoroutineExitPatch,
 		)
 
-		procDecl := `func newproc(fn`
-		newProc := `newg := newproc1(fn, gp, pc, false, waitReasonZero)`
-		if goVersion.Major == GO_MAJOR_1 {
-			if goVersion.Minor <= GO_VERSION_17 {
-				// to avoid typo check
-				const size = "s" + "i" + "z"
-				procDecl = `func newproc(` + size + ` int32`
-				newProc = `newg := newproc1(fn, argp, ` + size + `, gp, pc)`
-			} else if goVersion.Minor <= GO_VERSION_22 {
-				newProc = `newg := newproc1(fn, gp, pc)`
-			} else if goVersion.Minor <= GO_VERSION_23 {
-				newProc = `newg := newproc1(fn, gp, pc, false, waitReasonZero)`
-			}
-		}
-		// see https://github.com/xhd2015/xgo/issues/67
-		content = addContentAtIndex(
-			content,
-			"/*<begin declare_xgo_newg>*/", "/*<end declare_xgo_newg>*/",
-			[]string{
-				procDecl,
-				`systemstack(func() {`,
-				newProc,
-			},
-			1,
-			true,
-			"var xgo_newg *g",
-		)
-		content = addContentAtIndex(
-			content,
-			"/*<begin set_xgo_newg>*/", "/*<end set_xgo_newg>*/",
-			[]string{
-				procDecl,
-				`systemstack(func() {`,
-				newProc,
-				"\n",
-			},
-			3,
-			false,
-			"xgo_newg = newg",
-		)
-
-		content = addContentAtIndex(content,
-			"/*<begin add_go_newproc_callback>*/", "/*<end add_go_newproc_callback>*/",
-			[]string{
-				procDecl,
-				`systemstack(func() {`,
-				newProc,
-				"\n",
-				"})",
-				"}",
-			},
-			5,
-			true,
-			patch.RuntimeProcGoroutineCreatedPatch,
-		)
-		return content, nil
+		return instrument_runtime.InstrumentGoroutineCreation(goVersion, content)
 	})
 	if err != nil {
 		return err
@@ -214,11 +148,11 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 }
 
 func patchRuntimeTesting(origGoroot string, goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major == GO_MAJOR_1 && goVersion.Minor <= GO_VERSION_22 {
+	if goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor <= goinfo.GO_VERSION_22 {
 		return testingFilePatch.Apply(goroot, nil)
 	}
 	// go 1.23
-	srcFile := testingFilePatch.FilePath.Join(origGoroot)
+	srcFile := testingFilePatch.FilePath.JoinPrefix(origGoroot)
 	srcCode, err := fileutil.ReadFile(srcFile)
 	if err != nil {
 		return err
@@ -236,7 +170,7 @@ func tRunner(t *T, fn func(t *T)) {
 	if err != nil {
 		return err
 	}
-	err = fileutil.WriteFile(testingFilePatch.FilePath.Join(goroot), []byte(newCode))
+	err = fileutil.WriteFile(testingFilePatch.FilePath.JoinPrefix(goroot), []byte(newCode))
 	if err != nil {
 		return err
 	}
@@ -260,8 +194,8 @@ func patchRuntimeTime(goroot string) error {
 	runtimeTimeFile := filepath.Join(goroot, filepath.Join(runtimeTime...))
 	timeSleepFile := filepath.Join(goroot, filepath.Join(timeSleep...))
 
-	err := editFile(runtimeTimeFile, func(content string) (string, error) {
-		content = replaceContentAfter(content,
+	err := instrument_patch.EditFile(runtimeTimeFile, func(content string) (string, error) {
+		content = instrument_patch.ReplaceContentAfter(content,
 			"/*<begin redirect_runtime_sleep>*/", "/*<end redirect_runtime_sleep>*/",
 			[]string{},
 			"//go:linkname timeSleep time.Sleep\nfunc timeSleep(ns int64) {",
@@ -273,8 +207,8 @@ func patchRuntimeTime(goroot string) error {
 		return err
 	}
 
-	err = editFile(timeSleepFile, func(content string) (string, error) {
-		content = replaceContentAfter(content,
+	err = instrument_patch.EditFile(timeSleepFile, func(content string) (string, error) {
+		content = instrument_patch.ReplaceContentAfter(content,
 			"/*<begin replace_sleep_with_runtimesleep>*/", "/*<end replace_sleep_with_runtimesleep>*/",
 			[]string{},
 			"func Sleep(d Duration)",

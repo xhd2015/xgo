@@ -21,10 +21,6 @@ func TestPatchTypeMethodNoArg(t *testing.T) {
 	}
 }
 
-func (c *struct_) greetCtx(ctx context.Context) string {
-	return "hello " + c.s
-}
-
 func TestPatchTypeMethodCtxArg(t *testing.T) {
 	ins := &struct_{
 		s: "world",

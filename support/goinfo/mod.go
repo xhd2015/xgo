@@ -12,6 +12,7 @@ import (
 var ErrGoModNotFound = errors.New("go.mod not found")
 var ErrGoModDoesNotHaveModule = errors.New("go.mod does not have module")
 
+// ResolveMainModule returns the main module path and subPaths to the directory containing the go.mod file from dir
 func ResolveMainModule(dir string) (subPaths []string, mainModule string, err error) {
 	goMod, subPaths, err := findGoMod(dir)
 	if err != nil {

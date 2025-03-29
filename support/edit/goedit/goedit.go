@@ -4,6 +4,7 @@ import (
 	"go/token"
 
 	"github.com/xhd2015/xgo/support/edit"
+	"github.com/xhd2015/xgo/support/strutil"
 )
 
 type Edit struct {
@@ -14,8 +15,20 @@ type Edit struct {
 func New(fset *token.FileSet, content string) *Edit {
 	return &Edit{
 		fset: fset,
-		buf:  edit.NewBuffer([]byte(content)),
+		// buf is readonly, so we are safe to convert string to []byte
+		buf: edit.NewBuffer(strutil.ToReadonlyBytes(content)),
 	}
+}
+
+func NewWithBytes(fset *token.FileSet, content []byte) *Edit {
+	return &Edit{
+		fset: fset,
+		buf:  edit.NewBuffer(content),
+	}
+}
+
+func (c *Edit) Fset() *token.FileSet {
+	return c.fset
 }
 
 func (c *Edit) Delete(start token.Pos, end token.Pos) {
@@ -28,6 +41,14 @@ func (c *Edit) Insert(start token.Pos, content string) {
 
 func (c *Edit) Replace(start token.Pos, end token.Pos, content string) {
 	c.buf.Replace(c.offsetOf(start), c.offsetOf(end), content)
+}
+
+func (c *Edit) HasEdit() bool {
+	return c.buf.HasEdits()
+}
+
+func (c *Edit) Buffer() *edit.Buffer {
+	return c.buf
 }
 
 func (c *Edit) String() string {

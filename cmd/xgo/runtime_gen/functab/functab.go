@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/legacy"
 )
 
 // all func infos
@@ -36,6 +37,9 @@ func init() {
 // rewrite at compile time by compiler, the body will be replaced with
 // a call to runtime.__xgo_for_each_func
 func __xgo_link_retrieve_all_funcs_and_clear(f func(fn interface{})) {
+	if !legacy.V1_0_0 {
+		return
+	}
 	// linked at runtime
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_retrieve_all_funcs_and_clear(requires xgo).")
 }

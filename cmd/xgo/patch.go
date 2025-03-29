@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -14,6 +13,9 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/instrument/instrument_go"
+	"github.com/xhd2015/xgo/support/instrument/instrument_runtime"
+	"github.com/xhd2015/xgo/support/instrument/patch"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 
@@ -24,19 +26,7 @@ import (
 // NOTE: do not remove files, always add files,
 // these old files may exists in older version
 // so can be cleared by newer xgo
-type _FilePath []string
-
-func (c _FilePath) Join(s ...string) string {
-	return filepath.Join(filepath.Join(s...), filepath.Join(c...))
-}
-
-var affectedFiles []_FilePath
-
-func init() {
-	affectedFiles = append(affectedFiles, compilerFiles...)
-	affectedFiles = append(affectedFiles, runtimeFiles...)
-	affectedFiles = append(affectedFiles, reflectFiles...)
-}
+type _FilePath = patch.FilePath
 
 // assume go 1.20
 // the patch should be idempotent
@@ -52,43 +42,37 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 		return nil
 	}
 
-	// runtime
-	err := patchRuntimeAndTesting(origGoroot, goroot, goVersion)
+	// instrument go
+	err := instrument_go.InstrumentGo(goroot, goVersion)
 	if err != nil {
 		return err
 	}
 
-	// compiler
-	err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
+	// instrument runtime
+	err = instrument_runtime.InstrumentRuntime(goroot, goVersion, instrument_runtime.InstrumentRuntimeOptions{
+		Mode: instrument_runtime.InstrumentMode_ForceAndIgnoreMark,
+	})
 	if err != nil {
 		return err
+	}
+
+	if V1_0_0 {
+		// runtime
+		err := patchRuntimeAndTesting(origGoroot, goroot, goVersion)
+		if err != nil {
+			return err
+		}
+
+		// patch compiler
+		err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func replaceBuildIgnore(content []byte) ([]byte, error) {
-	const buildIgnore = "//go:build ignore"
-
-	// buggy: content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
-	return replaceMarkerNewline(content, []byte(buildIgnore))
-}
-
-// content = bytes.Replace(content, []byte("//go:build ignore\n"), nil, 1)
-func replaceMarkerNewline(content []byte, marker []byte) ([]byte, error) {
-	idx := bytes.Index(content, marker)
-	if idx < 0 {
-		return nil, fmt.Errorf("missing %s", string(marker))
-	}
-	idx += len(marker)
-	if idx < len(content) && content[idx] == '\r' {
-		idx++
-	}
-	if idx < len(content) && content[idx] == '\n' {
-		idx++
-	}
-	return content[idx:], nil
-}
 func checkRevisionChanged(coreRevisionFile string, currentCoreRevision string) (bool, error) {
 	savedCoreRevision, err := readOrEmpty(coreRevisionFile)
 	if err != nil {
@@ -115,6 +99,7 @@ func readOrEmpty(file string) (string, error) {
 	return s, nil
 }
 
+// syncGoroot copies goroot to instrumentGoroot
 // NOTE: flagA never cause goroot to reset
 func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile string) error {
 	// check if src goroot has src/runtime
@@ -123,7 +108,6 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 	if err != nil {
 		return err
 	}
-	var goBinaryChanged bool = true
 	srcGoBin := filepath.Join(goroot, "bin", "go"+osinfo.EXE_SUFFIX)
 	dstGoBin := filepath.Join(instrumentGoroot, "bin", "go"+osinfo.EXE_SUFFIX)
 
@@ -142,22 +126,25 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 		}
 	}
 
-	if dstFile != nil && !dstFile.IsDir() && dstFile.Size() == srcFile.Size() {
-		goBinaryChanged = false
+	var dstGoCopied bool
+	if dstFile != nil && !dstFile.IsDir() {
+		dstGoCopied = true
 	}
 
-	var doPartialCopy bool
-	if !goBinaryChanged && statNoErr(fullSyncRecordFile) {
+	var onlyCopySrc bool
+	if dstGoCopied && statNoErr(fullSyncRecordFile) {
 		// full sync record does not yet exist
-		doPartialCopy = true
+		onlyCopySrc = true
 	}
-	if doPartialCopy {
+	if onlyCopySrc {
 		// do partial copy
-		err := partialCopy(goroot, instrumentGoroot)
+		logDebug("partial copy $GOROOT/src")
+		err := copyGorootSrc(goroot, instrumentGoroot)
 		if err != nil {
 			return err
 		}
 	} else {
+		logDebug("fully copy $GOROOT and write %s", fullSyncRecordFile)
 		rmErr := os.Remove(fullSyncRecordFile)
 		if rmErr != nil {
 			if !errors.Is(rmErr, os.ErrNotExist) {
@@ -168,7 +155,7 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 		// need copy, delete target dst dir first
 		// TODO: use git worktree add if .git exists
 		err = filecopy.NewOptions().
-			Concurrent(2). // 10 is too much
+			Concurrent(1). // 10 is too much
 			CopyReplaceDir(goroot, instrumentGoroot)
 		if err != nil {
 			return err
@@ -185,35 +172,16 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 	return nil
 }
 
-func partialCopy(goroot string, instrumentGoroot string) error {
-	err := os.RemoveAll(xgoRewriteInternal.Join(instrumentGoroot))
-	if err != nil {
-		return err
-	}
-	for _, affectedFile := range affectedFiles {
-		srcFile := affectedFile.Join(goroot)
-		dstFile := affectedFile.Join(instrumentGoroot)
-
-		err := filecopy.CopyFileAll(srcFile, dstFile)
-		if err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-			// delete dstFile
-			err := os.RemoveAll(dstFile)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-	}
-	return nil
+func copyGorootSrc(goroot string, instrumentGoroot string) error {
+	return filecopy.CopyReplaceDir(filepath.Join(goroot, "src"), filepath.Join(instrumentGoroot, "src"), false)
 }
 
 func statNoErr(f string) bool {
 	_, err := os.Stat(f)
 	return err == nil
 }
+
+// Deprecated:
 func buildInstrumentTool(goroot string, xgoSrc string, compilerBin string, compilerBuildIDFile string, execToolBin string, xgoBin string, debugPkg string, logCompile bool, noSetup bool, debugWithDlv bool) (compilerChanged bool, toolExecFlag string, err error) {
 	var execToolCmd []string
 	if !noSetup {

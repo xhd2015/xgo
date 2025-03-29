@@ -1,390 +1,247 @@
 package trap
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
-	"sync"
+	"runtime"
+	"testing"
+	"time"
 
-	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/functab"
+	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
+	"github.com/xhd2015/xgo/runtime/trace/constants"
+	"github.com/xhd2015/xgo/runtime/trap/flags"
+	"github.com/xhd2015/xgo/runtime/trap/stack_model"
 )
 
-var setupOnce sync.Once
+func trap(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool) {
+	begin := time.Now()
+	// skip 2: <user func> -> runtime.XgoTrap -> trap
+	const SKIP = 2
 
-func __xgo_link_is_system_stack() bool {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_is_system_stack(requires xgo).")
-	return false
-}
+	var pcs [1]uintptr
+	runtime.Callers(SKIP+1, pcs[:])
+	pc := pcs[0]
+	funcInfo := runtime.FuncForPC(pc)
 
-func ensureTrapInstall() {
-	setupOnce.Do(func() {
-		// set trap once needed, no matter it
-		// is inside init or not
-		__xgo_link_set_trap(trapFunc)
-		__xgo_link_set_trap_var(trapVar)
+	fnName := funcInfo.Name()
 
-		// // do not capture trap before init finished
-		// if __xgo_link_init_finished() {
-		// } else {
-		// 	// deferred
-		// 	__xgo_link_on_init_finished(func() {
-		// 		__xgo_link_set_trap(trapFunc)
-		// 		__xgo_link_set_trap_var(trapVar)
-		// 	})
-		// }
-	})
-}
+	var mock func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool
 
-func init() {
-	__xgo_link_on_gonewproc(func(g uintptr) {
-		if isByPassing() {
-			return
+	var isStart bool
+	var isTesting bool
+	var testName string
+
+	stack := GetStack()
+	if stack != nil {
+		if stack.inspecting != nil {
+			stack.inspecting(pc, recvName, recvPtr, argNames, args, resultNames, results)
+			return nil, true
 		}
-		if __xgo_link_is_system_stack() {
-			// cannot lock/unlock on sys stack
-			return
+		wantPtr, mockFn := stack.getLastMock(funcInfo.Entry())
+		if mockFn != nil && (wantPtr == nil || (recvPtr != nil && sameReceiver(recvPtr, wantPtr))) {
+			mock = mockFn
 		}
-		local := getLocalInterceptorList()
-		if !local.hasAny() {
-			return
-		}
-		// inherit interceptors of last group
-		localInterceptors.Store(g, &interceptorGroup{
-			groups: []*interceptorList{{
-				list: local.copy(),
-			}},
-		})
-	})
-}
-
-func __xgo_link_set_trap(trapImpl func(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool)) {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_set_trap(requires xgo).")
-}
-
-func __xgo_link_set_trap_var(trap func(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool)) {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_set_trap_var(requires xgo).")
-}
-func __xgo_link_on_gonewproc(f func(g uintptr)) {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_gonewproc(requires xgo).")
-}
-func __xgo_link_on_init_finished(f func()) {
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_init_finished(requires xgo).")
-}
-
-// Skip serves as mark to tell xgo not insert
-// trap instructions for the function that
-// calls Skip()
-// NOTE: the function body is intentionally leave empty
-// as trap.Skip() is just a mark that makes
-// sense at compile time.
-func Skip() {}
-
-var stackMapping sync.Map // <goroutine key> -> root
-
-var inspectingMap sync.Map // <goroutine key> -> interceptor
-
-type root struct {
-	top          *stack
-	intercepting bool // is executing intercepting? to avoid re-entrance
-}
-
-type stack struct {
-	parent   *stack
-	funcInfo *core.FuncInfo
-	stage    stage
-	pc       uintptr // the actual pc
-}
-
-type stage int
-
-const (
-	stage_pre     stage = 0
-	stage_execute stage = 1
-	stage_post    stage = 2
-)
-
-// link to runtime
-// xgo:notrap
-func trapFunc(pkgPath string, identityName string, generic bool, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	if isByPassing() {
-		return nil, false
-	}
-	inspectingFn, inspecting := inspectingMap.Load(uintptr(__xgo_link_getcurg()))
-
-	// NOTE: this may return nil for generic template
-	var f *core.FuncInfo
-	if !generic {
-		f = functab.InfoPC(pc)
-	}
-	if f == nil {
-		// generic and closure under go1.22
-		f = functab.Info(pkgPath, identityName)
-	}
-	if f == nil {
-		// no func found
-		return nil, false
-	}
-	if f.RecvType != "" && methodHasBeenTrapped && recv == nil {
-		// method
-		// let go to the next interceptor
-		return nil, false
-	}
-	if inspecting {
-		inspectingFn.(inspectingFunc)(f, recv, pc)
-		// abort,never really call the target
-		return nil, true
-	}
-	// f is an interceptor or ignored by user
-	if funcIgnored(f) {
-		return nil, false
-	}
-
-	return trap(f, pc, recv, args, results)
-}
-
-func trapVar(pkgPath string, name string, tmpVarAddr interface{}, takeAddr bool) {
-	if isByPassing() {
-		return
-	}
-	identityName := name
-	if takeAddr {
-		identityName = "*" + name
-	}
-	fnInfo := functab.Info(pkgPath, identityName)
-	if fnInfo == nil {
-		return
-	}
-	if fnInfo.Kind != core.Kind_Var && fnInfo.Kind != core.Kind_VarPtr && fnInfo.Kind != core.Kind_Const {
-		return
-	}
-	// NOTE: stop always ignored because this is a simple get
-	post, _ := trap(fnInfo, 0, nil, nil, []interface{}{tmpVarAddr})
-	if post != nil {
-		// NOTE: must in defer, because in post we
-		// may capture panic
-		defer post()
-	}
-}
-func trap(f *core.FuncInfo, pc uintptr, recv interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	// never trap any function from runtime
-	key := uintptr(__xgo_link_getcurg())
-	r := &root{}
-	rv, loaded := stackMapping.LoadOrStore(key, r)
-	if loaded {
-		r = rv.(*root)
-	}
-	// fmt.Printf("trap: %s.%s intercepting=%v\n", f.Pkg, f.IdentityName, r.intercepting)
-	interceptors, _ := getAllInterceptors(f, !r.intercepting)
-	n := len(interceptors)
-	if n == 0 {
-		return nil, false
-	}
-
-	var resetFlag bool
-	parent := r.top
-
-	if !r.intercepting {
-		resetFlag = true
-		r.intercepting = true
-		defer func() {
-			r.intercepting = false
-		}()
-	}
-	stack := &stack{
-		parent:   parent,
-		funcInfo: f,
-		stage:    stage_pre,
-		pc:       pc,
-	}
-	r.top = stack
-
-	// dispose := setTrappingMark(group, f)
-	// if dispose == nil {
-	// 	return nil, false
-	// }
-	// defer dispose()
-
-	// retrieve context
-	var ctx context.Context
-	if f.FirstArgCtx {
-		// TODO: is *HttpRequest a *Context?
-
-		// NOTE: ctx can be nil when doing InspectPC
-		argCtx := reflect.ValueOf(args[0]).Elem().Interface()
-		if argCtx != nil {
-			ctx = argCtx.(context.Context)
-		}
-		// ctx = *(args[0].(*context.Context))
-	} else if f.Closure {
-		if len(args) > 0 {
-			argCtx, ok := reflect.ValueOf(args[0]).Elem().Interface().(context.Context)
-			if ok {
-				// modify on the fly
-				f.FirstArgCtx = true
-				ctx = argCtx
+		if !stack.hasStartedTracing {
+			if fnName == constants.START_XGO_TRACE {
+				stack.hasStartedTracing = true
+				isStart = true
 			}
 		}
-	}
-	var perr *error
-	if f.LastResultErr {
-		perr = results[len(results)-1].(*error)
-	} else if f.Closure {
-		if len(results) > 0 {
-			resErr, ok := reflect.ValueOf(results[0]).Interface().(*error)
-			if ok {
-				f.LastResultErr = true
-				perr = resErr
+		if !stack.hasStartedTracing {
+			// without tracing, mock becomes simpler
+			if mock != nil {
+				ok := mock(recvName, recvPtr, argNames, args, resultNames, results)
+				// ok indicates call old function
+				return nil, ok
 			}
+			return nil, false
 		}
-	}
-
-	// TODO: set FirstArgCtx and LastResultErr
-	req := make(object, 0, len(args))
-	result := make(object, 0, len(results))
-	if f.RecvType != "" {
-		req = append(req, field{
-			name:   f.RecvName,
-			valPtr: recv,
-		})
-	}
-	if !f.FirstArgCtx {
-		req = appendFields(req, args, f.ArgNames)
 	} else {
-		argNames := f.ArgNames
-		if argNames != nil {
-			argNames = argNames[1:]
-		}
-		req = appendFields(req, args[1:], argNames)
-	}
-
-	var resObject core.Object
-	if !f.LastResultErr {
-		result = appendFields(result, results, f.ResNames)
-		resObject = result
-	} else {
-		resNames := f.ResNames
-		var errName string
-		if resNames != nil {
-			errName = resNames[len(resNames)-1]
-			resNames = resNames[:len(resNames)-1]
-		}
-		errField := field{
-			name:   errName,
-			valPtr: results[len(results)-1],
-		}
-		result = appendFields(result, results[:len(results)-1], resNames)
-		resObject = &objectWithErr{
-			object: result,
-			err:    errField,
-		}
-	}
-
-	// TODO: what about inlined func?
-	// funcArgs := &FuncArgs{
-	// 	Recv:    recv,
-	// 	Args:    args,
-	// 	Results: results,
-	// }
-
-	// NOTE: context.TODO() is a constant
-	if ctx == nil {
-		ctx = context.TODO()
-	}
-
-	var firstPreErr error
-
-	abortIdx := -1
-	dataList := make([]interface{}, n)
-	skipIndex := make([]bool, n)
-	for i := n - 1; i >= 0; i-- {
-		interceptor := interceptors[i]
-		if interceptor.Pre == nil {
-			continue
-		}
-		// if
-		data, err := interceptor.Pre(ctx, f, req, resObject)
-		dataList[i] = data
-		if err != nil {
-			if err == ErrSkip {
-				skipIndex[i] = true
-				continue
+		if fnName != constants.START_XGO_TRACE {
+			if !flags.COLLECT_TEST_TRACE {
+				return nil, false
 			}
-			// always break on error
-			firstPreErr = err
-			abortIdx = i
-			break
+			if !(recvPtr == nil && len(args) == 1 && len(results) == 0) {
+				return nil, false
+			}
+			t, ok := args[0].(**testing.T)
+			if !ok {
+				return nil, false
+			}
+			// detect if we are called from TestX(t *testing.T)
+			var pcs [1]uintptr
+			runtime.Callers(SKIP+2, pcs[:])
+			pc := pcs[0]
+			funcInfo := runtime.FuncForPC(pc)
+
+			fnName := funcInfo.Name()
+			if fnName != "testing.tRunner" {
+				return nil, false
+			}
+			isTesting = true
+			testName = (*t).Name()
 		}
+		isStart = true
+		stack = &Stack{
+			Begin:             begin,
+			hasStartedTracing: true,
+		}
+		AttachStack(stack)
 	}
 
-	// not really an error
-	if firstPreErr == ErrAbort {
-		firstPreErr = nil
-	}
-	stack.stage = stage_execute
-	// always run post in defer
-	return func() {
-		stack.stage = stage_post
-		defer func() {
-			r.top = parent
-		}()
+	file, line := funcInfo.FileLine(pc)
+	cur := stack.newStackEntry(begin, fnName)
+	oldTop := stack.push(cur)
+	cur.File = file
+	cur.Line = line
 
-		if resetFlag {
-			r.intercepting = true
-			defer func() {
-				r.intercepting = false
-			}()
-		}
-
-		var lastPostErr error = firstPreErr
-		idx := 0
-		if abortIdx != -1 {
-			idx = abortIdx
-		}
-		for i := idx; i < n; i++ {
-			interceptor := interceptors[i]
-			if interceptor.Post == nil {
-				continue
+	if isStart && !isTesting {
+		var onFinish func(stack stack_model.IStack)
+		var outputFile string
+		var config interface{}
+		for i, arg := range args {
+			if argNames[i] == "config" {
+				config = arg
+				break
 			}
-			if skipIndex[i] {
-				continue
+		}
+		if config != nil {
+			rvalue := reflect.ValueOf(config)
+			if rvalue.Kind() == reflect.Ptr {
+				rvalue = rvalue.Elem()
 			}
-			err := interceptor.Post(ctx, f, req, resObject, dataList[i])
-			if err != nil {
-				if err == ErrAbort {
-					return
+			if rvalue.IsValid() && rvalue.Kind() == reflect.Struct {
+				outputFileField := rvalue.FieldByName("OutputFile")
+				if outputFileField.IsValid() {
+					file, ok := outputFileField.Interface().(string)
+					if ok {
+						outputFile = file
+					}
 				}
-				lastPostErr = err
+				onFinishField := rvalue.FieldByName("OnFinish")
+				if onFinishField.IsValid() {
+					f, ok := onFinishField.Interface().(func(stack stack_model.IStack))
+					if ok {
+						onFinish = f
+					}
+				}
 			}
 		}
-		if lastPostErr != nil {
-			if perr != nil {
-				*perr = lastPostErr
+		if outputFile == "" && onFinish == nil {
+			DetachStack()
+			return nil, false
+		}
+		stack.OutputFile = outputFile
+		stack.onFinish = onFinish
+	}
+
+	// fmt.Fprintf(os.Stderr, "%sargs: %s\n", prefix, string(argsJSON))
+	argNamesNoCtx, argsNoCtx := tryRemoveFirstCtx(argNames, args)
+	marshalNames := argNamesNoCtx
+	marshalArgs := argsNoCtx
+	if recvPtr != nil {
+		marshalNames = make([]string, 1+len(argNamesNoCtx))
+		marshalArgs = make([]interface{}, 1+len(argsNoCtx))
+		marshalNames[0] = recvName
+		marshalArgs[0] = recvPtr
+		copy(marshalNames[1:], argNamesNoCtx)
+		copy(marshalArgs[1:], argsNoCtx)
+	}
+	cur.Args = json.RawMessage(marshalNoError(newStructValue(marshalNames, marshalArgs)))
+	stack.Depth++
+
+	var hitMock bool
+	post := func() {
+		cur.EndNs = time.Now().UnixNano() - stack.Begin.UnixNano()
+		cur.HitMock = hitMock
+		var hasPanic bool
+		if pe := xgo_runtime.XgoPeekPanic(); pe != nil {
+			hasPanic = true
+			cur.Panic = true
+			cur.Error = fmt.Sprint(pe)
+		}
+
+		resultNamesNoErr, resultsNoErr, resErr := trySplitLastError(resultNames, results)
+		cur.Results = json.RawMessage(marshalNoError(newStructValue(resultNamesNoErr, resultsNoErr)))
+		if !hasPanic && resErr != nil {
+			cur.Error = resErr.Error()
+		}
+
+		stack.Top = oldTop
+		stack.Depth--
+		if isStart {
+			exportedStack := ExportStack(stack, 0)
+			exportedStackJSON := marshalNoError(exportedStack)
+			if isTesting {
+				outputFile := filepath.Join(flags.COLLECT_TEST_TRACE_DIR, testName+".json")
+				os.MkdirAll(filepath.Dir(outputFile), 0755)
+				err := os.WriteFile(outputFile, exportedStackJSON, 0644)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "error writing stack: %v\n", err)
+				}
 			} else {
-				panic(lastPostErr)
+				if stack.onFinish != nil {
+					stack.onFinish(&stackData{
+						data: exportedStack,
+						json: exportedStackJSON,
+					})
+				}
+				if stack.OutputFile != "" {
+					err := os.WriteFile(stack.OutputFile, exportedStackJSON, 0644)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "error writing stack: %v\n", err)
+					}
+				}
 			}
+			// DetachStack()
+			// fmt.Fprintf(os.Stderr, "trace end\n")
+			DetachStack()
 		}
-	}, abortIdx != -1
+	}
+	if mock != nil {
+		defer post()
+		hitMock = mock(recvName, recvPtr, argNames, args, resultNames, results)
+		return nil, hitMock
+	}
+	return post, false
 }
 
-func GetTrappingPC() uintptr {
-	key := uintptr(__xgo_link_getcurg())
-	val, ok := stackMapping.Load(key)
-	if !ok {
-		return 0
-	}
-	top := val.(*root).top
-	if top == nil {
-		return 0
-	}
-	return top.pc
+type stackData struct {
+	data *stack_model.Stack
+	json []byte
 }
 
-func clearLocalInterceptorsAndMark() {
-	key := uintptr(__xgo_link_getcurg())
-	localInterceptors.Delete(key)
-	bypassMapping.Delete(key)
+func (c *stackData) Data() *stack_model.Stack {
+	return c.data
+}
 
-	stackMapping.Delete(key)
+func (c *stackData) JSON() ([]byte, error) {
+	return c.json, nil
+}
+
+// push returns the old top
+func (c *Stack) push(cur *StackEntry) *StackEntry {
+	c.MaxID++
+	oldTop := c.Top
+	if oldTop == nil {
+		c.Roots = append(c.Roots, cur)
+	} else {
+		cur.ParentID = oldTop.ID
+		oldTop.Children = append(oldTop.Children, cur)
+	}
+	c.Top = cur
+	return oldTop
+}
+
+func (c *Stack) newStackEntry(begin time.Time, fnName string) *StackEntry {
+	c.MaxID++
+	cur := &StackEntry{
+		ID:       c.MaxID,
+		FuncName: fnName,
+		StartNs:  begin.UnixNano() - c.Begin.UnixNano(),
+	}
+	return cur
 }

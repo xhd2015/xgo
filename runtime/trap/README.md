@@ -1,36 +1,46 @@
-# About
-Trap is the core the xgo runtime. 
 
-When a function is called, it's control flow will first be transferred to Trap.
 
-Then Trap check if there is any interceptor, including system defined interceptors like `Mock` and `Trace`, as well as user defined interceptors by calling `Trap.AddInterceptor()`.
+# Example RPC Interceptor
 
-If any, it will then forward call to these interceptors, until all interceptors returned, or some interceptor returns `trap.ErrAbort` in the middle.
+Data flow:
+```
+Client add metadata
+Server retrieves metadata
+```
 
-# `Inspect(f)`
-the `trap.Inspect(fn)` implements a way to retrieve func info.
-It has different internal paths for these function types:
-- package level function
-  - PC lookup
-- struct method
-  - `-fm` suffix check
-  - `struct.method` proto existence check
-  - dynamic retrieval
-- interface method
-  - `-fm` suffix check
-  - interface proto existence check
-  - dynamic retrieval
-- closure
-  - closure is registered using IR
-  - PC lookup
-- generic function
-  - fullName parsing to de-generic
-  - generic template existence check
-  - no dynamic retrieval since no recv, but is legal to do so
-- generic struct method
-  - `-fm` suffix check
-  - fullName parsing to de-generic
-  - generic method template existence check
-  - dynamic retrieval just for receiver
-- generic interface method
-  - to be supported
+```go
+package trace
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+
+	"go-micro.dev/v4/server"
+    "go-micro.dev/v4/metadata"
+
+	"github.com/xhd2015/xgo/runtime/trace/signal"
+)
+
+const X_XGO_TRACE_FILE = "X-Xgo-Trace-File"
+
+func NewTraceInterceptor() server.HandlerWrapper {
+	return func(hf server.HandlerFunc) server.HandlerFunc {
+		return func(ctx context.Context, req server.Request, rsp interface{}) error {
+            // traceFile example: /tmp/some_trace.json
+            traceFile, _ := metadata.Get(ctx, X_XGO_TRACE_FILE)
+			if traceFile == "" {
+				return hf(ctx, req, rsp)
+			}
+
+			_, err = signal.StartXgoTrace(signal.StartXgoTraceConfig{
+				OutputFile: traceFile,
+			}, req.Body(), func() (interface{}, error) {
+				err := hf(ctx, req, rsp)
+				return rsp, err
+			})
+			return err
+		}
+	}
+}
+```

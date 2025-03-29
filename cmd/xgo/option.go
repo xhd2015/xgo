@@ -41,7 +41,6 @@ type options struct {
 	// amend the --options-from-file.
 	// it will take higher priority
 	mockRules []string
-
 	// dev only
 	debugWithDlv bool
 	xgoHome      string
@@ -65,6 +64,10 @@ type options struct {
 	// --trap-stdlib
 	trapStdlib bool
 
+	// --trap pkg
+	// where pkg cannot be runtime
+	trap []string
+
 	// xgo test --trace
 
 	// --strace, --strace=on, --strace=off
@@ -85,6 +88,8 @@ type options struct {
 	testArgs   []string
 	buildFlags []string
 	progFlags  []string
+
+	noLineDirective bool
 }
 
 func parseOptions(cmd string, args []string) (*options, error) {
@@ -133,11 +138,15 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var stackTraceDir string
 	var straceSnapshotMainModuleDefault string
 	var trapStdlib bool
+	var trap []string
 
 	var remainArgs []string
 	var testArgs []string
 	var buildFlags []string
 	var progFlags []string
+
+	var noLineDirective bool
+
 	nArg := len(args)
 
 	type FlagValue struct {
@@ -239,6 +248,12 @@ func parseOptions(cmd string, args []string) (*options, error) {
 				progFlags = append(progFlags, v)
 			},
 		},
+		{
+			Flags: []string{"--trap"},
+			Set: func(v string) {
+				trap = append(trap, v)
+			},
+		},
 	}
 
 	if isDevelopment {
@@ -303,7 +318,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			setupDev = true
 			continue
 		}
-		if arg == "--build-compiler" {
+		if V1_0_0 && arg == "--build-compiler" {
 			buildCompiler = true
 			continue
 		}
@@ -328,11 +343,17 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			noSetup = true
 			continue
 		}
-
-		debugCompileVal, ok := tryParseOption("--debug-compile", args, &i)
-		if ok {
-			debugCompile = &debugCompileVal
+		if arg == "--no-line-directive" {
+			noLineDirective = true
 			continue
+		}
+
+		if V1_0_0 {
+			debugCompileVal, ok := tryParseOption("--debug-compile", args, &i)
+			if ok {
+				debugCompile = &debugCompileVal
+				continue
+			}
 		}
 		debugVal, ok := tryParseOption("--debug", args, &i)
 		if ok {
@@ -474,11 +495,13 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		stackTraceDir:                   stackTraceDir,
 		straceSnapshotMainModuleDefault: straceSnapshotMainModuleDefault,
 		trapStdlib:                      trapStdlib,
+		trap:                            trap,
 
-		remainArgs: remainArgs,
-		testArgs:   testArgs,
-		buildFlags: buildFlags,
-		progFlags:  progFlags,
+		remainArgs:      remainArgs,
+		testArgs:        testArgs,
+		buildFlags:      buildFlags,
+		progFlags:       progFlags,
+		noLineDirective: noLineDirective,
 	}, nil
 }
 
