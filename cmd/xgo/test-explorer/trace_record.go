@@ -37,13 +37,14 @@ type CallRecord struct {
 type traceConverter struct {
 }
 
-func (c *traceConverter) convertRoot(root *RootExport) *RootRecord {
+func (c *traceConverter) convertRoot(root *Stack) *RootRecord {
 	if root == nil {
 		return nil
 	}
 	children := c.convertStacks(root.Children)
+	begin, _ := time.Parse(time.RFC3339, root.Begin)
 	record := &RootRecord{
-		Start: root.Begin,
+		Start: begin,
 		Root: &CallRecord{
 			Children: children,
 		},
@@ -65,7 +66,7 @@ func (c *traceConverter) convertRoot(root *RootExport) *RootRecord {
 	return record
 }
 
-func (c *traceConverter) convertStacks(stacks []*StackExport) []*CallRecord {
+func (c *traceConverter) convertStacks(stacks []*StackEntry) []*CallRecord {
 	if stacks == nil {
 		return nil
 	}
@@ -77,13 +78,13 @@ func (c *traceConverter) convertStacks(stacks []*StackExport) []*CallRecord {
 	return convStacks
 }
 
-func (c *traceConverter) convertStack(stack *StackExport) *CallRecord {
+func (c *traceConverter) convertStack(stack *StackEntry) *CallRecord {
 	if stack == nil {
 		return nil
 	}
 	funcInfo := stack.FuncInfo
 	if funcInfo == nil {
-		funcInfo = &FuncInfoExport{}
+		funcInfo = &FuncInfo{}
 	}
 	var args interface{} = stack.Args
 	var results interface{} = stack.Results
@@ -91,12 +92,12 @@ func (c *traceConverter) convertStack(stack *StackExport) *CallRecord {
 	// stack.Args
 	return &CallRecord{
 		Pkg:  funcInfo.Pkg,
-		Func: funcInfo.IdentityName,
+		Func: funcInfo.Name,
 		File: file,
 		Line: funcInfo.Line,
 
-		Start: stack.Begin,
-		End:   stack.End,
+		Start: stack.BeginNs,
+		End:   stack.EndNs,
 
 		Args: args,
 

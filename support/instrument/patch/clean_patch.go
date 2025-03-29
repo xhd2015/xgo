@@ -6,7 +6,7 @@ import (
 
 // CleanPatch removes all content between /*<begin and /*<end markers
 func CleanPatch(content string) string {
-	return CleanPatchMarkers(content, PatchMarker{Begin: "/*<begin", End: "*/"}, PatchMarker{Begin: "/*<end", End: "*/"})
+	return CleanPatchMarkers(content, PatchMarker{Begin: "/*<begin", End: ">*/"}, PatchMarker{Begin: "/*<end", End: ">*/"})
 }
 
 type PatchMarker struct {
@@ -24,33 +24,60 @@ func CleanPatchMarkers(content string, start PatchMarker, end PatchMarker) strin
 	n := len(content)
 	result.Grow(n)
 	for i := 0; i < n; {
-		startIdx, endIdx := findStartEnd(content, i, start, end)
-		if startIdx == -1 {
+		beginIdx, beginEndIdx, endIdx, endEndIdx := findStartEnd(content, i, start, end)
+		if beginIdx == -1 {
 			result.WriteString(content[i:])
 			break
 		}
-		result.WriteString(content[i:startIdx])
-		i = endIdx
+		result.WriteString(content[i:beginIdx])
+		oldContent := extractOldContent(content[beginEndIdx:endIdx])
+		if oldContent != "" {
+			result.WriteString(oldContent)
+		}
+		i = endEndIdx
 	}
 	return result.String()
 }
 
-func findStartEnd(content string, i int, start PatchMarker, end PatchMarker) (int, int) {
-	startIdx, startEndIdx := findMarker(content, i, start)
-	if startIdx == -1 {
-		return -1, -1
+func extractOldContent(content string) string {
+	idxOld := strings.Index(content, "/*old:")
+	if idxOld == -1 {
+		return ""
 	}
-
-	endIdx, endEndIdx := findMarker(content, startEndIdx, end)
-	if endIdx == -1 {
-		return -1, -1
+	base := idxOld + len("/*old:")
+	idxEnd := strings.Index(content[base:], "*/")
+	if idxEnd == -1 {
+		return ""
 	}
+	idxEnd += base
 
-	return startIdx, endEndIdx
+	return content[base:idxEnd]
 }
 
-func findMarker(content string, i int, marker PatchMarker) (int, int) {
-	start := strings.Index(content[i:], marker.Begin)
+func findStartEnd(content string, i int, start PatchMarker, end PatchMarker) (beginIdx int, beginEndIdx int, endIdx int, endEndIdx int) {
+	beginIdx, beginEndIdx = findMarker(content, i, start, "")
+	if beginIdx == -1 {
+		return -1, -1, -1, -1
+	}
+
+	// label is the content after marker.Begin, before marker.End
+	// e.g. /*<begin label>*//*<end label>*/
+	label := content[beginIdx+len(start.Begin) : beginEndIdx]
+
+	endIdx, endEndIdx = findMarker(content, beginEndIdx, end, label)
+	if endIdx == -1 {
+		return -1, -1, -1, -1
+	}
+
+	return beginIdx, beginEndIdx, endIdx, endEndIdx
+}
+
+// findMarker finds the first occurrence of marker.Begin
+// and marker.End in content starting from i.
+// It returns the start and end indices of the marker.
+// If the marker is not found, it returns -1, -1.
+func findMarker(content string, i int, marker PatchMarker, label string) (int, int) {
+	start := strings.Index(content[i:], marker.Begin+label)
 	if start == -1 {
 		return -1, -1
 	}

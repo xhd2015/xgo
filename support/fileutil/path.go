@@ -1,5 +1,11 @@
 package fileutil
 
+import (
+	"path/filepath"
+	"runtime"
+	"strings"
+)
+
 func CleanSpecial(path string) string {
 	chars := []rune(path)
 	n := len(chars)
@@ -18,4 +24,23 @@ func CleanSpecial(path string) string {
 		j++
 	}
 	return string(chars[:j])
+}
+
+// when doing filepath.Join(a,b),
+// on windows, if b has :, everything fails
+// TODO: test on windows
+func RebaseAbs(root string, path string) string {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	if runtime.GOOS != "windows" {
+		return filepath.Join(root, absPath)
+	}
+	idx := strings.Index(absPath, ":")
+	if idx < 0 {
+		return filepath.Join(root, absPath)
+	}
+	// join two parts before and after :
+	return filepath.Join(root, absPath[:idx], absPath[idx+1:])
 }

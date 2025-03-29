@@ -332,7 +332,7 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 					`func absFilename(name string) string {`,
 				},
 				0,
-				true,
+				instrument_patch.UpdatePosition_Before,
 				"func init(){ xgo_syntax.AbsFilename = absFilename;}\n",
 			)
 		} else {
@@ -342,7 +342,7 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 					`func trimFilename(b *syntax.PosBase) string {`,
 				},
 				0,
-				true,
+				instrument_patch.UpdatePosition_Before,
 				"func init(){ xgo_syntax.TrimFilename = trimFilename;}\n",
 			)
 		}

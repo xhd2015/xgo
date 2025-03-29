@@ -23,11 +23,12 @@ func MakeOverlay() Overlay {
 	return make(Overlay)
 }
 
-func (o Overlay) Override(absFile AbsFile, targetFile AbsFile) {
+func (o Overlay) OverrideFile(absFile AbsFile, targetFile AbsFile) {
 	o[absFile] = &FileOverlay{
 		AbsFile: targetFile,
 	}
 }
+
 func (o Overlay) OverrideContent(absFile AbsFile, content string) {
 	o[absFile] = &FileOverlay{
 		Content:              content,
@@ -58,7 +59,7 @@ func (o Overlay) Read(absFile AbsFile) (hitContent bool, content string, err err
 	return false, string(data), nil
 }
 
-func (o Overlay) MakeGoOverlay(overlayDir string) (*GoOverlay, error) {
+func (o Overlay) MakeGoOverlay(overlayDir string, addLineDirective bool) (*GoOverlay, error) {
 	absOverlayDir, err := filepath.Abs(overlayDir)
 	if err != nil {
 		return nil, err
@@ -71,7 +72,10 @@ func (o Overlay) MakeGoOverlay(overlayDir string) (*GoOverlay, error) {
 			if err != nil {
 				return nil, err
 			}
-			content := patch.FmtLineDirective(string(absFile), 1) + "\n" + fo.Content
+			content := fo.Content
+			if addLineDirective {
+				content = patch.FmtLineDirective(string(absFile), 1) + "\n" + content
+			}
 			err = os.WriteFile(writeFile, []byte(content), 0644)
 			if err != nil {
 				return nil, err

@@ -149,7 +149,7 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 	}
 
 	// run generate
-	err = cmd.Dir(rootDir).Run("go", "run", "./script/generate", "xgo-runtime")
+	err = cmd.Dir(rootDir).Run("go", "run", "./script/generate", "cmd/xgo/runtime_gen")
 	if err != nil {
 		return err
 	}

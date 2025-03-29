@@ -178,6 +178,7 @@ func handleBuild(cmd string, args []string) error {
 	straceSnapshotMainModuleDefault := opts.straceSnapshotMainModuleDefault
 	trapStdlib := opts.trapStdlib
 	trapPkgs := opts.trap
+	noLineDirective := opts.noLineDirective
 
 	if cmdExec && len(remainArgs) == 0 {
 		return fmt.Errorf("exec requires command")
@@ -521,11 +522,31 @@ func handleBuild(cmd string, args []string) error {
 			go tailLog(debugCompileLogFile)
 			logDebug("debug compile package: %s", debugCompilePkg)
 		}
+		overlayFS := overlay.MakeOverlay()
+		if overlayFile != "" {
+			goOverlay, err := overlay.ReadGoOverlay(overlayFile)
+			if err != nil {
+				return err
+			}
+			for k, v := range goOverlay.Replace {
+				overlayFS.OverrideFile(k, v)
+			}
+		}
 
 		projectRoot := getProjectRoot(projectDir, subPaths)
-		if enableStackTrace && overlayFile == "" {
+		var xgoRuntimeModuleDir string
+
+		// the most important result of `importRuntimeDepGenOverlay`
+		// is the standalone runtime module dir,i.e. `xgoRuntimeModuleDir`
+		// except this, there are no other significant new go files
+		// intruduced. following steps that loads packages should
+		// sticks to old mod and modfile
+		modForLoad := mod
+		modfileForLoad := modfile
+		if enableStackTrace {
 			// coverage and trace auto loading may conflict,
 			// see https://github.com/xhd2015/xgo/issues/285
+			// and https://github.com/xhd2015/xgo/issues/299
 			var mayHaveCover bool
 			// example:
 			//    -cover -coverpkg github.com/xhd2015/xgo/... -coverprofile cover.out
@@ -537,31 +558,33 @@ func handleBuild(cmd string, args []string) error {
 			}
 
 			// check if xgo/runtime ready
-			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, mayHaveCover, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, mainModule, mod, remainArgs)
+			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, mayHaveCover, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, remainArgs)
 			if impRuntimeErr != nil {
 				// can be silently ignored
 				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", RUNTIME_TRACE_PKG, RUNTIME_TRACE_PKG, impRuntimeErr)
 			} else if impResult != nil {
-				overlayFile = impResult.overlayFile
 				if impResult.mod != "" {
 					mod = impResult.mod
 				}
 				if impResult.modfile != "" {
 					modfile = impResult.modfile
 				}
+				// override go files, which has auto import _ "github.com/xhd2015/xgo/runtime/trace"
+				for src, target := range impResult.fileReplace {
+					overlayFS.OverrideFile(src, target)
+				}
+				// after we have replaced modules, and use -mod=mod
+				// go will try to read target modules's go.mod even
+				// they don't exist.
+				// so here we also put these phantom files in the overlay,
+				// they just don't have to exist in vendor
+				for mod, target := range impResult.modReplace {
+					overlayFS.OverrideFile(mod, target)
+				}
+				xgoRuntimeModuleDir = impResult.runtimeModuleDir
 			}
 		}
 
-		overlayFS := overlay.MakeOverlay()
-		if overlayFile != "" {
-			goOverlay, err := overlay.ReadGoOverlay(overlayFile)
-			if err != nil {
-				return err
-			}
-			for k, v := range goOverlay.Replace {
-				overlayFS.Override(k, v)
-			}
-		}
 		var opts FileOptions
 		if len(optionsFromFileContent) > 0 {
 			err = json.Unmarshal(optionsFromFileContent, &opts)
@@ -576,13 +599,13 @@ func handleBuild(cmd string, args []string) error {
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		err = instrumentUserSpace(projectDir, projectRoot, mod, modfile, mainModule, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir)
+		err = instrumentUserSpace(projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir)
 		if err != nil {
 			return err
 		}
 
 		if len(overlayFS) > 0 {
-			goOverlay, err := overlayFS.MakeGoOverlay(filepath.Join(localXgoGenDir, "overlay"))
+			goOverlay, err := overlayFS.MakeGoOverlay(filepath.Join(localXgoGenDir, "overlay"), !noLineDirective)
 			if err != nil {
 				return err
 			}
@@ -787,7 +810,18 @@ func handleBuild(cmd string, args []string) error {
 		execCmdEnv = append(execCmdEnv, exec_tool.XGO_SRC_WD+"="+wd)
 	}
 
-	logDebug("command env: %v", execCmdEnv)
+	if logDebugFile != nil {
+		// filter env
+		var logEnv []string
+		for _, env := range execCmdEnv {
+			if !strings.HasPrefix(env, "GO") && !strings.HasPrefix(env, "XGO") {
+				continue
+			}
+			logEnv = append(logEnv, env)
+		}
+		logDebug("command go env: %v...", logEnv)
+	}
+
 	printDir := projectDir
 	if printDir == "" {
 		printDir = "."
@@ -872,8 +906,8 @@ func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error)
 	}
 	if !noInstrument {
 		minor := goVersion.Minor
-		if goVersion.Major != 1 || (minor < 17 || minor > 23) {
-			return nil, fmt.Errorf("only supports go1.17 ~ go1.23, current: %s", goVersionStr)
+		if goVersion.Major != 1 || (minor < 17 || minor > 24) {
+			return nil, fmt.Errorf("xgo only support go1.17 ~ go1.24, current: %s", goVersionStr)
 		}
 	}
 	return goVersion, nil

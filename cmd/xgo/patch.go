@@ -13,8 +13,9 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/instrument/instrument_go"
+	"github.com/xhd2015/xgo/support/instrument/instrument_runtime"
 	"github.com/xhd2015/xgo/support/instrument/patch"
-	"github.com/xhd2015/xgo/support/instrument/runtime"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 
@@ -26,14 +27,6 @@ import (
 // these old files may exists in older version
 // so can be cleared by newer xgo
 type _FilePath = patch.FilePath
-
-var affectedFiles []_FilePath
-
-func init() {
-	affectedFiles = append(affectedFiles, compilerFiles...)
-	affectedFiles = append(affectedFiles, runtimeFiles...)
-	affectedFiles = append(affectedFiles, reflectFiles...)
-}
 
 // assume go 1.20
 // the patch should be idempotent
@@ -49,9 +42,15 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 		return nil
 	}
 
+	// instrument go
+	err := instrument_go.InstrumentGo(goroot, goVersion)
+	if err != nil {
+		return err
+	}
+
 	// instrument runtime
-	err := runtime.InstrumentRuntime(goroot, runtime.InstrumentRuntimeOptions{
-		Mode: runtime.InstrumentMode_ForceAndIgnoreMark,
+	err = instrument_runtime.InstrumentRuntime(goroot, goVersion, instrument_runtime.InstrumentRuntimeOptions{
+		Mode: instrument_runtime.InstrumentMode_ForceAndIgnoreMark,
 	})
 	if err != nil {
 		return err
@@ -109,7 +108,6 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 	if err != nil {
 		return err
 	}
-	var goBinaryChanged bool = true
 	srcGoBin := filepath.Join(goroot, "bin", "go"+osinfo.EXE_SUFFIX)
 	dstGoBin := filepath.Join(instrumentGoroot, "bin", "go"+osinfo.EXE_SUFFIX)
 
@@ -128,22 +126,25 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 		}
 	}
 
-	if dstFile != nil && !dstFile.IsDir() && dstFile.Size() == srcFile.Size() {
-		goBinaryChanged = false
+	var dstGoCopied bool
+	if dstFile != nil && !dstFile.IsDir() {
+		dstGoCopied = true
 	}
 
-	var doPartialCopy bool
-	if !goBinaryChanged && statNoErr(fullSyncRecordFile) {
+	var onlyCopySrc bool
+	if dstGoCopied && statNoErr(fullSyncRecordFile) {
 		// full sync record does not yet exist
-		doPartialCopy = true
+		onlyCopySrc = true
 	}
-	if doPartialCopy {
+	if onlyCopySrc {
 		// do partial copy
-		err := partialCopy(goroot, instrumentGoroot)
+		logDebug("partial copy $GOROOT/src")
+		err := copyGorootSrc(goroot, instrumentGoroot)
 		if err != nil {
 			return err
 		}
 	} else {
+		logDebug("fully copy $GOROOT and write %s", fullSyncRecordFile)
 		rmErr := os.Remove(fullSyncRecordFile)
 		if rmErr != nil {
 			if !errors.Is(rmErr, os.ErrNotExist) {
@@ -171,29 +172,8 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 	return nil
 }
 
-func partialCopy(goroot string, instrumentGoroot string) error {
-	err := os.RemoveAll(xgoRewriteInternal.JoinPrefix(instrumentGoroot))
-	if err != nil {
-		return err
-	}
-	for _, affectedFile := range affectedFiles {
-		srcFile := affectedFile.JoinPrefix(goroot)
-		dstFile := affectedFile.JoinPrefix(instrumentGoroot)
-
-		err := filecopy.CopyFileAll(srcFile, dstFile)
-		if err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-			// delete dstFile
-			err := os.RemoveAll(dstFile)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-	}
-	return nil
+func copyGorootSrc(goroot string, instrumentGoroot string) error {
+	return filecopy.CopyReplaceDir(filepath.Join(goroot, "src"), filepath.Join(instrumentGoroot, "src"), false)
 }
 
 func statNoErr(f string) bool {

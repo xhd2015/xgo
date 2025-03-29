@@ -470,7 +470,7 @@ func readTraceFromFile(file string) (records []*CallRecord, err error) {
 		}
 		return nil, err
 	}
-	var rootExport *RootExport
+	var rootExport *Stack
 	err = json.Unmarshal(data, &rootExport)
 	if err != nil {
 		return nil, err

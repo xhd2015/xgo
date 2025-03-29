@@ -89,6 +89,19 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 	}, nil
 }
 
+func (c *Packages) Filter(f func(pkg *Package) bool) *Packages {
+	var filtered []*Package
+	for _, pkg := range c.Packages {
+		if f(pkg) {
+			filtered = append(filtered, pkg)
+		}
+	}
+	return &Packages{
+		Fset:     c.Fset,
+		Packages: filtered,
+	}
+}
+
 func ParseFile(fset *token.FileSet, asbFilePath string, overlayFS overlay.Overlay) *File {
 	f := &File{
 		AbsPath: asbFilePath,
