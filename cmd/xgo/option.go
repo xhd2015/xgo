@@ -88,6 +88,8 @@ type options struct {
 	testArgs   []string
 	buildFlags []string
 	progFlags  []string
+
+	noLineDirective bool
 }
 
 func parseOptions(cmd string, args []string) (*options, error) {
@@ -142,6 +144,9 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var testArgs []string
 	var buildFlags []string
 	var progFlags []string
+
+	var noLineDirective bool
+
 	nArg := len(args)
 
 	type FlagValue struct {
@@ -338,6 +343,10 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			noSetup = true
 			continue
 		}
+		if arg == "--no-line-directive" {
+			noLineDirective = true
+			continue
+		}
 
 		if V1_0_0 {
 			debugCompileVal, ok := tryParseOption("--debug-compile", args, &i)
@@ -488,10 +497,11 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		trapStdlib:                      trapStdlib,
 		trap:                            trap,
 
-		remainArgs: remainArgs,
-		testArgs:   testArgs,
-		buildFlags: buildFlags,
-		progFlags:  progFlags,
+		remainArgs:      remainArgs,
+		testArgs:        testArgs,
+		buildFlags:      buildFlags,
+		progFlags:       progFlags,
+		noLineDirective: noLineDirective,
 	}, nil
 }
 

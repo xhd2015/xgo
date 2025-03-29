@@ -2,8 +2,6 @@ package revision
 
 import (
 	"fmt"
-	"go/ast"
-	"go/token"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
@@ -204,16 +202,16 @@ func PatchVersionFile(file string, version string, rev string, autIncrementNumbe
 	return nil
 }
 
-func ParseVersionConstants(content string) (version string, revision string, number int, err error) {
-	return parseVersionConstants(content, "VERSION", "REVISION", "NUMBER")
+func ParseVersionConstants(fileName string, content string) (version string, revision string, number int, err error) {
+	return parseVersionConstants(fileName, content, "VERSION", "REVISION", "NUMBER")
 }
 
-func ParseCoreVersionConstants(content string) (version string, revision string, number int, err error) {
-	return parseVersionConstants(content, "CORE_VERSION", "CORE_REVISION", "CORE_NUMBER")
+func ParseCoreVersionConstants(fileName string, content string) (version string, revision string, number int, err error) {
+	return parseVersionConstants(fileName, content, "CORE_VERSION", "CORE_REVISION", "CORE_NUMBER")
 }
 
-func parseVersionConstants(content string, versionName string, revisionName string, numberName string) (version string, revision string, number int, err error) {
-	constants, err := ParseConstants(content)
+func parseVersionConstants(fileName string, content string, versionName string, revisionName string, numberName string) (version string, revision string, number int, err error) {
+	constants, err := goparse.ExtractConstants(fileName, content)
 	if err != nil {
 		return
 	}
@@ -235,53 +233,6 @@ func parseVersionConstants(content string, versionName string, revisionName stri
 		number = int(i)
 	}
 	return
-}
-
-// parse
-func ParseConstants(content string) (map[string]string, error) {
-	file, _, err := goparse.ParseFileCode("src.go", []byte(content))
-	if err != nil {
-		return nil, err
-	}
-
-	constants := make(map[string]string)
-	for _, decl := range file.Decls {
-		genDecl, ok := decl.(*ast.GenDecl)
-		if !ok {
-			continue
-		}
-		if genDecl.Tok != token.CONST {
-			continue
-		}
-		for _, spec := range genDecl.Specs {
-			constSpec, ok := spec.(*ast.ValueSpec)
-			if !ok {
-				continue
-			}
-			var names []string
-			for _, name := range constSpec.Names {
-				names = append(names, name.Name)
-			}
-			var values []string
-			for _, value := range constSpec.Values {
-				var valueLit string
-				if lit, ok := value.(*ast.BasicLit); ok {
-					valueLit = lit.Value
-				} else {
-					return nil, fmt.Errorf("unknown const spec value: %T %v", value, value)
-				}
-				values = append(values, valueLit)
-			}
-			if len(names) != len(values) {
-				return nil, fmt.Errorf("mismatch decl: names=%v,values=%v", names, values)
-			}
-
-			for i, name := range names {
-				constants[name] = values[i]
-			}
-		}
-	}
-	return constants, nil
 }
 
 func GetXgoVersionFile(rootDir string) string {
@@ -307,7 +258,7 @@ func CopyCoreVersion(xgoVersionFile string, runtimeVersionFile string) error {
 	if err != nil {
 		return err
 	}
-	coreVersion, coreRevision, coreNumber, err := ParseCoreVersionConstants(string(code))
+	coreVersion, coreRevision, coreNumber, err := ParseCoreVersionConstants(xgoVersionFile, string(code))
 	if err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
 const convertXY = `
@@ -74,7 +75,7 @@ func getExprInternalPatch(mark string, rawCall string, checkGoVersion func(goVer
 	return &Patch{
 		Mark:           mark,
 		InsertIndex:    5,
-		UpdatePosition: true,
+		UpdatePosition: patch.UpdatePosition_Before,
 		Anchors: []string{
 			`(check *Checker) exprInternal`,
 			"\n",
@@ -118,7 +119,7 @@ var type2ExprPatch = &FilePatch{
 		{
 			Mark:           "type2_binary_convert_type_xgo_simple_convert",
 			InsertIndex:    2,
-			UpdatePosition: true,
+			UpdatePosition: patch.UpdatePosition_Before,
 			Anchors: []string{
 				`func (check *Checker) binary(x *operand`,
 				"\n",
@@ -134,7 +135,7 @@ var type2ExprPatch = &FilePatch{
 		{
 			Mark:           "type2_binary_convert_type_xgo_simple_convert_can_mix",
 			InsertIndex:    2,
-			UpdatePosition: true,
+			UpdatePosition: patch.UpdatePosition_Before,
 			Anchors: []string{
 				`func (check *Checker) binary(x *operand`,
 				"\n",
@@ -166,7 +167,7 @@ var type2AssignmentsPatch = &FilePatch{
 		{
 			Mark:           "type2_assignment_rewrite_xgo_simple_convert",
 			InsertIndex:    1,
-			UpdatePosition: true,
+			UpdatePosition: patch.UpdatePosition_Before,
 			Anchors: []string{
 				`func (check *Checker) assignment(`,
 				`switch x.mode {`,
@@ -201,7 +202,7 @@ var syntaxWalkPatch = &FilePatch{
 		{
 			Mark:           "syntax_walk_xgo_simple_convert",
 			InsertIndex:    4,
-			UpdatePosition: true,
+			UpdatePosition: patch.UpdatePosition_Before,
 			Anchors: []string{
 				`func (w walker) node(n Node) {`,
 				`case *RangeClause:`,
@@ -235,7 +236,7 @@ var syntaxParserPatch = &FilePatch{
 			// NOTE: dependency injection
 			Mark:           "syntax_parser_record_comment_declare",
 			InsertIndex:    0,
-			UpdatePosition: true,
+			UpdatePosition: patch.UpdatePosition_Before,
 			Anchors: []string{
 				`func (p *parser) init(file *PosBase,`,
 			},
@@ -268,7 +269,7 @@ var noderWriterPatch = &FilePatch{
 		{
 			Mark:           "noder_write_xgo_simple_convert",
 			InsertIndex:    3,
-			UpdatePosition: true,
+			UpdatePosition: patch.UpdatePosition_Before,
 			Anchors: []string{
 				`func (w *writer) expr(expr syntax.Expr) {`,
 				`switch expr := expr.(type) {`,
@@ -289,7 +290,7 @@ var noderExprPatch = &FilePatch{
 		{
 			Mark:           "noder_expr_const_expr_op_xgo_simple_convert",
 			InsertIndex:    1,
-			UpdatePosition: true,
+			UpdatePosition: patch.UpdatePosition_Before,
 			Anchors: []string{
 				`func constExprOp(expr syntax.Expr) ir.Op {`,
 				`case *syntax.BasicLit:`,
@@ -312,7 +313,7 @@ var syntaxPrinterPatch = &FilePatch{
 		{
 			Mark:           "noder_syntax_print_xgo_simple_convert",
 			InsertIndex:    1,
-			UpdatePosition: true,
+			UpdatePosition: patch.UpdatePosition_Before,
 			Anchors: []string{
 				`func (p *printer) printRawNode(n Node) {`,
 				`case *BasicLit:`,

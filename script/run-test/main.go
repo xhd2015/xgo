@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/git"
 )
 
 // usage:
@@ -244,6 +245,7 @@ func main() {
 	var coverpkgs []string
 	var coverprofile string
 	var names []string
+	var dir string
 
 	var list bool
 	for i := 0; i < n; i++ {
@@ -255,6 +257,14 @@ func main() {
 		}
 		if arg == "--include" {
 			includes = append(includes, args[i+1])
+			i++
+			continue
+		}
+		if arg == "--dir" {
+			if i+1 >= n {
+				panic(fmt.Errorf("%v requires arg", arg))
+			}
+			dir = args[i+1]
 			i++
 			continue
 		}
@@ -345,6 +355,36 @@ func main() {
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
+		os.Exit(1)
+	}
+	topLevel, err := git.ShowTopLevel("")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	same := func(a string, b string) (bool, error) {
+		absA, err := filepath.Abs(a)
+		if err != nil {
+			return false, err
+		}
+		absB, err := filepath.Abs(b)
+		if err != nil {
+			return false, err
+		}
+		return absA == absB, nil
+	}
+	atRoot, err := same(topLevel, wd)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if !atRoot {
+		fmt.Fprintln(os.Stderr, "run-test requires executing from project root, current: %s\n", wd)
 		os.Exit(1)
 	}
 	if list {

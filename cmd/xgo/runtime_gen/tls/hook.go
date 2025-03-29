@@ -4,22 +4,36 @@ import (
 	"fmt"
 	"os"
 	"unsafe"
+
+	"github.com/xhd2015/xgo/runtime/legacy"
 )
 
 func __xgo_link_on_gonewproc(f func(g uintptr)) {
+	if !legacy.V1_0_0 {
+		return
+	}
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_gonewproc(requires xgo).")
 }
 
 func __xgo_link_getcurg() unsafe.Pointer {
+	if !legacy.V1_0_0 {
+		return nil
+	}
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_getcurg(requires xgo).")
 	return nil
 }
 
 func __xgo_link_on_goexit(fn func()) {
+	if !legacy.V1_0_0 {
+		return
+	}
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_on_goexit(requires xgo).")
 }
 
 func __xgo_link_is_system_stack() bool {
+	if !legacy.V1_0_0 {
+		return false
+	}
 	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_is_system_stack(requires xgo).")
 	return false
 }

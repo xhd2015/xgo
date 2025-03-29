@@ -4,6 +4,7 @@ import (
 	"go/token"
 
 	"github.com/xhd2015/xgo/support/edit"
+	"github.com/xhd2015/xgo/support/strutil"
 )
 
 type Edit struct {
@@ -14,7 +15,8 @@ type Edit struct {
 func New(fset *token.FileSet, content string) *Edit {
 	return &Edit{
 		fset: fset,
-		buf:  edit.NewBuffer([]byte(content)),
+		// buf is readonly, so we are safe to convert string to []byte
+		buf: edit.NewBuffer(strutil.ToReadonlyBytes(content)),
 	}
 }
 

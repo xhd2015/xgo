@@ -8,12 +8,24 @@ import (
 	"github.com/xhd2015/xgo/support/strutil"
 )
 
-func EditFile(file string, callback func(content string) (string, error)) error {
+func EditFile(file string, callback func(content string) (string, error)) (err error) {
 	bytes, err := fileutil.ReadFile(file)
 	if err != nil {
 		return err
 	}
 	content := CleanPatch(string(bytes))
+	defer func() {
+		if e := recover(); e != nil {
+			if pe, ok := e.(error); ok {
+				err = pe
+			} else {
+				err = fmt.Errorf("panic: %v", e)
+			}
+		}
+		if err != nil {
+			err = fmt.Errorf("%s: %w", file, err)
+		}
+	}()
 	newContent, err := callback(content)
 	if err != nil {
 		return err
@@ -35,7 +47,7 @@ func AddCodeAfterImports(code string, beginMark string, endMark string, contents
 
 // Deprecated: use AddContentAtIndex instead
 func AddContentBefore(content string, beginMark string, endMark string, seq []string, addContent string) string {
-	return UpdateContentLines(content, beginMark, endMark, seq, 0, true, addContent)
+	return UpdateContentLines(content, beginMark, endMark, seq, 0, UpdatePosition_Before, addContent)
 }
 
 // Deprecated: use AddContentAtIndex instead
@@ -51,11 +63,12 @@ func addContentAt(content string, beginMark string, endMark string, seq []string
 	return insertContentLinesNoDuplicate(content, beginMark, endMark, idx, addContent)
 }
 
-type UpdatePosition bool
+type UpdatePosition int
 
 const (
-	UpdatePosition_After  UpdatePosition = false
-	UpdatePosition_Before UpdatePosition = true
+	UpdatePosition_After   UpdatePosition = 0
+	UpdatePosition_Before  UpdatePosition = 1
+	UpdatePosition_Replace UpdatePosition = 2
 )
 
 // UpdateContentLines add content before or after the `i`'s anchor in `seq`
@@ -68,17 +81,32 @@ func UpdateContent(content string, beginMark string, endMark string, seq []strin
 	return updateContent(content, beginMark, endMark, seq, i, position, addContent, "")
 }
 
-func updateContent(content string, beginMark string, endMark string, seq []string, i int, position UpdatePosition, addContent string, separator string) string {
-	offset, endOffset := strutil.SequenceOffset(content, seq, i, bool(position))
+func updateContent(content string, beginMark string, endMark string, seq []string, i int, position UpdatePosition, patchContent string, separator string) string {
+	isReplace := position == UpdatePosition_Replace
+	if isReplace {
+		replacedContent, ok := tryReplaceWithMark(content, beginMark, endMark, separator, patchContent)
+		if ok {
+			return replacedContent
+		}
+	}
+	var begin bool
+	if position == UpdatePosition_Before || isReplace {
+		begin = true
+	}
+	offset, anchorLen, endOffset := strutil.SequenceOffset(content, seq, i, begin)
 	if offset < 0 {
-		panic(fmt.Errorf("sequence missing: %v", seq))
+		qseq := make([]string, len(seq))
+		for i, s := range seq {
+			qseq[i] = "  " + s
+		}
+		panic(fmt.Errorf("sequence missing:\n%v", strings.Join(qseq, "\n")))
 	}
 	// ensure sequence is unique
-	anotherOff, _ := strutil.SequenceOffset(content[endOffset:], seq, i, false)
+	anotherOff, _, _ := strutil.SequenceOffset(content[endOffset:], seq, i, false)
 	if anotherOff >= 0 {
 		panic(fmt.Errorf("sequence duplicate: %v", seq))
 	}
-	return insertContentNoDuplicate(content, beginMark, endMark, offset, addContent, separator)
+	return insertOrReplaceContentNoDuplicate(content, isReplace, anchorLen, beginMark, endMark, offset, patchContent, separator)
 }
 
 func ReplaceContentAfter(content string, beginMark string, endMark string, seq []string, target string, replaceContent string) string {
@@ -93,7 +121,7 @@ func ReplaceContentAfter(content string, beginMark string, endMark string, seq [
 	if strings.Contains(content, closuerContent) {
 		return content
 	}
-	content, ok := tryReplaceWithMark(content, beginMark, endMark, closuerContent)
+	content, ok := tryReplaceWithMark(content, beginMark, endMark, "\n", replaceContent)
 	if ok {
 		return content
 	}
@@ -107,25 +135,28 @@ func ReplaceContentAfter(content string, beginMark string, endMark string, seq [
 // signature example: /*<begin ident>*/ {content} /*<end ident>*/
 // insert content at index
 func insertContentLinesNoDuplicate(content string, beginMark string, endMark string, idx int, insertContent string) string {
-	return insertContentNoDuplicate(content, beginMark, endMark, idx, insertContent, "\n")
+	return insertOrReplaceContentNoDuplicate(content, false, 0, beginMark, endMark, idx, insertContent, "\n")
 }
 
-func insertContentNoDuplicate(content string, beginMark string, endMark string, idx int, insertContent string, separator string) string {
+func insertOrReplaceContentNoDuplicate(content string, replace bool, replaceLen int, beginMark string, endMark string, idx int, insertContent string, separator string) string {
 	if insertContent == "" {
 		return content
 	}
-	closuerContent := beginMark + separator + insertContent + separator + endMark + separator
-	content, ok := tryReplaceWithMark(content, beginMark, endMark, closuerContent)
+	content, ok := tryReplaceWithMark(content, beginMark, endMark, separator, insertContent)
 	if ok {
 		return content
 	}
-	if strings.Contains(content, closuerContent) {
+	if replace {
+		return content[:idx] + beginMark + fmt.Sprintf("/*old:%s*/", content[idx:idx+replaceLen]) + separator + insertContent + separator + endMark + separator + content[idx+replaceLen:]
+	}
+	closureContent := beginMark + separator + insertContent + separator + endMark + separator
+	if strings.Contains(content, closureContent) {
 		return content
 	}
-	return content[:idx] + closuerContent + content[idx:]
+	return content[:idx] + closureContent + content[idx:]
 }
 
-func tryReplaceWithMark(content string, beginMark string, endMark string, closureContent string) (string, bool) {
+func tryReplaceWithMark(content string, beginMark string, endMark string, separator string, patchContent string) (string, bool) {
 	beginIdx := strings.Index(content, beginMark)
 	if beginIdx < 0 {
 		return content, false
@@ -134,8 +165,12 @@ func tryReplaceWithMark(content string, beginMark string, endMark string, closur
 	if endIdx < 0 {
 		return content, false
 	}
+	oldContent := extractOldContent(content[beginIdx+len(beginMark) : endIdx])
+	if oldContent != "" {
+		patchContent = oldContent + patchContent
+	}
 	lastIdx := endIdx + len(endMark)
-	return content[:beginIdx] + closureContent + content[lastIdx:], true
+	return content[:beginIdx] + beginMark + separator + patchContent + separator + endMark + separator + content[lastIdx:], true
 }
 
 func indexSeq(s string, sequence []string, begin bool) int {

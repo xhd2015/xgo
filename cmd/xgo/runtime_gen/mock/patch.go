@@ -1,13 +1,10 @@
 package mock
 
 import (
-	"context"
 	"fmt"
 	"reflect"
-	"strings"
 
-	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/functab"
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
@@ -19,122 +16,52 @@ import (
 // this function returns a clean up function that can be
 // used to clear the replacer.
 func Patch(fn interface{}, replacer interface{}) func() {
-	if fn == nil {
-		panic("fn cannot be nil")
-	}
-	if replacer == nil {
-		panic("replacer cannot be nil")
-	}
-	fnType := reflect.TypeOf(fn)
-	fnKind := fnType.Kind()
-	if fnKind == reflect.Func {
-		if fnType != reflect.TypeOf(replacer) {
-			panic(fmt.Errorf("replacer should have type: %T, actual: %T", fn, replacer))
+	fnv := reflect.ValueOf(fn)
+	if fnv.Kind() == reflect.Ptr {
+		// variable
+		rv := reflect.ValueOf(replacer)
+		isPtr := checkVarType(fnv.Type(), rv.Type(), true)
+		handler := func(name string, res interface{}) {
+			fnRes := rv.Call([]reflect.Value{})
+			reflect.ValueOf(res).Elem().Set(fnRes[0])
 		}
-	} else if fnKind == reflect.Ptr {
-		replacerType := reflect.TypeOf(replacer)
-		wantType := reflect.FuncOf(nil, []reflect.Type{fnType.Elem()}, false)
-		var targetTypeStr string
-		var replacerTypeStr string
-		var match bool
-		if reflect.TypeOf(replacer).Kind() != reflect.Func {
-			targetTypeStr = wantType.String()
-			replacerTypeStr = replacerType.String()
-		} else {
-			targetTypeStr, replacerTypeStr, match = checkFuncTypeMatch(wantType, replacerType, false)
+		if !isPtr {
+			return trap.PushVarMockHandler(fnv.Pointer(), handler)
 		}
-		if !match {
-			panic(fmt.Errorf("replacer should have type: %s, actual: %s", targetTypeStr, replacerTypeStr))
-		}
+		return trap.PushVarPtrMockHandler(fnv.Pointer(), handler)
+	} else if fnv.Kind() == reflect.Func {
+		// func
 	} else {
 		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
 	}
 
-	recvPtr, fnInfo, funcPC, trappingPC := getFunc(fn)
-	return mock(recvPtr, fnInfo, funcPC, trappingPC, buildInterceptorFromPatch(recvPtr, replacer))
+	recvPtr, _, trappingPC := trap.InspectPC(fn)
+	handler := buildPatchHandler(recvPtr, fn, replacer)
+	return trap.PushMockHandler(trappingPC, recvPtr, handler)
 }
 
-func PatchByName(pkgPath string, funcName string, replacer interface{}) func() {
-	if replacer == nil {
-		panic("replacer cannot be nil")
-	}
-	t := reflect.TypeOf(replacer)
-	if t.Kind() != reflect.Func {
-		panic(fmt.Errorf("replacer should be func, actual: %T", replacer))
+// return `true` if hit ptr type
+func checkVarType(varType reflect.Type, replacerType reflect.Type, supportPtr bool) bool {
+	wantValueType := reflect.FuncOf(nil, []reflect.Type{varType.Elem()}, false)
+	if replacerType.Kind() != reflect.Func {
+		panic(fmt.Errorf("replacer should have type: %s, actual: %s", wantValueType.String(), replacerType.String()))
 	}
 
-	// check type
-	recvPtr, funcInfo, funcPC, trappingPC := getFuncByName(pkgPath, funcName)
-	if funcInfo.Kind == core.Kind_Func {
-		if funcInfo.Func != nil {
-			calledType, replacerType, match := checkFuncTypeMatch(reflect.TypeOf(funcInfo.Func), t, recvPtr != nil)
-			if !match {
-				panic(fmt.Errorf("replacer should have type: %s, actual: %s", calledType, replacerType))
-			}
-		}
-	} else if funcInfo.Kind == core.Kind_Var || funcInfo.Kind == core.Kind_VarPtr || funcInfo.Kind == core.Kind_Const {
-		varPtrType := reflect.TypeOf(funcInfo.Var)
-		var wantValueType reflect.Type
-		if funcInfo.Kind == core.Kind_Var {
-			wantValueType = reflect.FuncOf(nil, []reflect.Type{varPtrType.Elem()}, false)
-		} else {
-			// const: type is not pointer
-			wantValueType = reflect.FuncOf(nil, []reflect.Type{varPtrType}, false)
-		}
-
-		var targetTypeStr string
-		var replacerTypeStr string
-		var match bool
-
-		var matchPtr bool
-		replacerType := reflect.TypeOf(replacer)
-		if replacerType.Kind() != reflect.Func {
-			targetTypeStr = wantValueType.String()
-			replacerTypeStr = replacerType.String()
-		} else {
-			targetTypeStr, replacerTypeStr, match = checkFuncTypeMatch(wantValueType, replacerType, false)
-			if !match && funcInfo.Kind != core.Kind_VarPtr {
-				_, replacerTypeStr, match = checkFuncTypeMatch(reflect.FuncOf(nil, []reflect.Type{varPtrType}, false), replacerType, false)
-				matchPtr = true
-			}
-		}
-		if !match {
-			panic(fmt.Errorf("replacer should have type: %s, actual: %s", targetTypeStr, replacerTypeStr))
-		}
+	targetTypeStr, replacerTypeStr, match := checkFuncTypeMatch(wantValueType, replacerType, false)
+	if match {
+		return false
+	}
+	if supportPtr {
+		wantPtrType := reflect.FuncOf(nil, []reflect.Type{varType}, false)
+		_, _, matchPtr := checkFuncTypeMatch(wantPtrType, replacerType, false)
 		if matchPtr {
-			funcInfo = functab.Info(pkgPath, "*"+funcName)
-			if funcInfo == nil {
-				panic(fmt.Errorf("failed to patch: %s *%s", pkgPath, funcName))
-			}
-		}
-	} else {
-		panic(fmt.Errorf("unrecognized func type: %s", funcInfo.Kind.String()))
-	}
-
-	return mock(recvPtr, funcInfo, funcPC, trappingPC, buildInterceptorFromPatch(recvPtr, replacer))
-}
-
-func PatchMethodByName(instance interface{}, method string, replacer interface{}) func() {
-	if replacer == nil {
-		panic("replacer cannot be nil")
-	}
-	t := reflect.TypeOf(replacer)
-	if t.Kind() != reflect.Func {
-		panic(fmt.Errorf("replacer should be func, actual: %T", replacer))
-	}
-
-	// check type
-	recvPtr, funcInfo, funcPC, trappingPC := getMethodByName(instance, method)
-	if funcInfo.Func != nil {
-		calledType, replacerType, match := checkFuncTypeMatch(reflect.TypeOf(funcInfo.Func), t, recvPtr != nil)
-		if !match {
-			panic(fmt.Errorf("replacer should have type: %s, actual: %s", calledType, replacerType))
+			return true
 		}
 	}
-	return mock(recvPtr, funcInfo, funcPC, trappingPC, buildInterceptorFromPatch(recvPtr, replacer))
+	panic(fmt.Errorf("replacer should have type: %s, actual: %s", targetTypeStr, replacerTypeStr))
 }
 
-func buildInterceptorFromPatch(recvPtr interface{}, replacer interface{}) func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+func buildPatchHandler(recvPtr interface{}, fn interface{}, replacer interface{}) func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool {
 	v := reflect.ValueOf(replacer)
 	t := v.Type()
 	if t.Kind() != reflect.Func {
@@ -143,149 +70,78 @@ func buildInterceptorFromPatch(recvPtr interface{}, replacer interface{}) func(c
 	if v.IsNil() {
 		panic("replacer is nil")
 	}
+	if t != reflect.TypeOf(fn) {
+		panic(fmt.Errorf("replacer should have type: %T, actual: %T", fn, replacer))
+	}
 	nIn := t.NumIn()
-
-	// replacer is usually a closure,
-	// we can bypass it
-	trap.Ignore(replacer)
 
 	// first arg ctx: true => [recv,args[1:]...]
 	// first arg ctx: false => [recv, args[0:]...]
-	return func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+	return func(recvName string, actRecvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool {
 		// assemble arguments
 		callArgs := make([]reflect.Value, nIn)
-		src := 0
-		dst := 0
+		callIdx := 0
 
-		if fn.RecvType != "" {
+		// if recvPtr is nil, then we can just treat as normal
+		// function
+		// otherwise, we need to check if actRecvPtr is same as recvPtr
+
+		if recvPtr != nil {
+			if actRecvPtr == nil {
+				panic("receiver mismatch")
+			}
+		}
+
+		if actRecvPtr != nil {
 			var isInstance bool
 			if recvPtr != nil {
-				if fn.Generic && trap.GenericImplIsClosure && args.NumField() == nIn {
-					// not an instance
-				} else {
-					isInstance = true
-				}
+				isInstance = true
 			}
 			if isInstance {
 				// patching an instance method
-				src++
-				// replacer's does not have receiver
+				// replacer's does not have receiver, so no need to fill in
 			} else {
 				// set receiver
 				if nIn > 0 {
-					callArgs[dst] = reflect.ValueOf(args.GetFieldIndex(0).Ptr()).Elem()
-					dst++
-					src++
+					callArgs[callIdx] = reflect.ValueOf(actRecvPtr).Elem()
+					callIdx++
 				}
 			}
 		}
-		if fn.FirstArgCtx {
-			callArgs[dst] = reflect.ValueOf(ctx)
-			dst++
-		}
-		for i := 0; i < nIn-dst; i++ {
+		for i := 0; i < nIn-callIdx; i++ {
 			// fail if with the following setup:
 			//    reflect: Call using zero Value argument
 			// callArgs[dst+i] = reflect.ValueOf(args.GetFieldIndex(src + i).Value())
-			callArgs[dst+i] = reflect.ValueOf(args.GetFieldIndex(src + i).Ptr()).Elem()
+			callArgs[callIdx+i] = reflect.ValueOf(args[i]).Elem()
 		}
 
 		// call the function
+		var callOld bool
 		var res []reflect.Value
-		if !t.IsVariadic() {
-			res = v.Call(callArgs)
-		} else {
-			res = v.CallSlice(callArgs)
+		func() {
+			defer func() {
+				if e := runtime.XgoPeekPanic(); e != nil {
+					if pe, ok := e.(error); ok && pe == errCallOld {
+						callOld = true
+					}
+				}
+			}()
+			if !t.IsVariadic() {
+				res = v.Call(callArgs)
+			} else {
+				res = v.CallSlice(callArgs)
+			}
+		}()
+		if callOld {
+			return false
 		}
 
 		// assign result
 		nOut := len(res)
 		resLen := nOut
-		if fn.LastResultErr {
-			resLen--
-		}
 		for i := 0; i < resLen; i++ {
-			results.GetFieldIndex(i).Set(res[i].Interface())
+			reflect.ValueOf(results[i]).Elem().Set(res[i])
 		}
-
-		if fn.LastResultErr {
-			results.(core.ObjectWithErr).GetErr().Set(res[nOut-1].Interface())
-		}
-
-		return nil
+		return true
 	}
-}
-
-// a,b must be func type
-func checkFuncTypeMatch(a reflect.Type, b reflect.Type, skipAFirst bool) (atype string, btype string, match bool) {
-	na := a.NumIn()
-	nb := b.NumIn()
-
-	base := 0
-	if skipAFirst {
-		base++
-	}
-	if na-base != nb {
-		return formatFuncType(a, skipAFirst), formatFuncType(b, false), false
-	}
-
-	for i := 0; i < na; i++ {
-		ta := a.In(i + base)
-		tb := b.In(i)
-		if ta != tb {
-			return formatFuncType(a, skipAFirst), formatFuncType(b, false), false
-		}
-	}
-
-	nouta := a.NumOut()
-	noutb := b.NumOut()
-	if nouta != noutb {
-		return formatFuncType(a, skipAFirst), formatFuncType(b, false), false
-	}
-	for i := 0; i < nouta; i++ {
-		ta := a.Out(i)
-		tb := b.Out(i)
-		if ta != tb {
-			return formatFuncType(a, skipAFirst), formatFuncType(b, false), false
-		}
-	}
-	return "", "", true
-}
-
-func formatFuncType(f reflect.Type, skipFirst bool) string {
-	n := f.NumIn()
-	i := 0
-	if skipFirst {
-		i++
-	}
-	var strBuilder strings.Builder
-	strBuilder.WriteString("func(")
-	for ; i < n; i++ {
-		t := f.In(i)
-		strBuilder.WriteString(t.String())
-		if i < n-1 {
-			strBuilder.WriteString(",")
-		}
-	}
-	strBuilder.WriteString(")")
-
-	nout := f.NumOut()
-	if nout > 0 {
-		strBuilder.WriteString(" ")
-		if nout > 1 {
-			strBuilder.WriteString("(")
-		}
-		for i := 0; i < nout; i++ {
-			t := f.Out(i)
-			strBuilder.WriteString(t.String())
-			if i < nout-1 {
-				strBuilder.WriteString(",")
-			}
-		}
-		if nout > 1 {
-			strBuilder.WriteString(")")
-		}
-	}
-
-	return strBuilder.String()
 }

@@ -16,7 +16,8 @@ import (
 	"github.com/xhd2015/xgo/support/instrument/overlay"
 )
 
-func instrumentUserSpace(projectDir string, projectRoot string, mod string, modfile string, mainModule string, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string) error {
+func instrumentUserSpace(projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string) error {
+	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
 		vendorDir, err := getVendorDir(projectRoot)
@@ -27,16 +28,18 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 			mod = "vendor"
 		}
 	}
-	err := instrument.LinkXgoRuntime(projectDir, overlayFS, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir)
+	err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir)
 	if err != nil {
 		if err != instrument.ErrLinkFileNotFound {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, `WARNING: xgo: skipping runtime instrumentation, requires upgrade %s
+		fmt.Fprintf(os.Stderr, `WARNING: xgo: skipping runtime instrumentation, upgrade:
   go get %s@latest
-  import _ %q`, instrument_xgo_runtime.RUNTIME_TRAP_PKG, instrument_xgo_runtime.RUNTIME_TRAP_PKG, instrument_xgo_runtime.RUNTIME_TRAP_PKG)
+  import _ %q
+`, instrument_xgo_runtime.RUNTIME_TRAP_PKG, instrument_xgo_runtime.RUNTIME_TRAP_PKG)
 		return nil
 	}
+
 	includeMain, loadPkgs, err := getLoadPackages(rules)
 	if err != nil {
 		return err
@@ -48,9 +51,6 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 	}
 	loadArgs = append(loadArgs, loadPkgs...)
 	loadArgs = append(loadArgs, trapPkgs...)
-	loadArgs = append(loadArgs,
-		instrument_xgo_runtime.RUNTIME_TRACE_SIGNAL_PKG,
-	)
 
 	logDebug("start load: %v", loadArgs)
 	loadPackages, err := load.LoadPackages(loadArgs, load.LoadOptions{
@@ -63,8 +63,8 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 	if err != nil {
 		return err
 	}
-	packages := edit.Edit(loadPackages)
 
+	packages := edit.Edit(loadPackages)
 	logDebug("start instrumentFuncTrap: len(packages)=%d", len(packages.Packages))
 	err = instrument.InstrumentFuncTrap(packages)
 	if err != nil {

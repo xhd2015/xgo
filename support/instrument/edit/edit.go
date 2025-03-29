@@ -3,7 +3,6 @@ package edit
 import (
 	"go/ast"
 	"go/token"
-	"unsafe"
 
 	"github.com/xhd2015/xgo/support/edit/goedit"
 	"github.com/xhd2015/xgo/support/instrument/load"
@@ -62,7 +61,7 @@ func Edit(packages *load.Packages) *Packages {
 		for j, file := range pkg.Files {
 			files[j] = &File{
 				File: file,
-				Edit: goedit.NewWithBytes(packages.Fset, toReadonlyBytes(file.Content)),
+				Edit: goedit.New(packages.Fset, file.Content),
 			}
 		}
 		p := &Package{
@@ -74,26 +73,6 @@ func Edit(packages *load.Packages) *Packages {
 	}
 
 	return pkgs
-}
-
-func toReadonlyBytes(s string) []byte {
-	type stringHeader struct {
-		data uintptr
-		len  int
-	}
-	type sliceHeader struct {
-		data uintptr
-		len  int
-		cap  int
-	}
-
-	strHeader := (*stringHeader)(unsafe.Pointer(&s))
-	slHeader := sliceHeader{
-		data: strHeader.data,
-		len:  strHeader.len,
-		cap:  strHeader.len,
-	}
-	return *(*[]byte)(unsafe.Pointer(&slHeader))
 }
 
 func (p *Packages) Filter(f func(pkg *Package) bool) *Packages {

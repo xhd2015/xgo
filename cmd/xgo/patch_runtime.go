@@ -10,8 +10,8 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/instrument/instrument_runtime"
 	instrument_patch "github.com/xhd2015/xgo/support/instrument/patch"
-	runtime_patch "github.com/xhd2015/xgo/support/instrument/runtime"
 	ast_patch "github.com/xhd2015/xgo/support/transform/patch"
 )
 
@@ -27,7 +27,7 @@ var testingFilePatch = &FilePatch{
 		{
 			Mark:           "declare_testing_callback_v2",
 			InsertIndex:    0,
-			UpdatePosition: true,
+			UpdatePosition: instrument_patch.UpdatePosition_Before,
 			Anchors: []string{
 				"func tRunner(t *T, fn func",
 				"{",
@@ -38,7 +38,7 @@ var testingFilePatch = &FilePatch{
 		{
 			Mark:           "call_testing_callback_v2",
 			InsertIndex:    4,
-			UpdatePosition: true,
+			UpdatePosition: instrument_patch.UpdatePosition_Before,
 			Anchors: []string{
 				"func tRunner(t *T, fn func",
 				"{",
@@ -116,7 +116,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		content = strings.ReplaceAll(content, entryPatch, "fn.entry")
 	}
 
-	content = runtime_patch.AppendGetFuncNameImpl(goVersion, content)
+	content = instrument_runtime.AppendGetFuncNameImpl(goVersion, content)
 
 	return true, os.WriteFile(dstFile, []byte(content), 0755)
 }
@@ -139,7 +139,7 @@ func patchRuntimeProc(goroot string, goVersion *goinfo.GoVersion) error {
 			patch.RuntimeProcGoroutineExitPatch,
 		)
 
-		return runtime_patch.InstrumentGoroutineCreation(goVersion, content)
+		return instrument_runtime.InstrumentGoroutineCreation(goVersion, content)
 	})
 	if err != nil {
 		return err
