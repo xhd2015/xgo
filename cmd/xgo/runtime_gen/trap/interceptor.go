@@ -2,22 +2,12 @@ package trap
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
-
-// a marker to indicate the
-// original function should be called
-var errCallOld = errors.New("mock: call old")
-
-func MockCallOld() {
-	panic(errCallOld)
-}
 
 type Interceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error
 
@@ -151,25 +141,11 @@ func buildPatchHandler(recvPtr interface{}, fn interface{}, replacer interface{}
 		}
 
 		// call the function
-		var callOld bool
 		var res []reflect.Value
-
-		func() {
-			defer func() {
-				if e := runtime.XgoPeekPanic(); e != nil {
-					if pe, ok := e.(error); ok && pe == errCallOld {
-						callOld = true
-					}
-				}
-			}()
-			if !t.IsVariadic() {
-				res = v.Call(callArgs)
-			} else {
-				res = v.CallSlice(callArgs)
-			}
-		}()
-		if callOld {
-			return false
+		if !t.IsVariadic() {
+			res = v.Call(callArgs)
+		} else {
+			res = v.CallSlice(callArgs)
 		}
 
 		// assign result
@@ -212,24 +188,35 @@ func buildRecorderHandler(recvPtr interface{}, fn interface{}, pre interface{}, 
 	fnType := reflect.TypeOf(fn)
 	wantArgs := make([]reflect.Type, 0, fnType.NumIn()+fnType.NumOut())
 	for i := 0; i < fnType.NumIn(); i++ {
-		wantArgs = append(wantArgs, reflect.PtrTo(fnType.In(i)))
+		wantArgs = append(wantArgs, fnType.In(i))
 	}
 	for i := 0; i < fnType.NumOut(); i++ {
-		wantArgs = append(wantArgs, reflect.PtrTo(fnType.Out(i)))
+		wantArgs = append(wantArgs, fnType.Out(i))
 	}
 
-	wantType := reflect.FuncOf(wantArgs, nil, false)
-	if preType != nil && preType != wantType {
-		panic(fmt.Errorf("pre should have type: %v, actual: %T", wantType, pre))
+	var preArgTypes []ptrType
+	var postArgTypes []ptrType
+	printWantType := reflect.FuncOf(wantArgs, nil, false)
+	if preType != nil {
+		var ok bool
+		preArgTypes, ok = resolveArgTypes(preType, wantArgs)
+		if !ok {
+			panic(fmt.Errorf("pre should have type: %v, actual: %T", printWantType, pre))
+		}
 	}
-	if postType != nil && postType != wantType {
-		panic(fmt.Errorf("post should have type: %v, actual: %T", wantType, post))
+	if postType != nil {
+		var ok bool
+		postArgTypes, ok = resolveArgTypes(postType, wantArgs)
+		if !ok {
+			panic(fmt.Errorf("post should have type: %v, actual: %T", printWantType, post))
+		}
 	}
-	nIn := wantType.NumIn()
+
+	nIn := printWantType.NumIn()
 
 	// first arg ctx: true => [recv,args[1:]...]
 	// first arg ctx: false => [recv, args[0:]...]
-	callHandlerHandler := func(fnV reflect.Value, recvName string, actRecvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (interface{}, bool) {
+	callHandlerHandler := func(fnV reflect.Value, fnType reflect.Type, argTypes []ptrType, recvName string, actRecvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (interface{}, bool) {
 		// assemble arguments
 		callArgs := make([]reflect.Value, nIn)
 		callIdx := 0
@@ -255,18 +242,20 @@ func buildRecorderHandler(recvPtr interface{}, fn interface{}, pre interface{}, 
 			} else {
 				// set receiver
 				if nIn > 0 {
-					callArgs[callIdx] = reflect.ValueOf(actRecvPtr)
+					callArgs[callIdx] = argTypes[callIdx].get(reflect.ValueOf(actRecvPtr))
 					callIdx++
 				}
 			}
 		}
 		nArgs := len(args)
 		for i := 0; i < nArgs; i++ {
-			callArgs[callIdx+i] = reflect.ValueOf(args[i])
+			callArgs[callIdx] = argTypes[callIdx].get(reflect.ValueOf(args[i]))
+			callIdx++
 		}
 		nResults := len(results)
 		for i := 0; i < nResults; i++ {
-			callArgs[callIdx+nArgs+i] = reflect.ValueOf(results[i])
+			callArgs[callIdx] = argTypes[callIdx].get(reflect.ValueOf(results[i]))
+			callIdx++
 		}
 
 		// call the function
@@ -282,15 +271,50 @@ func buildRecorderHandler(recvPtr interface{}, fn interface{}, pre interface{}, 
 
 	if pre != nil {
 		preHandler = func(recvName string, actRecvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (interface{}, bool) {
-			return callHandlerHandler(preV, recvName, actRecvPtr, argNames, args, resultNames, results)
+			return callHandlerHandler(preV, preType, preArgTypes, recvName, actRecvPtr, argNames, args, resultNames, results)
 		}
 	}
 	if post != nil {
 		postHandler = func(recvName string, actRecvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}, data interface{}) {
-			callHandlerHandler(postV, recvName, actRecvPtr, argNames, args, resultNames, results)
+			callHandlerHandler(postV, postType, postArgTypes, recvName, actRecvPtr, argNames, args, resultNames, results)
 		}
 	}
 	return preHandler, postHandler
+}
+
+type ptrType int
+
+const (
+	ptrType_Value ptrType = iota
+	ptrType_Ptr
+)
+
+func (c ptrType) get(p reflect.Value) reflect.Value {
+	if c == ptrType_Value {
+		return p.Elem()
+	}
+	return p
+}
+
+func resolveArgTypes(t reflect.Type, argTypes []reflect.Type) ([]ptrType, bool) {
+	// assume t is func type
+	if t.NumIn() != len(argTypes) {
+		return nil, false
+	}
+	res := make([]ptrType, t.NumIn())
+	for i := 0; i < t.NumIn(); i++ {
+		argType := argTypes[i]
+		tArg := t.In(i)
+		pt := ptrType_Value
+		if tArg != argType {
+			if tArg.Kind() != reflect.Ptr || tArg.Elem() != argType {
+				return nil, false
+			}
+			pt = ptrType_Ptr
+		}
+		res[i] = pt
+	}
+	return res, true
 }
 
 func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool {
@@ -332,20 +356,8 @@ func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func
 			})
 		}
 
-		// call the function
-		var callOld bool
-		func() {
-			defer func() {
-				if e := runtime.XgoPeekPanic(); e != nil {
-					if pe, ok := e.(error); ok && pe == errCallOld {
-						callOld = true
-					}
-				}
-			}()
-
-			interceptor(nil, fnInfo, argObj, resObject)
-		}()
-		return !callOld
+		interceptor(nil, fnInfo, argObj, resObject)
+		return true
 	}
 }
 
