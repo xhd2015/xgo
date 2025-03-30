@@ -1,4 +1,4 @@
-package mock
+package trap
 
 import (
 	"fmt"

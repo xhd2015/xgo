@@ -121,6 +121,18 @@ func (c *Stack) getLastVarPtrMock(varAddr uintptr) (mock func(name string, res i
 	return m.mock
 }
 
+func (c *Stack) getRecordHandlers(pc uintptr) []*recorderHolder {
+	return c.recorder[pc]
+}
+
+func (c *Stack) getVarRecordHandlers(varAddr uintptr) []*varRecordHolder {
+	return c.varRecorder[varAddr]
+}
+
+func (c *Stack) getVarPtrRecordHandlers(varAddr uintptr) []*varRecordHolder {
+	return c.varPtrRecorder[varAddr]
+}
+
 func sameReceiver(recvPtr interface{}, actRecvPtr interface{}) bool {
 	// assume both are non-nil
 	recvPtrVal := reflect.ValueOf(recvPtr)

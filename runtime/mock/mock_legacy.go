@@ -1,7 +1,6 @@
 package mock
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -9,8 +8,11 @@ import (
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
 	"github.com/xhd2015/xgo/runtime/legacy"
+	"github.com/xhd2015/xgo/runtime/trap"
 	trap_legacy "github.com/xhd2015/xgo/runtime/trap/legacy"
 )
+
+type Interceptor = trap.Interceptor
 
 // Deprecated: use Mock instead
 func MockByName(pkgPath string, funcName string, interceptor Interceptor) func() {
@@ -85,56 +87,7 @@ func getMethodByName(instance interface{}, method string) (recvPtr interface{}, 
 //
 // Deprecated: use mock instead
 func mockLegacy(mockRecvPtr interface{}, mockFnInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr, interceptor Interceptor) func() {
-	return trap_legacy.AddFuncInfoInterceptor(mockFnInfo, &trap_legacy.Interceptor{
-		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
-			if f.Kind == core.Kind_Func && f.PC == 0 {
-				if !f.Generic {
-					if !f.Closure || trap_legacy.ClosureHasFunc {
-						return nil, nil
-					}
-				}
-				// may atch generic
-				// or closure without PC
-			}
-			if f != mockFnInfo {
-				// no match
-				return nil, nil
-			}
-			if f.Generic && f.RecvType == "" {
-				// generic function(not method) should distinguish different implementations
-				curTrappingPC := trap_legacy.GetTrappingPC()
-				if curTrappingPC != 0 && curTrappingPC != funcPC && curTrappingPC != trappingPC {
-					return nil, nil
-				}
-			}
-
-			if f.RecvType != "" && mockRecvPtr != nil {
-				// check recv instance
-				recvPtr := args.GetFieldIndex(0).Ptr()
-
-				// check they pointing to the same variable
-				re := reflect.ValueOf(recvPtr).Elem().Interface()
-				me := reflect.ValueOf(mockRecvPtr).Elem().Interface()
-				if re != me {
-					// if *recvPtr != *mockRecvPtr {
-					return nil, nil
-				}
-			}
-
-			// TODO: add panic check
-			err = interceptor(ctx, f, args, result)
-			if err != nil {
-				if err == errCallOld {
-					// continue
-					return nil, nil
-				}
-				return nil, err
-			}
-
-			// when match func, default to use mock
-			return nil, trap_legacy.ErrAbort
-		},
-	})
+	panic("Deprecated: should be not called")
 }
 
 // mock context

@@ -27,6 +27,7 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 	funcInfo := runtime.FuncForPC(pc)
 
 	fnName := funcInfo.Name()
+	fnPC := funcInfo.Entry()
 
 	var mock func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool
 
@@ -34,13 +35,15 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 	var isTesting bool
 	var testName string
 
+	var postRecorder func()
+
 	stack := GetStack()
 	if stack != nil {
 		if stack.inspecting != nil {
 			stack.inspecting(pc, recvName, recvPtr, argNames, args, resultNames, results)
 			return nil, true
 		}
-		wantPtr, mockFn := stack.getLastMock(funcInfo.Entry())
+		wantPtr, mockFn := stack.getLastMock(fnPC)
 		if mockFn != nil && (wantPtr == nil || (recvPtr != nil && sameReceiver(recvPtr, wantPtr))) {
 			mock = mockFn
 		}
@@ -50,14 +53,43 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 				isStart = true
 			}
 		}
+		var postRecorders []func()
+		recordHandlers := stack.getRecordHandlers(fnPC)
+		for _, h := range recordHandlers {
+			if h.wantRecvPtr != nil && (recvPtr == nil || !sameReceiver(recvPtr, h.wantRecvPtr)) {
+				continue
+			}
+			var data interface{}
+			if h.pre != nil {
+				data, _ = h.pre(recvName, recvPtr, argNames, args, resultNames, results)
+			}
+			if h.post != nil {
+				postRecorders = append(postRecorders, func() {
+					h.post(recvName, recvPtr, argNames, args, resultNames, results, data)
+				})
+			}
+		}
+		if len(postRecorders) > 0 {
+			if len(postRecorders) == 1 {
+				postRecorder = postRecorders[0]
+			} else {
+				postRecorder = func() {
+					// reversed
+					n := len(postRecorders)
+					for i := n - 1; i >= 0; i-- {
+						postRecorders[i]()
+					}
+				}
+			}
+		}
 		if !stack.hasStartedTracing {
 			// without tracing, mock becomes simpler
 			if mock != nil {
 				ok := mock(recvName, recvPtr, argNames, args, resultNames, results)
 				// ok=true indicates not call old function
-				return nil, ok
+				return postRecorder, ok
 			}
-			return nil, false
+			return postRecorder, false
 		}
 	} else {
 		if fnName != constants.START_XGO_TRACE {
@@ -132,7 +164,7 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 		}
 		if outputFile == "" && onFinish == nil {
 			DetachStack()
-			return nil, false
+			return postRecorder, false
 		}
 		stack.OutputFile = outputFile
 		stack.onFinish = onFinish
@@ -155,6 +187,9 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 
 	var hitMock bool
 	post := func() {
+		if postRecorder != nil {
+			postRecorder()
+		}
 		cur.EndNs = time.Now().UnixNano() - stack.Begin.UnixNano()
 		cur.HitMock = hitMock
 		var hasPanic bool
