@@ -24,7 +24,9 @@ func associateG(curG *_G, newG *_G) {
 
 	// inherit mock
 	newStack := newG.GetOrAttachStack()
-	newStack.mock = cloneMocks(stack.mock)
+	newStack.mock = cloneFuncMocks(stack.mock)
+	newStack.varMock = cloneVarMocks(stack.varMock)
+	newStack.varPtrMock = cloneVarMocks(stack.varPtrMock)
 
 	// associate trace
 	if stack.hasStartedTracing {
@@ -44,7 +46,7 @@ func associateG(curG *_G, newG *_G) {
 	}
 }
 
-func cloneMocks(mock map[uintptr][]*mockHolder) map[uintptr][]*mockHolder {
+func cloneFuncMocks(mock map[uintptr][]*mockHolder) map[uintptr][]*mockHolder {
 	if mock == nil {
 		return nil
 	}
@@ -55,6 +57,23 @@ func cloneMocks(mock map[uintptr][]*mockHolder) map[uintptr][]*mockHolder {
 			newMocks[i] = &mockHolder{
 				wantRecvPtr: m.wantRecvPtr,
 				mock:        m.mock,
+			}
+		}
+		newMock[pc] = newMocks
+	}
+	return newMock
+}
+
+func cloneVarMocks(mock map[uintptr][]*varMockHolder) map[uintptr][]*varMockHolder {
+	if mock == nil {
+		return nil
+	}
+	newMock := make(map[uintptr][]*varMockHolder, len(mock))
+	for pc, mocks := range mock {
+		newMocks := make([]*varMockHolder, len(mocks))
+		for i, m := range mocks {
+			newMocks[i] = &varMockHolder{
+				mock: m.mock,
 			}
 		}
 		newMock[pc] = newMocks

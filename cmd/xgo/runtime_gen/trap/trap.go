@@ -54,7 +54,7 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 			// without tracing, mock becomes simpler
 			if mock != nil {
 				ok := mock(recvName, recvPtr, argNames, args, resultNames, results)
-				// ok indicates call old function
+				// ok=true indicates not call old function
 				return nil, ok
 			}
 			return nil, false

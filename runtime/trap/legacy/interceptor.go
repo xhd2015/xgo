@@ -60,6 +60,7 @@ var globalInterceptors = &interceptorManager{}
 var localInterceptors sync.Map // goroutine ptr -> *interceptorGroup
 
 // AddInterceptor add a general interceptor, disallowing re-entrant
+// Deprecated: no longer supported
 func AddInterceptor(interceptor *Interceptor) func() {
 	if !legacy.V1_0_0 {
 		fmt.Fprintln(os.Stderr, "WARNING: AddFuncInterceptor no longer supported.")
@@ -68,6 +69,7 @@ func AddInterceptor(interceptor *Interceptor) func() {
 	return addInterceptor(nil, interceptor, false)
 }
 
+// Deprecated: no longer supported
 func AddInterceptorHead(interceptor *Interceptor) func() {
 	if !legacy.V1_0_0 {
 		fmt.Fprintln(os.Stderr, "WARNING: AddFuncInterceptor no longer supported.")
@@ -77,6 +79,7 @@ func AddInterceptorHead(interceptor *Interceptor) func() {
 }
 
 // AddFuncInterceptor add func interceptor, allowing f to be re-entrant
+// Deprecated: no longer supported
 func AddFuncInterceptor(f interface{}, interceptor *Interceptor) func() {
 	if !legacy.V1_0_0 {
 		fmt.Fprintln(os.Stderr, "WARNING: AddFuncInterceptor no longer supported.")
@@ -89,6 +92,7 @@ func AddFuncInterceptor(f interface{}, interceptor *Interceptor) func() {
 	return addInterceptor(fnInfo, interceptor, false)
 }
 
+// Deprecated: no longer supported
 func AddFuncInfoInterceptor(f *core.FuncInfo, interceptor *Interceptor) func() {
 	if !legacy.V1_0_0 {
 		fmt.Fprintln(os.Stderr, "WARNING: AddFuncInterceptor no longer supported.")
@@ -110,6 +114,7 @@ func AddFuncInfoInterceptor(f *core.FuncInfo, interceptor *Interceptor) func() {
 // NOTE: the implementation uses addLocalInterceptor
 // even from init because it will be soon cleared
 // without causing concurrent issues.
+// Deprecated: no longer supported
 func WithInterceptor(interceptor *Interceptor, f func()) {
 	dispose, _ := addLocalInterceptor(nil, interceptor, false, false)
 	defer dispose()
@@ -119,17 +124,21 @@ func WithInterceptor(interceptor *Interceptor, f func()) {
 // WithOverride override local and global interceptors
 // in current goroutine temporarily, it returns a function
 // that can be used to cancel the override.
+// Deprecated: no longer supported
 func WithOverride(interceptor *Interceptor, f func()) {
 	_, disposeGroup := addLocalInterceptor(nil, interceptor, true, false)
 	defer disposeGroup()
 	f()
 }
+
+// Deprecated: no longer supported
 func WithFuncOverride(funcInfo *core.FuncInfo, interceptor *Interceptor, f func()) {
 	_, disposeGroup := addLocalInterceptor(funcInfo, interceptor, true, false)
 	defer disposeGroup()
 	f()
 }
 
+// Deprecated: no longer supported
 func addInterceptor(f *core.FuncInfo, interceptor *Interceptor, head bool) func() {
 	ensureTrapInstall()
 	if __xgo_link_init_finished() {
