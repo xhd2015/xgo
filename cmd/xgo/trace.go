@@ -69,7 +69,7 @@ func getVendorDir(projectRoot string) (string, error) {
 // by employing this technique with -modfile=replacedModFile, we can instruct go
 // to build with different modules.
 // TODO: may apply tags
-func importRuntimeDepGenOverlay(test bool, mayHaveCover bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, projectRoot string, localXgoGenDir string, mainModule string, mod string, forceCopyRuntime bool, args []string) (*importResult, error) {
+func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, projectRoot string, localXgoGenDir string, mainModule string, mod string, forceCopyRuntime bool, args []string) (*importResult, error) {
 	if mainModule == "" {
 		// only work with module
 		return nil, nil
@@ -138,7 +138,7 @@ func importRuntimeDepGenOverlay(test bool, mayHaveCover bool, goroot string, goB
 	}
 
 	pkgArgs := getPkgArgs(args)
-	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, mayHaveCover, overlayDir)
+	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, overlayDir)
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +485,7 @@ func isLocalReplace(modPath string) bool {
 	return false
 }
 
-func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs []string, test bool, mayHaveCover bool, tmpProjectDir string) (replace map[string]string, err error) {
+func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs []string, test bool, tmpProjectDir string) (replace map[string]string, err error) {
 	// list files, add init
 	// NOTE: go build tag applies,
 	// ignored files will be placed to IgnoredGoFiles
@@ -537,8 +537,9 @@ func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs 
 			hasGoFiles = true
 			pkgInfos = append(pkgInfos, pkgInfo{pkg.Imports, pkg.GoFiles, false})
 		}
-		if !hasGoFiles || mayHaveCover {
-			// mayHaveCover: see https://github.com/xhd2015/xgo/issues/285
+		if !hasGoFiles {
+			// previous we check mayHaveCover: https://github.com/xhd2015/xgo/issues/285
+			// now fixed: https://github.com/xhd2015/xgo/issues/300
 			pkgInfos = append(pkgInfos, pkgInfo{nil, pkg.TestGoFiles, true})
 			pkgInfos = append(pkgInfos, pkgInfo{nil, pkg.XTestGoFiles, true})
 		}

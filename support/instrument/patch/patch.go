@@ -95,6 +95,11 @@ func updateContent(content string, beginMark string, endMark string, seq []strin
 	}
 	offset, anchorLen, endOffset := strutil.SequenceOffset(content, seq, i, begin)
 	if offset < 0 {
+		// logS := content
+		// if len(logS) > 1000 {
+		// 	logS = logS[:1000] + "..."
+		// }
+		// fmt.Fprintf(os.Stderr, "DEBUG sequence %d %q missing from\n:%s\n", i, seq, logS)
 		qseq := make([]string, len(seq))
 		for i, s := range seq {
 			qseq[i] = "  " + s

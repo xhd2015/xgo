@@ -48,6 +48,12 @@ func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, go
 		return err
 	}
 
+	// instrument go tool cover
+	err = instrument_go.InstrumentGoToolCover(goroot, goVersion)
+	if err != nil {
+		return err
+	}
+
 	// instrument runtime
 	err = instrument_runtime.InstrumentRuntime(goroot, goVersion, instrument_runtime.InstrumentRuntimeOptions{
 		Mode: instrument_runtime.InstrumentMode_ForceAndIgnoreMark,

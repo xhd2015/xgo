@@ -14,6 +14,8 @@ go run -tags dev ./cmd/xgo test --with-goroot go1.19.13 --project-dir runtime/te
 # specific test
 go run -tags dev ./cmd/xgo test --with-goroot go1.17.13 --project-dir ./runtime/test/mock_var -v -run TestThirdPartyTypeMethodVar
 
+# with -cover
+go run -tags dev ./cmd/xgo test --with-goroot go1.19.13 -cover --project-dir runtime/test ./patch
 ```
 
 # Debug tests

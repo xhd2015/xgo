@@ -37,7 +37,7 @@ type FuncInfo struct {
 	Kind         Kind
 	FullName     string
 	Pkg          string
-	IdentityName string
+	IdentityName string // identity name within a package
 	Name         string
 	RecvType     string
 	RecvPtr      bool
