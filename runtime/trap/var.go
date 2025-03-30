@@ -18,14 +18,11 @@ func trapVar(name string, varAddr interface{}, res interface{}) {
 
 	ptr := reflect.ValueOf(varAddr).Pointer()
 	mock := stack.getLastVarMock(ptr)
-	if !stack.hasStartedTracing {
-		if mock != nil {
-			mock(name, res)
-		}
-		return
-	}
 	if mock != nil {
 		mock(name, res)
+	}
+	if !stack.hasStartedTracing {
+		return
 	}
 	_, file, line, _ := runtime.Caller(SKIP + 1)
 	cur := stack.newStackEntry(begin, name)
@@ -54,14 +51,12 @@ func trapVarPtr(name string, varAddr interface{}, res interface{}) {
 			mockRes = reflect.ValueOf(res).Elem().Interface()
 		}
 	}
-	if !stack.hasStartedTracing {
-		if mock != nil {
-			mock(name, mockRes)
-		}
-		return
-	}
+
 	if mock != nil {
 		mock(name, mockRes)
+	}
+	if !stack.hasStartedTracing {
+		return
 	}
 
 	_, file, line, _ := runtime.Caller(SKIP + 1)
