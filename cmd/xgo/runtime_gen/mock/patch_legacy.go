@@ -12,40 +12,6 @@ import (
 	trap_legacy "github.com/xhd2015/xgo/runtime/trap/legacy"
 )
 
-// Patch replaces `fn` with `replacer` in current goroutine.
-// You do not have to manually clean up the replacer, as
-// xgo will automatically clear the replacer when
-// current gorotuine exits.
-// However, if you want to clear the replacer earlier,
-// this function returns a clean up function that can be
-// used to clear the replacer.
-// Deprecated: use Patch instead.
-func PatchV1(fn interface{}, replacer interface{}) func() {
-	if !legacy.V1_0_0 {
-		panic("PatchV1 is deprecated and no longer supported, use Patch instead")
-	}
-	if fn == nil {
-		panic("fn cannot be nil")
-	}
-	if replacer == nil {
-		panic("replacer cannot be nil")
-	}
-	fnType := reflect.TypeOf(fn)
-	fnKind := fnType.Kind()
-	if fnKind == reflect.Func {
-		if fnType != reflect.TypeOf(replacer) {
-			panic(fmt.Errorf("replacer should have type: %T, actual: %T", fn, replacer))
-		}
-	} else if fnKind == reflect.Ptr {
-		checkVarType(fnType, reflect.TypeOf(replacer), false)
-	} else {
-		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
-	}
-
-	recvPtr, fnInfo, funcPC, trappingPC := getFunc(fn)
-	return mockLegacy(recvPtr, fnInfo, funcPC, trappingPC, buildInterceptorFromPatch(recvPtr, replacer))
-}
-
 // Deprecated: use Patch instead.
 func PatchByName(pkgPath string, funcName string, replacer interface{}) func() {
 	if !legacy.V1_0_0 {

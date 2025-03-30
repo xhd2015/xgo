@@ -26,6 +26,11 @@ type Stack struct {
 	varMock    map[uintptr][]*varMockHolder
 	varPtrMock map[uintptr][]*varMockHolder
 
+	// pc->recorder
+	recorder       map[uintptr][]*recorderHolder
+	varRecorder    map[uintptr][]*varRecordHolder
+	varPtrRecorder map[uintptr][]*varRecordHolder
+
 	inspecting func(pc uintptr, recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{})
 }
 
