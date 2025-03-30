@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -22,27 +23,7 @@ func InstrumentGo(goroot string, goVersion *goinfo.GoVersion) error {
 		return err
 	}
 	// build go command
-	srcDir := filepath.Join(goroot, "src")
-	origGo := filepath.Join(goroot, "bin", "go"+osinfo.EXE_SUFFIX)
-
-	tmpBuiltGo := filepath.Join(goroot, "bin", "__xgo_go"+osinfo.EXE_SUFFIX)
-	err = cmd.Dir(srcDir).
-		Env([]string{"GOROOT=" + goroot}).
-		Run(origGo, "build", "-o", tmpBuiltGo, "./cmd/go")
-	if err != nil {
-		return err
-	}
-
-	err = os.Rename(origGo, origGo+".bak")
-	if err != nil {
-		return err
-	}
-	err = os.Rename(tmpBuiltGo, origGo)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return buildBinary(goroot, filepath.Join(goroot, "src"), filepath.Join(goroot, "bin"), "go", "./cmd/go")
 }
 
 func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
@@ -90,7 +71,47 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 			patch.UpdatePosition_Replace,
 			"__xgo_overlay_source_file,",
 		)
+		// redesign
+		if goVersion.Minor >= 20 {
+			// fmt.Fprintf(os.Stderr, "DEBUG content: \n%s\n", content)
+			content = patch.UpdateContent(content,
+				"/*<begin modify_infiles>*/",
+				"/*<end modify_infiles>*/",
+				[]string{
+					"func (b *Builder) build(",
+					coverLine,
+					"if cfg.Experiment.CoverageRedesign {",
+					"infiles = append(infiles, sourceFile)",
+				},
+				3,
+				patch.UpdatePosition_Replace,
+				strings.TrimSuffix(getActualFile, ";")+";"+"infiles = append(infiles, __xgo_overlay_source_file)",
+			)
+		}
 		return content, nil
 	})
 
+}
+
+func buildBinary(goroot string, srcDir string, outputDir string, outputName string, arg string) error {
+	origGo := filepath.Join(goroot, "bin", "go"+osinfo.EXE_SUFFIX)
+
+	origFile := filepath.Join(outputDir, outputName+osinfo.EXE_SUFFIX)
+	tmpBuiltOutput := filepath.Join(outputDir, "__xgo_"+outputName+osinfo.EXE_SUFFIX)
+	err := cmd.Dir(srcDir).
+		Env([]string{"GOROOT=" + goroot}).
+		Run(origGo, "build", "-o", tmpBuiltOutput, arg)
+	if err != nil {
+		return err
+	}
+
+	err = os.Rename(origFile, origFile+".bak")
+	if err != nil {
+		return err
+	}
+	err = os.Rename(tmpBuiltOutput, origFile)
+	if err != nil {
+		return err
+	}
+	return nil
 }

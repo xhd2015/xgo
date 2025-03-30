@@ -544,21 +544,8 @@ func handleBuild(cmd string, args []string) error {
 		modForLoad := mod
 		modfileForLoad := modfile
 		if enableStackTrace {
-			// coverage and trace auto loading may conflict,
-			// see https://github.com/xhd2015/xgo/issues/285
-			// and https://github.com/xhd2015/xgo/issues/299
-			var mayHaveCover bool
-			// example:
-			//    -cover -coverpkg github.com/xhd2015/xgo/... -coverprofile cover.out
-			for _, arg := range args {
-				if strings.HasPrefix(arg, "-cover") {
-					mayHaveCover = true
-					break
-				}
-			}
-
 			// check if xgo/runtime ready
-			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, mayHaveCover, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, remainArgs)
+			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, remainArgs)
 			if impRuntimeErr != nil {
 				// can be silently ignored
 				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", RUNTIME_TRACE_PKG, RUNTIME_TRACE_PKG, impRuntimeErr)
@@ -592,6 +579,18 @@ func handleBuild(cmd string, args []string) error {
 				return err
 			}
 		}
+		// coverage and instrument have conflicts,
+		// see https://github.com/xhd2015/xgo/issues/301
+		// TODO: enhance this to be extract -coverpkg pkg1,pkg2,...
+		var mayHaveCover bool
+		// example:
+		//    -cover -coverpkg github.com/xhd2015/xgo/... -coverprofile cover.out
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "-cover") {
+				mayHaveCover = true
+				break
+			}
+		}
 
 		var collectTestTrace bool
 		var collectTestTraceDir string
@@ -599,7 +598,7 @@ func handleBuild(cmd string, args []string) error {
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		err = instrumentUserSpace(projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir)
+		err = instrumentUserSpace(projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir)
 		if err != nil {
 			return err
 		}

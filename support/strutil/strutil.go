@@ -35,7 +35,7 @@ func indexSequence(s string, sequence []string, anchorIdx int, begin bool) (offs
 	if anchorIdx == -1 {
 		anchorIdx = len(sequence) - 1
 	} else if anchorIdx < 0 || anchorIdx >= len(sequence) {
-		return -1, -1, -1
+		panic(fmt.Errorf("anchorIdx out of range: %d", anchorIdx))
 	}
 	var recordOff int
 	cursor := 0

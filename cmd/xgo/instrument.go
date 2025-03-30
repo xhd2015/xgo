@@ -11,12 +11,13 @@ import (
 	"github.com/xhd2015/xgo/support/git"
 	"github.com/xhd2015/xgo/support/instrument"
 	"github.com/xhd2015/xgo/support/instrument/edit"
+	"github.com/xhd2015/xgo/support/instrument/instrument_go"
 	"github.com/xhd2015/xgo/support/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/support/instrument/load"
 	"github.com/xhd2015/xgo/support/instrument/overlay"
 )
 
-func instrumentUserSpace(projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string) error {
+func instrumentUserSpace(projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -87,6 +88,12 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 				continue
 			}
 			content := string(file.Edit.Buffer().Bytes())
+			if mayHaveCover {
+				content, err = instrument_go.AddEditsNotes(file.Edit, file.File.AbsPath, file.File.Content, content)
+				if err != nil {
+					return fmt.Errorf("failed to add edits: %s %w", file.File.AbsPath, err)
+				}
+			}
 			overlayFS.OverrideContent(overlay.AbsFile(file.File.AbsPath), content)
 			updatedFiles++
 		}
