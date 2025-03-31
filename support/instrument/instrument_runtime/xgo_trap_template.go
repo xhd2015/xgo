@@ -111,11 +111,17 @@ func XgoOnExitG(callback func()) {
 }
 
 func __xgo_callback_on_create_g(curg *g, newg *g) {
+	if newg == nil {
+		return
+	}
 	// newg might be reused from an already exited goroutine
 	// so here we need to explicity clear the __xgo_g
 	// clear
 	newg.__xgo_g = __xgo_g{}
 	if len(__xgo_on_create_g_callbacks) == 0 {
+		return
+	}
+	if curg == nil {
 		return
 	}
 	// println("new g:", hex(uintptr(unsafe.Pointer(newg))), "from g:", hex(uintptr(unsafe.Pointer(curg))))

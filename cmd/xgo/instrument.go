@@ -69,6 +69,7 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 		return err
 	}
 
+	// insert func trap
 	packages := edit.Edit(loadPackages)
 	logDebug("start instrumentFuncTrap: len(packages)=%d", len(packages.Packages))
 	for _, pkg := range packages.Packages {
@@ -120,8 +121,14 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 					lines = append(lines, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, literal))
 				}
 				for _, funcInfo := range file.TrapFuncs {
+					var extra []string
 					identityName := getIdentityName(fset, file.File.Content, funcInfo.FuncDecl)
-					extra := []string{"Func:" + identityName}
+					if !isGeneric(funcInfo.FuncDecl) {
+						extra = append(extra, "Func:"+identityName)
+					} else {
+						extra = append(extra, "Generic:true")
+					}
+
 					literal := makeLiteral("Kind_Func", funcInfo.FuncDecl.Name.Name, identityName, funcInfo.FuncDecl.Pos(), extra)
 					lines = append(lines, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, literal))
 				}
@@ -138,14 +145,14 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 				absFile := file.File.AbsPath
 				declLines := make([]string, 0, len(lines)+2)
 				declLines = append(declLines,
-					fmt.Sprintf("pkgPath := %q", pkgPath),
-					fmt.Sprintf("absFile := %q", absFile),
+					fmt.Sprintf("pkgPath:=%q", pkgPath),
+					fmt.Sprintf("absFile:=%q", absFile),
 				)
 				declLines = append(declLines, lines...)
 
 				code := strings.Join(declLines, ";")
-				pos, posType := patch.GetFuncInsertPosition(fileSyntax)
-				patch.AddCode(fileEdit, pos, posType, "func init(){"+code+";}")
+				pos := patch.GetFuncInsertPosition(fileSyntax)
+				patch.AddCode(fileEdit, pos, "func init(){"+code+";}")
 			}
 		}
 	}
@@ -187,6 +194,13 @@ func getIdentityName(fset *token.FileSet, code string, funcDecl *ast.FuncDecl) s
 		recvName = "(" + recvName + ")"
 	}
 	return fmt.Sprintf("%s.%s", recvName, funcDecl.Name.Name)
+}
+
+func isGeneric(funcDecl *ast.FuncDecl) bool {
+	if funcDecl.Type.TypeParams == nil || len(funcDecl.Type.TypeParams.List) == 0 {
+		return false
+	}
+	return true
 }
 
 func hasFunc(pkg *edit.Package, fn string) bool {

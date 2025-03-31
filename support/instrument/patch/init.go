@@ -8,22 +8,19 @@ import (
 	"github.com/xhd2015/xgo/support/edit/goedit"
 )
 
-type PositionType int
-
-const (
-	Before PositionType = iota
-	After
-)
-
-func GetFuncInsertPosition(file *ast.File) (token.Pos, PositionType) {
+// NOTE: new func is always inserted after a position
+// because a function or variable may have some
+// special directive like go:embed, go:linkname...
+// we cannot add anything before them.
+func GetFuncInsertPosition(file *ast.File) token.Pos {
 	// find first non-import declaration
 	for _, decl := range file.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok {
-			return decl.Pos(), Before
+			return decl.End()
 		}
 		if genDecl.Tok != token.IMPORT {
-			return genDecl.Pos(), Before
+			return genDecl.End()
 		}
 	}
 
@@ -40,20 +37,13 @@ func GetFuncInsertPosition(file *ast.File) (token.Pos, PositionType) {
 		// so we panic here
 		panic("nothing to instrument with empty file")
 	}
-	return fileEnd, After
+	return fileEnd
 }
 
 func AddImport(edit *goedit.Edit, file *ast.File, name string, pkgPath string) {
 	edit.Insert(file.Name.End(), fmt.Sprintf(";import %s %q", name, pkgPath))
 }
 
-func AddCode(edit *goedit.Edit, pos token.Pos, posType PositionType, code string) {
-	switch posType {
-	case Before:
-		edit.Insert(pos, code+";")
-	case After:
-		edit.Insert(pos, ";"+code)
-	default:
-		panic(fmt.Errorf("invalid position type: %d", posType))
-	}
+func AddCode(edit *goedit.Edit, pos token.Pos, code string) {
+	edit.Insert(pos, ";"+code)
 }
