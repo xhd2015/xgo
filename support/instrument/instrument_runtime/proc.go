@@ -13,6 +13,10 @@ func instrumentProc(goroot string, goVersion *goinfo.GoVersion) error {
 		if err != nil {
 			return false, nil, err
 		}
+		procContent, err = instrumentGoexit(goVersion, procContent)
+		if err != nil {
+			return false, nil, err
+		}
 		return true, []byte(procContent), nil
 	})
 }
@@ -67,6 +71,21 @@ func instrumentNewGroutineV2(goVersion *goinfo.GoVersion, procContent string) (s
 		2,
 		patch.UpdatePosition_After,
 		";__xgo_callback_on_create_g(__xgo_curg,newg);",
+	)
+	return procContent, nil
+}
+
+func instrumentGoexit(goVersion *goinfo.GoVersion, procContent string) (string, error) {
+	// goexit1() is called for every exited goroutine
+	procContent = patch.UpdateContent(procContent,
+		"/*<begin add_go_exit1_callback>*/", "/*<end add_go_exit1_callback>*/",
+		[]string{
+			"func goexit1() {",
+			"\n",
+		},
+		0,
+		patch.UpdatePosition_After,
+		";__xgo_callback_on_exit_g()",
 	)
 	return procContent, nil
 }

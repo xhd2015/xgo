@@ -14,6 +14,17 @@ func init() {
 	runtime.XgoOnCreateG(func(g unsafe.Pointer, childG unsafe.Pointer) {
 		associateG((*_G)(g), (*_G)(childG))
 	})
+	runtime.XgoOnExitG(func() {
+		g := _GetG()
+		stack := g.GetStack()
+		if stack == nil {
+			return
+		}
+		if stack.End.IsZero() {
+			// fill end
+			stack.End = time.Now()
+		}
+	})
 }
 
 func associateG(curG *_G, newG *_G) {
@@ -34,7 +45,7 @@ func associateG(curG *_G, newG *_G) {
 
 		if stack.Top != nil {
 			child := &StackEntry{
-				StartNs:  time.Since(stack.Begin).Nanoseconds(),
+				BeginNs:  newStack.Begin.Sub(stack.Begin).Nanoseconds(),
 				Go:       true,
 				FuncName: "go",
 				GetStack: func() *Stack {
