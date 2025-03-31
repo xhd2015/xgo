@@ -77,9 +77,14 @@ func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File) []*edit.FuncInfo
 		if funcDecl.Body == nil {
 			return true
 		}
-
+		if funcDecl.Name == nil || funcDecl.Name.Name == "" || funcDecl.Name.Name == "_" {
+			return true
+		}
 		// Check if it's a method (has a receiver) with empty or "_" receiver name
 		_, receiver := processReceiverNames(funcDecl, fset, editor)
+		if receiver == nil && funcDecl.Name.Name == "init" {
+			return true
+		}
 
 		receiverName, receiverAddr := toNameAddr(receiver)
 		// Process parameter names
