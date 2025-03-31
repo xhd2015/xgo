@@ -9,20 +9,6 @@ import (
 	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
-const (
-	RUNTIME_TRAP_PKG             = "github.com/xhd2015/xgo/runtime/trap"
-	RUNTIME_INTERNAL_RUNTIME_PKG = "github.com/xhd2015/xgo/runtime/internal/runtime"
-	RUNTIME_CORE_PKG             = "github.com/xhd2015/xgo/runtime/core"
-	RUNTIME_TRACE_SIGNAL_PKG     = "github.com/xhd2015/xgo/runtime/trace/signal"
-	RUNTIME_TRAP_FLAGS_PKG       = "github.com/xhd2015/xgo/runtime/trap/flags"
-)
-
-const (
-	RUNTIME_LINK_FILE = "runtime_link.go"
-	VERSION_FILE      = "version.go"
-	FLAG_FILE         = "flags.go"
-)
-
 //go:embed runtime_link_template.go
 var runtimeLinkTemplate string
 

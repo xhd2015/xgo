@@ -10,7 +10,17 @@ import (
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/legacy"
+)
+
+type FuncInfo = core.FuncInfo
+
+const (
+	Kind_Func   = core.Kind_Func
+	Kind_Var    = core.Kind_Var
+	Kind_VarPtr = core.Kind_VarPtr
+	Kind_Const  = core.Kind_Const
 )
 
 // all func infos
@@ -47,6 +57,14 @@ func __xgo_link_retrieve_all_funcs_and_clear(f func(fn interface{})) {
 func __xgo_link_get_pc_name(pc uintptr) string {
 	fmt.Fprintf(os.Stderr, "WARNING: failed to link __xgo_link_get_pc_name(requires xgo).\n")
 	return ""
+}
+
+func RegisterFunc(funcInfo *FuncInfo) {
+	if funcInfo == nil {
+		panic("funcInfo is nil")
+	}
+	funcInfos = append(funcInfos, funcInfo)
+	registerIndex(funcInfo)
 }
 
 func GetFuncs() []*core.FuncInfo {
@@ -182,10 +200,67 @@ func registerFuncInfo(fnInfo interface{}) {
 
 	f := rv.FieldByName("Fn").Interface()
 
+	recvName := rv.FieldByName("RecvName").String()
+	argNames := rv.FieldByName("ArgNames").Interface().([]string)
+	resNames := rv.FieldByName("ResNames").Interface().([]string)
+	file := rv.FieldByName("File").String()
+	line := int(rv.FieldByName("Line").Int())
+
+	// debug
+	// fmt.Printf("reg: %s\n", fullName)
+	// if pkgPath == "main" {
+	// 	fmt.Fprintf(os.Stderr, "reg: funcName=%s,pc=%x,generic=%v,genericname=%s\n", funcName, pc, generic, genericName)
+	// }
+	// _, recvTypeName, recvPtr, name := core.ParseFuncName(identityName, false)
+	var infoVar interface{}
+	if varField.IsValid() {
+		infoVar = varField.Interface()
+	}
+	info := &core.FuncInfo{
+		Kind:         fnKind,
+		Pkg:          pkgPath,
+		IdentityName: identityName,
+		Name:         name,
+		RecvType:     recvTypeName,
+		RecvPtr:      recvPtr,
+
+		Interface: interface_,
+		Generic:   generic,
+		Closure:   closure,
+		Stdlib:    stdlib,
+
+		File: file,
+		Line: line,
+
+		// runtime info
+		Func: f, // nil for geneirc
+		Var:  infoVar,
+
+		RecvName: recvName,
+		ArgNames: argNames,
+		ResNames: resNames,
+	}
+	funcInfos = append(funcInfos, info)
+	registerIndex(info)
+}
+
+func registerIndex(info *core.FuncInfo) {
+	identityName := info.IdentityName
+	generic := info.Generic
+	interface_ := info.Interface
+	recvTypeName := info.RecvType
+	pkgPath := info.Pkg
+	fnKind := info.Kind
+	infoVar := info.Var
+
+	closure := info.Closure
+
+	f := info.Func
+
+	var pcFullName string
 	var firstArgCtx bool
 	var lastResErr bool
 	var pc uintptr
-	var fullName string
 	if !generic && !interface_ {
 		if f != nil {
 			// TODO: move all ctx, err check logic here
@@ -202,58 +277,30 @@ func registerFuncInfo(fnInfo interface{}) {
 				lastResErr = true
 			}
 			pc = getFuncPC(f)
-			fullName = __xgo_link_get_pc_name(pc)
+			pcFullName = runtime.XgoGetFullPCName(pc)
 		} else {
 			if (closure || fnKind == core.Kind_Var || fnKind == core.Kind_VarPtr || fnKind == core.Kind_Const) && identityName != "" {
-				fullName = pkgPath + "." + identityName
+				pcFullName = pkgPath + "." + identityName
 			}
 		}
 	}
-	recvName := rv.FieldByName("RecvName").String()
-	argNames := rv.FieldByName("ArgNames").Interface().([]string)
-	resNames := rv.FieldByName("ResNames").Interface().([]string)
-	file := rv.FieldByName("File").String()
-	line := int(rv.FieldByName("Line").Int())
+	info.PC = pc
 
-	// debug
-	// fmt.Printf("reg: %s\n", fullName)
-	// if pkgPath == "main" {
-	// 	fmt.Fprintf(os.Stderr, "reg: funcName=%s,pc=%x,generic=%v,genericname=%s\n", funcName, pc, generic, genericName)
-	// }
-	// _, recvTypeName, recvPtr, name := core.ParseFuncName(identityName, false)
-	info := &core.FuncInfo{
-		Kind:         fnKind,
-		FullName:     fullName,
-		Pkg:          pkgPath,
-		IdentityName: identityName,
-		Name:         name,
-		RecvType:     recvTypeName,
-		RecvPtr:      recvPtr,
-
-		Interface: interface_,
-		Generic:   generic,
-		Closure:   closure,
-		Stdlib:    stdlib,
-
-		File: file,
-		Line: line,
-
-		// runtime info
-		PC:   pc, // nil for generic
-		Func: f,  // nil for geneirc
-
-		RecvName: recvName,
-		ArgNames: argNames,
-		ResNames: resNames,
-
-		// brief info
-		FirstArgCtx:   firstArgCtx,
-		LastResultErr: lastResErr,
+	if info.FullName == "" {
+		info.FullName = pcFullName
+	} else if info.FullName != pcFullName {
+		panic(fmt.Errorf("func name mismatch: %s != %s", info.FullName, pcFullName))
 	}
-	if varField.IsValid() {
-		info.Var = varField.Interface()
+
+	// brief info
+	info.FirstArgCtx = firstArgCtx
+	info.LastResultErr = lastResErr
+
+	// register index
+	if info.FullName != "" {
+		funcFullNameMapping[info.FullName] = info
 	}
-	funcInfos = append(funcInfos, info)
+
 	if !generic && info.PC != 0 {
 		funcPCMapping[info.PC] = info
 	}
@@ -274,13 +321,11 @@ func registerFuncInfo(fnInfo interface{}) {
 		pkgMapping[recvTypeName] = info
 	}
 	if fnKind == core.Kind_Var {
-		if varField.IsValid() {
-			varAddr := varField.Elem().Pointer()
+		if infoVar != nil {
+			// infoVar is &v
+			varAddr := reflect.ValueOf(infoVar).Pointer()
 			varAddrMapping[varAddr] = info
 		}
-	}
-	if fullName != "" {
-		funcFullNameMapping[fullName] = info
 	}
 }
 

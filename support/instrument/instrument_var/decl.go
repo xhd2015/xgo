@@ -15,6 +15,10 @@ func (ctx *BlockContext) traverseDecl(node ast.Decl, pkgScopeNames PkgScopeNames
 					ctx.Add(spec.Name.Name)
 				}
 			case *ast.ValueSpec:
+				for _, value := range spec.Values {
+					ctx.traverseExpr(value, pkgScopeNames, imports)
+				}
+				// name after values
 				for _, name := range spec.Names {
 					ctx.Add(name.Name)
 				}

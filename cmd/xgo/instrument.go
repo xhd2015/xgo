@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,11 +12,13 @@ import (
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/git"
 	"github.com/xhd2015/xgo/support/instrument"
+	"github.com/xhd2015/xgo/support/instrument/constants"
 	"github.com/xhd2015/xgo/support/instrument/edit"
+	"github.com/xhd2015/xgo/support/instrument/instrument_func"
 	"github.com/xhd2015/xgo/support/instrument/instrument_go"
-	"github.com/xhd2015/xgo/support/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/support/instrument/load"
 	"github.com/xhd2015/xgo/support/instrument/overlay"
+	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
 func instrumentUserSpace(projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string) error {
@@ -29,7 +33,7 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 			mod = "vendor"
 		}
 	}
-	err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir)
+	xgoPkgs, err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir)
 	if err != nil {
 		if err != instrument.ErrLinkFileNotFound {
 			return err
@@ -37,7 +41,7 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 		fmt.Fprintf(os.Stderr, `WARNING: xgo: skipping runtime instrumentation, upgrade:
   go get %s@latest
   import _ %q
-`, instrument_xgo_runtime.RUNTIME_TRAP_PKG, instrument_xgo_runtime.RUNTIME_TRAP_PKG)
+`, constants.RUNTIME_TRAP_PKG, constants.RUNTIME_TRAP_PKG)
 		return nil
 	}
 
@@ -67,9 +71,11 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 
 	packages := edit.Edit(loadPackages)
 	logDebug("start instrumentFuncTrap: len(packages)=%d", len(packages.Packages))
-	err = instrument.InstrumentFuncTrap(packages)
-	if err != nil {
-		return err
+	for _, pkg := range packages.Packages {
+		for _, file := range pkg.Files {
+			funcs := instrument_func.EditInjectRuntimeTrap(file.Edit, file.File.Syntax)
+			file.TrapFuncs = append(file.TrapFuncs, funcs...)
+		}
 	}
 	// trap var for packages in main module
 	varPkgs := packages.Filter(func(pkg *edit.Package) bool {
@@ -80,6 +86,69 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 	if err != nil {
 		return err
 	}
+	funcTabPkg := xgoPkgs.PackageByPath[constants.RUNTIME_FUNCTAB_PKG]
+	if funcTabPkg == nil || !hasFunc(funcTabPkg, constants.RUNTIME_REGISTER_FUNC_TAB) {
+		logDebug("skip functab registering")
+	} else {
+		logDebug("generate functab register")
+		fset := packages.Fset
+		for _, pkg := range packages.Packages {
+			for _, file := range pkg.Files {
+				const FUNC_INFO = "FuncInfo"
+				FUNC_TAB := constants.RUNTIME_PKG_NAME_FUNCTAB
+				REGISTER := constants.RUNTIME_REGISTER_FUNC_TAB
+
+				// TODO: add fn and var ptr
+				lines := make([]string, 0, len(file.TrapFuncs)+len(file.TrapVars))
+				makeLiteral := func(kind string, name string, identityName string, pos token.Pos, extra []string) string {
+					var suffix string
+					if len(extra) > 0 {
+						suffix = "," + strings.Join(extra, ",")
+					}
+					lineNum := fset.Position(pos).Line
+					return fmt.Sprintf("&%s.%s{Kind:%s.%s,Pkg:pkgPath,Name:%q,IdentityName:%q,File:absFile,Line:%d%s}", FUNC_TAB, FUNC_INFO, FUNC_TAB, kind,
+						name,
+						identityName,
+						lineNum,
+						suffix,
+					)
+				}
+				for _, varInfo := range file.TrapVars {
+					extra := []string{"Var:" + "&" + varInfo.Name}
+					literal := makeLiteral("Kind_Var", varInfo.Name, varInfo.Name, varInfo.Decl.Decl.Pos(), extra)
+					lines = append(lines, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, literal))
+				}
+				for _, funcInfo := range file.TrapFuncs {
+					identityName := getIdentityName(fset, file.File.Content, funcInfo.FuncDecl)
+					extra := []string{"Func:" + identityName}
+					literal := makeLiteral("Kind_Func", funcInfo.FuncDecl.Name.Name, identityName, funcInfo.FuncDecl.Pos(), extra)
+					lines = append(lines, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, literal))
+				}
+
+				if len(lines) == 0 {
+					continue
+				}
+				fileEdit := file.Edit
+				fileSyntax := file.File.Syntax
+
+				patch.AddImport(fileEdit, fileSyntax, FUNC_TAB, constants.RUNTIME_FUNCTAB_PKG)
+
+				pkgPath := pkg.LoadPackage.GoPackage.ImportPath
+				absFile := file.File.AbsPath
+				declLines := make([]string, 0, len(lines)+2)
+				declLines = append(declLines,
+					fmt.Sprintf("pkgPath := %q", pkgPath),
+					fmt.Sprintf("absFile := %q", absFile),
+				)
+				declLines = append(declLines, lines...)
+
+				code := strings.Join(declLines, ";")
+				pos, posType := patch.GetFuncInsertPosition(fileSyntax)
+				patch.AddCode(fileEdit, pos, posType, "func init(){"+code+";}")
+			}
+		}
+	}
+
 	logDebug("collect edits")
 	updatedFiles := 0
 	for _, pkg := range packages.Packages {
@@ -100,6 +169,38 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 	}
 	logDebug("finish instruments, updated %d files", updatedFiles)
 	return nil
+}
+
+func getIdentityName(fset *token.FileSet, code string, funcDecl *ast.FuncDecl) string {
+	if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || funcDecl.Recv.List[0].Type == nil {
+		return funcDecl.Name.Name
+	}
+	recv := funcDecl.Recv.List[0]
+	recvType := recv.Type
+
+	start := fset.Position(recvType.Pos()).Offset
+	end := fset.Position(recvType.End()).Offset
+	recvName := code[start:end]
+
+	if strings.HasPrefix(recvName, "*") {
+		recvName = "(" + recvName + ")"
+	}
+	return fmt.Sprintf("%s.%s", recvName, funcDecl.Name.Name)
+}
+
+func hasFunc(pkg *edit.Package, fn string) bool {
+	for _, file := range pkg.Files {
+		for _, decl := range file.File.Syntax.Decls {
+			fnDecl, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if fnDecl.Name != nil && fnDecl.Name.Name == fn {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func pkgWithinModule(pkgPath string, mainModule string) bool {

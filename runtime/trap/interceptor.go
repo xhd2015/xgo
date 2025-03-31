@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/functab"
 )
 
 type Interceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error
@@ -14,6 +15,11 @@ type Interceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, 
 func PushMockByInterceptor(fn interface{}, interceptor Interceptor) func() {
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() == reflect.Ptr {
+		varPtr := fnv.Pointer()
+		funcInfo := functab.InfoVar(varPtr)
+		if funcInfo == nil {
+			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
+		}
 		// variable
 		handler := func(name string, res interface{}) {
 			fnInfo := &core.FuncInfo{
@@ -28,7 +34,7 @@ func PushMockByInterceptor(fn interface{}, interceptor Interceptor) func() {
 			}
 			interceptor(nil, fnInfo, argObj, resObject)
 		}
-		return PushVarMockHandler(fnv.Pointer(), handler)
+		return PushVarMockHandler(varPtr, handler)
 	} else if fnv.Kind() == reflect.Func {
 		// func
 	} else {
@@ -43,6 +49,11 @@ func PushMockByInterceptor(fn interface{}, interceptor Interceptor) func() {
 func PushMockByPatch(fn interface{}, replacer interface{}) func() {
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() == reflect.Ptr {
+		varPtr := fnv.Pointer()
+		funcInfo := functab.InfoVar(varPtr)
+		if funcInfo == nil {
+			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
+		}
 		// variable
 		rv := reflect.ValueOf(replacer)
 		isPtr := checkVarType(fnv.Type(), rv.Type(), true)
@@ -51,9 +62,9 @@ func PushMockByPatch(fn interface{}, replacer interface{}) func() {
 			reflect.ValueOf(res).Elem().Set(fnRes[0])
 		}
 		if !isPtr {
-			return PushVarMockHandler(fnv.Pointer(), handler)
+			return PushVarMockHandler(varPtr, handler)
 		}
-		return PushVarPtrMockHandler(fnv.Pointer(), handler)
+		return PushVarPtrMockHandler(varPtr, handler)
 	} else if fnv.Kind() == reflect.Func {
 		// func
 	} else {
