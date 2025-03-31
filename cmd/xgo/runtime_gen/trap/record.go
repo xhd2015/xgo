@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/functab"
 )
 
 type PreRecordInterceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) (interface{}, error)
@@ -25,6 +26,11 @@ type varRecordHolder struct {
 func PushRecorderInterceptor(fn interface{}, preInterceptor PreRecordInterceptor, postInterceptor PostRecordInterceptor) func() {
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() == reflect.Ptr {
+		varPtr := fnv.Pointer()
+		funcInfo := functab.InfoVar(varPtr)
+		if funcInfo == nil {
+			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
+		}
 		// variable
 		preHandler := func(name string, res interface{}) (interface{}, bool) {
 			fnInfo := &core.FuncInfo{
@@ -53,7 +59,7 @@ func PushRecorderInterceptor(fn interface{}, preInterceptor PreRecordInterceptor
 			}
 			postInterceptor(nil, fnInfo, argObj, resObject, data)
 		}
-		return PushVarRecordHandler(fnv.Pointer(), preHandler, postHandler)
+		return PushVarRecordHandler(varPtr, preHandler, postHandler)
 	} else if fnv.Kind() == reflect.Func {
 		// func
 	} else {
@@ -68,6 +74,12 @@ func PushRecorderInterceptor(fn interface{}, preInterceptor PreRecordInterceptor
 func PushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() == reflect.Ptr {
+		varPtr := fnv.Pointer()
+		funcInfo := functab.InfoVar(varPtr)
+		if funcInfo == nil {
+			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
+		}
+
 		// variable
 		rv := reflect.ValueOf(pre)
 		isPtr := checkVarType(fnv.Type(), rv.Type(), true)
@@ -79,9 +91,9 @@ func PushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
 			reflect.ValueOf(post).Call([]reflect.Value{})
 		}
 		if !isPtr {
-			return PushVarRecordHandler(fnv.Pointer(), preHandler, postHandler)
+			return PushVarRecordHandler(varPtr, preHandler, postHandler)
 		}
-		return PushVarPtrRecordHandler(fnv.Pointer(), preHandler, postHandler)
+		return PushVarPtrRecordHandler(varPtr, preHandler, postHandler)
 	} else if fnv.Kind() == reflect.Func {
 		// func
 	} else {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/xhd2015/xgo/support/edit/goedit"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/instrument/constants"
 	"github.com/xhd2015/xgo/support/instrument/edit"
 	"github.com/xhd2015/xgo/support/instrument/instrument_func"
 	"github.com/xhd2015/xgo/support/instrument/instrument_go"
@@ -22,7 +23,7 @@ var ErrLinkFileNotFound = fmt.Errorf("xgo: link file not found")
 // create an overlay: abs file -> content
 type Overlay map[string]string
 
-func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS overlay.Overlay, mod string, modfile string, xgoVersion string, xgoRevision string, xgoNumber int, collectTestTrace bool, collectTestTraceDir string) error {
+func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS overlay.Overlay, mod string, modfile string, xgoVersion string, xgoRevision string, xgoNumber int, collectTestTrace bool, collectTestTraceDir string) (*edit.Packages, error) {
 	opts := load.LoadOptions{
 		Dir:     projectDir,
 		Overlay: overlayFS,
@@ -37,14 +38,15 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 		}
 	}
 	packages, err := load.LoadPackages([]string{
-		instrument_xgo_runtime.RUNTIME_INTERNAL_RUNTIME_PKG,
-		instrument_xgo_runtime.RUNTIME_CORE_PKG,
-		instrument_xgo_runtime.RUNTIME_TRAP_FLAGS_PKG,
-		instrument_xgo_runtime.RUNTIME_TRACE_SIGNAL_PKG,
+		constants.RUNTIME_INTERNAL_RUNTIME_PKG,
+		constants.RUNTIME_CORE_PKG,
+		constants.RUNTIME_TRAP_FLAGS_PKG,
+		constants.RUNTIME_TRACE_SIGNAL_PKG,
+		constants.RUNTIME_FUNCTAB_PKG,
 	}, opts)
 	if err != nil {
 		// TODO: handle the case where error indicates the package is not found
-		return err
+		return nil, err
 	}
 	overrideContent := func(absFile overlay.AbsFile, content string) {
 		if xgoRuntimeModuleDir == "" {
@@ -58,47 +60,58 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 			panic(err)
 		}
 	}
+	editPackages := edit.Edit(packages)
 	var foundLink bool
-	for _, pkg := range packages.Packages {
-		importPath := pkg.GoPackage.ImportPath
+	for _, pkg := range editPackages.Packages {
+		importPath := pkg.LoadPackage.GoPackage.ImportPath
 		var addTrap bool
-		if importPath == instrument_xgo_runtime.RUNTIME_TRACE_SIGNAL_PKG {
+		var skip bool
+		switch importPath {
+		case constants.RUNTIME_TRACE_SIGNAL_PKG:
 			addTrap = true
+		case constants.RUNTIME_FUNCTAB_PKG:
+			skip = true
 		}
-		for _, file := range pkg.Files {
+		if skip {
+			continue
+		}
+		for _, efile := range pkg.Files {
+			file := efile.File
 			content := file.Content
 			absFile := overlay.AbsFile(file.AbsPath)
+			var fnInfos []*edit.FuncInfo
 			if addTrap {
 				edit := goedit.New(packages.Fset, content)
-				instrument_func.EditInjectRuntimeTrap(edit, file.Syntax)
+				fnInfos = instrument_func.EditInjectRuntimeTrap(edit, file.Syntax)
 				if edit.HasEdit() {
 					overrideContent(absFile, edit.Buffer().String())
 				}
-				continue
+			} else {
+				switch file.Name {
+				case constants.RUNTIME_LINK_FILE:
+					if importPath == constants.RUNTIME_INTERNAL_RUNTIME_PKG {
+						foundLink = true
+						overrideContent(absFile, instrument_xgo_runtime.GetLinkRuntimeCode())
+					}
+				case constants.VERSION_FILE:
+					if importPath == constants.RUNTIME_CORE_PKG {
+						versionContent := instrument_xgo_runtime.ReplaceVersion(content, xgoVersion, xgoRevision, xgoNumber)
+						overrideContent(absFile, versionContent)
+					}
+				case constants.FLAG_FILE:
+					if importPath == constants.RUNTIME_TRAP_FLAGS_PKG && collectTestTrace {
+						flagsContent := instrument_xgo_runtime.InjectFlags(content, collectTestTrace, collectTestTraceDir)
+						overrideContent(absFile, flagsContent)
+					}
+				}
 			}
-			switch file.Name {
-			case instrument_xgo_runtime.RUNTIME_LINK_FILE:
-				if importPath == instrument_xgo_runtime.RUNTIME_INTERNAL_RUNTIME_PKG {
-					foundLink = true
-					overrideContent(absFile, instrument_xgo_runtime.GetLinkRuntimeCode())
-				}
-			case instrument_xgo_runtime.VERSION_FILE:
-				if importPath == instrument_xgo_runtime.RUNTIME_CORE_PKG {
-					versionContent := instrument_xgo_runtime.ReplaceVersion(content, xgoVersion, xgoRevision, xgoNumber)
-					overrideContent(absFile, versionContent)
-				}
-			case instrument_xgo_runtime.FLAG_FILE:
-				if importPath == instrument_xgo_runtime.RUNTIME_TRAP_FLAGS_PKG && collectTestTrace {
-					flagsContent := instrument_xgo_runtime.InjectFlags(content, collectTestTrace, collectTestTraceDir)
-					overrideContent(absFile, flagsContent)
-				}
-			}
+			efile.TrapFuncs = fnInfos
 		}
 	}
 	if !foundLink {
-		return ErrLinkFileNotFound
+		return editPackages, ErrLinkFileNotFound
 	}
-	return nil
+	return editPackages, nil
 }
 
 func InstrumentVarTrap(packages *edit.Packages) error {

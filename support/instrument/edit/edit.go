@@ -44,6 +44,28 @@ type File struct {
 	Edit *goedit.Edit
 
 	Decls []*Decl
+
+	TrapFuncs []*FuncInfo
+	TrapVars  []*VarInfo
+}
+
+type FuncInfo struct {
+	FuncDecl *ast.FuncDecl
+	Receiver *Field
+	Params   []*Field
+	Results  []*Field
+}
+
+type VarInfo struct {
+	Name string
+	Decl *Decl
+	Type ast.Expr
+}
+
+type Field struct {
+	Name      string
+	NameIdent *ast.Ident // could be nil for anonymous field
+	Type      ast.Expr
 }
 
 func (c *File) HasEdit() bool {

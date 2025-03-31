@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 
+	"github.com/xhd2015/xgo/support/instrument/constants"
 	"github.com/xhd2015/xgo/support/instrument/edit"
 )
 
@@ -64,24 +65,33 @@ func Instrument(packages *edit.Packages) {
 			var hasVar bool
 			for _, decl := range file.Decls {
 				if decl.Kind == edit.DeclKindVar && decl.Type != nil && decl.HasCallRewrite {
-					edit := file.Edit
+					fileEdit := file.Edit
 					end := decl.Decl.End()
 					// TODO: check if the end is a semicolon
 					// `;;` causes error
 					// endOffset := fset.Position(end).Offset
 
-					typeStart := fset.Position(decl.Type.Pos()).Offset
-					typeEnd := fset.Position(decl.Type.End()).Offset
+					declType := decl.Type
+					typeStart := fset.Position(declType.Pos()).Offset
+					typeEnd := fset.Position(declType.End()).Offset
 					typeCode := file.File.Content[typeStart:typeEnd]
-					code := genCode(decl.Ident.Name, typeCode)
 
-					edit.Insert(end, ";")
-					edit.Insert(end, code)
+					varName := decl.Ident.Name
+					code := genCode(varName, typeCode)
+
+					file.TrapVars = append(file.TrapVars, &edit.VarInfo{
+						Name: varName,
+						Type: declType,
+						Decl: decl,
+					})
+
+					fileEdit.Insert(end, ";")
+					fileEdit.Insert(end, code)
 					hasVar = true
 				}
 			}
 			if hasVar {
-				file.Edit.Insert(file.File.Syntax.Name.End(), `;import __xgo_var_runtime "runtime"`)
+				file.Edit.Insert(file.File.Syntax.Name.End(), ";import "+constants.RUNTIME_PKG_NAME_VAR_TRAP+` "runtime"`)
 			}
 		}
 	}

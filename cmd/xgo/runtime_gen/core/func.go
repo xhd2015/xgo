@@ -32,12 +32,14 @@ func (c Kind) String() string {
 }
 
 type FuncInfo struct {
+	Kind Kind
 	// full name, format: {pkgPath}.{receiver}.{funcName}
-	// example:  github.com/xhd2015/xgo/runtime/core.(*FuncInfo).IsFunc
-	Kind         Kind
-	FullName     string
-	Pkg          string
-	IdentityName string // identity name within a package
+	// example:  github.com/xhd2015/xgo/runtime/core.(*SomeType).SomeFunc
+	FullName string
+	Pkg      string
+	// identity name within a package, for ptr-method, it's something like `(*SomeType).SomeFunc`
+	// run `go run ./test/example/method` to verify
+	IdentityName string
 	Name         string
 	RecvType     string
 	RecvPtr      bool
