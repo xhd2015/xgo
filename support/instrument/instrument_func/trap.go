@@ -226,7 +226,7 @@ func processFieldNames(fieldList *ast.FieldList, namePrefix string, editor *goed
 			newName := fmt.Sprintf("%s%d", namePrefix, seqNum)
 
 			// Special handling for single unnamed return value (results only)
-			if singleUnnamedField && isResult {
+			if singleUnnamedField && isResult && fieldList.Opening == token.NoPos {
 				// Find the position right after the closing parenthesis of the function parameters
 				openPos := funcDecl.Type.Params.Closing + 1
 				// Add opening parenthesis right after function parameters
