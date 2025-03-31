@@ -18,6 +18,10 @@ type Package struct {
 	// e.g.: main.go, option.go
 	GoFiles     []string
 	TestGoFiles []string
+	// XTestGoFiles is when a _test.go file
+	// declares package as xxx_test, while the
+	// package name of normal file is xxx
+	XTestGoFiles []string
 }
 
 type LoadPackageOptions struct {

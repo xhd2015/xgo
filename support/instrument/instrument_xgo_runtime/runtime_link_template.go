@@ -40,3 +40,7 @@ func XgoGetFullPCName(pc uintptr) string {
 func XgoOnCreateG(callback func(g unsafe.Pointer, childG unsafe.Pointer)) {
 	runtime.XgoOnCreateG(callback)
 }
+
+func XgoOnExitG(callback func()) {
+	runtime.XgoOnExitG(callback)
+}

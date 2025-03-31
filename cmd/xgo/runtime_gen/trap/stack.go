@@ -8,6 +8,7 @@ import (
 
 type Stack struct {
 	Begin time.Time
+	End   time.Time
 	MaxID int
 
 	hasStartedTracing bool
@@ -40,7 +41,7 @@ type StackEntry struct {
 	ID       int
 	ParentID int
 
-	StartNs int64
+	BeginNs int64
 	EndNs   int64
 
 	Children []*StackEntry

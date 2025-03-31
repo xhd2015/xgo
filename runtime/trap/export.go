@@ -36,7 +36,10 @@ func ExportStackEntry(entry *StackEntry, offsetNS int64) *stack_model.StackEntry
 	}
 
 	children := ExportStackEntries(entry.Children, offsetNS)
-	beginNs := entry.StartNs + offsetNS
+	beginNs := entry.BeginNs + offsetNS
+	// stackEndNs := entry.EndNs
+	endNs := entry.EndNs + offsetNS
+	fnInfo := ExportFuncInfo(entry)
 	if entry.Go && entry.GetStack != nil {
 		// handle async stack
 		stack := entry.GetStack()
@@ -45,12 +48,18 @@ func ExportStackEntry(entry *StackEntry, offsetNS int64) *stack_model.StackEntry
 			// child goroutine might be running
 			exportedStack := ExportStack(stack, beginNs)
 			children = append(children, exportedStack.Children...)
+			if stack.End.IsZero() {
+				fnInfo.Name += " (running)"
+				endNs = time.Now().UnixNano() - stack.Begin.UnixNano() + beginNs
+			} else {
+				endNs = stack.End.UnixNano() - stack.Begin.UnixNano() + beginNs
+			}
 		}
 	}
 	return &stack_model.StackEntry{
-		FuncInfo: ExportFuncInfo(entry),
+		FuncInfo: fnInfo,
 		BeginNs:  beginNs,
-		EndNs:    entry.EndNs + offsetNS,
+		EndNs:    endNs,
 		Args:     entry.Args,
 		Results:  entry.Results,
 		Panic:    entry.Panic,

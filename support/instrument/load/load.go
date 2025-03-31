@@ -62,7 +62,7 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 
 	// TODO: parallize
 	for _, pkg := range loadPkgs {
-		handleFile := func(file string) {
+		addFile := func(file string) {
 			absFilePath := filepath.Join(pkg.GoPackage.Dir, file)
 			pkgFile := ParseFile(fset, absFilePath, overlayFS)
 			pkg.Files = append(pkg.Files, pkgFile)
@@ -71,14 +71,20 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 			if !strings.HasSuffix(file, ".go") {
 				continue
 			}
-			handleFile(file)
+			addFile(file)
 		}
 		if opts.IncludeTest {
 			for _, file := range pkg.GoPackage.TestGoFiles {
 				if !strings.HasSuffix(file, ".go") {
 					continue
 				}
-				handleFile(file)
+				addFile(file)
+			}
+			for _, file := range pkg.GoPackage.XTestGoFiles {
+				if !strings.HasSuffix(file, ".go") {
+					continue
+				}
+				addFile(file)
 			}
 		}
 	}

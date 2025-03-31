@@ -38,3 +38,7 @@ func XgoGetFullPCName(pc uintptr) string {
 func XgoOnCreateG(callback func(g unsafe.Pointer, childG unsafe.Pointer)) {
 	logError("WARNING: failed to link runtime.XgoOnCreateG(requires xgo).")
 }
+
+func XgoOnExitG(callback func()) {
+	logError("WARNING: failed to link runtime.XgoOnExitG(requires xgo).")
+}

@@ -100,9 +100,14 @@ func XgoGetFullPCName(pc uintptr) string {
 
 // goroutine creation
 var __xgo_on_create_g_callbacks []func(g unsafe.Pointer, childG unsafe.Pointer)
+var __xgo_on_exit_g_callbacks []func()
 
 func XgoOnCreateG(callback func(g unsafe.Pointer, childG unsafe.Pointer)) {
 	__xgo_on_create_g_callbacks = append(__xgo_on_create_g_callbacks, callback)
+}
+
+func XgoOnExitG(callback func()) {
+	__xgo_on_exit_g_callbacks = append(__xgo_on_exit_g_callbacks, callback)
 }
 
 func __xgo_callback_on_create_g(curg *g, newg *g) {
@@ -118,5 +123,11 @@ func __xgo_callback_on_create_g(curg *g, newg *g) {
 	newg_p := unsafe.Pointer(&newg.__xgo_g)
 	for _, callback := range __xgo_on_create_g_callbacks {
 		callback(curg_p, newg_p)
+	}
+}
+
+func __xgo_callback_on_exit_g() {
+	for _, callback := range __xgo_on_exit_g_callbacks {
+		callback()
 	}
 }

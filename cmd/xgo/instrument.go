@@ -22,7 +22,7 @@ import (
 )
 
 func instrumentUserSpace(projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string) error {
-	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, collectTestTrace)
+	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
 		vendorDir, err := getVendorDir(projectRoot)
@@ -77,6 +77,7 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 			file.TrapFuncs = append(file.TrapFuncs, funcs...)
 		}
 	}
+
 	// trap var for packages in main module
 	varPkgs := packages.Filter(func(pkg *edit.Package) bool {
 		return pkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)

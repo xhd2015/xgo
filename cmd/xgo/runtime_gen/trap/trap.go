@@ -16,6 +16,13 @@ import (
 	"github.com/xhd2015/xgo/runtime/trap/stack_model"
 )
 
+// trap is the function called upon every go function call,
+// it implements mock, recording and tracing functionality
+// the trap discarded the interceptor design in xgo v1.0,
+// and uses a simpler and more efficient design:
+//   - mapping by pc and variable pointer
+//
+// this avoids the infinite trap problem
 func trap(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool) {
 	begin := time.Now()
 	// skip 2: <user func> -> runtime.XgoTrap -> trap
@@ -31,7 +38,7 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 
 	var mock func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool
 
-	var isStart bool
+	var isStartTracing bool
 	var isTesting bool
 	var testName string
 
@@ -50,7 +57,7 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 		if !stack.hasStartedTracing {
 			if fnName == constants.START_XGO_TRACE {
 				stack.hasStartedTracing = true
-				isStart = true
+				isStartTracing = true
 			}
 		}
 		var postRecorders []func()
@@ -116,7 +123,7 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 			isTesting = true
 			testName = (*t).Name()
 		}
-		isStart = true
+		isStartTracing = true
 		stack = &Stack{
 			Begin:             begin,
 			hasStartedTracing: true,
@@ -130,7 +137,7 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 	cur.File = file
 	cur.Line = line
 
-	if isStart && !isTesting {
+	if isStartTracing && !isTesting {
 		var onFinish func(stack stack_model.IStack)
 		var outputFile string
 		var config interface{}
@@ -190,7 +197,8 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 		if postRecorder != nil {
 			postRecorder()
 		}
-		cur.EndNs = time.Now().UnixNano() - stack.Begin.UnixNano()
+		end := time.Now()
+		cur.EndNs = end.UnixNano() - stack.Begin.UnixNano()
 		cur.HitMock = hitMock
 		var hasPanic bool
 		if pe := xgo_runtime.XgoPeekPanic(); pe != nil {
@@ -207,7 +215,8 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 
 		stack.Top = oldTop
 		stack.Depth--
-		if isStart {
+		if isStartTracing {
+			stack.End = end
 			exportedStack := ExportStack(stack, 0)
 			exportedStackJSON := marshalNoError(exportedStack)
 			if isTesting {
@@ -276,7 +285,7 @@ func (c *Stack) newStackEntry(begin time.Time, fnName string) *StackEntry {
 	cur := &StackEntry{
 		ID:       c.MaxID,
 		FuncName: fnName,
-		StartNs:  begin.UnixNano() - c.Begin.UnixNano(),
+		BeginNs:  begin.UnixNano() - c.Begin.UnixNano(),
 	}
 	return cur
 }
