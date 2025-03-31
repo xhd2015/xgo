@@ -15,27 +15,28 @@ func ExportStack(stack *Stack, offsetNS int64) *stack_model.Stack {
 	return &stack_model.Stack{
 		Format:   "stack",
 		Begin:    stack.Begin.Format(time.RFC3339),
-		Children: ExportStackEntries(stack.Roots, offsetNS),
+		Children: ExportStackEntries(stack.Roots, stack.Begin, offsetNS),
 	}
 }
 
-func ExportStackEntries(entries []*StackEntry, offsetNS int64) []*stack_model.StackEntry {
+func ExportStackEntries(entries []*StackEntry, rootBegin time.Time, offsetNS int64) []*stack_model.StackEntry {
 	if entries == nil {
 		return nil
 	}
 	list := make([]*stack_model.StackEntry, len(entries))
 	for i, entry := range entries {
-		list[i] = ExportStackEntry(entry, offsetNS)
+		list[i] = ExportStackEntry(entry, rootBegin, offsetNS)
 	}
 	return list
 }
 
-func ExportStackEntry(entry *StackEntry, offsetNS int64) *stack_model.StackEntry {
+func ExportStackEntry(entry *StackEntry, rootBegin time.Time, offsetNS int64) *stack_model.StackEntry {
 	if entry == nil {
 		return nil
 	}
 
-	children := ExportStackEntries(entry.Children, offsetNS)
+	var isRunning bool
+	children := ExportStackEntries(entry.Children, rootBegin, offsetNS)
 	beginNs := entry.BeginNs + offsetNS
 	// stackEndNs := entry.EndNs
 	endNs := entry.EndNs + offsetNS
@@ -49,12 +50,18 @@ func ExportStackEntry(entry *StackEntry, offsetNS int64) *stack_model.StackEntry
 			exportedStack := ExportStack(stack, beginNs)
 			children = append(children, exportedStack.Children...)
 			if stack.End.IsZero() {
-				fnInfo.Name += " (running)"
+				isRunning = true
 				endNs = time.Now().UnixNano() - stack.Begin.UnixNano() + beginNs
 			} else {
 				endNs = stack.End.UnixNano() - stack.Begin.UnixNano() + beginNs
 			}
 		}
+	} else if entry.EndNs == 0 {
+		endNs += time.Now().UnixNano() - rootBegin.UnixNano()
+		isRunning = true
+	}
+	if isRunning {
+		fnInfo.Name += " (running)"
 	}
 	return &stack_model.StackEntry{
 		FuncInfo: fnInfo,

@@ -21,7 +21,7 @@ type StackEntry struct {
 	FuncInfo *FuncInfo
 
 	BeginNs int64 // ns
-	EndNs   int64 // ns
+	EndNs   int64 // ns, 0 if running
 
 	Args    interface{}
 	Results interface{}

@@ -25,6 +25,9 @@ go run -tags dev ./cmd/xgo test --with-goroot go1.19.13 -c -o __debug_bin_test -
 
 # debug
 dlv exec --listen=:2345 --api-version=2 --check-go-version=false --headless -- ./__debug_bin_test -test.run TestPatchTypeMethodCtxArg
+
+# build and run
+go run -tags dev ./cmd/xgo test --with-goroot go1.19.13 --log-debug --project-dir runtime/test -c -gcflags="all=-N -l" -o __debug_bin_test ./trace/go_trace && ./__debug_bin_test -test.v -test.run TestGoTraceSync
 ```
 
 

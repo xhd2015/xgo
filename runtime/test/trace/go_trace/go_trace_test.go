@@ -51,7 +51,7 @@ func TestGoTraceSync(t *testing.T) {
 	if !strings.Contains(stackJSON, `"Name":"go"`) {
 		t.Fatalf("stack does not contain go")
 	}
-	// t.Logf("stack: %s", string(json))
+	t.Logf("stack: %s", string(json))
 }
 
 func TestGoTraceAsync(t *testing.T) {
@@ -70,5 +70,5 @@ func TestGoTraceAsync(t *testing.T) {
 	if !strings.Contains(stackJSON, `"Name":"go (running)"`) {
 		t.Fatalf("stack does not contain go")
 	}
-	// t.Logf("stack: %s", string(json))
+	t.Logf("stack: %s", string(json))
 }
