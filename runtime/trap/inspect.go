@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
 )
@@ -26,24 +27,33 @@ const methodSuffix = "-fm"
 //
 //	MyInt(SomeVar).String() // good
 //	SomeVar.String() // bad: xgo cannot determine if it is a pointer receiver
-var ErrNotInstrumented = errors.New("not instrumented by xgo")
+var ErrNotInstrumented = errors.New("not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md")
 
 // InspectPC inspects the function and returns the receiver pointer, function PC and trapping PC.
 // for ordinary function, `funcPC` is the same with `trappingPC`
 // for method,`funcPC` and `trappingPC` are different, `funcPC` is the PC of the method, which binds a special pointer to its receiver, and `trappingPC` is the PC of the general type method
-func InspectPC(f interface{}) (recvPtr interface{}, funcPC uintptr, trappingPC uintptr) {
+func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
 	fn := reflect.ValueOf(f)
 	if fn.Kind() != reflect.Func {
 		panic(fmt.Errorf("requires func, given: %s", fn.Kind().String()))
 	}
 	funcPC = fn.Pointer()
+	funcInfo = functab.InfoPC(funcPC)
+	if funcInfo != nil {
+		// found funcPC
+		return nil, funcInfo, funcPC, funcPC
+	}
 
 	fullName := xgo_runtime.XgoGetFullPCName(funcPC)
 	if !strings.HasSuffix(fullName, methodSuffix) {
-		return nil, funcPC, funcPC
+		// not a method, might be generic or closure
+		// we currently cannot handle this
+		panic(fmt.Errorf("func %w: %s", ErrNotInstrumented, fullName))
 	}
-	funcInfo := functab.GetFuncByFullName(fullName[:len(fullName)-len(methodSuffix)])
+	lookupName := fullName[:len(fullName)-len(methodSuffix)]
+	funcInfo = functab.GetFuncByFullName(lookupName)
 	if funcInfo == nil {
+		// might be generic of a method
 		panic(fmt.Errorf("func %w: %s", ErrNotInstrumented, fullName))
 	}
 
@@ -70,5 +80,5 @@ func InspectPC(f interface{}) (recvPtr interface{}, funcPC uintptr, trappingPC u
 		}
 	}
 	callFn()
-	return recvPtr, funcPC, trappingPC
+	return recvPtr, funcInfo, funcPC, trappingPC
 }

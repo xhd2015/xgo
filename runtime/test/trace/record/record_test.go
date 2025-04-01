@@ -52,7 +52,7 @@ func TestRecordCall(t *testing.T) {
 func Varadic(msg string, args ...string) {
 }
 
-func TestRecordVaradic(t *testing.T) {
+func TestRecordFuncVaradic(t *testing.T) {
 	var records []string
 	trace.RecordCall(Varadic, func(msg *string, args *[]string) {
 		records = append(records, fmt.Sprintf("Varadic is called: %s, %v", *msg, *args))

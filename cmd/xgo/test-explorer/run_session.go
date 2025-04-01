@@ -19,6 +19,7 @@ import (
 
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 	"github.com/xhd2015/xgo/cmd/xgo/test-explorer/icov"
+	"github.com/xhd2015/xgo/cmd/xgo/trace/render/stack_model"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -470,7 +471,7 @@ func readTraceFromFile(file string) (records []*CallRecord, err error) {
 		}
 		return nil, err
 	}
-	var rootExport *Stack
+	var rootExport *stack_model.Stack
 	err = json.Unmarshal(data, &rootExport)
 	if err != nil {
 		return nil, err

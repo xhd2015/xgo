@@ -1,3 +1,6 @@
+// This file defines public types for rendering stack traces
+// via `xgo tool trace SomeTrace.json`
+
 package stack_model
 
 type FuncKind string
