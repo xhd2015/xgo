@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/xhd2015/xgo/support/fileutil"
@@ -38,7 +39,7 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 		if err != instrument.ErrLinkFileNotFound {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, `WARNING: xgo: skipping runtime instrumentation, upgrade:
+		fmt.Fprintf(os.Stderr, `WARNING: xgo: skip runtime instrumentation, upgrade:
   go get %s@latest
   import _ %q
 `, constants.RUNTIME_TRAP_PKG, constants.RUNTIME_TRAP_PKG)
@@ -93,68 +94,8 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 		logDebug("skip functab registering")
 	} else {
 		logDebug("generate functab register")
-		fset := packages.Fset
-		for _, pkg := range packages.Packages {
-			for _, file := range pkg.Files {
-				const FUNC_INFO = "FuncInfo"
-				FUNC_TAB := constants.RUNTIME_PKG_NAME_FUNCTAB
-				REGISTER := constants.RUNTIME_REGISTER_FUNC_TAB
-
-				// TODO: add fn and var ptr
-				lines := make([]string, 0, len(file.TrapFuncs)+len(file.TrapVars))
-				makeLiteral := func(kind string, name string, identityName string, pos token.Pos, extra []string) string {
-					var suffix string
-					if len(extra) > 0 {
-						suffix = "," + strings.Join(extra, ",")
-					}
-					lineNum := fset.Position(pos).Line
-					return fmt.Sprintf("&%s.%s{Kind:%s.%s,Pkg:pkgPath,Name:%q,IdentityName:%q,File:absFile,Line:%d%s}", FUNC_TAB, FUNC_INFO, FUNC_TAB, kind,
-						name,
-						identityName,
-						lineNum,
-						suffix,
-					)
-				}
-				for _, varInfo := range file.TrapVars {
-					extra := []string{"Var:" + "&" + varInfo.Name}
-					literal := makeLiteral("Kind_Var", varInfo.Name, varInfo.Name, varInfo.Decl.Decl.Pos(), extra)
-					lines = append(lines, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, literal))
-				}
-				for _, funcInfo := range file.TrapFuncs {
-					var extra []string
-					identityName := getIdentityName(fset, file.File.Content, funcInfo.FuncDecl)
-					if !isGeneric(funcInfo.FuncDecl) {
-						extra = append(extra, "Func:"+identityName)
-					} else {
-						extra = append(extra, "Generic:true")
-					}
-
-					literal := makeLiteral("Kind_Func", funcInfo.FuncDecl.Name.Name, identityName, funcInfo.FuncDecl.Pos(), extra)
-					lines = append(lines, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, literal))
-				}
-
-				if len(lines) == 0 {
-					continue
-				}
-				fileEdit := file.Edit
-				fileSyntax := file.File.Syntax
-
-				patch.AddImport(fileEdit, fileSyntax, FUNC_TAB, constants.RUNTIME_FUNCTAB_PKG)
-
-				pkgPath := pkg.LoadPackage.GoPackage.ImportPath
-				absFile := file.File.AbsPath
-				declLines := make([]string, 0, len(lines)+2)
-				declLines = append(declLines,
-					fmt.Sprintf("pkgPath:=%q", pkgPath),
-					fmt.Sprintf("absFile:=%q", absFile),
-				)
-				declLines = append(declLines, lines...)
-
-				code := strings.Join(declLines, ";")
-				pos := patch.GetFuncInsertPosition(fileSyntax)
-				patch.AddCode(fileEdit, pos, "func init(){"+code+";}")
-			}
-		}
+		collectFuncInfos(xgoPkgs)
+		collectFuncInfos(packages)
 	}
 
 	logDebug("collect edits")
@@ -179,6 +120,84 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 	return nil
 }
 
+func collectFuncInfos(packages *edit.Packages) {
+	fset := packages.Fset
+	for _, pkg := range packages.Packages {
+		for _, file := range pkg.Files {
+			const FUNC_INFO = "FuncInfo"
+			FUNC_TAB := constants.RUNTIME_PKG_NAME_FUNCTAB
+			REGISTER := constants.RUNTIME_REGISTER_FUNC_TAB
+
+			// TODO: add fn and var ptr
+			lines := make([]string, 0, len(file.TrapFuncs)+len(file.TrapVars))
+			makeLiteral := func(kind string, name string, identityName string, pos token.Pos, extra []string) string {
+				var suffix string
+				if len(extra) > 0 {
+					suffix = "," + strings.Join(extra, ",")
+				}
+				lineNum := fset.Position(pos).Line
+				return fmt.Sprintf("&%s.%s{Kind:%s.%s,Pkg:pkgPath,Name:%q,IdentityName:%q,File:absFile,Line:%d%s}", FUNC_TAB, FUNC_INFO, FUNC_TAB, kind,
+					name,
+					identityName,
+					lineNum,
+					suffix,
+				)
+			}
+			for _, varInfo := range file.TrapVars {
+				extra := []string{
+					"Var:" + "&" + varInfo.Name,
+					fmt.Sprintf("ResNames:[]string{%q}", varInfo.Name),
+				}
+
+				literal := makeLiteral("Kind_Var", varInfo.Name, varInfo.Name, varInfo.Decl.Decl.Pos(), extra)
+				lines = append(lines, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, literal))
+			}
+			for _, funcInfo := range file.TrapFuncs {
+				var extra []string
+				identityName := getIdentityName(fset, file.File.Content, funcInfo.FuncDecl)
+				if !isGeneric(funcInfo.FuncDecl) {
+					extra = append(extra, "Func:"+identityName)
+				} else {
+					extra = append(extra, "Generic:true")
+				}
+				if funcInfo.Receiver != nil {
+					extra = append(extra, fmt.Sprintf("RecvName:%q", funcInfo.Receiver.Name))
+				}
+				if len(funcInfo.Params) > 0 {
+					extra = append(extra, fmt.Sprintf("ArgNames:[]string{%s}", strings.Join(quoteNames(funcInfo.Params.Names()), ",")))
+				}
+				if len(funcInfo.Results) > 0 {
+					extra = append(extra, fmt.Sprintf("ResNames:[]string{%s}", strings.Join(quoteNames(funcInfo.Results.Names()), ",")))
+				}
+
+				literal := makeLiteral("Kind_Func", funcInfo.FuncDecl.Name.Name, identityName, funcInfo.FuncDecl.Pos(), extra)
+				lines = append(lines, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, literal))
+			}
+
+			if len(lines) == 0 {
+				continue
+			}
+			fileEdit := file.Edit
+			fileSyntax := file.File.Syntax
+
+			patch.AddImport(fileEdit, fileSyntax, FUNC_TAB, constants.RUNTIME_FUNCTAB_PKG)
+
+			pkgPath := pkg.LoadPackage.GoPackage.ImportPath
+			absFile := file.File.AbsPath
+			declLines := make([]string, 0, len(lines)+2)
+			declLines = append(declLines,
+				fmt.Sprintf("pkgPath:=%q", pkgPath),
+				fmt.Sprintf("absFile:=%q", absFile),
+			)
+			declLines = append(declLines, lines...)
+
+			code := strings.Join(declLines, ";")
+			pos := patch.GetFuncInsertPosition(fileSyntax)
+			patch.AddCode(fileEdit, pos, "func init(){"+code+";}")
+		}
+	}
+}
+
 func getIdentityName(fset *token.FileSet, code string, funcDecl *ast.FuncDecl) string {
 	if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || funcDecl.Recv.List[0].Type == nil {
 		return funcDecl.Name.Name
@@ -194,6 +213,14 @@ func getIdentityName(fset *token.FileSet, code string, funcDecl *ast.FuncDecl) s
 		recvName = "(" + recvName + ")"
 	}
 	return fmt.Sprintf("%s.%s", recvName, funcDecl.Name.Name)
+}
+
+func quoteNames(names []string) []string {
+	quotedNames := make([]string, len(names))
+	for i, name := range names {
+		quotedNames[i] = strconv.Quote(name)
+	}
+	return quotedNames
 }
 
 func isGeneric(funcDecl *ast.FuncDecl) bool {

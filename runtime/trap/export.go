@@ -1,7 +1,6 @@
 package trap
 
 import (
-	"strings"
 	"time"
 
 	"github.com/xhd2015/xgo/runtime/core"
@@ -79,29 +78,63 @@ func ExportFuncInfo(entry *StackEntry) *stack_model.FuncInfo {
 	if entry == nil {
 		return nil
 	}
-	pkg, name := splitFuncPkg(entry.FuncName)
+	// the file and line is where the call occurs
+	// not where the variable is defined
+	file := entry.File
+	line := entry.Line
+
+	var pkg string
+	var name string
+	var kind stack_model.FuncKind
+
+	var recvName string
+	var argNames []string
+	var resNames []string
+
+	var generic bool
+
+	var firstArgCtx bool
+	var lastResultErr bool
+
+	name = entry.FuncName
+	if entry.FuncInfo != nil {
+		pkg = entry.FuncInfo.Pkg
+		name = entry.FuncInfo.IdentityName
+
+		recvName = entry.FuncInfo.RecvName
+		argNames = entry.FuncInfo.ArgNames
+		resNames = entry.FuncInfo.ResNames
+
+		generic = entry.FuncInfo.Generic
+
+		firstArgCtx = entry.FuncInfo.FirstArgCtx
+		lastResultErr = entry.FuncInfo.LastResultErr
+
+		switch entry.FuncInfo.Kind {
+		case core.Kind_Func:
+			kind = stack_model.FuncKind_Func
+			file = entry.FuncInfo.File
+			line = entry.FuncInfo.Line
+		case core.Kind_Var:
+			kind = stack_model.FuncKind_Var
+		case core.Kind_VarPtr:
+			kind = stack_model.FuncKind_VarPtr
+		case core.Kind_Const:
+			kind = stack_model.FuncKind_Const
+		}
+	}
+
 	return &stack_model.FuncInfo{
-		Name: name,
-		Pkg:  pkg,
-		File: entry.File,
-		Line: entry.Line,
+		Kind:          kind,
+		Name:          name,
+		Pkg:           pkg,
+		File:          file,
+		Line:          line,
+		RecvName:      recvName,
+		ArgNames:      argNames,
+		ResNames:      resNames,
+		FirstArgCtx:   firstArgCtx,
+		LastResultErr: lastResultErr,
+		Generic:       generic,
 	}
-}
-
-func splitFuncPkg(funcName string) (string, string) {
-	pkg, recvName, recvPtr, typeGeneric, funcGeneric, basicName := core.ParseFuncName(funcName)
-
-	_ = recvName
-	_ = recvPtr
-	_ = typeGeneric
-	_ = funcGeneric
-	_ = basicName
-
-	if pkg == "" {
-		return "", funcName
-	}
-	name := strings.TrimPrefix(funcName, pkg)
-	name = strings.TrimPrefix(name, ".")
-
-	return pkg, name
 }

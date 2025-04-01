@@ -169,6 +169,9 @@ func getInterfaceOrGenericByFullName(fullName string) *core.FuncInfo {
 var errType = reflect.TypeOf((*error)(nil)).Elem()
 var ctxType = reflect.TypeOf((*context.Context)(nil)).Elem()
 
+// Deprecated: now xgo can make package automatically depends
+// on this package(github.com/xhd2015/xgo/runtime/functab),
+// so we don't need to do struct inspection here anymore.
 func registerFuncInfo(fnInfo interface{}) {
 	rv := reflect.ValueOf(fnInfo)
 	if rv.Kind() != reflect.Struct {

@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"runtime"
 	"time"
+
+	"github.com/xhd2015/xgo/runtime/functab"
 )
 
 const SKIP = 2
@@ -47,6 +49,7 @@ func trapVar(name string, varAddr interface{}, res interface{}) {
 	cur := stack.newStackEntry(begin, name)
 	cur.File = file
 	cur.Line = line
+	cur.FuncInfo = functab.InfoVarAddr(ptr)
 	cur.Results = json.RawMessage(marshalNoError(res))
 	stack.Top = stack.push(cur)
 	cur.EndNs = time.Now().UnixNano() - stack.Begin.UnixNano()
@@ -102,6 +105,7 @@ func trapVarPtr(name string, varAddr interface{}, res interface{}) {
 	cur := stack.newStackEntry(begin, name)
 	cur.File = file
 	cur.Line = line
+	cur.FuncInfo = functab.InfoVarAddr(ptr)
 	cur.Results = json.RawMessage(marshalNoError(res))
 	stack.Top = stack.push(cur)
 	cur.EndNs = time.Now().UnixNano() - stack.Begin.UnixNano()

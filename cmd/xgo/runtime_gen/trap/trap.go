@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xhd2015/xgo/runtime/functab"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/trace/constants"
 	"github.com/xhd2015/xgo/runtime/trap/flags"
@@ -35,6 +36,8 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 
 	fnName := funcInfo.Name()
 	fnPC := funcInfo.Entry()
+
+	coreFuncInfo := functab.InfoPC(fnPC)
 
 	var mock func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool
 
@@ -136,6 +139,7 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 	oldTop := stack.push(cur)
 	cur.File = file
 	cur.Line = line
+	cur.FuncInfo = coreFuncInfo
 
 	if isStartTracing && !isTesting {
 		var onFinish func(stack stack_model.IStack)
