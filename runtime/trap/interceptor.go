@@ -16,7 +16,7 @@ func PushMockByInterceptor(fn interface{}, interceptor Interceptor) func() {
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() == reflect.Ptr {
 		varPtr := fnv.Pointer()
-		funcInfo := functab.InfoVar(varPtr)
+		funcInfo := functab.InfoVarAddr(varPtr)
 		if funcInfo == nil {
 			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
 		}
@@ -41,8 +41,8 @@ func PushMockByInterceptor(fn interface{}, interceptor Interceptor) func() {
 		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
 	}
 
-	recvPtr, _, trappingPC := InspectPC(fn)
-	handler := buildMockFromInterceptor(recvPtr, interceptor)
+	recvPtr, funcInfo, _, trappingPC := InspectPC(fn)
+	handler := buildMockFromInterceptor(recvPtr, funcInfo, interceptor)
 	return PushMockHandler(trappingPC, recvPtr, handler)
 }
 
@@ -50,7 +50,7 @@ func PushMockByPatch(fn interface{}, replacer interface{}) func() {
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() == reflect.Ptr {
 		varPtr := fnv.Pointer()
-		funcInfo := functab.InfoVar(varPtr)
+		funcInfo := functab.InfoVarAddr(varPtr)
 		if funcInfo == nil {
 			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
 		}
@@ -71,14 +71,14 @@ func PushMockByPatch(fn interface{}, replacer interface{}) func() {
 		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
 	}
 
-	recvPtr, _, trappingPC := InspectPC(fn)
-	handler := buildPatchHandler(recvPtr, fn, replacer)
+	recvPtr, funcInfo, _, trappingPC := InspectPC(fn)
+	handler := buildPatchHandler(recvPtr, funcInfo, fn, replacer)
 	return PushMockHandler(trappingPC, recvPtr, handler)
 }
 
 // return `true` if hit ptr type
-func checkVarType(varType reflect.Type, replacerType reflect.Type, supportPtr bool) bool {
-	wantValueType := reflect.FuncOf(nil, []reflect.Type{varType.Elem()}, false)
+func checkVarType(varPtrType reflect.Type, replacerType reflect.Type, supportPtr bool) bool {
+	wantValueType := reflect.FuncOf(nil, []reflect.Type{varPtrType.Elem()}, false)
 	if replacerType.Kind() != reflect.Func {
 		panic(fmt.Errorf("replacer should have type: %s, actual: %s", wantValueType.String(), replacerType.String()))
 	}
@@ -88,7 +88,7 @@ func checkVarType(varType reflect.Type, replacerType reflect.Type, supportPtr bo
 		return false
 	}
 	if supportPtr {
-		wantPtrType := reflect.FuncOf(nil, []reflect.Type{varType}, false)
+		wantPtrType := reflect.FuncOf(nil, []reflect.Type{varPtrType}, false)
 		_, _, matchPtr := checkFuncTypeMatch(wantPtrType, replacerType, false)
 		if matchPtr {
 			return true
@@ -97,7 +97,26 @@ func checkVarType(varType reflect.Type, replacerType reflect.Type, supportPtr bo
 	panic(fmt.Errorf("replacer should have type: %s, actual: %s", targetTypeStr, replacerTypeStr))
 }
 
-func buildPatchHandler(recvPtr interface{}, fn interface{}, replacer interface{}) func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool {
+func checkVarRecorderType(varPtrType reflect.Type, recorderType reflect.Type, supportPtr bool) ([]ptrType, bool) {
+	varType := varPtrType.Elem()
+	printWantType := reflect.FuncOf([]reflect.Type{varType}, nil, false)
+	if recorderType.Kind() != reflect.Func {
+		panic(fmt.Errorf("recorder should have type: %v, actual: %s", printWantType, recorderType.String()))
+	}
+	recordArgTypes, ok := resolveArgTypes(recorderType, []reflect.Type{varType})
+	if ok {
+		return recordArgTypes, false
+	}
+	if supportPtr {
+		recordArgTypes, ok := resolveArgTypes(recorderType, []reflect.Type{varPtrType})
+		if ok {
+			return recordArgTypes, true
+		}
+	}
+	panic(fmt.Errorf("recorder should have type: %v, actual: %T", printWantType, recorderType))
+}
+
+func buildPatchHandler(recvPtr interface{}, funcInfo *core.FuncInfo, fn interface{}, replacer interface{}) func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool {
 	v := reflect.ValueOf(replacer)
 	t := v.Type()
 	if t.Kind() != reflect.Func {
@@ -172,7 +191,7 @@ func buildPatchHandler(recvPtr interface{}, fn interface{}, replacer interface{}
 // pre and post must have the same signature, as:
 //
 //	fn(args ..., results...)
-func buildRecorderHandler(recvPtr interface{}, fn interface{}, pre interface{}, post interface{}) (func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (interface{}, bool), func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}, data interface{})) {
+func buildRecorderHandler(recvPtr interface{}, funcInfo *core.FuncInfo, fn interface{}, pre interface{}, post interface{}) (func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (interface{}, bool), func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}, data interface{})) {
 	if pre == nil && post == nil {
 		panic("pre and post are nil")
 	}
@@ -328,7 +347,7 @@ func resolveArgTypes(t reflect.Type, argTypes []reflect.Type) ([]ptrType, bool) 
 	return res, true
 }
 
-func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool {
+func buildMockFromInterceptor(recvPtr interface{}, funcInfo *core.FuncInfo, interceptor Interceptor) func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool {
 	if interceptor == nil {
 		panic("interceptor is nil")
 	}
@@ -342,10 +361,6 @@ func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func
 			}
 		}
 
-		// TODO: fill info
-		fnInfo := &core.FuncInfo{
-			Kind: core.Kind_Func,
-		}
 		var argObj object
 		var resObject object
 		if actRecvPtr != nil {
@@ -367,12 +382,12 @@ func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func
 			})
 		}
 
-		interceptor(nil, fnInfo, argObj, resObject)
+		interceptor(nil, funcInfo, argObj, resObject)
 		return true
 	}
 }
 
-func buildRecorderFromInterceptor(recvPtr interface{}, interceptor PreRecordInterceptor, postInterceptor PostRecordInterceptor) (func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (interface{}, bool), func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}, data interface{})) {
+func buildRecorderFromInterceptor(recvPtr interface{}, funcInfo *core.FuncInfo, interceptor PreRecordInterceptor, postInterceptor PostRecordInterceptor) (func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (interface{}, bool), func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}, data interface{})) {
 	if interceptor == nil {
 		panic("interceptor is nil")
 	}
@@ -386,10 +401,6 @@ func buildRecorderFromInterceptor(recvPtr interface{}, interceptor PreRecordInte
 			}
 		}
 
-		// TODO: fill info
-		fnInfo := &core.FuncInfo{
-			Kind: core.Kind_Func,
-		}
 		var argObj object
 		var resObject object
 		if actRecvPtr != nil {
@@ -410,7 +421,7 @@ func buildRecorderFromInterceptor(recvPtr interface{}, interceptor PreRecordInte
 				valPtr: res,
 			})
 		}
-		data, err := interceptor(nil, fnInfo, argObj, resObject)
+		data, err := interceptor(nil, funcInfo, argObj, resObject)
 		if err != nil {
 			panic(err)
 		}
@@ -423,10 +434,6 @@ func buildRecorderFromInterceptor(recvPtr interface{}, interceptor PreRecordInte
 			}
 		}
 
-		// TODO: fill info
-		fnInfo := &core.FuncInfo{
-			Kind: core.Kind_Func,
-		}
 		var argObj object
 		var resObject object
 		if actRecvPtr != nil {
@@ -447,7 +454,7 @@ func buildRecorderFromInterceptor(recvPtr interface{}, interceptor PreRecordInte
 				valPtr: res,
 			})
 		}
-		err := postInterceptor(nil, fnInfo, argObj, resObject, data)
+		err := postInterceptor(nil, funcInfo, argObj, resObject, data)
 		if err != nil {
 			panic(err)
 		}

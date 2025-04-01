@@ -23,74 +23,53 @@ type varRecordHolder struct {
 	post func(name string, res interface{}, data interface{})
 }
 
-func PushRecorderInterceptor(fn interface{}, preInterceptor PreRecordInterceptor, postInterceptor PostRecordInterceptor) func() {
-	fnv := reflect.ValueOf(fn)
-	if fnv.Kind() == reflect.Ptr {
-		varPtr := fnv.Pointer()
-		funcInfo := functab.InfoVar(varPtr)
-		if funcInfo == nil {
-			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
-		}
-		// variable
-		preHandler := func(name string, res interface{}) (interface{}, bool) {
-			fnInfo := &core.FuncInfo{
-				Kind: core.Kind_Var,
-			}
-			var argObj object
-			resObject := object{
-				{
-					name:   name,
-					valPtr: res,
-				},
-			}
-			data, _ := preInterceptor(nil, fnInfo, argObj, resObject)
-			return data, false
-		}
-		postHandler := func(name string, res interface{}, data interface{}) {
-			fnInfo := &core.FuncInfo{
-				Kind: core.Kind_Var,
-			}
-			var argObj object
-			resObject := object{
-				{
-					name:   name,
-					valPtr: res,
-				},
-			}
-			postInterceptor(nil, fnInfo, argObj, resObject, data)
-		}
-		return PushVarRecordHandler(varPtr, preHandler, postHandler)
-	} else if fnv.Kind() == reflect.Func {
-		// func
-	} else {
-		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
-	}
-
-	recvPtr, _, trappingPC := InspectPC(fn)
-	pre, post := buildRecorderFromInterceptor(recvPtr, preInterceptor, postInterceptor)
-	return PushRecordHandler(trappingPC, recvPtr, pre, post)
-}
-
 func PushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() == reflect.Ptr {
 		varPtr := fnv.Pointer()
-		funcInfo := functab.InfoVar(varPtr)
+		funcInfo := functab.InfoVarAddr(varPtr)
 		if funcInfo == nil {
 			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
 		}
+		if pre == nil && post == nil {
+			panic(fmt.Errorf("pre and post should not be both nil"))
+		}
+
+		if pre != nil && post != nil && reflect.TypeOf(pre) != reflect.TypeOf(post) {
+			panic(fmt.Errorf("pre-recorder and post-recorder should have the same type, actual: pre has %T, post has %T", pre, post))
+		}
 
 		// variable
-		rv := reflect.ValueOf(pre)
-		isPtr := checkVarType(fnv.Type(), rv.Type(), true)
-		preHandler := func(name string, res interface{}) (interface{}, bool) {
-			reflect.ValueOf(pre).Call([]reflect.Value{})
-			return nil, false
+		var preHandler func(name string, res interface{}) (interface{}, bool)
+		var postHandler func(name string, res interface{}, data interface{})
+
+		var preIsPtr bool
+		var postIsPtr bool
+
+		if pre != nil {
+			preV := reflect.ValueOf(pre)
+			var preRecordArgTypes []ptrType
+			preRecordArgTypes, preIsPtr = checkVarRecorderType(fnv.Type(), preV.Type(), true)
+			preHandler = func(name string, res interface{}) (interface{}, bool) {
+				arg := preRecordArgTypes[0].get(reflect.ValueOf(res))
+				preV.Call([]reflect.Value{arg})
+				return nil, false
+			}
 		}
-		postHandler := func(name string, res interface{}, data interface{}) {
-			reflect.ValueOf(post).Call([]reflect.Value{})
+		if post != nil {
+			postV := reflect.ValueOf(post)
+			var postRecordArgTypes []ptrType
+			postRecordArgTypes, postIsPtr = checkVarRecorderType(fnv.Type(), postV.Type(), true)
+			postHandler = func(name string, res interface{}, data interface{}) {
+				arg := postRecordArgTypes[0].get(reflect.ValueOf(res))
+				postV.Call([]reflect.Value{arg})
+			}
 		}
-		if !isPtr {
+		if pre != nil && post != nil && preIsPtr == postIsPtr {
+			panic(fmt.Errorf("pre-recorder and post-recorder should have the same type, actual: pre has %T, post has %T", pre, post))
+		}
+
+		if !preIsPtr {
 			return PushVarRecordHandler(varPtr, preHandler, postHandler)
 		}
 		return PushVarPtrRecordHandler(varPtr, preHandler, postHandler)
@@ -100,9 +79,51 @@ func PushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
 		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
 	}
 
-	recvPtr, _, trappingPC := InspectPC(fn)
-	preHandler, postHandler := buildRecorderHandler(recvPtr, fn, pre, post)
+	recvPtr, funcInfo, _, trappingPC := InspectPC(fn)
+	preHandler, postHandler := buildRecorderHandler(recvPtr, funcInfo, fn, pre, post)
 	return PushRecordHandler(trappingPC, recvPtr, preHandler, postHandler)
+}
+
+func PushRecorderInterceptor(fn interface{}, preInterceptor PreRecordInterceptor, postInterceptor PostRecordInterceptor) func() {
+	fnv := reflect.ValueOf(fn)
+	if fnv.Kind() == reflect.Ptr {
+		varPtr := fnv.Pointer()
+		funcInfo := functab.InfoVarAddr(varPtr)
+		if funcInfo == nil {
+			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
+		}
+		// variable
+		preHandler := func(name string, res interface{}) (interface{}, bool) {
+			var argObj object
+			resObject := object{
+				{
+					name:   name,
+					valPtr: res,
+				},
+			}
+			data, _ := preInterceptor(nil, funcInfo, argObj, resObject)
+			return data, false
+		}
+		postHandler := func(name string, res interface{}, data interface{}) {
+			var argObj object
+			resObject := object{
+				{
+					name:   name,
+					valPtr: res,
+				},
+			}
+			postInterceptor(nil, funcInfo, argObj, resObject, data)
+		}
+		return PushVarRecordHandler(varPtr, preHandler, postHandler)
+	} else if fnv.Kind() == reflect.Func {
+		// func
+	} else {
+		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
+	}
+
+	recvPtr, funcInfo, _, trappingPC := InspectPC(fn)
+	pre, post := buildRecorderFromInterceptor(recvPtr, funcInfo, preInterceptor, postInterceptor)
+	return PushRecordHandler(trappingPC, recvPtr, pre, post)
 }
 
 func PushRecordHandler(pc uintptr, recvPtr interface{}, pre func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (interface{}, bool), post func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}, data interface{})) func() {

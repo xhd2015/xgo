@@ -95,6 +95,10 @@ func InfoPC(pc uintptr) *core.FuncInfo {
 	return funcPCMapping[pc]
 }
 
+func InfoVarAddr(addr uintptr) *core.FuncInfo {
+	return varAddrMapping[addr]
+}
+
 // maybe rename to FuncForGeneric
 func Info(pkg string, identityName string) *core.FuncInfo {
 	return funcInfoMapping[pkg][identityName]

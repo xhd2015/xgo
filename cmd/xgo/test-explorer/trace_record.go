@@ -2,6 +2,8 @@ package test_explorer
 
 import (
 	"time"
+
+	"github.com/xhd2015/xgo/cmd/xgo/trace/render/stack_model"
 )
 
 type MockStatus string
@@ -37,7 +39,7 @@ type CallRecord struct {
 type traceConverter struct {
 }
 
-func (c *traceConverter) convertRoot(root *Stack) *RootRecord {
+func (c *traceConverter) convertRoot(root *stack_model.Stack) *RootRecord {
 	if root == nil {
 		return nil
 	}
@@ -66,7 +68,7 @@ func (c *traceConverter) convertRoot(root *Stack) *RootRecord {
 	return record
 }
 
-func (c *traceConverter) convertStacks(stacks []*StackEntry) []*CallRecord {
+func (c *traceConverter) convertStacks(stacks []*stack_model.StackEntry) []*CallRecord {
 	if stacks == nil {
 		return nil
 	}
@@ -78,13 +80,13 @@ func (c *traceConverter) convertStacks(stacks []*StackEntry) []*CallRecord {
 	return convStacks
 }
 
-func (c *traceConverter) convertStack(stack *StackEntry) *CallRecord {
+func (c *traceConverter) convertStack(stack *stack_model.StackEntry) *CallRecord {
 	if stack == nil {
 		return nil
 	}
 	funcInfo := stack.FuncInfo
 	if funcInfo == nil {
-		funcInfo = &FuncInfo{}
+		funcInfo = &stack_model.FuncInfo{}
 	}
 	var args interface{} = stack.Args
 	var results interface{} = stack.Results
