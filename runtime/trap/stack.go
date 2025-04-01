@@ -3,6 +3,7 @@ package trap
 import (
 	"time"
 
+	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/trap/stack_model"
 )
 
@@ -40,6 +41,8 @@ type StackEntryData map[interface{}]interface{}
 type StackEntry struct {
 	ID       int
 	ParentID int
+
+	FuncInfo *core.FuncInfo
 
 	BeginNs int64
 	EndNs   int64

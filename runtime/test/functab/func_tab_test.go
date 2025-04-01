@@ -13,7 +13,7 @@ var SomeVar int
 
 var SomeVarWithoutType = 0
 
-func Example() {
+func Example(s string) {
 	var _ = &SomeVar
 	var _ = &SomeVarWithoutType
 }
@@ -34,36 +34,50 @@ func TestFuncTab(t *testing.T) {
 		return reflect.ValueOf(fn).Pointer()
 	}
 	type TestCase struct {
-		WantKind     core.Kind
-		WantFullName string
-		WantPC       uintptr
-		WantVar      interface{}
+		WantKind         core.Kind
+		WantFullName     string
+		WantName         string
+		WantIdentityName string
+		WantArgs         []string
+		WantPC           uintptr
+		WantVar          interface{}
 	}
 	expectFullNames := []TestCase{
 		{
-			WantKind:     core.Kind_Var,
-			WantFullName: "github.com/xhd2015/xgo/runtime/test/func_tab.SomeVar",
-			WantVar:      &SomeVar,
+			WantKind:         core.Kind_Var,
+			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.SomeVar",
+			WantName:         "SomeVar",
+			WantIdentityName: "SomeVar",
+			WantVar:          &SomeVar,
 		},
 		{
-			WantKind:     core.Kind_Func,
-			WantFullName: "github.com/xhd2015/xgo/runtime/test/func_tab.Example",
-			WantPC:       getPC(Example),
+			WantKind:         core.Kind_Func,
+			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.Example",
+			WantName:         "Example",
+			WantIdentityName: "Example",
+			WantPC:           getPC(Example),
+			WantArgs:         []string{"s"},
 		},
 		{
-			WantKind:     core.Kind_Func,
-			WantFullName: "github.com/xhd2015/xgo/runtime/test/func_tab.SomeType.ValueMethod",
-			WantPC:       getPC(SomeType.ValueMethod),
+			WantKind:         core.Kind_Func,
+			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.SomeType.ValueMethod",
+			WantName:         "ValueMethod",
+			WantIdentityName: "SomeType.ValueMethod",
+			WantPC:           getPC(SomeType.ValueMethod),
 		},
 		{
-			WantKind:     core.Kind_Func,
-			WantFullName: "github.com/xhd2015/xgo/runtime/test/func_tab.(*SomeType).PtrMethod",
-			WantPC:       getPC((*SomeType).PtrMethod),
+			WantKind:         core.Kind_Func,
+			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.(*SomeType).PtrMethod",
+			WantName:         "PtrMethod",
+			WantIdentityName: "(*SomeType).PtrMethod",
+			WantPC:           getPC((*SomeType).PtrMethod),
 		},
 		{
-			WantKind:     core.Kind_Func,
-			WantFullName: "github.com/xhd2015/xgo/runtime/test/func_tab.TestFuncTab",
-			WantPC:       getPC(TestFuncTab),
+			WantKind:         core.Kind_Func,
+			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.TestFuncTab",
+			WantName:         "TestFuncTab",
+			WantIdentityName: "TestFuncTab",
+			WantPC:           getPC(TestFuncTab),
 		},
 	}
 	funcInfos := functab.GetFuncs()
@@ -73,13 +87,19 @@ func TestFuncTab(t *testing.T) {
 	for i, funcInfo := range funcInfos {
 		var expectKind core.Kind
 		var expectFullName string
+		var expectName string
+		var expectIdentityName string
 		var expectPC uintptr
 		var expectVar interface{}
+		var expectArgs []string
 		if i < len(expectFullNames) {
 			expectKind = expectFullNames[i].WantKind
 			expectFullName = expectFullNames[i].WantFullName
+			expectName = expectFullNames[i].WantName
+			expectIdentityName = expectFullNames[i].WantIdentityName
 			expectPC = expectFullNames[i].WantPC
 			expectVar = expectFullNames[i].WantVar
+			expectArgs = expectFullNames[i].WantArgs
 		}
 		if funcInfo.Kind != expectKind {
 			t.Errorf("funcInfo[%d] kind mismatch, want %s, got %s", i, expectKind, funcInfo.Kind)
@@ -87,11 +107,20 @@ func TestFuncTab(t *testing.T) {
 		if funcInfo.FullName != expectFullName {
 			t.Errorf("funcInfo[%d] mismatch, want %s, got %s", i, expectFullName, funcInfo.FullName)
 		}
+		if funcInfo.Name != expectName {
+			t.Errorf("funcInfo[%d] name mismatch, want %s, got %s", i, expectName, funcInfo.Name)
+		}
+		if funcInfo.IdentityName != expectIdentityName {
+			t.Errorf("funcInfo[%d] identityName mismatch, want %s, got %s", i, expectIdentityName, funcInfo.IdentityName)
+		}
 		if funcInfo.PC != expectPC {
 			t.Errorf("funcInfo[%d] pc mismatch, want %d, got %d", i, expectPC, funcInfo.PC)
 		}
 		if expectVar != nil && funcInfo.Var != expectVar {
 			t.Errorf("funcInfo[%d] var mismatch, want %v, got %v", i, expectVar, funcInfo.Var)
+		}
+		if expectArgs != nil && !reflect.DeepEqual(expectArgs, funcInfo.ArgNames) {
+			t.Errorf("funcInfo[%d] args mismatch, want %v, got %v", i, expectArgs, funcInfo.ArgNames)
 		}
 	}
 

@@ -52,8 +52,18 @@ type File struct {
 type FuncInfo struct {
 	FuncDecl *ast.FuncDecl
 	Receiver *Field
-	Params   []*Field
-	Results  []*Field
+	Params   Fields
+	Results  Fields
+}
+
+type Fields []*Field
+
+func (f Fields) Names() []string {
+	names := make([]string, len(f))
+	for i, field := range f {
+		names[i] = field.Name
+	}
+	return names
 }
 
 type VarInfo struct {

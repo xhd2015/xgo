@@ -56,6 +56,7 @@ type ExportOptions struct {
 
 	stats map[string]map[string]*stat
 }
+
 type stat struct {
 	total   int
 	current int
