@@ -20,7 +20,17 @@ import (
 	"github.com/xhd2015/xgo/support/instrument/load"
 	"github.com/xhd2015/xgo/support/instrument/overlay"
 	"github.com/xhd2015/xgo/support/instrument/patch"
+	"github.com/xhd2015/xgo/support/strutil"
 )
+
+// limit the instrument file size up to 1MB
+// larger file may bloat in size, causing
+// the go compiler to fail.
+// see https://github.com/xhd2015/xgo/issues/303
+// TODO: we may add unit test for this
+// and check if later go version has fixed this
+// known for: go1.19
+const MAX_FILE_SIZE = 1 * 1024 * 1024
 
 func instrumentUserSpace(projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
@@ -34,7 +44,20 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 			mod = "vendor"
 		}
 	}
-	xgoPkgs, err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir)
+
+	overrideXgoContent := func(absFile overlay.AbsFile, content string) {
+		if xgoRuntimeModuleDir == "" {
+			overlayFS.OverrideContent(absFile, content)
+			return
+		}
+		// we can directly replace the go files in the xgoRuntimeModuleDir
+		// just write back the content to the file
+		err := os.WriteFile(string(absFile), strutil.ToReadonlyBytes(content), 0644)
+		if err != nil {
+			panic(err)
+		}
+	}
+	xgoPkgs, err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir, overrideXgoContent)
 	if err != nil {
 		if err != instrument.ErrLinkFileNotFound {
 			return err
@@ -60,11 +83,13 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 
 	logDebug("start load: %v", loadArgs)
 	loadPackages, err := load.LoadPackages(loadArgs, load.LoadOptions{
-		Dir:         projectDir,
-		Mod:         mod,
-		Overlay:     overlayFS,
-		IncludeTest: includeTest,
-		ModFile:     modfile,
+		Dir:             projectDir,
+		Mod:             mod,
+		Overlay:         overlayFS,
+		IncludeTest:     includeTest,
+		ModFile:         modfile,
+		MaxFileSize:     MAX_FILE_SIZE,
+		FilterErrorFile: true,
 	})
 	if err != nil {
 		return err
@@ -99,22 +124,13 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 	}
 
 	logDebug("collect edits")
-	updatedFiles := 0
-	for _, pkg := range packages.Packages {
-		for _, file := range pkg.Files {
-			if !file.Edit.HasEdit() {
-				continue
-			}
-			content := string(file.Edit.Buffer().Bytes())
-			if mayHaveCover {
-				content, err = instrument_go.AddEditsNotes(file.Edit, file.File.AbsPath, file.File.Content, content)
-				if err != nil {
-					return fmt.Errorf("failed to add edits: %s %w", file.File.AbsPath, err)
-				}
-			}
-			overlayFS.OverrideContent(overlay.AbsFile(file.File.AbsPath), content)
-			updatedFiles++
-		}
+	updatedFiles, err := addEditNotes(overlayFS, packages, mayHaveCover, nil)
+	if err != nil {
+		return err
+	}
+	_, err = addEditNotes(overlayFS, xgoPkgs, mayHaveCover, overrideXgoContent)
+	if err != nil {
+		return err
 	}
 	logDebug("finish instruments, updated %d files", updatedFiles)
 	return nil
@@ -196,6 +212,34 @@ func collectFuncInfos(packages *edit.Packages) {
 			patch.AddCode(fileEdit, pos, "func init(){"+code+";}")
 		}
 	}
+}
+
+func addEditNotes(overlayFS overlay.Overlay, packages *edit.Packages, mayHaveCover bool, overrideContent func(absFile overlay.AbsFile, content string)) (int, error) {
+	updatedFiles := 0
+
+	for _, pkg := range packages.Packages {
+		for _, file := range pkg.Files {
+			if !file.Edit.HasEdit() {
+				continue
+			}
+			content := string(file.Edit.Buffer().Bytes())
+			if mayHaveCover {
+				var err error
+				content, err = instrument_go.AddEditsNotes(file.Edit, file.File.AbsPath, file.File.Content, content)
+				if err != nil {
+					return 0, fmt.Errorf("failed to add edits: %s %w", file.File.AbsPath, err)
+				}
+			}
+			absFile := overlay.AbsFile(file.File.AbsPath)
+			if overrideContent != nil {
+				overrideContent(absFile, content)
+			} else {
+				overlayFS.OverrideContent(absFile, content)
+			}
+			updatedFiles++
+		}
+	}
+	return updatedFiles, nil
 }
 
 func getIdentityName(fset *token.FileSet, code string, funcDecl *ast.FuncDecl) string {

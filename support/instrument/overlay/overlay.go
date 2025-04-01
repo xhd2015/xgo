@@ -40,6 +40,25 @@ func (o Overlay) Get(absFile AbsFile) *FileOverlay {
 	return o[absFile]
 }
 
+func (o Overlay) Size(absFile AbsFile) (size int64, err error) {
+	fo := o.Get(absFile)
+
+	readOSFile := absFile
+	if fo != nil {
+		if fo.hasOverriddenContent {
+			return int64(len(fo.Content)), nil
+		}
+		if fo.AbsFile != "" {
+			readOSFile = fo.AbsFile
+		}
+	}
+	info, err := os.Stat(string(readOSFile))
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
+}
+
 func (o Overlay) Read(absFile AbsFile) (hitContent bool, content string, err error) {
 	fo := o.Get(absFile)
 

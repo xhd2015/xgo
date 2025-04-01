@@ -2,9 +2,7 @@ package instrument
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/xhd2015/xgo/support/edit/goedit"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/instrument/constants"
 	"github.com/xhd2015/xgo/support/instrument/edit"
@@ -15,7 +13,6 @@ import (
 	"github.com/xhd2015/xgo/support/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/support/instrument/load"
 	"github.com/xhd2015/xgo/support/instrument/overlay"
-	"github.com/xhd2015/xgo/support/strutil"
 )
 
 var ErrLinkFileNotFound = fmt.Errorf("xgo: link file not found")
@@ -23,7 +20,7 @@ var ErrLinkFileNotFound = fmt.Errorf("xgo: link file not found")
 // create an overlay: abs file -> content
 type Overlay map[string]string
 
-func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS overlay.Overlay, mod string, modfile string, xgoVersion string, xgoRevision string, xgoNumber int, collectTestTrace bool, collectTestTraceDir string) (*edit.Packages, error) {
+func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS overlay.Overlay, mod string, modfile string, xgoVersion string, xgoRevision string, xgoNumber int, collectTestTrace bool, collectTestTraceDir string, overrideContent func(absFile overlay.AbsFile, content string)) (*edit.Packages, error) {
 	opts := load.LoadOptions{
 		Dir:     projectDir,
 		Overlay: overlayFS,
@@ -48,18 +45,6 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 		// TODO: handle the case where error indicates the package is not found
 		return nil, err
 	}
-	overrideContent := func(absFile overlay.AbsFile, content string) {
-		if xgoRuntimeModuleDir == "" {
-			overlayFS.OverrideContent(absFile, content)
-			return
-		}
-		// we can directly replace the go files in the xgoRuntimeModuleDir
-		// just write back the content to the file
-		err := os.WriteFile(string(absFile), strutil.ToReadonlyBytes(content), 0644)
-		if err != nil {
-			panic(err)
-		}
-	}
 	editPackages := edit.Edit(packages)
 	var foundLink bool
 	for _, pkg := range editPackages.Packages {
@@ -79,10 +64,10 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 			file := efile.File
 			content := file.Content
 			absFile := overlay.AbsFile(file.AbsPath)
-			var fnInfos []*edit.FuncInfo
+			var funcInfos []*edit.FuncInfo
 			if addTrap {
-				edit := goedit.New(packages.Fset, content)
-				fnInfos = instrument_func.EditInjectRuntimeTrap(edit, file.Syntax)
+				edit := efile.Edit
+				funcInfos = instrument_func.EditInjectRuntimeTrap(edit, file.Syntax)
 				if edit.HasEdit() {
 					overrideContent(absFile, edit.Buffer().String())
 				}
@@ -105,7 +90,7 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 					}
 				}
 			}
-			efile.TrapFuncs = fnInfos
+			efile.TrapFuncs = funcInfos
 		}
 	}
 	if !foundLink {
