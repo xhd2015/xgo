@@ -374,15 +374,15 @@ func splitCommaList(s string) []string {
 		return nil
 	}
 	list := strings.Split(s, ",")
-	trimedList := make([]string, 0, len(list))
+	trimmedList := make([]string, 0, len(list))
 	for _, item := range list {
 		item := strings.TrimSpace(item)
 		if item == "" {
 			continue
 		}
-		trimedList = append(trimedList, item)
+		trimmedList = append(trimmedList, item)
 	}
-	return trimedList
+	return trimmedList
 }
 
 func getLocalXgoGenDir(projectDir string) (string, error) {

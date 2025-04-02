@@ -84,14 +84,14 @@ func (o Overlay) MakeGoOverlay(overlayDir string, addLineDirective bool) (*GoOve
 		return nil, err
 	}
 	replace := make(Replace, len(o))
-	for absFile, fo := range o {
-		if fo.hasOverriddenContent {
+	for absFile, fileOverlay := range o {
+		if fileOverlay.hasOverriddenContent {
 			writeFile := filepath.Join(absOverlayDir, string(absFile))
 			err := os.MkdirAll(filepath.Dir(writeFile), 0755)
 			if err != nil {
 				return nil, err
 			}
-			content := fo.Content
+			content := fileOverlay.Content
 			if addLineDirective {
 				content = patch.FmtLineDirective(string(absFile), 1) + "\n" + content
 			}
@@ -102,10 +102,10 @@ func (o Overlay) MakeGoOverlay(overlayDir string, addLineDirective bool) (*GoOve
 			replace[absFile] = AbsFile(writeFile)
 			continue
 		}
-		if fo.AbsFile == "" {
+		if fileOverlay.AbsFile == "" {
 			continue
 		}
-		replace[absFile] = fo.AbsFile
+		replace[absFile] = fileOverlay.AbsFile
 	}
 	return &GoOverlay{Replace: replace}, nil
 }

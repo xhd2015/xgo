@@ -14,7 +14,7 @@ func TestGetLocalHostByIPType(t *testing.T) {
 	}{
 		{name: "Test with all IPs", ipType: "all", want: true},
 		{name: "Test with IPv4", ipType: "ipv4", want: true},
-		{name: "Test unknow ipType", ipType: "test", want: false},
+		{name: "Test unknown ipType", ipType: "test", want: false},
 	}
 
 	for _, tt := range tests {

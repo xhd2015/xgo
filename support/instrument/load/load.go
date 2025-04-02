@@ -71,7 +71,7 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 		}
 	}
 
-	// TODO: parallize
+	// TODO: parallelize
 	for _, pkg := range loadPkgs {
 		addFile := func(file string) {
 			absFilePath := filepath.Join(pkg.GoPackage.Dir, file)

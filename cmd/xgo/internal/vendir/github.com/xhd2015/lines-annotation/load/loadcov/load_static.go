@@ -19,7 +19,7 @@ func LoadStatic(astLoadInfo ast.LoadInfo, opts LodOpts) (*model.ProjectAnnotatio
 
 	lineEmptyAnnotation := load.LoadLineEmptyFromAstInfo(astLoadInfo)
 
-	trimedEmptyProfile, err := ast2ann.CollectBlockProfilesNoModPath(astLoadInfo)
+	trimmedEmptyProfile, err := ast2ann.CollectBlockProfilesNoModPath(astLoadInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -37,10 +37,10 @@ func LoadStatic(astLoadInfo ast.LoadInfo, opts LodOpts) (*model.ProjectAnnotatio
 	}
 
 	// sort blocks
-	trimedEmptyProfile.SortAll()
+	trimmedEmptyProfile.SortAll()
 
 	funcInfoMapping := load.FuncInfoMappingToAnnotation(funcInfo)
-	blockInfo := load.BinaryProfileTrimmedToAnnotation(trimedEmptyProfile)
+	blockInfo := load.BinaryProfileTrimmedToAnnotation(trimmedEmptyProfile)
 	if blockInfo == nil {
 		// if all files excluded, the block info can be nil
 		blockInfo = &model.ProjectAnnotation{

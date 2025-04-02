@@ -19,7 +19,8 @@ jobs:
     - name: Prepare typo config
       run: |
         # Don't correct the word "Incrimental"
-        echo -ne '[files]\nextend-exclude = ["**/vendir/**/*"]\n[default.extend-words]\nIncrimental = "Incrimental"\n' > /tmp/typo-config.toml
+        # `typ` is usually used in go as `type` is a keyword
+        echo -ne '[files]\nextend-exclude = ["**/vendir/**/*"]\n[default.extend-words]\nIncrimental = "Incrimental"\ntyp = "typ"\nTyp = "Typ"\n' > /tmp/typo-config.toml
         cat /tmp/typo-config.toml
 
     - name: Check spelling of files
