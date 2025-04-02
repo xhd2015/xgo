@@ -472,7 +472,11 @@ func main() {
 			}
 			for _, testArg := range testArgs {
 				if len(testArg.Args) == 0 {
-					fmt.Fprintf(os.Stderr, "SKIP %s: no tests to run\n", testArg.Dir)
+					logDir := testArg.Dir
+					if logDir == "" {
+						logDir = "."
+					}
+					fmt.Fprintf(os.Stderr, "SKIP %s: no tests to run\n", logDir)
 					continue
 				}
 				usePlainGo := testArg.Dir == "" || testArg.Dir == "runtime"

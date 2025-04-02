@@ -267,13 +267,6 @@ func quoteNames(names []string) []string {
 	return quotedNames
 }
 
-func isGeneric(funcDecl *ast.FuncDecl) bool {
-	if funcDecl.Type.TypeParams == nil || len(funcDecl.Type.TypeParams.List) == 0 {
-		return false
-	}
-	return true
-}
-
 func hasFunc(pkg *edit.Package, fn string) bool {
 	for _, file := range pkg.Files {
 		for _, decl := range file.File.Syntax.Decls {

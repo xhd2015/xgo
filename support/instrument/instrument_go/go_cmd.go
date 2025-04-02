@@ -27,9 +27,9 @@ func InstrumentGo(goroot string, goVersion *goinfo.GoVersion) error {
 }
 
 func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major != 1 || (goVersion.Minor != 18 && goVersion.Minor != 19 && goVersion.Minor != 20 && goVersion.Minor != 21 && goVersion.Minor != 22 && goVersion.Minor != 23 && goVersion.Minor != 24) {
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 24) {
 		// src/cmd/go/internal/work/exec.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.18~go1.24", execFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", execFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
 	}
 	execFile := execFilePath.JoinPrefix(goroot)
 
@@ -43,7 +43,7 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 		switch goVersion.Minor {
 		case 20, 21:
 			coverLine = `if p.Internal.CoverMode != "" {`
-		case 18, 19:
+		case 18, 19, 17:
 			coverLine = `if a.Package.Internal.CoverMode != "" {`
 		}
 		content = patch.UpdateContent(content,
