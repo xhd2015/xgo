@@ -41,15 +41,15 @@ func (o Overlay) Get(absFile AbsFile) *FileOverlay {
 }
 
 func (o Overlay) Size(absFile AbsFile) (size int64, err error) {
-	fo := o.Get(absFile)
+	overlayFile := o.Get(absFile)
 
 	readOSFile := absFile
-	if fo != nil {
-		if fo.hasOverriddenContent {
-			return int64(len(fo.Content)), nil
+	if overlayFile != nil {
+		if overlayFile.hasOverriddenContent {
+			return int64(len(overlayFile.Content)), nil
 		}
-		if fo.AbsFile != "" {
-			readOSFile = fo.AbsFile
+		if overlayFile.AbsFile != "" {
+			readOSFile = overlayFile.AbsFile
 		}
 	}
 	info, err := os.Stat(string(readOSFile))
@@ -60,15 +60,15 @@ func (o Overlay) Size(absFile AbsFile) (size int64, err error) {
 }
 
 func (o Overlay) Read(absFile AbsFile) (hitContent bool, content string, err error) {
-	fo := o.Get(absFile)
+	overlayFile := o.Get(absFile)
 
 	readOSFile := absFile
-	if fo != nil {
-		if fo.hasOverriddenContent {
-			return true, fo.Content, nil
+	if overlayFile != nil {
+		if overlayFile.hasOverriddenContent {
+			return true, overlayFile.Content, nil
 		}
-		if fo.AbsFile != "" {
-			readOSFile = fo.AbsFile
+		if overlayFile.AbsFile != "" {
+			readOSFile = overlayFile.AbsFile
 		}
 	}
 	data, err := os.ReadFile(string(readOSFile))

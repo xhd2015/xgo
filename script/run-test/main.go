@@ -361,7 +361,7 @@ func main() {
 				fmt.Printf("resetting instrument\n")
 			}
 			cmdArgs := []string{
-				"run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot, "--build-compiler",
+				"run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot,
 			}
 			if debug {
 				cmdArgs = append(cmdArgs, "--log-debug=stdout")
@@ -409,23 +409,7 @@ func main() {
 				runDefault = true
 			}
 			addArgs := func(args []string, variant string) []string {
-				if cover {
-					args = append(args, "-cover")
-				}
-				for _, coverPkg := range coverpkgs {
-					args = append(args, "-coverpkg", coverPkg)
-				}
-				if coverprofile != "" {
-					var prefix string
-					var suffix string
-					idx := strings.LastIndex(coverprofile, ".")
-					if idx < 0 {
-						prefix = coverprofile
-					} else {
-						prefix, suffix = coverprofile[:idx], coverprofile[idx:]
-					}
-					args = append(args, "-coverprofile", prefix+"-"+variant+suffix)
-				}
+				args = addGoFlags(args, cover, coverpkgs, coverprofile, variant)
 				if debug && (variant == "xgo" || variant == "runtime" || variant == "runtime-sub") {
 					args = append(args, "--log-debug=stdout")
 				}
@@ -482,17 +466,22 @@ func main() {
 				usePlainGo := testArg.Dir == "" || testArg.Dir == "runtime"
 				// projectDir
 				runArgs := make([]string, 0, len(remainArgs)+1)
-				if logDebug {
+				if !usePlainGo && logDebug {
 					runArgs = append(runArgs, "--log-debug")
 				}
+				var coverageVariant string
 				var dir string
 				if testArg.Dir != "" {
-					if testArg.Dir == "runtime" {
-						dir = "runtime"
+					// runtime, runtime-test
+					coverageVariant = strings.ReplaceAll(strings.ReplaceAll(testArg.Dir, "/", "-"), "\\", "-")
+					if usePlainGo {
+						dir = testArg.Dir
 					} else {
 						runArgs = append(runArgs, "--project-dir", testArg.Dir)
 					}
 				}
+				runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
+
 				runArgs = append(runArgs, remainArgs...)
 				err := doRunTest(goroot, testKind_xgoAny, usePlainGo, dir, runArgs, testArg.Args, nil)
 				if err != nil {
@@ -503,6 +492,27 @@ func main() {
 		}
 		fmt.Fprintf(os.Stdout, "PASS %s(%v)\n", goroot, time.Since(begin))
 	}
+}
+
+func addGoFlags(args []string, cover bool, coverPkgs []string, coverprofile string, coverageVariant string) []string {
+	if cover {
+		args = append(args, "-cover")
+	}
+	for _, coverPkg := range coverPkgs {
+		args = append(args, "-coverpkg", coverPkg)
+	}
+	if coverprofile != "" {
+		var prefix string
+		var suffix string
+		idx := strings.LastIndex(coverprofile, ".")
+		if idx < 0 {
+			prefix = coverprofile
+		} else {
+			prefix, suffix = coverprofile[:idx], coverprofile[idx:]
+		}
+		args = append(args, "-coverprofile", prefix+"-"+coverageVariant+suffix)
+	}
+	return args
 }
 
 func getTestArgs(args []string) []*TestArg {

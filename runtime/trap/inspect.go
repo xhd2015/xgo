@@ -57,7 +57,7 @@ func InspectPC(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, fun
 		panic(fmt.Errorf("func %w: %s", ErrNotInstrumented, fullName))
 	}
 
-	// retrieve recieve ptr
+	// retrieve receive ptr
 	callFn := func() {
 		stack := GetOrAttachStack()
 		stack.inspecting = func(pc uintptr, recvName string, actRecvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) {

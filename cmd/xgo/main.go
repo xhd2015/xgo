@@ -539,7 +539,7 @@ func handleBuild(cmd string, args []string) error {
 		// the most important result of `importRuntimeDepGenOverlay`
 		// is the standalone runtime module dir,i.e. `xgoRuntimeModuleDir`
 		// except this, there are no other significant new go files
-		// intruduced. following steps that loads packages should
+		// introduced. following steps that loads packages should
 		// sticks to old mod and modfile
 		modForLoad := mod
 		modfileForLoad := modfile
