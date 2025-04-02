@@ -6,6 +6,8 @@ import (
 	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
+const enableCyclicDetect = false
+
 func instrumentJsonEncoding(goroot string, goMajor int, goMinor int) error {
 	if goMajor != 1 || (goMinor != 18 && goMinor != 19 && goMinor != 20 && goMinor != 21 && goMinor != 22 && goMinor != 23 && goMinor != 24) {
 		// src/encoding/json/encode.go
@@ -36,22 +38,24 @@ func instrumentJsonEncoding(goroot string, goMajor int, goMinor int) error {
 			unsupportedTypeIgnore,
 		)
 
-		encoders := []string{"mapEncoder", "sliceEncoder", "ptrEncoder"}
-		for _, encoder := range encoders {
-			content = patch.UpdateContent(content,
-				fmt.Sprintf("/*<begin instrument_json_encoding_ignore_cyclic_%s>*/", encoder),
-				fmt.Sprintf("/*<end instrument_json_encoding_ignore_cyclic_%s>*/", encoder),
-				[]string{
-					fmt.Sprintf("%s) encode", encoder),
-					"if",
-					"e.ptrLevel > startDetectingCyclesAfter",
-					"if _, ok := e.ptrSeen[ptr]; ok {",
-					"\n",
-				},
-				3,
-				patch.UpdatePosition_After,
-				cyclicIgnore,
-			)
+		if enableCyclicDetect {
+			encoders := []string{"mapEncoder", "sliceEncoder", "ptrEncoder"}
+			for _, encoder := range encoders {
+				content = patch.UpdateContent(content,
+					fmt.Sprintf("/*<begin instrument_json_encoding_ignore_cyclic_%s>*/", encoder),
+					fmt.Sprintf("/*<end instrument_json_encoding_ignore_cyclic_%s>*/", encoder),
+					[]string{
+						fmt.Sprintf("%s) encode", encoder),
+						"if",
+						"e.ptrLevel > startDetectingCyclesAfter",
+						"if _, ok := e.ptrSeen[ptr]; ok {",
+						"\n",
+					},
+					3,
+					patch.UpdatePosition_After,
+					cyclicIgnore,
+				)
+			}
 		}
 		return content, nil
 	})
