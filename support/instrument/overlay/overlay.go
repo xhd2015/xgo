@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
@@ -86,7 +87,7 @@ func (o Overlay) MakeGoOverlay(overlayDir string, addLineDirective bool) (*GoOve
 	replace := make(Replace, len(o))
 	for absFile, fileOverlay := range o {
 		if fileOverlay.hasOverriddenContent {
-			writeFile := filepath.Join(absOverlayDir, string(absFile))
+			writeFile := fileutil.RebaseAbs(absOverlayDir, string(absFile))
 			err := os.MkdirAll(filepath.Dir(writeFile), 0755)
 			if err != nil {
 				return nil, err

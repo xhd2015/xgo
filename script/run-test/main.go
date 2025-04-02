@@ -866,7 +866,7 @@ func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args [
 		testArgs = testArgs[:i]
 	}
 	// debug
-	fmt.Printf("test Args: %v\n", testArgs)
+	fmt.Printf("go %s\n", strings.Join(testArgs, " "))
 
 	execCmd := exec.Command(filepath.Join(goroot, "bin", "go"), testArgs...)
 	dt := detector{

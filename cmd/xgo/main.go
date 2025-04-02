@@ -14,19 +14,15 @@ import (
 	"strings"
 	"time"
 
-	cmd_support "github.com/xhd2015/xgo/support/cmd"
-	"github.com/xhd2015/xgo/support/instrument/overlay"
-
-	debug_support "github.com/xhd2015/xgo/support/debug"
-
-	"github.com/xhd2015/xgo/support/cmd"
-	"github.com/xhd2015/xgo/support/netutil"
-	"github.com/xhd2015/xgo/support/osinfo"
-
 	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 	test_explorer "github.com/xhd2015/xgo/cmd/xgo/test-explorer"
+	cmd_support "github.com/xhd2015/xgo/support/cmd"
+	debug_support "github.com/xhd2015/xgo/support/debug"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/instrument/overlay"
+	"github.com/xhd2015/xgo/support/netutil"
+	"github.com/xhd2015/xgo/support/osinfo"
 )
 
 // usage:
@@ -961,7 +957,7 @@ func getNakedGo() string {
 	return "go"
 }
 func getGoEnvRoot(dir string) (string, error) {
-	goroot, err := cmd.Dir(dir).Output(getNakedGo(), "env", "GOROOT")
+	goroot, err := cmd_support.Dir(dir).Output(getNakedGo(), "env", "GOROOT")
 	if err != nil {
 		return "", err
 	}
