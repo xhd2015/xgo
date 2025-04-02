@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 if [[ ${OS:-} = Windows_NT ]]; then
     echo 'error: please install xgo using Windows Subsystem for Linux'
@@ -14,47 +14,60 @@ error() {
 command -v tar >/dev/null || error 'tar is required to install xgo'
 
 case $(uname -ms) in
-'Darwin x86_64')
-    target=darwin-amd64
+    'Darwin x86_64')
+        target=darwin-amd64
     ;;
-'Darwin arm64')
-    target=darwin-arm64
+    'Darwin arm64')
+        target=darwin-arm64
     ;;
-'Linux aarch64' | 'Linux arm64')
-    target=linux-arm64
+    'Linux aarch64' | 'Linux arm64')
+        target=linux-arm64
     ;;
-'Linux x86_64' | *)
-    target=linux-amd64
+    'Linux x86_64' | *)
+        target=linux-amd64
     ;;
 esac
 
-latestURL="https://github.com/xhd2015/xgo/releases/latest"
-headers=$(curl "$latestURL" -so /dev/null -D -)
-if [[ "$headers" != *302* ]];then
-    error "expect 302 from $latestURL"
+#for pre-release like:
+#   https://github.com/xhd2015/xgo/releases/download/v1.1.0-alpha/xgo1.1.0-linux-amd64.tar.gz
+
+if [[ "$INSTALL_TAG" != "" ]];then
+    install_version=$INSTALL_VERSION
+    if [[ -z "$install_version" ]];then
+        install_version=$INSTALL_TAG
+    fi
+    file="xgo${install_version}-${target}.tar.gz"
+    uri="https://github.com/xhd2015/xgo/releases/download/${INSTALL_TAG}/${file}"
+else
+    latestURL="https://github.com/xhd2015/xgo/releases/latest"
+    headers=$(curl "$latestURL" -so /dev/null -D -)
+    if [[ "$headers" != *302* ]];then
+        error "expect 302 from $latestURL"
+    fi
+    
+    location=$(echo "$headers"|grep "location: ")
+    if [[ -z $location ]];then
+        error "expect 302 location from $latestURL"
+    fi
+    locationURL=${location/#"location: "}
+    locationURL=${locationURL/%$'\n'}
+    locationURL=${locationURL/%$'\r'}
+    
+    versionName=""
+    if [[ "$locationURL" = *'/xgo-v'* ]];then
+        versionName=${locationURL/#*'/xgo-v'}
+        elif [[ "$locationURL" = *'/tag/v'* ]];then
+        versionName=${locationURL/#*'/tag/v'}
+    fi
+    
+    if [[ -z $versionName ]];then
+        error "expect tag format: xgo-v1.x.x, actual: $locationURL"
+    fi
+    
+    file="xgo${versionName}-${target}.tar.gz"
+    uri="$latestURL/download/$file"
 fi
 
-location=$(echo "$headers"|grep "location: ")
-if [[ -z $location ]];then
-    error "expect 302 location from $latestURL"
-fi
-locationURL=${location/#"location: "}
-locationURL=${locationURL/%$'\n'}
-locationURL=${locationURL/%$'\r'}
-
-versionName=""
-if [[ "$locationURL" = *'/xgo-v'* ]];then
-    versionName=${locationURL/#*'/xgo-v'}
-elif [[ "$locationURL" = *'/tag/v'* ]];then
-    versionName=${locationURL/#*'/tag/v'}
-fi
-
-if [[ -z $versionName ]];then
-   error "expect tag format: xgo-v1.x.x, actual: $locationURL"
-fi
-
-file="xgo${versionName}-${target}.tar.gz"
-uri="$latestURL/download/$file"
 install_dir=$HOME/.xgo
 bin_dir=$install_dir/bin
 
@@ -87,7 +100,7 @@ else
             echo "export PATH=\"$bin_dir:\$PATH\"" >> ~/.bash_profile
         fi
     fi
-
+    
     if [[ -f ~/.zshrc ]];then
         content=$(cat ~/.zshrc)
         if [[ "$content" != *'# setup xgo'* ]];then
@@ -101,8 +114,8 @@ fi
 xgoTip=xgo
 sourceTip=""
 if ! command -v xgo >/dev/null;then
-     xgoTip="~/.xgo/bin/xgo"
-     sourceTip=$'You may need to source shell profile or add xgo to PATH to use:\n    export PATH=~/.xgo/bin:$PATH'
+    xgoTip="~/.xgo/bin/xgo"
+    sourceTip=$'You may need to source shell profile or add xgo to PATH to use:\n    export PATH=~/.xgo/bin:$PATH'
 fi
 
 echo "Successfully installed, to get started, run:"
