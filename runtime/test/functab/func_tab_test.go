@@ -13,7 +13,7 @@ var SomeVar int
 
 var SomeVarWithoutType = 0
 
-func Example(s string) {
+func SomeFunc(s string) {
 	var _ = &SomeVar
 	var _ = &SomeVarWithoutType
 }
@@ -52,10 +52,10 @@ func TestFuncTab(t *testing.T) {
 		},
 		{
 			WantKind:         core.Kind_Func,
-			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.Example",
-			WantName:         "Example",
-			WantIdentityName: "Example",
-			WantPC:           getPC(Example),
+			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.SomeFunc",
+			WantName:         "SomeFunc",
+			WantIdentityName: "SomeFunc",
+			WantPC:           getPC(SomeFunc),
 			WantArgs:         []string{"s"},
 		},
 		{
@@ -124,11 +124,11 @@ func TestFuncTab(t *testing.T) {
 		}
 	}
 
-	funcInfo := functab.InfoFunc(Example)
+	funcInfo := functab.InfoFunc(SomeFunc)
 	if funcInfo == nil {
 		t.Fatal(fmt.Errorf("func not found"))
 	}
-	funcInfo2 := functab.InfoPC(getPC(Example))
+	funcInfo2 := functab.InfoPC(getPC(SomeFunc))
 	if funcInfo2 == nil {
 		t.Fatal(fmt.Errorf("func not found"))
 	}

@@ -3,7 +3,7 @@ package stack_trace
 import (
 	"fmt"
 
-	"github.com/xhd2015/xgo/runtime/test/stack_trace/user_info"
+	"github.com/xhd2015/xgo/runtime/test/trace/stack_trace/user_info"
 )
 
 func UpdateUserInfo(name string) (actualName string, err error) {

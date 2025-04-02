@@ -3,11 +3,12 @@ package main
 import "fmt"
 
 // REVISION and NUMBER are auto updated when run 'git commit'
+// they correspond to a unique commit.
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
 const VERSION = "1.1.0"
-const REVISION = "5670a53fec3198bc661f215d65287dd0d10bab5c+1"
-const NUMBER = 352
+const REVISION = "03506518c51804a218b72b64ff5d6025de696210+1"
+const NUMBER = 353
 
 // the wanted runtime/core's version
 // manually updated

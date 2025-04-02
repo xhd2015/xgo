@@ -14,6 +14,14 @@ import (
 	"github.com/xhd2015/xgo/support/git"
 )
 
+// the test driver for xgo
+// it automatically detects all GOROOTs under `go-release`, and
+// run predefined tests for each GOROOT.
+// this simplifies xgo's compatibility test across multiple go versions.
+// specifically, `go-release` directory can be downloaded using:
+//   go run ./script/download-go go1.19.13
+// if there is no any go version under `go-release`, the system GOROOT will be used.
+
 // usage:
 //
 //	go run ./script/run-test/ --include go1.19.13
@@ -21,6 +29,9 @@ import (
 //	go run ./script/run-test/ --include go1.19.13 -run TestHelloWorld -v
 //	go run ./script/run-test/ -count=1 --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.2
 //  go run ./script/run-test/ -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile covers/cover.out --include go1.21.8
+
+// specific test:
+//   go run ./script/run-test --include go1.18.10 --log-debug ./runtime/test/patch
 
 // when will cache affect?
 //   -tags dev : cache is off by default, so revision is not significant
@@ -46,180 +57,39 @@ import (
 
 var globalFlags = []string{"-timeout=60s"}
 
-// TODO: remove duplicate test between xgo test and runtime test
-var runtimeSubTests = []string{
-	"func_list",
-	"trap",
-	"trap_inspect_func",
-	"trap_args",
-	"mock_func",
-	"mock_method",
-	"mock_by_name",
-	"mock_closure",
-	"mock_stdlib",
-	"mock_generic",
-	"mock_var",
-	"patch",
-	"patch_const",
-	"tls",
+type TestArg struct {
+	Dir  string
+	Args []string
 }
 
-type TestCase struct {
-	name         string
-	usePlainGo   bool //  use go instead of xgo
-	dir          string
-	flags        []string
-	windowsFlags []string
-	env          []string
-	skipOnCover  bool
-
-	skipOnTimeout     bool
-	windowsFailIgnore bool
-}
-
-// can be selected via --name
-// use:
-//
-//	go run ./scrip/run-test --list
-//
-// to list all names
-var extraSubTests = []*TestCase{
+var defaultTestArgs = []*TestArg{
 	{
-		name:  "trace_without_dep",
-		dir:   "runtime/test/trace_without_dep",
-		flags: []string{"--strace"},
-		// see https://github.com/xhd2015/xgo/issues/144#issuecomment-2138565532
-		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
+		// test using go
+		Dir:  "",
+		Args: []string{
+			// "./...",
+			// "./test",
+		},
 	},
 	{
-		name:         "trace_without_dep_vendor",
-		dir:          "runtime/test/trace_without_dep_vendor",
-		flags:        []string{"--strace"},
-		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
+		// test using go
+		Dir: "runtime",
+		Args: []string{
+			// "./...",
+			"./core/...",
+		},
 	},
 	{
-		// see https://github.com/xhd2015/xgo/issues/87
-		name:         "trace_without_dep_vendor_replace",
-		dir:          "runtime/test/trace_without_dep_vendor_replace",
-		flags:        []string{"--strace"},
-		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
-	},
-	// trap
-	{
-		name: "trap_flags_persistent",
-		dir:  "runtime/test/trap/flags/persistent_after_build",
-	},
-	{
-		name:  "trap_with_overlay",
-		dir:   "runtime/test/trap_with_overlay",
-		flags: []string{"-overlay", "overlay.json"},
-	},
-	{
-		// see https://github.com/xhd2015/xgo/issues/111
-		name:  "trap_stdlib_any",
-		dir:   "runtime/test/trap_stdlib_any",
-		flags: []string{"--trap-stdlib"},
-	},
-	{
-		// see https://github.com/xhd2015/xgo/issues/142
-		name:  "bugs_regression",
-		dir:   "runtime/test/bugs/...",
-		flags: []string{},
-	},
-	{
-		name:         "trace_marshal",
-		dir:          "runtime/test/trace_marshal/...",
-		flags:        []string{},
-		windowsFlags: []string{"--trap-stdlib=false"},
-	},
-	{
-		name:         "trace",
-		dir:          "runtime/test/trace",
-		flags:        []string{},
-		windowsFlags: []string{"--trap-stdlib=false"},
-	},
-	{
-		// see https://github.com/xhd2015/xgo/issues/142
-		name:         "trace",
-		dir:          "runtime/test/trace/check_trace_flag",
-		flags:        []string{},
-		windowsFlags: []string{"--trap-stdlib=false"},
-	},
-	{
-		// go run ./script/run-test/ --name trace-marshal-not-trap-stdlib
-		name:  "trace-marshal-not-trap-stdlib",
-		dir:   "runtime/test/trace/marshal/flag",
-		flags: []string{"--trap-stdlib=false"},
-	},
-	{
-		name:  "trace-marshal-exclude",
-		dir:   "runtime/test/trace/marshal/exclude",
-		flags: []string{"--mock-rule", `{"pkg":"encoding/json","name":"newTypeEncoder","action":"exclude"}`},
-	},
-	{
-		name:          "trace-snapshot",
-		dir:           "runtime/test/trace/snapshot",
-		skipOnCover:   true,
-		skipOnTimeout: true,
-	},
-	{
-		name:              "trace-custom-dir",
-		dir:               "runtime/test/trace/trace_dir",
-		windowsFailIgnore: true,
-	},
-	{
-		// see https://github.com/xhd2015/xgo/issues/202
-		name: "asm_func",
-		dir:  "runtime/test/issue_194_asm_func",
-	},
-	{
-		// see https://github.com/xhd2015/xgo/issues/194
-		name: "asm_func_sonic",
-		dir:  "runtime/test/issue_194_asm_func/demo",
-	},
-	{
-		// see https://github.com/xhd2015/xgo/issues/142
-		name:         "trace_panic_peek",
-		dir:          "runtime/test/trace_panic_peek/...",
-		flags:        []string{},
-		windowsFlags: []string{"--trap-stdlib=false"},
-	},
-	{
-		// see https://github.com/xhd2015/xgo/issues/164
-		name:  "stdlib_recover_no_trap",
-		dir:   "runtime/test/recover_no_trap",
-		flags: []string{"--trap-stdlib"},
-	},
-	{
-		name:  "mock_rule_not_set",
-		dir:   "runtime/test/mock/rule",
-		flags: []string{"-run", "TestClosureDefaultMock"},
-	},
-	{
-		name:  "mock_rule_set",
-		dir:   "runtime/test/mock/rule",
-		flags: []string{"-run", "TestClosureWithMockRuleNoMock", "--mock-rule", `{"closure":true,"action":"exclude"}`},
-	},
-	{
-		// see https://github.com/xhd2015/xgo/issues/231
-		name:  "cross_build",
-		dir:   "runtime/test/build/simple",
-		flags: []string{"-c", "-o", "/dev/null"},
-		env:   []string{"GOOS=", "GOARCH="},
-	},
-	{
-		name:       "xgo_integration",
-		usePlainGo: true,
-		dir:        "test/xgo_integration",
-	},
-	{
-		name:       "timeout",
-		usePlainGo: true,
-		dir:        "runtime/test/timeout",
-		// the test is 600ms sleep
-		flags:             []string{"-timeout=0.2s"},
-		skipOnTimeout:     true,
-		windowsFailIgnore: true,
+		// test using xgo
+		Dir: "runtime/test",
+		Args: []string{
+			// "./...",
+			"./patch",
+			"./functab",
+			"./trace/record",
+			"./trace/go_trace",
+			"./trace/marshal/cyclic",
+		},
 	},
 }
 
@@ -245,11 +115,24 @@ func main() {
 	var coverpkgs []string
 	var coverprofile string
 	var names []string
-	var dir string
+
+	var projectDir string
+	var legacyV1_0 bool
+	var logDebug bool
 
 	var list bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
+		if arg == "--" {
+			if i+1 < n {
+				remainArgs = append(remainArgs, args[i+1:]...)
+			}
+			break
+		}
+		if !strings.HasPrefix(arg, "-") {
+			remainTests = append(remainTests, arg)
+			continue
+		}
 		if arg == "--exclude" {
 			excludes = append(excludes, args[i+1])
 			i++
@@ -260,11 +143,11 @@ func main() {
 			i++
 			continue
 		}
-		if arg == "--dir" {
+		if arg == "--project-dir" {
 			if i+1 >= n {
 				panic(fmt.Errorf("%v requires arg", arg))
 			}
-			dir = args[i+1]
+			projectDir = args[i+1]
 			i++
 			continue
 		}
@@ -283,6 +166,10 @@ func main() {
 		}
 		if arg == "-v" || strings.HasPrefix(arg, "-count=") {
 			remainArgs = append(remainArgs, arg)
+			continue
+		}
+		if arg == "--log-debug" {
+			logDebug = true
 			continue
 		}
 		if arg == "--xgo-test-only" {
@@ -344,19 +231,14 @@ func main() {
 			list = true
 			continue
 		}
-		if arg == "--" {
-			if i+1 < n {
-				remainArgs = append(remainArgs, args[i+1:]...)
-			}
-			break
-		}
-		if !strings.HasPrefix(arg, "-") {
-			remainTests = append(remainTests, arg)
+		if arg == "--legacy-v1.0" {
+			legacyV1_0 = true
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
 		os.Exit(1)
 	}
+	_ = projectDir
 	topLevel, err := git.ShowTopLevel("")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -384,7 +266,7 @@ func main() {
 		os.Exit(1)
 	}
 	if !atRoot {
-		fmt.Fprintln(os.Stderr, "run-test requires executing from project root, current: %s\n", wd)
+		fmt.Fprintf(os.Stderr, "run-test requires executing from project root, current: %s\n", wd)
 		os.Exit(1)
 	}
 	if list {
@@ -494,90 +376,218 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		runDefault := true
-		runXgoTestFlag := true
-		runRuntimeTestFlag := true
-		runRuntimeSubTestFlag := true
-		if len(names) > 0 {
-			runRuntimeTestFlag = false
-			runRuntimeSubTestFlag = true
-			runXgoTestFlag = false
-			runDefault = false
-		} else if xgoTestOnly {
-			runRuntimeTestFlag = false
-			runRuntimeSubTestFlag = false
-			runXgoTestFlag = true
-			runDefault = false
-		} else if xgoRuntimeTestOnly {
-			runRuntimeTestFlag = true
-			runRuntimeSubTestFlag = false
-			runXgoTestFlag = false
-			runDefault = false
-		} else if xgoRuntimeSubTestOnly {
-			runRuntimeTestFlag = false
-			runRuntimeSubTestFlag = true
-			runXgoTestFlag = false
-			runDefault = false
-		} else if xgoDefaultTestOnly {
-			runRuntimeTestFlag = false
-			runRuntimeSubTestFlag = false
-			runXgoTestFlag = false
-			runDefault = true
-		}
-		addArgs := func(args []string, variant string) []string {
-			if cover {
-				args = append(args, "-cover")
-			}
-			for _, coverPkg := range coverpkgs {
-				args = append(args, "-coverpkg", coverPkg)
-			}
-			if coverprofile != "" {
-				var prefix string
-				var suffix string
-				idx := strings.LastIndex(coverprofile, ".")
-				if idx < 0 {
-					prefix = coverprofile
-				} else {
-					prefix, suffix = coverprofile[:idx], coverprofile[idx:]
-				}
-				args = append(args, "-coverprofile", prefix+"-"+variant+suffix)
-			}
-			if debug && (variant == "xgo" || variant == "runtime" || variant == "runtime-sub") {
-				args = append(args, "--log-debug=stdout")
-			}
-			return args
-		}
-		if runXgoTestFlag {
-			err := runXgoTest(goroot, addArgs(remainArgs, "xgo"), remainTests)
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
-				os.Exit(1)
-			}
-		}
 
-		if runRuntimeTestFlag {
-			err := runRuntimeTest(goroot, addArgs(remainArgs, "runtime"), remainTests)
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+		if legacyV1_0 {
+			runDefault := true
+			runXgoTestFlag := true
+			runRuntimeTestFlag := true
+			runRuntimeSubTestFlag := true
+			if len(names) > 0 {
+				runRuntimeTestFlag = false
+				runRuntimeSubTestFlag = true
+				runXgoTestFlag = false
+				runDefault = false
+			} else if xgoTestOnly {
+				runRuntimeTestFlag = false
+				runRuntimeSubTestFlag = false
+				runXgoTestFlag = true
+				runDefault = false
+			} else if xgoRuntimeTestOnly {
+				runRuntimeTestFlag = true
+				runRuntimeSubTestFlag = false
+				runXgoTestFlag = false
+				runDefault = false
+			} else if xgoRuntimeSubTestOnly {
+				runRuntimeTestFlag = false
+				runRuntimeSubTestFlag = true
+				runXgoTestFlag = false
+				runDefault = false
+			} else if xgoDefaultTestOnly {
+				runRuntimeTestFlag = false
+				runRuntimeSubTestFlag = false
+				runXgoTestFlag = false
+				runDefault = true
+			}
+			addArgs := func(args []string, variant string) []string {
+				if cover {
+					args = append(args, "-cover")
+				}
+				for _, coverPkg := range coverpkgs {
+					args = append(args, "-coverpkg", coverPkg)
+				}
+				if coverprofile != "" {
+					var prefix string
+					var suffix string
+					idx := strings.LastIndex(coverprofile, ".")
+					if idx < 0 {
+						prefix = coverprofile
+					} else {
+						prefix, suffix = coverprofile[:idx], coverprofile[idx:]
+					}
+					args = append(args, "-coverprofile", prefix+"-"+variant+suffix)
+				}
+				if debug && (variant == "xgo" || variant == "runtime" || variant == "runtime-sub") {
+					args = append(args, "--log-debug=stdout")
+				}
+				return args
+			}
+			if runXgoTestFlag {
+				err := runXgoTest(goroot, addArgs(remainArgs, "xgo"), remainTests)
+				if err != nil {
+					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+					os.Exit(1)
+				}
+			}
+
+			if runRuntimeTestFlag {
+				err := runRuntimeTest(goroot, addArgs(remainArgs, "runtime"), remainTests)
+				if err != nil {
+					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+					os.Exit(1)
+				}
+			}
+			if runRuntimeSubTestFlag {
+				err := runRuntimeSubTest(goroot, addArgs(remainArgs, "runtime-sub"), remainTests, names)
+				if err != nil {
+					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+					os.Exit(1)
+				}
+			}
+			if runDefault {
+				err := runDefaultTest(goroot, addArgs(remainArgs, "default"), remainTests)
+				if err != nil {
+					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+					os.Exit(1)
+				}
+			}
+		} else {
+			if projectDir != "" {
+				fmt.Fprintf(os.Stderr, "--project-dir is not supported\n")
 				os.Exit(1)
 			}
-		}
-		if runRuntimeSubTestFlag {
-			err := runRuntimeSubTest(goroot, addArgs(remainArgs, "runtime-sub"), remainTests, names)
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+			testArgs := getTestArgs(remainTests)
+			if len(testArgs) == 0 {
+				fmt.Fprintf(os.Stderr, "no tests to run: %v\n", remainTests)
 				os.Exit(1)
 			}
-		}
-		if runDefault {
-			err := runDefaultTest(goroot, addArgs(remainArgs, "default"), remainTests)
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
-				os.Exit(1)
+			for _, testArg := range testArgs {
+				if len(testArg.Args) == 0 {
+					fmt.Fprintf(os.Stderr, "SKIP %s: no tests to run\n", testArg.Dir)
+					continue
+				}
+				usePlainGo := testArg.Dir == "" || testArg.Dir == "runtime"
+				// projectDir
+				runArgs := make([]string, 0, len(remainArgs)+1)
+				if logDebug {
+					runArgs = append(runArgs, "--log-debug")
+				}
+				var dir string
+				if testArg.Dir != "" {
+					if testArg.Dir == "runtime" {
+						dir = "runtime"
+					} else {
+						runArgs = append(runArgs, "--project-dir", testArg.Dir)
+					}
+				}
+				runArgs = append(runArgs, remainArgs...)
+				err := doRunTest(goroot, testKind_xgoAny, usePlainGo, dir, runArgs, testArg.Args, nil)
+				if err != nil {
+					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+					os.Exit(1)
+				}
 			}
 		}
 		fmt.Fprintf(os.Stdout, "PASS %s(%v)\n", goroot, time.Since(begin))
 	}
+}
+
+func getTestArgs(args []string) []*TestArg {
+	if len(args) == 0 {
+		return defaultTestArgs
+	}
+	return splitArgs(args)
+}
+
+func splitArgs(args []string) []*TestArg {
+	var results []*TestArg
+	for _, arg := range args {
+		dir, path := splitArg(arg)
+
+		var prev *TestArg
+		for i, r := range results {
+			if r.Dir == dir {
+				prev = results[i]
+				break
+			}
+		}
+		if prev == nil {
+			prev = &TestArg{Dir: dir, Args: []string{}}
+			results = append(results, prev)
+		}
+		prev.Args = append(prev.Args, path)
+	}
+	return results
+}
+
+func splitArg(fullArg string) (dir string, path string) {
+	if fullArg == "" {
+		return "", ""
+	}
+	parts := splitPath(fullArg)
+	if len(parts) == 0 {
+		return "", ""
+	}
+	if parts[0] != "." {
+		xgo := []string{"github.com", "xhd2015", "xgo"}
+		if !isList(parts, xgo) {
+			return "", fullArg
+		}
+		return splitXgoRelative(parts[len(xgo):], fullArg)
+	}
+	return splitXgoRelative(parts[1:], fullArg)
+}
+
+func splitXgoRelative(relative []string, fullArg string) (string, string) {
+	if len(relative) == 0 {
+		return "", fullArg
+	}
+	if relative[0] != "runtime" {
+		return "", fullArg
+	}
+	if len(relative) >= 2 && relative[1] == "test" {
+		return filepath.Join("runtime", "test"), "./" + strings.Join(relative[2:], "/")
+	}
+	return "runtime", "./" + strings.Join(relative[1:], "/")
+}
+
+func isList(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, e := range a {
+		if e != b[i] {
+			return false
+		}
+	}
+	return true
+}
+func splitPath(path string) []string {
+	var list []string
+	var runes []rune
+	for _, r := range path {
+		if r != '/' && r != '\\' {
+			runes = append(runes, r)
+			continue
+		}
+		if len(runes) > 0 {
+			list = append(list, string(runes))
+			runes = nil
+		}
+	}
+	if len(runes) > 0 {
+		list = append(list, string(runes))
+	}
+	return list
 }
 
 // TODO: use slices.Contains()
@@ -737,11 +747,16 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 type testKind string
 
 const (
-	testKind_default        testKind = ""
-	testKind_xgoTest        testKind = "xgo-test"
-	testKind_runtimeTest    testKind = "runtime-test"
+	// Deprecated: use testKind_xgoAny instead
+	testKind_default testKind = ""
+	// Deprecated: use testKind_xgoAny instead
+	testKind_xgoTest testKind = "xgo-test"
+	// Deprecated: use testKind_xgoAny instead
+	testKind_runtimeTest testKind = "runtime-test"
+	// Deprecated: use testKind_xgoAny instead
 	testKind_runtimeSubTest testKind = "runtime-sub-test"
-	testKind_xgoAny         testKind = "xgo-any"
+
+	testKind_xgoAny testKind = "xgo-any"
 )
 
 func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args []string, tests []string, env []string) error {
