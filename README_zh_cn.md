@@ -274,90 +274,6 @@ func TestMethodMock(t *testing.T){
 }
 ```
 
-## Trap
-Trap允许对几乎所有函数进行拦截, 它是`xgo`的核心机制, 是其他功能, 如Mock和Trace的基础。
-
-下面的例子对函数的执行进行拦截并打印日志:
-
-(查看 [test/testdata/trap/trap.go](test/testdata/trap/trap.go) 获取更多细节.)
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-
-    "github.com/xhd2015/xgo/runtime/core"
-    "github.com/xhd2015/xgo/runtime/trap"
-)
-
-func init() {
-    trap.AddInterceptor(&trap.Interceptor{
-        Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
-            if f.Name == "A" {
-                fmt.Printf("trap A\n")
-                return nil, nil
-            }
-            if f.Name == "B" {
-                fmt.Printf("abort B\n")
-                return nil, trap.ErrAbort
-            }
-            return nil, nil
-        },
-    })
-}
-
-func main() {
-    A()
-    B()
-}
-
-func A() {
-    fmt.Printf("A\n")
-}
-
-func B() {
-    fmt.Printf("B\n")
-}
-```
-
-使用`go`运行:
-
-```sh
-go run ./
-# 输出:
-#   A
-#   B
-```
-
-使用`xgo`运行:
-
-```sh
-xgo run ./
-# 输出:
-#   trap A
-#   A
-#   abort B
-```
-
-`AddInterceptor()`将一个拦截器添加到全局或当前Goroutine,取决于当前是在`init`中还是`init`完成后:
-- `init`中: 对所有Goroutine中的函数拦截都生效,
-- `init`完成后: 仅对当前Goroutine生效, 并且在当前Goroutine退出后清理.
-
-当在`init`完成之后调用`AddInterceptor()`, 它还会返回一个额外的清理函数, 用于提前清理设置的拦截器.
-
-例子:
-
-```go
-func main(){
-    clear := trap.AddInterceptor(...)
-    defer clear()
-    ...
-}
-```
-
-Trap还提供了一个`Direct(fn)`的函数, 用于跳过拦截器, 直接调用到原始的函数。
-
 ## Trace
 > Trace也许是xgo提供的最强大的工具, 这个博客介绍了一个更全面的例子: https://blog.xhd2015.xyz/zh/posts/xgo-trace_a-powerful-visualization-tool-in-go/
 
@@ -405,24 +321,94 @@ xgo tool trace TestTrace.json
 
 使用Trace可以帮助你快速理解代码的执行流程。
 
-默认情况下, Trace会在当前目录下写入堆栈记录, 可通过环境变量`XGO_TRACE_OUTPUT`进行控制:
-- `XGO_TRACE_OUTPUT=stdout`: 堆栈记录会被输出到stdout, 方便debug,
-- `XGO_TRACE_OUTPUT=<dir>`: 堆栈记录被写入到`<dir>`目录下,
-- `XGO_TRACE_OUTPUT=off`: 关闭堆栈记录收集。
+默认情况下, Trace会在当前目录下写入堆栈记录, 可通过`--strace-dir=<DIR>`进行控制。
 
-除了使用`--strace`之外, xgo还允许你通过`trace.Begin()`的方式手动控制追踪范围:
+除了使用`--strace`之外, xgo还允许你通过`signal.StartXgoTrace()`的方式手动控制追踪范围:
 ```go
-import "github.com/xhd2015/xgo/runtime/trace"
+import "github.com/xhd2015/xgo/runtime/trace/signal"
 
 func TestTrace(t *testing.T) {
     A()
-    finish := trace.Begin()
-    defer finish()
-    B()
-    C()
+    signal.StartXgoTrace(signal.StartXgoTraceConfig{OutputFile:"demo.json"},nil,func() (interface{},error){
+        B()
+        C()
+    return nil,nil
+    })
 }
 ```
 结果中只会包含`B()`和`C()`.
+
+## Recorder
+Trap允许对几乎所有函数进行记录, 它是`xgo`的核心机制, 是Mock和Trace的基础。
+
+下面的例子对函数的执行进行拦截并打印日志:
+
+(查看 [test/testdata/trap/trap.go](test/testdata/trap/trap.go) 获取更多细节.)
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/xhd2015/xgo/runtime/trace"
+)
+
+func main() {
+    trace.RecordCall(A, func(){
+        fmt.Printf("record A\n")
+    })
+    trace.RecordCall(B,func(){
+        fmt.Printf("record B\n")
+    })
+    A()
+    B()
+}
+
+func A() {
+    fmt.Printf("A\n")
+}
+
+func B() {
+    fmt.Printf("B\n")
+}
+```
+
+使用`go`运行:
+
+```sh
+go run ./
+# 输出:
+#   A
+#   B
+```
+
+使用`xgo`运行:
+
+```sh
+xgo run ./
+# 输出:
+#   record A
+#   A
+#   record B
+#   B
+```
+
+`RecordCall()`将一个拦截器添加到全局或当前Goroutine,取决于当前是在`init`中还是`init`完成后:
+- `init`中: 对所有Goroutine中的函数拦截都生效,
+- `init`完成后: 仅对当前Goroutine生效, 并且在当前Goroutine退出后清理.
+
+当在`init`完成之后调用`AddInterceptor()`, 它还会返回一个额外的清理函数, 用于提前清理设置的拦截器.
+
+例子:
+
+```go
+func main(){
+    clear := trap.RecordCall(...)
+    defer clear()
+    ...
+}
+```
 
 # 工具
 

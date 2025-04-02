@@ -15,7 +15,7 @@
 - [API](#api):
   - [Mock](#patch)
   - [Trace](#trace)
-  - [Trap](#trap)
+  - [Recorder](#recorder)
 - [Tools](#tools):
   - [Test Explorer](#test-explorer)
   - [Incremental Coverage](#incremental-coverage)
@@ -311,25 +311,24 @@ Real world examples:
 
 Trace helps you get started to a new project quickly.
 
-By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
-- `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purpose,
-- `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
-- `XGO_TRACE_OUTPUT=off`: turn off trace.
+By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `--strace-dir=<DIR>`.
 
-Besides the `--strace` flag, xgo allows you to define which span should be collected, using `trace.Begin()`:
+Besides the `--strace` flag, xgo allows you to define which span should be collected, using `signal.StartXgoTrace()`:
 ```go
-import "github.com/xhd2015/xgo/runtime/trace"
+import "github.com/xhd2015/xgo/runtime/trace/signal"
 
 func TestTrace(t *testing.T) {
     A()
-    finish := trace.Begin()
-    defer finish()
-    B()
-    C()
+    signal.StartXgoTrace(signal.StartXgoTraceConfig{OutputFile:"demo.json"},nil,func() (interface{},error){
+        B()
+        C()
+    return nil,nil
+    })
 }
 ```
 The trace will only include `B()` and `C()`.
-## Trap
+
+## Recorder
 Xgo **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, providing a chance for user to intercept any function when called.
 
 Trap allows developer to intercept function execution on the fly.
@@ -346,27 +345,16 @@ import (
     "context"
     "fmt"
 
-    "github.com/xhd2015/xgo/runtime/core"
-    "github.com/xhd2015/xgo/runtime/trap"
+    "github.com/xhd2015/xgo/runtime/trace"
 )
 
-func init() {
-    trap.AddInterceptor(&trap.Interceptor{
-        Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
-            if f.Name == "A" {
-                fmt.Printf("trap A\n")
-                return nil, nil
-            }
-            if f.Name == "B" {
-                fmt.Printf("abort B\n")
-                return nil, trap.ErrAbort
-            }
-            return nil, nil
-        },
-    })
-}
-
 func main() {
+    trace.RecordCall(A, func(){
+        fmt.Printf("record A\n")
+    })
+    trace.RecordCall(B,func(){
+        fmt.Printf("record B\n")
+    })
     A()
     B()
 }
@@ -394,28 +382,27 @@ Run with `xgo`:
 ```sh
 xgo run ./
 # output:
-#   trap A
+#   record A
 #   A
-#   abort B
+#   record B
+#   B
 ```
 
-`AddInterceptor()` add given interceptor to either global or local, depending on whether it is called from `init` or after `init`:
+`RecordCall()` add given interceptor to either global or local, depending on whether it is called from `init` or after `init`:
 - Before `init`: effective globally for all goroutines,
 - After `init`: effective only for current goroutine, and will be cleared after current goroutine exits.
 
-When `AddInterceptor()` is called after `init`, it will return a dispose function to clear the interceptor earlier before current goroutine exits.
+When `RecordCall()` is called after `init`, it will return a dispose function to clear the interceptor earlier before current goroutine exits.
 
 Example:
 
 ```go
 func main(){
-    clear := trap.AddInterceptor(...)
+    clear := trap.RecordCall(...)
     defer clear()
     ...
 }
 ```
-
-Trap also have a helper function called `Direct(fn)`, which can be used to bypass any trap and mock interceptors, calling directly into the original function.
 
 # Tools
 ## Test Explorer
