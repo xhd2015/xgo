@@ -17,8 +17,8 @@ on:
     # 'gin-gonic/gin' ok
     # 'fatedier/frp' cannot pass even with go? need to verify
     #
-    # NOTE: use serially job to avoid 'Job Cancelled' which could
-    # possible be due to memory exhaust
+    # NOTE: use serial job to avoid 'Job Cancelled' which could
+    # possibly be due to memory exhaust
 jobs:
 
   test-with-xgo:

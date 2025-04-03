@@ -36,24 +36,6 @@ import (
 // when will cache affect?
 //   -tags dev : cache is off by default, so revision is not significant
 //   otherwise, revision is used as cache key
-//
-// runtime test:
-//    go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestFuncList -v ./test/func_list
-//
-// runtime sub test:
-//    go run ./script/run-test/ --include go1.17.13 --xgo-runtime-sub-test-only -run TestFuncList -v ./func_list
-
-// runtime sub tests by names:
-//    go run ./script/run-test/ --include go1.17.13 --name trace_without_dep --name trap_with_overlay
-
-// xgo default test:
-//    go run ./script/run-test/ --include go1.18.10 --xgo-default-test-only -run TestAtomicGenericPtr -v ./test
-
-// xgo test
-//    go run ./script/run-test/ --include go1.18.10 --xgo-test-only -run TestFuncNames -v ./test/xgo_test/func_names
-
-// run specific test for all go versions
-//     go run ./script/run-test/ --include go1.17.13 --include go1.18.10 --include go1.19.13 --include go1.20.14 --include go1.21.8 --include go1.22.1 -count=1 --xgo-default-test-only -run TestFuncNameSliceShouldWorkWithDebug -v
 
 var globalFlags = []string{"-timeout=60s"}
 
@@ -118,7 +100,9 @@ func main() {
 
 	var projectDir string
 	var legacyV1_0 bool
+
 	var logDebug bool
+	var withSetup bool
 
 	var list bool
 	for i := 0; i < n; i++ {
@@ -170,6 +154,10 @@ func main() {
 		}
 		if arg == "--log-debug" {
 			logDebug = true
+			continue
+		}
+		if arg == "--with-setup" {
+			withSetup = true
 			continue
 		}
 		if arg == "--xgo-test-only" {
@@ -352,6 +340,18 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	var setupGoroots []string
+	if withSetup {
+		setupGoroots = make([]string, len(goroots))
+		for i, goroot := range goroots {
+			setupGoroots[i], err = setupGoroot(goroot)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "setup goroot: %s %v\n", goroot, err)
+				os.Exit(1)
+			}
+		}
+		goroots = setupGoroots
+	}
 	for _, goroot := range goroots {
 		begin := time.Now()
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
@@ -492,6 +492,10 @@ func main() {
 		}
 		fmt.Fprintf(os.Stdout, "PASS %s(%v)\n", goroot, time.Since(begin))
 	}
+}
+
+func setupGoroot(goroot string) (string, error) {
+	return cmd.Output("go", "run", "./cmd/xgo", "setup", "--with-goroot", goroot)
 }
 
 func addGoFlags(args []string, cover bool, coverPkgs []string, coverprofile string, coverageVariant string) []string {
