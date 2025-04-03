@@ -19,6 +19,7 @@
 - [工具](#工具)
   - [Test Explorer](#test-explorer)
   - [增量覆盖率](#增量覆盖率)
+- [IDE集成](#ide集成)
 
 就Mock而言，`xgo`作为一个预处理器工作在`go run`,`go build`,和`go test`之上(查看[blog](https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec))。
 
@@ -462,6 +463,32 @@ xgo tool coverage serve cover.out
 为什么? 因为当你设置mock时，只有当前的goroutine受影响，并且在goroutine退出后清除，不管当前测试失败还是成功。
 
 想知道真正的原因吗? 我们正在整理内部实现的文档，尽请期待。
+
+# IDE集成
+`xgo`支持与VSCode, GoLand以及其他IDE进行集成。参考下面的步骤:
+
+- 生成GOROOT
+```sh
+xgo setup
+```
+
+这个命令会基于当前使用的GOROOT进行增强，输出增强后的GOROOT:
+```sh
+/Users/xhd2015/.xgo/go-instrument/go1.24.2_Us_xh_in_go_994c1863/go1.24.2
+```
+
+- 将这个GOROOT添加到IDE配置中
+  - VSCode: 添加到`.vscode/settings.json`
+```json
+{
+    "go.goroot": "/Users/xhd2015/.xgo/go-instrument/go1.24.2_Us_xh_in_go_994c1863/go1.24.2",
+    "go.testFlags": [
+        "-v"
+    ]
+}
+```
+  - GoLand: 添加到工程配置, 参考[GoLand: GOROOT and GOPATH](https://www.jetbrains.com/help/go/configuring-goroot-and-gopath.html)
+  - 其他IDE: 参考IDE的说明
 
 # 实现原理
 

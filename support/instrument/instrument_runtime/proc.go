@@ -1,23 +1,23 @@
 package instrument_runtime
 
 import (
-	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
 func instrumentProc(goroot string, goVersion *goinfo.GoVersion) error {
 	file := procPath.JoinPrefix(goroot)
-	return fileutil.UpdateFile(file, func(content []byte) (bool, []byte, error) {
-		procContent, err := instrumentNewGroutineV2(goVersion, string(content))
+
+	return patch.EditFile(file, func(content string) (string, error) {
+		procContent, err := instrumentNewGroutineV2(goVersion, content)
 		if err != nil {
-			return false, nil, err
+			return "", err
 		}
 		procContent, err = instrumentGoexit(goVersion, procContent)
 		if err != nil {
-			return false, nil, err
+			return "", err
 		}
-		return true, []byte(procContent), nil
+		return procContent, nil
 	})
 }
 

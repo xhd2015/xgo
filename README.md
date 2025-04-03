@@ -19,6 +19,7 @@
 - [Tools](#tools):
   - [Test Explorer](#test-explorer)
   - [Incremental Coverage](#incremental-coverage)
+- [IDE Setup](#ide-setup)
 
 As for the monkey patching part, `xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec)).
 
@@ -446,6 +447,31 @@ The displayed coverage is a combination of coverage and git diff. By default, on
 - Uncovered lines shown as light yellow
 
 This helps to quickly locate changes that were not covered, and add tests for them incrementally.
+
+# IDE Setup
+To use `xgo` with IDEs like VSCode, GoLand and many others, follow these steps:
+- setup GOROOT
+```sh
+xgo setup
+```
+
+This will output an xgo-instrumented GOROOT from your current GOROOT:
+```sh
+/Users/xhd2015/.xgo/go-instrument/go1.24.2_Us_xh_in_go_994c1863/go1.24.2
+```
+
+- Add instrumented GOROOT to IDE's env
+  - VSCode: add to `.vscode/settings.json`
+```json
+{
+    "go.goroot": "/Users/xhd2015/.xgo/go-instrument/go1.24.2_Us_xh_in_go_994c1863/go1.24.2",
+    "go.testFlags": [
+        "-v"
+    ]
+}
+```
+  - GoLand: add to project settings, see [GoLand: GOROOT and GOPATH](https://www.jetbrains.com/help/go/configuring-goroot-and-gopath.html)
+  - Others: refer to the IDE's documentation
 
 # Concurrent safety
 I know you guys from other monkey patching library suffer from the unsafety implied by these frameworks.

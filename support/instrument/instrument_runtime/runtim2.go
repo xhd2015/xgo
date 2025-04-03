@@ -13,18 +13,6 @@ func instrumentRuntime2(goroot string, goMajor int, goMinor int) error {
 	}
 	runtime2File := runtime2Path.JoinPrefix(goroot)
 
-	// bytes, err := fileutil.ReadFile(runtime2File)
-	// if err != nil {
-	// 	return err
-	// }
-	// before := string(bytes)
-	// content := patch.CleanPatch(before)
-
-	// diff := assert.Diff(before, content)
-	// fmt.Fprintln(os.Stderr, "diff:", diff)
-	// // panic("debug")
-	// time.Sleep(100 * time.Second)
-
 	return patch.EditFile(runtime2File, func(content string) (string, error) {
 		content = patch.UpdateContent(content,
 			"/*<begin instrument_runtime2_xgo_g>*/",

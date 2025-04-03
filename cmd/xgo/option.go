@@ -83,6 +83,9 @@ type options struct {
 	// --strace-snapshot-main-module-default
 	straceSnapshotMainModuleDefault string
 
+	// --delete
+	deleteFlag bool
+
 	remainArgs []string
 
 	testArgs   []string
@@ -146,6 +149,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var progFlags []string
 
 	var noLineDirective bool
+
+	var deleteFlag bool
 
 	nArg := len(args)
 
@@ -260,6 +265,15 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		flagValues = append(flagValues, FlagValue{
 			Flags: []string{"--xgo-home"},
 			Value: &xgoHome,
+		})
+	}
+	if cmd == "setup" {
+		flagValues = append(flagValues, FlagValue{
+			Flags:  []string{"--delete"},
+			Single: true,
+			Set: func(v string) {
+				deleteFlag = true
+			},
 		})
 	}
 
@@ -502,6 +516,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		buildFlags:      buildFlags,
 		progFlags:       progFlags,
 		noLineDirective: noLineDirective,
+		deleteFlag:      deleteFlag,
 	}, nil
 }
 

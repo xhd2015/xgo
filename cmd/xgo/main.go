@@ -95,11 +95,11 @@ func main() {
 		return
 	}
 	if cmd == "shadow" {
-		err := handleShadow()
+		err := handleShawdow()
 		consumeErrAndExit(err)
 		return
 	}
-	if cmd != "build" && cmd != "run" && cmd != "test" && cmd != "exec" {
+	if cmd != "build" && cmd != "run" && cmd != "test" && cmd != "exec" && cmd != "setup" {
 		fmt.Fprintf(os.Stderr, "xgo %s: unknown command\nRun 'xgo help' for usage.\n", cmd)
 		os.Exit(1)
 	}
@@ -129,6 +129,7 @@ func handleBuild(cmd string, args []string) error {
 	cmdBuild := cmd == "build"
 	cmdTest := cmd == "test"
 	cmdExec := cmd == "exec"
+	cmdSetup := cmd == "setup"
 	opts, err := parseOptions(cmd, args)
 	if err != nil {
 		return err
@@ -175,6 +176,7 @@ func handleBuild(cmd string, args []string) error {
 	trapStdlib := opts.trapStdlib
 	trapPkgs := opts.trap
 	noLineDirective := opts.noLineDirective
+	deleteFlag := opts.deleteFlag
 
 	if cmdExec && len(remainArgs) == 0 {
 		return fmt.Errorf("exec requires command")
@@ -200,19 +202,19 @@ func handleBuild(cmd string, args []string) error {
 	logDebug("effective GOROOT: %s", goroot)
 
 	// create a tmp dir for communication with exec_tool
-	tmpRoot, err := getTmpDir()
+	tmpRoot, err := getStableTmpDir()
 	if err != nil {
 		return err
 	}
-	// the xgoTmpDir can be thought as a shortly-stable cache dir
+	// the globalXgoTmpDir can be thought as a shortly-stable cache dir
 	//  - it won't gets deleted in a short period
 	//  - the system will reclaim it if out of storage
 	// it will hold:
 	//  - instrumentation
 	//  - build cache
-	xgoTmpDir := filepath.Join(tmpRoot, "xgo")
-	logDebug("xgoTmpDir: %s", xgoTmpDir)
-	err = os.MkdirAll(xgoTmpDir, 0755)
+	globalXgoTmpDir := filepath.Join(tmpRoot, "xgo")
+	logDebug("xgoTmpDir: %s", globalXgoTmpDir)
+	err = os.MkdirAll(globalXgoTmpDir, 0755)
 	if err != nil {
 		return err
 	}
@@ -224,18 +226,19 @@ func handleBuild(cmd string, args []string) error {
 		return err
 	}
 
+	localTmp := filepath.Join(localXgoGenDir, "tmp")
+	err = os.MkdirAll(localTmp, 0755)
+	if err != nil {
+		return err
+	}
+
 	// sessionTmpDir is specifically for this run session
-	sessionTmpDir, err := os.MkdirTemp(xgoTmpDir, "session-"+cmd+"-")
+	sessionTmpDir, err := os.MkdirTemp(localTmp, cmd)
 	logDebug("sessionTmpDir: %s", sessionTmpDir)
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(sessionTmpDir)
-
-	optionsFromFile, optionsFromFileContent, err := mergeOptionFiles(sessionTmpDir, opts.optionsFromFile, opts.mockRules)
-	if err != nil {
-		return err
-	}
 
 	var vscodeDebugFile string
 	var vscodeDebugFileSuffix string
@@ -259,7 +262,7 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	// build the exec tool
-	goVersion, err := checkGoVersion(goroot, noInstrument)
+	goVersion, err := checkGoVersion(goroot, !noInstrument)
 	if err != nil {
 		return err
 	}
@@ -271,19 +274,60 @@ func handleBuild(cmd string, args []string) error {
 		return err
 	}
 
-	// abs xgo dir
+	// abs xgo dir of ~/.xgo
 	xgoDir, err := getOrMakeAbsXgoHome(xgoHome)
 	if err != nil {
 		return err
 	}
 	binDir := filepath.Join(xgoDir, "bin")
-	logDir := filepath.Join(xgoTmpDir, "log")
+	logDir := filepath.Join(localXgoGenDir, "log")
 	instrumentSuffix := ""
 	if isDevelopment {
 		instrumentSuffix = "-dev"
 	}
-	instrumentDir := filepath.Join(xgoTmpDir, "go-instrument"+instrumentSuffix, mappedGorootName)
+
+	const INSTRUMENT_XGO_REVISION_FILE = "xgo-revision.txt"
+	var instrumentDir string
+
+	// detect if the GOROOT is already instrumented
+	var instrumented bool
+	gorootParent := filepath.Dir(goroot)
+	if gorootParent != "/" && gorootParent != goroot {
+		revisionFile := filepath.Join(gorootParent, INSTRUMENT_XGO_REVISION_FILE)
+		stat, statErr := os.Stat(revisionFile)
+		if statErr != nil && !os.IsNotExist(statErr) {
+			return statErr
+		}
+		// the revision exists as a file
+		if stat != nil && !stat.IsDir() {
+			logDebug("%s exists, GOROOT %s is already instrumented", revisionFile, goroot)
+			instrumented = true
+			instrumentDir = gorootParent
+		}
+	}
+
+	if !instrumented {
+		if !cmdSetup {
+			// /tmp/xgo/go-instrument/go1.21.0
+			instrumentDir = filepath.Join(globalXgoTmpDir, "go-instrument"+instrumentSuffix, mappedGorootName)
+		} else {
+			// ~/.xgo/go-instrument/go1.21.0
+			instrumentDir = filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
+		}
+	}
+
 	logDebug("instrument dir: %s", instrumentDir)
+	if cmdSetup && deleteFlag {
+		logDebug("delete instrument dir: %s", instrumentDir)
+		err := os.RemoveAll(instrumentDir)
+		if err != nil {
+			return err
+		}
+		if flagV {
+			fmt.Fprintf(os.Stdout, "rm -rf %s\n", instrumentDir)
+		}
+		return nil
+	}
 
 	exeSuffix := osinfo.EXE_SUFFIX
 	// NOTE: on Windows, go build -o xxx will always yield xxx.exe
@@ -301,6 +345,11 @@ func handleBuild(cmd string, args []string) error {
 	}
 	if len(gcflags) > 0 || debug != nil {
 		buildCacheSuffix += "-gcflags"
+	}
+
+	optionsFromFile, optionsFromFileContent, err := mergeOptionFiles(sessionTmpDir, opts.optionsFromFile, opts.mockRules)
+	if err != nil {
+		return err
 	}
 	if optionsFromFile != "" && len(optionsFromFileContent) > 0 {
 		h := md5.New()
@@ -327,7 +376,7 @@ func handleBuild(cmd string, args []string) error {
 
 	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
 
-	revisionFile := filepath.Join(instrumentDir, "xgo-revision.txt")
+	revisionFile := filepath.Join(instrumentDir, INSTRUMENT_XGO_REVISION_FILE)
 	fullSyncRecord := filepath.Join(instrumentDir, "full-sync-record.txt")
 
 	var realXgoSrc string
@@ -370,14 +419,14 @@ func handleBuild(cmd string, args []string) error {
 			return err
 		}
 
-		if resetInstrument {
+		if resetInstrument && !instrumented {
 			logDebug("reset instrument %s", instrumentDir)
 			err := os.RemoveAll(instrumentDir)
 			if err != nil {
 				return err
 			}
 		}
-		if resetInstrument || flagA {
+		if !cmdSetup && (resetInstrument || flagA) {
 			logDebug("reset overlay %s", localXgoGenDir)
 			err := os.RemoveAll(localXgoGenDir)
 			if err != nil {
@@ -386,12 +435,20 @@ func handleBuild(cmd string, args []string) error {
 		}
 		resetOrRevisionChanged := resetInstrument || buildCompiler || coreRevisionChanged
 		if isDevelopment || resetOrRevisionChanged {
-			logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
-			err = syncGoroot(goroot, instrumentGoroot, fullSyncRecord)
-			if err != nil {
-				return err
+			if !instrumented {
+				if cmdSetup && flagV {
+					fmt.Fprintf(os.Stderr, "sync GOROOT %s -> %s\n", goroot, instrumentGoroot)
+				}
+				logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
+				err = syncGoroot(goroot, instrumentGoroot, fullSyncRecord)
+				if err != nil {
+					return err
+				}
 			}
 			// patch go runtime and compiler
+			if cmdSetup && flagV {
+				fmt.Fprintf(os.Stderr, "patch GOROOT\n")
+			}
 			logDebug("patch runtime at: %s", instrumentGoroot)
 			err = patchRuntimeAndCompiler(goroot, instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged)
 			if err != nil {
@@ -417,6 +474,11 @@ func handleBuild(cmd string, args []string) error {
 		if setupDev {
 			return nil
 		}
+	}
+	if cmdSetup {
+		// finished setup
+		fmt.Fprintf(os.Stdout, "%s\n", instrumentGoroot)
+		return nil
 	}
 	if syncXgoOnly {
 		return nil
@@ -741,6 +803,7 @@ func handleBuild(cmd string, args []string) error {
 	}
 	if !noInstrument {
 		execCmdEnv = append(execCmdEnv, "GOCACHE="+buildCacheDir)
+		execCmdEnv = append(execCmdEnv, exec_tool.GO_BYPASS_XGO+"=true")
 	}
 
 	if !noInstrument && V1_0_0 {
@@ -889,7 +952,7 @@ func checkedCopyToStdout(file string, msg string) error {
 	return nil
 }
 
-func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error) {
+func checkGoVersion(goroot string, needCheckVersion bool) (*goinfo.GoVersion, error) {
 	// check if we are using expected go version
 	goVersionStr, err := goinfo.GetGoVersionOutput(filepath.Join(goroot, "bin", "go"))
 	if err != nil {
@@ -899,7 +962,7 @@ func checkGoVersion(goroot string, noInstrument bool) (*goinfo.GoVersion, error)
 	if err != nil {
 		return nil, err
 	}
-	if !noInstrument {
+	if needCheckVersion {
 		minor := goVersion.Minor
 		if goVersion.Major != 1 || (minor < 17 || minor > 24) {
 			return nil, fmt.Errorf("xgo only support go1.17 ~ go1.24, current: %s", goVersionStr)
@@ -933,8 +996,8 @@ func getOrMakeAbsXgoHome(xgoHome string) (string, error) {
 	return absHome, nil
 }
 
-// getTmpDir for build caches
-func getTmpDir() (string, error) {
+// getStableTmpDir for build caches
+func getStableTmpDir() (string, error) {
 	if runtime.GOOS != "windows" {
 		// the publicly known /tmp dir
 		const KNOWN_TMP = "/tmp"

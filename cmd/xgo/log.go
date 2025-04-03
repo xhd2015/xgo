@@ -15,11 +15,19 @@ var logDebugFile *os.File
 
 func setupDebugLog(logDebugOption *string) (func(), error) {
 	var logDebugFileName string
+	if logDebugOption == nil || *logDebugOption == "" {
+		envLog := os.Getenv("XGO_LOG_DEBUG")
+		if envLog != "" {
+			logDebugOption = &envLog
+		}
+	}
 	if logDebugOption != nil {
 		logDebugFileName = *logDebugOption
-		if logDebugFileName == "" {
+		if logDebugFileName == "" || logDebugFileName == "true" {
 			// default to stderr
 			logDebugFileName = "stderr"
+		} else if logDebugFileName == "disable" {
+			return nil, nil
 		}
 	}
 	if logDebugFileName == "" {
