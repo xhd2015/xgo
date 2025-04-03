@@ -20,7 +20,9 @@ func xgoPrecheck(cmd string, osArgs []string) bool {
 		return false
 	}
 	// pass to xgo unless we cannot find xgo
-	args := osArgs[1:]
+	args := make([]string, 0, len(osArgs))
+	args = append(args, cmd, "--go")
+	args = append(args, osArgs[2:]...)
 	xgoCmd := exec.Command("xgo", args...)
 	xgoCmd.Stdout = os.Stdout
 	xgoCmd.Stderr = os.Stderr
@@ -29,7 +31,7 @@ func xgoPrecheck(cmd string, osArgs []string) bool {
 	if runErr == nil {
 		return true
 	}
-	if !errors.Is(runErr, exec.ErrNotFound) {
+	if errors.Is(runErr, exec.ErrNotFound) {
 		return false
 	}
 	exitCode := 1

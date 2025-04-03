@@ -33,7 +33,7 @@ type Stack struct {
 	varRecorder    map[uintptr][]*varRecordHolder
 	varPtrRecorder map[uintptr][]*varRecordHolder
 
-	inspecting func(pc uintptr, recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{})
+	inspecting func(pc uintptr, funcInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{})
 }
 
 type StackEntryData map[interface{}]interface{}
@@ -92,16 +92,16 @@ func GetStack() *Stack {
 	return g.GetStack()
 }
 
+func GetOrAttachStack() *Stack {
+	return _GetG().GetOrAttachStack()
+}
+
 func (g *_G) GetStack() *Stack {
 	stack := g.Get(stackKey)
 	if stack == nil {
 		return nil
 	}
 	return stack.(*Stack)
-}
-
-func GetOrAttachStack() *Stack {
-	return _GetG().GetOrAttachStack()
 }
 
 func (g *_G) GetOrAttachStack() *Stack {

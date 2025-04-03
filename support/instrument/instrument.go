@@ -67,7 +67,7 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 			var funcInfos []*edit.FuncInfo
 			if addTrap {
 				edit := efile.Edit
-				funcInfos = instrument_func.EditInjectRuntimeTrap(edit, file.Syntax)
+				funcInfos = instrument_func.EditInjectRuntimeTrap(edit, file.Syntax, efile.Index)
 				if edit.HasEdit() {
 					overrideContent(absFile, edit.Buffer().String())
 				}
@@ -107,7 +107,7 @@ func InstrumentVarTrap(packages *edit.Packages) error {
 func InstrumentFuncTrap(packages *edit.Packages) error {
 	for _, pkg := range packages.Packages {
 		for _, file := range pkg.Files {
-			instrument_func.EditInjectRuntimeTrap(file.Edit, file.File.Syntax)
+			instrument_func.EditInjectRuntimeTrap(file.Edit, file.File.Syntax, file.Index)
 		}
 	}
 	return nil

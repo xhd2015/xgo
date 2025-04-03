@@ -86,6 +86,11 @@ type options struct {
 	// --delete
 	deleteFlag bool
 
+	// --go
+	// this flag indicates the xgo is called from
+	// go command, so checks can be bypassed
+	goFlag bool
+
 	remainArgs []string
 
 	testArgs   []string
@@ -151,6 +156,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var noLineDirective bool
 
 	var deleteFlag bool
+	var goFlag bool
 
 	nArg := len(args)
 
@@ -257,6 +263,13 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			Flags: []string{"--trap"},
 			Set: func(v string) {
 				trap = append(trap, v)
+			},
+		},
+		{
+			Flags:  []string{"--go"},
+			Single: true,
+			Set: func(v string) {
+				goFlag = true
 			},
 		},
 	}
@@ -517,6 +530,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		progFlags:       progFlags,
 		noLineDirective: noLineDirective,
 		deleteFlag:      deleteFlag,
+		goFlag:          goFlag,
 	}, nil
 }
 

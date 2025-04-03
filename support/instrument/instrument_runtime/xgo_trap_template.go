@@ -14,47 +14,47 @@ var _ = unsafe.Pointer(nil)
 
 // this signature is to avoid relying on defined type
 // just raw string,interface{},[]string, []interface{} are needed
-var __xgo_trap func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool)
+var __xgo_trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)
 
-var __xgo_var_trap func(name string, varAddr interface{}, res interface{})
-var __xgo_var_ptr_trap func(name string, varAddr interface{}, res interface{})
+var __xgo_var_trap func(info unsafe.Pointer, varAddr interface{}, res interface{})
+var __xgo_var_ptr_trap func(info unsafe.Pointer, varAddr interface{}, res interface{})
 
-func XgoTrap(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool) {
+func XgoTrap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool) {
 	if __xgo_trap == nil {
 		return nil, false
 	}
-	return __xgo_trap(recvName, recvPtr, argNames, args, resultNames, results)
+	return __xgo_trap(info, recvPtr, args, results)
 }
 
-func XgoTrapVar(name string, varAddr interface{}, res interface{}) {
+func XgoTrapVar(info unsafe.Pointer, varAddr interface{}, res interface{}) {
 	if __xgo_var_trap == nil {
 		return
 	}
-	__xgo_var_trap(name, varAddr, res)
+	__xgo_var_trap(info, varAddr, res)
 }
 
-func XgoTrapVarPtr(name string, varAddr interface{}, res interface{}) {
+func XgoTrapVarPtr(info unsafe.Pointer, varAddr interface{}, res interface{}) {
 	if __xgo_var_ptr_trap == nil {
 		return
 	}
-	__xgo_var_ptr_trap(name, varAddr, res)
+	__xgo_var_ptr_trap(info, varAddr, res)
 }
 
-func XgoSetTrap(trap func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool)) {
+func XgoSetTrap(trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	if __xgo_trap != nil {
 		panic("__xgo_trap already set")
 	}
 	__xgo_trap = trap
 }
 
-func XgoSetVarTrap(trap func(name string, varAddr interface{}, res interface{})) {
+func XgoSetVarTrap(trap func(info unsafe.Pointer, varAddr interface{}, res interface{})) {
 	if __xgo_var_trap != nil {
 		panic("__xgo_var_trap already set")
 	}
 	__xgo_var_trap = trap
 }
 
-func XgoSetVarPtrTrap(trap func(name string, varAddr interface{}, res interface{})) {
+func XgoSetVarPtrTrap(trap func(info unsafe.Pointer, varAddr interface{}, res interface{})) {
 	if __xgo_var_ptr_trap != nil {
 		panic("__xgo_var_ptr_trap already set")
 	}

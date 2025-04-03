@@ -177,6 +177,7 @@ func handleBuild(cmd string, args []string) error {
 	trapPkgs := opts.trap
 	noLineDirective := opts.noLineDirective
 	deleteFlag := opts.deleteFlag
+	goFlag := opts.goFlag
 
 	if cmdExec && len(remainArgs) == 0 {
 		return fmt.Errorf("exec requires command")
@@ -239,6 +240,10 @@ func handleBuild(cmd string, args []string) error {
 		return err
 	}
 	defer os.RemoveAll(sessionTmpDir)
+	sessionTmpDir, err = filepath.Abs(sessionTmpDir)
+	if err != nil {
+		return err
+	}
 
 	var vscodeDebugFile string
 	var vscodeDebugFileSuffix string
@@ -656,7 +661,7 @@ func handleBuild(cmd string, args []string) error {
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		err = instrumentUserSpace(projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir)
+		err = instrumentUserSpace(projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag)
 		if err != nil {
 			return err
 		}

@@ -5,13 +5,17 @@ import (
 	"reflect"
 	"runtime"
 	"time"
+	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/functab"
 )
 
 const SKIP = 2
 
-func trapVar(name string, varAddr interface{}, res interface{}) {
+func trapVar(info unsafe.Pointer, varAddr interface{}, res interface{}) {
+	funcInfo := (*functab.FuncInfo)(info)
+	name := funcInfo.Name
+
 	begin := time.Now()
 	stack := GetStack()
 	if stack == nil {
@@ -55,7 +59,10 @@ func trapVar(name string, varAddr interface{}, res interface{}) {
 	cur.EndNs = time.Now().UnixNano() - stack.Begin.UnixNano()
 }
 
-func trapVarPtr(name string, varAddr interface{}, res interface{}) {
+func trapVarPtr(info unsafe.Pointer, varAddr interface{}, res interface{}) {
+	funcInfo := (*functab.FuncInfo)(info)
+	name := funcInfo.Name
+
 	begin := time.Now()
 	stack := GetStack()
 	if stack == nil {

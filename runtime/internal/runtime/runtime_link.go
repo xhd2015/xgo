@@ -8,15 +8,15 @@ import (
 	"unsafe"
 )
 
-func XgoSetTrap(trap func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool)) {
+func XgoSetTrap(trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	logError("WARNING: failed to link runtime.XgoSetTrap(requires xgo).")
 }
 
-func XgoSetVarTrap(trap func(name string, varAddr interface{}, res interface{})) {
+func XgoSetVarTrap(trap func(info unsafe.Pointer, varAddr interface{}, res interface{})) {
 	logError("WARNING: failed to link runtime.XgoSetVarTrap(requires xgo).")
 }
 
-func XgoSetVarPtrTrap(trap func(name string, varAddr interface{}, res interface{})) {
+func XgoSetVarPtrTrap(trap func(info unsafe.Pointer, varAddr interface{}, res interface{})) {
 	logError("WARNING: failed to link runtime.XgoSetVarPtrTrap(requires xgo).")
 }
 

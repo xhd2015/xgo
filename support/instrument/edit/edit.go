@@ -40,20 +40,33 @@ type Package struct {
 }
 
 type File struct {
-	File *load.File
+	File  *load.File
+	Index int
+
 	Edit *goedit.Edit
 
 	Decls []*Decl
 
-	TrapFuncs []*FuncInfo
-	TrapVars  []*VarInfo
+	// the file index
+
+	TrapFuncs      []*FuncInfo
+	TrapVars       []*VarInfo
+	InterfaceTypes []*InterfaceType
 }
 
 type FuncInfo struct {
+	InfoVar  string
 	FuncDecl *ast.FuncDecl
 	Receiver *Field
 	Params   Fields
 	Results  Fields
+}
+
+type InterfaceType struct {
+	InfoVar string
+	Name    string
+	Ident   *ast.Ident
+	Type    *ast.InterfaceType
 }
 
 type Fields []*Field
@@ -67,9 +80,10 @@ func (f Fields) Names() []string {
 }
 
 type VarInfo struct {
-	Name string
-	Decl *Decl
-	Type ast.Expr
+	InfoVar string
+	Name    string
+	Decl    *Decl
+	Type    ast.Expr
 }
 
 type Field struct {
@@ -92,8 +106,9 @@ func Edit(packages *load.Packages) *Packages {
 		files := make([]*File, len(pkg.Files))
 		for j, file := range pkg.Files {
 			files[j] = &File{
-				File: file,
-				Edit: goedit.New(packages.Fset, file.Content),
+				File:  file,
+				Index: j,
+				Edit:  goedit.New(packages.Fset, file.Content),
 			}
 		}
 		p := &Package{

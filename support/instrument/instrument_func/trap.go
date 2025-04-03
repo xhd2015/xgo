@@ -3,7 +3,6 @@ package instrument_func
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"strconv"
 	"strings"
@@ -11,8 +10,6 @@ import (
 	"github.com/xhd2015/xgo/support/edit/goedit"
 	"github.com/xhd2015/xgo/support/instrument/constants"
 	"github.com/xhd2015/xgo/support/instrument/edit"
-	"github.com/xhd2015/xgo/support/instrument/overlay"
-	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
 const (
@@ -21,7 +18,7 @@ const (
 	resultNamePrefix = "__xgo_auto_res_"
 )
 
-// InjectRuntimeTrap parses the given file as golang AST,
+// EditInjectRuntimeTrap parses the given file as golang AST,
 // and then for each package level function decl that has a body,
 // it inserts a `defer runtime.XgoTrap()();` at the beginning of the body.
 // Returns the modified content.
@@ -36,34 +33,7 @@ const (
 //		func add(a, b int) int {defer runtime.XgoTrap()();
 //			return a+b
 //		}
-func InjectRuntimeTrap(filePath overlay.AbsFile, overlayFS overlay.Overlay) ([]byte, bool, error) {
-	_, content, err := overlayFS.Read(filePath)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Create the file set
-	fset := token.NewFileSet()
-
-	// Parse the file
-	file, err := parser.ParseFile(fset, string(filePath), content, parser.ParseComments)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Create a new editor - convert content to string for goedit.New
-	editor := goedit.New(fset, content)
-
-	funcInfos := EditInjectRuntimeTrap(editor, file)
-	if len(funcInfos) == 0 {
-		return nil, false, nil
-	}
-	// prefix the modified content with line directive
-	editor.Buffer().Insert(0, patch.FmtLineDirective(string(filePath), 1)+"\n")
-	return editor.Buffer().Bytes(), true, nil
-}
-
-func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File) []*edit.FuncInfo {
+func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File, fileIndex int) []*edit.FuncInfo {
 	fset := editor.Fset()
 
 	var funcInfos []*edit.FuncInfo
@@ -86,14 +56,14 @@ func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File) []*edit.FuncInfo
 			return true
 		}
 
-		receiverName, receiverAddr := toNameAddr(receiver)
+		_, receiverAddr := toNameAddr(receiver)
 		// Process parameter names
 		_, paramFields := processParamNames(funcDecl, fset, editor)
 
 		_, resultFields := processResultNames(funcDecl, fset, editor)
 
-		paramNames, paramAddrs := toNameAddrs(paramFields)
-		resultNames, resultAddrs := toNameAddrs(resultFields)
+		_, paramAddrs := toNameAddrs(paramFields)
+		_, resultAddrs := toNameAddrs(resultFields)
 
 		// Only process functions with a body
 		// Get position right after the opening brace
@@ -109,15 +79,18 @@ func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File) []*edit.FuncInfo
 		//        return
 		//     }
 		// trap: func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool)
+		funcInfo := fmt.Sprintf("%s_%d_%d", constants.FUNC_INFO, fileIndex, len(funcInfos))
 		editor.Insert(pos, fmt.Sprintf(trapTemplate,
 			line, line,
-			receiverName, receiverAddr,
-			strings.Join(paramNames, ","), strings.Join(paramAddrs, ","),
-			strings.Join(resultNames, ","), strings.Join(resultAddrs, ","),
+			funcInfo,
+			receiverAddr,
+			strings.Join(paramAddrs, ","),
+			strings.Join(resultAddrs, ","),
 			line, line, line,
 		))
 
 		funcInfos = append(funcInfos, &edit.FuncInfo{
+			InfoVar:  funcInfo,
 			FuncDecl: funcDecl,
 			Receiver: receiver,
 			Params:   paramFields,
@@ -130,7 +103,10 @@ func EditInjectRuntimeTrap(editor *goedit.Edit, file *ast.File) []*edit.FuncInfo
 		return nil
 	}
 
-	editor.Insert(file.Name.End(), `;import `+constants.RUNTIME_PKG_NAME_FUNC_TRAP+` "runtime"`)
+	editor.Insert(file.Name.End(),
+		`;import `+constants.RUNTIME_PKG_NAME_FUNC+` "runtime"`+
+			`;import `+constants.UNSAFE_PKG_NAME_FUNC+` "unsafe"`,
+	)
 	return funcInfos
 }
 

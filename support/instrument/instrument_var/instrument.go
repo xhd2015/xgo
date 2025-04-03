@@ -1,6 +1,7 @@
 package instrument_var
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 
@@ -71,18 +72,21 @@ func Instrument(packages *edit.Packages) {
 					// `;;` causes error
 					// endOffset := fset.Position(end).Offset
 
+					infoVar := fmt.Sprintf("%s_%d_%d", constants.VAR_INFO, file.Index, len(file.TrapVars))
+
 					declType := decl.Type
 					typeStart := fset.Position(declType.Pos()).Offset
 					typeEnd := fset.Position(declType.End()).Offset
 					typeCode := file.File.Content[typeStart:typeEnd]
 
 					varName := decl.Ident.Name
-					code := genCode(varName, typeCode)
+					code := genCode(varName, infoVar, typeCode)
 
 					file.TrapVars = append(file.TrapVars, &edit.VarInfo{
-						Name: varName,
-						Type: declType,
-						Decl: decl,
+						InfoVar: infoVar,
+						Name:    varName,
+						Type:    declType,
+						Decl:    decl,
 					})
 
 					fileEdit.Insert(end, ";")
@@ -91,7 +95,10 @@ func Instrument(packages *edit.Packages) {
 				}
 			}
 			if hasVar {
-				file.Edit.Insert(file.File.Syntax.Name.End(), ";import "+constants.RUNTIME_PKG_NAME_VAR_TRAP+` "runtime"`)
+				file.Edit.Insert(file.File.Syntax.Name.End(),
+					";import "+constants.RUNTIME_PKG_NAME_VAR+` "runtime"`+
+						";import "+constants.UNSAFE_PKG_NAME_VAR+` "unsafe"`,
+				)
 			}
 		}
 	}

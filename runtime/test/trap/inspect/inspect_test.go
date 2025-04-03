@@ -1,4 +1,4 @@
-package trap_inspect_func
+package inspect
 
 import (
 	"testing"
@@ -7,10 +7,9 @@ import (
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
-// go run ./script/run-test/ --include go1.17.13 --xgo-runtime-test-only -run TestTrapInspectFunc -v ./test/trap_inspect_func
-func TestTrapInspectFunc(t *testing.T) {
+func TestInspectFunc(t *testing.T) {
 	// plain function
-	recv, f := trap.Inspect(F)
+	recv, f, _, _ := trap.InspectPC(F)
 	if f == nil {
 		t.Fatalf("F not found")
 	}
@@ -20,7 +19,7 @@ func TestTrapInspectFunc(t *testing.T) {
 
 	// struct method
 	s := &struct_{}
-	srecv, sf := trap.Inspect(s.F)
+	srecv, sf, _, _ := trap.InspectPC(s.F)
 	if sf == nil {
 		t.Fatalf("struct_.F not found")
 	}
@@ -37,7 +36,7 @@ func TestTrapInspectFunc(t *testing.T) {
 
 	// interface method
 	var intf interface_ = s
-	irecv, if_ := trap.Inspect(intf.F)
+	irecv, if_, _, _ := trap.InspectPC(intf.F)
 	if if_ == nil {
 		t.Fatalf("interface_.F not found")
 	}

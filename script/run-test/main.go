@@ -33,6 +33,9 @@ import (
 // specific test:
 //   go run ./script/run-test --include go1.18.10 --log-debug ./runtime/test/patch
 
+// debug:
+//   go run ./script/run-test --include go1.20.14 --debug ./runtime/test/patch
+
 // when will cache affect?
 //   -tags dev : cache is off by default, so revision is not significant
 //   otherwise, revision is used as cache key
@@ -71,6 +74,7 @@ var defaultTestArgs = []*TestArg{
 			"./trace/record",
 			"./trace/go_trace",
 			"./trace/marshal/cyclic",
+			"./trap/inspect",
 		},
 	},
 }
@@ -350,7 +354,7 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		goroots = setupGoroots
+		goroots = append(goroots, setupGoroots...)
 	}
 	for _, goroot := range goroots {
 		begin := time.Now()
@@ -466,8 +470,13 @@ func main() {
 				usePlainGo := testArg.Dir == "" || testArg.Dir == "runtime"
 				// projectDir
 				runArgs := make([]string, 0, len(remainArgs)+1)
-				if !usePlainGo && logDebug {
-					runArgs = append(runArgs, "--log-debug")
+				if !usePlainGo {
+					if logDebug {
+						runArgs = append(runArgs, "--log-debug")
+					}
+					if debug {
+						runArgs = append(runArgs, "--debug")
+					}
 				}
 				var coverageVariant string
 				var dir string

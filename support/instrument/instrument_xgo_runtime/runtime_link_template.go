@@ -10,15 +10,15 @@ import (
 	"unsafe"
 )
 
-func XgoSetTrap(trap func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool)) {
+func XgoSetTrap(trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	runtime.XgoSetTrap(trap)
 }
 
-func XgoSetVarTrap(trap func(name string, varAddr interface{}, res interface{})) {
+func XgoSetVarTrap(trap func(info unsafe.Pointer, varAddr interface{}, res interface{})) {
 	runtime.XgoSetVarTrap(trap)
 }
 
-func XgoSetVarPtrTrap(trap func(name string, varAddr interface{}, res interface{})) {
+func XgoSetVarPtrTrap(trap func(info unsafe.Pointer, varAddr interface{}, res interface{})) {
 	runtime.XgoSetVarPtrTrap(trap)
 }
 

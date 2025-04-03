@@ -9,8 +9,9 @@ import (
 	"runtime"
 	"testing"
 	"time"
+	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/functab"
+	"github.com/xhd2015/xgo/runtime/core"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/trace/constants"
 	"github.com/xhd2015/xgo/runtime/trap/flags"
@@ -24,7 +25,12 @@ import (
 //   - mapping by pc and variable pointer
 //
 // this avoids the infinite trap problem
-func trap(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool) {
+func trap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool) {
+	coreFuncInfo := (*core.FuncInfo)(info)
+	recvName := coreFuncInfo.RecvName
+	argNames := coreFuncInfo.ArgNames
+	resultNames := coreFuncInfo.ResNames
+
 	begin := time.Now()
 	// skip 2: <user func> -> runtime.XgoTrap -> trap
 	const SKIP = 2
@@ -37,8 +43,6 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 	fnName := funcInfo.Name()
 	fnPC := funcInfo.Entry()
 
-	coreFuncInfo := functab.InfoPC(fnPC)
-
 	var mock func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) bool
 
 	var isStartTracing bool
@@ -50,7 +54,7 @@ func trap(recvName string, recvPtr interface{}, argNames []string, args []interf
 	stack := GetStack()
 	if stack != nil {
 		if stack.inspecting != nil {
-			stack.inspecting(pc, recvName, recvPtr, argNames, args, resultNames, results)
+			stack.inspecting(pc, coreFuncInfo, recvPtr, args, results)
 			return nil, true
 		}
 		wantPtr, mockFn := stack.getLastMock(fnPC)

@@ -4,8 +4,6 @@
 package main
 
 import (
-	"go/ast"
-
 	"github.com/xhd2015/xgo/support/fileutil"
 )
 
@@ -18,8 +16,4 @@ func patchJSONPretty(settingsFile string, fn func(settings *map[string]interface
 		f := *(v.(*interface{}))
 		return fn(f.(*map[string]interface{}))
 	})
-}
-
-func isGeneric(funcDecl *ast.FuncDecl) bool {
-	return false
 }
