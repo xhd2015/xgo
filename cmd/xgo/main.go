@@ -460,21 +460,6 @@ func handleBuild(cmd string, args []string) error {
 				if err != nil {
 					return err
 				}
-				logDebug("DEBUG file copied")
-
-				// list files
-				srcDir := filepath.Join(instrumentGoroot, "src")
-				files, readErr := os.ReadDir(srcDir)
-				if readErr != nil {
-					logDebug("DEBUG read err: %v", readErr)
-				}
-				for _, file := range files {
-					logDebug("DEBUG file under goroot src: %s", file.Name())
-				}
-				execFile := filepath.Join(instrumentGoroot, "src", "cmd", "go", "internal", "work", "exec.go")
-				logDebug("DEBUG exec file: %s", execFile)
-				stat, statErr := os.Stat(execFile)
-				logDebug("DEBUG stat: %v %v", stat, statErr)
 			}
 			// patch go runtime and compiler
 			if cmdSetup && flagV {

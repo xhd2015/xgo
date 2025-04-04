@@ -139,7 +139,6 @@ func copyReplaceDir(srcDir string, targetDir string, opts *Options) error {
 	}
 	if !opts.noRm {
 		// remove target
-		fmt.Fprintf(os.Stderr, "DEBUG remove target: %s\n", targetAbsDir)
 		err = os.RemoveAll(targetAbsDir)
 		if err != nil {
 			return err
@@ -151,16 +150,13 @@ func copyReplaceDir(srcDir string, targetDir string, opts *Options) error {
 		return err
 	}
 	if opts.useLink {
-		fmt.Fprintf(os.Stderr, "DEBUG use link: %v\n", opts.useLink)
 		return LinkFiles(srcDir, targetAbsDir)
 	}
 	const BUF_SIZE = 4 * 1024 * 1024 // 4M
 	numGo := opts.concurrent
-	fmt.Fprintf(os.Stderr, "DEBUG numGo: %v, filterSubPath==nil?%v\n", numGo, filterSubPath == nil)
 	if numGo <= 1 {
 		buf := make([]byte, BUF_SIZE)
 		return copyDirHandle(srcDir, targetAbsDir, copyOpts, func(srcFile, dstFile string) error {
-			fmt.Fprintf(os.Stderr, "DEBUG copyFile %s -> %s\n", srcFile, dstFile)
 			return copyFile(srcFile, dstFile, false, buf)
 		})
 	}
@@ -256,7 +252,6 @@ func copyDirHandle(srcDir string, targetAbsDir string, opts *copyOptions, handle
 	}
 	actualDir := srcDir
 	if !stat.IsDir() {
-		fmt.Fprintf(os.Stderr, "DEBUG copyDirHandle: %s is not a directory\n", srcDir)
 		// example:
 		//   - link: C:\hostedtoolcache\windows\go\1.24.2\x64
 		//   - resolved: D:\hostedtoolcache\windows\go\1.24.2\x64\
@@ -264,13 +259,13 @@ func copyDirHandle(srcDir string, targetAbsDir string, opts *copyOptions, handle
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "DEBUG copyDirHandle: %s is a link, linkDir: %s\n", srcDir, linkDir)
 		actualDir = linkDir
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG before trima ctualDir: %s\n", actualDir)
-	fmt.Fprintf(os.Stderr, "DEBUG clean actualDir: %s\n", filepath.Clean(actualDir))
+	// clean example:
+	//   - before: D:\hostedtoolcache\windows\go\1.24.2\x64\
+	//   - after: D:\hostedtoolcache\windows\go\1.24.2\x64
+	actualDir = filepath.Clean(actualDir)
 	actualDir = strings.TrimRight(actualDir, string(filepath.Separator))
-	fmt.Fprintf(os.Stderr, "DEBUG after trim actualDir: %s\n", actualDir)
 	n := len(actualDir)
 	prefixLen := n + len(string(filepath.Separator))
 	return filepath.WalkDir(actualDir, func(path string, d fs.DirEntry, err error) error {
@@ -292,9 +287,7 @@ func copyDirHandle(srcDir string, targetAbsDir string, opts *copyOptions, handle
 			return nil
 		}
 		dstPath := filepath.Join(targetAbsDir, subPath)
-		fmt.Fprintf(os.Stderr, "DEBUG isDir: %v, targetAbsDir: %s subPath: %s, join: %s\n", isDir, targetAbsDir, subPath, dstPath)
 		if isDir {
-			fmt.Fprintf(os.Stderr, "DEBUG mkdir: %s\n", dstPath)
 			return os.MkdirAll(dstPath, 0755)
 		}
 
