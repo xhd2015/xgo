@@ -397,7 +397,11 @@ func main() {
 }
 
 func setupGoroot(goroot string) (string, error) {
-	return cmd.Output("go", "run", "./cmd/xgo", "setup", "--with-goroot", goroot)
+	out, err := cmd.Output("go", "run", "./cmd/xgo", "setup", "--with-goroot", goroot)
+	if err != nil {
+		return "", fmt.Errorf("setup goroot: %s %w", goroot, err)
+	}
+	return out, nil
 }
 
 func addGoFlags(args []string, cover bool, coverPkgs []string, coverprofile string, coverageVariant string) []string {
