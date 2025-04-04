@@ -257,6 +257,9 @@ func copyDirHandle(srcDir string, targetAbsDir string, opts *copyOptions, handle
 	actualDir := srcDir
 	if !stat.IsDir() {
 		fmt.Fprintf(os.Stderr, "DEBUG copyDirHandle: %s is not a directory\n", srcDir)
+		// example:
+		//   - link: C:\hostedtoolcache\windows\go\1.24.2\x64
+		//   - resolved: D:\hostedtoolcache\windows\go\1.24.2\x64\
 		linkDir, err := os.Readlink(srcDir)
 		if err != nil {
 			return err
@@ -286,6 +289,7 @@ func copyDirHandle(srcDir string, targetAbsDir string, opts *copyOptions, handle
 			return nil
 		}
 		dstPath := filepath.Join(targetAbsDir, subPath)
+		fmt.Fprintf(os.Stderr, "DEBUG isDir: %v, targetAbsDir: %s subPath: %s, join: %s\n", isDir, targetAbsDir, subPath, dstPath)
 		if isDir {
 			fmt.Fprintf(os.Stderr, "DEBUG mkdir: %s\n", dstPath)
 			return os.MkdirAll(dstPath, 0755)
