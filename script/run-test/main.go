@@ -403,11 +403,7 @@ func setupGoroot(goroot string, logDebug bool) (string, error) {
 	if logDebug {
 		args = append(args, "--log-debug")
 	}
-	out, err := cmd.Output("go", args...)
-	if err != nil {
-		return "", fmt.Errorf("setup goroot: %s %w", goroot, err)
-	}
-	return out, nil
+	return cmd.Output("go", args...)
 }
 
 func addGoFlags(args []string, cover bool, coverPkgs []string, coverprofile string, coverageVariant string) []string {
