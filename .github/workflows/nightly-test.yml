@@ -2,6 +2,10 @@
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
 # Nightly Test Against Open Source Projects Using Xgo
+# this workflow is triggered daily at 00:23 UTC
+# and also can be triggered manually by pushing
+# to the 'trigger-nightly-test' branch
+#   git push origin HEAD:trigger-nightly-test
 name: Nightly Test
 
 on:
@@ -89,20 +93,21 @@ jobs:
         with:
           repository: gohugoio/hugo
           path: gohugoio/hugo
-
+      # see hugo's github actions workflow for more details
+      # https://github.com/gohugoio/hugo/blob/master/.github/workflows/test.yml
       - name: Install Ruby
-        uses: ruby/setup-ruby@5f19ec79cedfadb78ab837f95b87734d0003c899
+        uses: ruby/setup-ruby@a6e6f86333f0a2523ece813039b8b4be04560854
         with:
           ruby-version: "2.7"
-          bundler-cache: true #
+          bundler-cache: true
       - name: Install Python
-        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d
+        uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f
         with:
           python-version: "3.x"
       - name: Install Mage
         run: go install github.com/magefile/mage@v1.15.0
       - name: Install asciidoctor
-        uses: reitzig/actions-asciidoctor@03fcc74cd74880b697950c4930c9ec8a67c69ecc
+        uses: reitzig/actions-asciidoctor@c642db5eedd1d729bb8c92034770d0b2f769eda6
       - name: Install docutils
         run: |
           pip install docutils
@@ -115,8 +120,8 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y pandoc
           export GO111MODULE=on
-          export SASS_VERSION=1.63.2
-          export DART_SASS_SHA_LINUX=3ea33c95ad5c35fda6e9a0956199eef38a398f496cfb8750e02479d7d1dd42af
+          export SASS_VERSION=1.80.3
+          export DART_SASS_SHA_LINUX=7c933edbad0a7d389192c5b79393485c088bd2c4398e32f5754c32af006a9ffd
           echo "---Install Dart Sass version ${SASS_VERSION} ---"
           curl -LJO "https://github.com/sass/dart-sass/releases/download/${SASS_VERSION}/dart-sass-${SASS_VERSION}-linux-x64.tar.gz";
           echo "${DART_SASS_SHA_LINUX}  dart-sass-${SASS_VERSION}-linux-x64.tar.gz" | sha256sum -c
