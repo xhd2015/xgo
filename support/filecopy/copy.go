@@ -267,7 +267,10 @@ func copyDirHandle(srcDir string, targetAbsDir string, opts *copyOptions, handle
 		fmt.Fprintf(os.Stderr, "DEBUG copyDirHandle: %s is a link, linkDir: %s\n", srcDir, linkDir)
 		actualDir = linkDir
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG actualDir: %s\n", actualDir)
+	fmt.Fprintf(os.Stderr, "DEBUG before trima ctualDir: %s\n", actualDir)
+	fmt.Fprintf(os.Stderr, "DEBUG clean actualDir: %s\n", filepath.Clean(actualDir))
+	actualDir = strings.TrimRight(actualDir, string(filepath.Separator))
+	fmt.Fprintf(os.Stderr, "DEBUG after trim actualDir: %s\n", actualDir)
 	n := len(actualDir)
 	prefixLen := n + len(string(filepath.Separator))
 	return filepath.WalkDir(actualDir, func(path string, d fs.DirEntry, err error) error {
