@@ -26,4 +26,4 @@ jobs:
         go-version: '${{ matrix.go }}'
 
     - name: Test
-      run: go run ./script/run-test --install-xgo --with-setup --reset-instrument --debug -v
+      run: go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v

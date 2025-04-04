@@ -318,13 +318,13 @@ func main() {
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
 		if resetInstrument {
 			// reset-instrument: reset goroot, but not caches
-			if debug {
+			if logDebug {
 				fmt.Printf("resetting instrument\n")
 			}
 			cmdArgs := []string{
 				"run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot,
 			}
-			if debug {
+			if logDebug {
 				cmdArgs = append(cmdArgs, "--log-debug=stdout")
 			}
 			err := cmd.Run("go", cmdArgs...)

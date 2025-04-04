@@ -27,14 +27,14 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string) {
 	regCap := len(file.TrapFuncs) + len(file.TrapVars) + len(file.InterfaceTypes)
 	varDefs := make([]string, 0, regCap)
 	varRegs := make([]string, 0, regCap)
-	deleyInits := make([]string, 0, len(file.TrapFuncs))
+	delayInits := make([]string, 0, len(file.TrapFuncs))
 	idx := 0
 	addLiteral := func(infoVar string, literal string, delayInitProp string, delayInitValue string) {
 		idx++
 		varDefs = append(varDefs, fmt.Sprintf("var %s=%s", infoVar, literal))
 		varRegs = append(varRegs, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, infoVar))
 		if delayInitProp != "" {
-			deleyInits = append(deleyInits, fmt.Sprintf("%s.%s=%s", infoVar, delayInitProp, delayInitValue))
+			delayInits = append(delayInits, fmt.Sprintf("%s.%s=%s", infoVar, delayInitProp, delayInitValue))
 		}
 	}
 	makeLiteral := func(kind string, name string, identityName string, pos token.Pos, extra []string) string {
@@ -134,8 +134,8 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string) {
 	defCode := strings.Join(defLines, ";")
 	regCode := strings.Join(varRegs, ";")
 	var delayInitCode string
-	if len(deleyInits) > 0 {
-		delayInitCode = ";func init(){" + strings.Join(deleyInits, ";") + ";}"
+	if len(delayInits) > 0 {
+		delayInitCode = ";func init(){" + strings.Join(delayInits, ";") + ";}"
 	}
 	regCodeInit := "func init(){" + regCode + ";}"
 	pos := patch.GetFuncInsertPosition(fileSyntax)

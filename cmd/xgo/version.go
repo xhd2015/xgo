@@ -7,8 +7,8 @@ import "fmt"
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
 const VERSION = "1.1.0"
-const REVISION = "5d8c1aabbc410b3a9606c3229a6778cee1d8572f+1"
-const NUMBER = 362
+const REVISION = "8a57c8d17f84859d748b2f5ed27a35ba7fa2ecfd+1"
+const NUMBER = 363
 
 // the wanted runtime/core's version
 // manually updated
