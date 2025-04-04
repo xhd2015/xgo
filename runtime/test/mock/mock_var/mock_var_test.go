@@ -6,7 +6,7 @@ import (
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/mock_var/sub"
+	"github.com/xhd2015/xgo/runtime/test/mock/mock_var/sub"
 )
 
 var a int = 123

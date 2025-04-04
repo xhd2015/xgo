@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/support/osinfo"
+	"github.com/xhd2015/xgo/support/strutil"
 )
 
 var ErrGoModNotFound = errors.New("go.mod not found")
@@ -16,16 +17,16 @@ var ErrGoModDoesNotHaveModule = errors.New("go.mod does not have module")
 func ResolveMainModule(dir string) (subPaths []string, mainModule string, err error) {
 	goMod, subPaths, err := findGoMod(dir)
 	if err != nil {
-		return nil, "", err
+		return subPaths, "", err
 	}
 
 	goModContent, err := os.ReadFile(goMod)
 	if err != nil {
-		return nil, "", err
+		return subPaths, "", err
 	}
-	modPath := parseModPath(string(goModContent))
+	modPath := parseModPath(strutil.ToReadonlyString(goModContent))
 	if modPath == "" {
-		return nil, "", ErrGoModDoesNotHaveModule
+		return subPaths, "", ErrGoModDoesNotHaveModule
 	}
 
 	return subPaths, modPath, nil
@@ -111,21 +112,30 @@ func reverse(list []string) []string {
 	return list
 }
 
+const modulePrefix = "module "
+
 func parseModPath(goModContent string) string {
-	lines := strings.Split(string(goModContent), "\n")
-	n := len(lines)
-	for i := 0; i < n; i++ {
-		line := strings.TrimSpace(lines[i])
-		if strings.HasPrefix(line, "module ") {
-			module := strings.TrimSpace(line[len("module "):])
+	s := goModContent
+	for {
+		s = strings.TrimLeft(s, " \t")
+		newLineIdx := strings.Index(s, "\n")
+		if strings.HasPrefix(s, modulePrefix) {
+			ed := newLineIdx
+			if ed < 0 {
+				ed = len(s)
+			}
+			module := strings.TrimSpace(s[len(modulePrefix):ed])
 			commentIdx := strings.Index(module, "//")
 			if commentIdx >= 0 {
 				module = strings.TrimSpace(module[:commentIdx])
 			}
 			return module
 		}
+		if newLineIdx < 0 {
+			return ""
+		}
+		s = s[newLineIdx+1:]
 	}
-	return ""
 }
 
 func ModCompare(path string, x, y string) int {

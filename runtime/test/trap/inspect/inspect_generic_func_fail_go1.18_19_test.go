@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/xhd2015/xgo/runtime/trap"
+	"github.com/xhd2015/xgo/runtime/internal/trap"
 )
 
 func TestGenericFuncFailWithGo118_19(t *testing.T) {

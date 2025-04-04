@@ -262,7 +262,7 @@ func (c *collectOpts) Begin() func() {
 func setupInterceptor() func() {
 	if enabledGlobally {
 		setupOnceGlobally.Do(func() {
-			trap.AddInterceptorHead(&trap.Interceptor{
+			trap.AddInterceptorHead(&trap.InterceptorFunc{
 				Pre:  handleTracePre,
 				Post: handleTracePost,
 			})
@@ -271,7 +271,7 @@ func setupInterceptor() func() {
 	}
 
 	// setup for each goroutine
-	return trap.AddInterceptorHead(&trap.Interceptor{
+	return trap.AddInterceptorHead(&trap.InterceptorFunc{
 		Pre:  handleTracePre,
 		Post: handleTracePost,
 	})

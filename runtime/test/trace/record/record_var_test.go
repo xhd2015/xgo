@@ -22,6 +22,7 @@ func TestRecordVar(t *testing.T) {
 		t.Errorf("want V to be 10, but got %d", V)
 	}
 	if len(records) != 2 {
+		// the 2 records comes from read from `V!=0` and `V!=10`
 		t.Errorf("records length is not 2: %d", len(records))
 	}
 	if len(records) > 0 && records[0] != "V is accessed: 0" {

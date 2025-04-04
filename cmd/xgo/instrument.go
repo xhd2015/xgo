@@ -9,17 +9,17 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/xhd2015/xgo/instrument"
+	"github.com/xhd2015/xgo/instrument/constants"
+	"github.com/xhd2015/xgo/instrument/edit"
+	"github.com/xhd2015/xgo/instrument/instrument_func"
+	"github.com/xhd2015/xgo/instrument/instrument_go"
+	"github.com/xhd2015/xgo/instrument/instrument_intf"
+	"github.com/xhd2015/xgo/instrument/instrument_reg"
+	"github.com/xhd2015/xgo/instrument/load"
+	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/git"
-	"github.com/xhd2015/xgo/support/instrument"
-	"github.com/xhd2015/xgo/support/instrument/constants"
-	"github.com/xhd2015/xgo/support/instrument/edit"
-	"github.com/xhd2015/xgo/support/instrument/instrument_func"
-	"github.com/xhd2015/xgo/support/instrument/instrument_go"
-	"github.com/xhd2015/xgo/support/instrument/instrument_intf"
-	"github.com/xhd2015/xgo/support/instrument/instrument_reg"
-	"github.com/xhd2015/xgo/support/instrument/load"
-	"github.com/xhd2015/xgo/support/instrument/overlay"
 	"github.com/xhd2015/xgo/support/strutil"
 )
 
@@ -99,10 +99,25 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 
 	// insert func trap
 	packages := edit.Edit(loadPackages)
+	packages = packages.Filter(func(pkg *edit.Package) bool {
+		// avoid instrument runtime package
+		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
+		suffix, isRuntime := pkgWithinModule(pkgPath, constants.RUNTIME_MODULE)
+		if !isRuntime {
+			return true
+		}
+		// check if is runtime/test
+		_, ok := pkgWithinModule(suffix, "test")
+		if ok {
+			return true
+		}
+		// a regular runtime package
+		return false
+	})
 	logDebug("start instrumentFuncTrap: len(packages)=%d", len(packages.Packages))
 	for _, pkg := range packages.Packages {
 		for _, file := range pkg.Files {
-			funcs := instrument_func.EditInjectRuntimeTrap(file.Edit, file.File.Syntax, file.Index)
+			funcs := instrument_func.InjectRuntimeTrap(file.Edit, file.File.Syntax, file.Index)
 			file.TrapFuncs = append(file.TrapFuncs, funcs...)
 
 			// interface types
@@ -113,7 +128,8 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 
 	// trap var for packages in main module
 	varPkgs := packages.Filter(func(pkg *edit.Package) bool {
-		return pkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
+		_, ok := pkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
+		return ok
 	})
 	logDebug("start instrumentVarTrap: len(varPkgs)=%d", len(varPkgs.Packages))
 	err = instrument.InstrumentVarTrap(varPkgs)
@@ -203,17 +219,25 @@ func hasFunc(pkg *edit.Package, fn string) bool {
 	return false
 }
 
-func pkgWithinModule(pkgPath string, mainModule string) bool {
-	if !strings.HasPrefix(pkgPath, mainModule) {
-		return false
+func pkgWithinModule(pkgPath string, module string) (suffix string, ok bool) {
+	n := len(pkgPath)
+	m := len(module)
+	if n < m {
+		return "", false
 	}
-	if len(pkgPath) == len(mainModule) {
-		return true
+	// check prefix
+	for i := 0; i < m; i++ {
+		if pkgPath[i] != module[i] {
+			return "", false
+		}
 	}
-	if pkgPath[len(mainModule)] != '/' {
-		return false
+	if n == m {
+		return "", true
 	}
-	return true
+	if pkgPath[m] != '/' {
+		return "", false
+	}
+	return pkgPath[m+1:], true
 }
 
 func getLoadPackages(rules []Rule) (includeMain bool, packages []string, err error) {
@@ -299,8 +323,8 @@ func splitCommaList(s string) []string {
 	return trimmedList
 }
 
-func getLocalXgoGenDir(projectDir string) (string, error) {
-	xgoDir, err := getLocalXgoDir(projectDir)
+func getLocalXgoGenDir(projectRootDir string) (string, error) {
+	xgoDir, err := getLocalXgoDir(projectRootDir)
 	if err != nil {
 		return "", err
 	}

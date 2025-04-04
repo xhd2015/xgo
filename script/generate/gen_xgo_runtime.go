@@ -12,11 +12,11 @@ func genXgoRuntime(cmd string, rootDir string) error {
 	runtimeDir := filepath.Join(rootDir, "runtime")
 	genRuntimeDir := filepath.Join(rootDir, "cmd", "xgo", "runtime_gen")
 
-	srcStackModel := filepath.Join(rootDir, "cmd", "xgo", "trace", "render", "stack_model", "stack_model.go")
-	dstStackModel := filepath.Join(runtimeDir, "trap", "stack_model", "stack_model.go")
+	traceRenderingStackModel := filepath.Join(rootDir, "cmd", "xgo", "trace", "render", "stack_model", "stack_model.go")
+	runtimeStackModel := filepath.Join(runtimeDir, "trace", "stack_model", "stack_model.go")
 
 	// copy stack model from xgo to runtime first
-	err := copyStackTraceExport(cmd, srcStackModel, dstStackModel)
+	err := copyStackTraceExport(cmd, traceRenderingStackModel, runtimeStackModel)
 	if err != nil {
 		return err
 	}

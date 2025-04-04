@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/instrument/instrument_go"
+	"github.com/xhd2015/xgo/instrument/instrument_runtime"
+	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
-	"github.com/xhd2015/xgo/support/instrument/instrument_go"
-	"github.com/xhd2015/xgo/support/instrument/instrument_runtime"
-	"github.com/xhd2015/xgo/support/instrument/patch"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/trap"
 )
 
 // go run ./cmd/xgo run --project-dir ./runtime ./test/mock
@@ -45,7 +44,7 @@ func hello(a string) string {
 }
 
 func hello_skipped(a string) string {
-	trap.Skip()
+	panic("hello_skipped")
 
 	return fmt.Sprintf("hello %s skipped\n", a)
 }

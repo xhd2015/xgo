@@ -10,12 +10,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/goparse"
-	"github.com/xhd2015/xgo/support/instrument/overlay"
 )
 
 const RUNTIME_MODULE = "github.com/xhd2015/xgo/runtime"

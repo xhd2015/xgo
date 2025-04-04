@@ -8,11 +8,11 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/trap"
+	"github.com/xhd2015/xgo/runtime/internal/trap"
 )
 
 func TestInspectGenericSuccessWithGo120(t *testing.T) {
-	recv, f, _, _ := trap.InspectPC(GenericFunc[int])
+	recv, f, _, _ := trap.Inspect(GenericFunc[int])
 	if f == nil {
 		t.Fatalf("GenericFunc[int] not found")
 	}
@@ -21,7 +21,7 @@ func TestInspectGenericSuccessWithGo120(t *testing.T) {
 	}
 
 	s := &GenericType[int]{}
-	recv, f, _, _ = trap.InspectPC(s.GenericMethod)
+	recv, f, _, _ = trap.Inspect(s.GenericMethod)
 	if f == nil {
 		t.Fatalf("GenericType[int].GenericMethod not found")
 	}

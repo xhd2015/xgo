@@ -1,23 +1,5 @@
 package main
 
-// TODO: remove duplicate test between xgo test and runtime test
-var runtimeSubTests = []string{
-	"func_list",
-	"trap",
-	"trap_inspect_func",
-	"trap_args",
-	"mock_func",
-	"mock_method",
-	"mock_by_name",
-	"mock_closure",
-	"mock_stdlib",
-	"mock_generic",
-	"mock_var",
-	"patch",
-	"patch_const",
-	"tls",
-}
-
 type TestCase struct {
 	name         string
 	usePlainGo   bool //  use go instead of xgo

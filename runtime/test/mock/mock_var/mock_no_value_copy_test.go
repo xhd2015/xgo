@@ -72,7 +72,7 @@ var countFn int
 // NOTE: if lock is captured, this function will
 // panic: fatal error: sync: unlock of unlocked mutex
 func incrLocked_Fn() {
-	f := lock.Lock
+	f := lock.Lock // lock should a pointer, should not be intercepted
 	f()
 	countFn = countFn + 1
 	lock.Unlock()

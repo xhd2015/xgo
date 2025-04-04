@@ -15,7 +15,7 @@
 - [API](#api):
   - [Mock](#patch)
   - [Trace](#trace)
-  - [Recorder](#recorder)
+  - [Trap](#trap)
 - [Tools](#tools):
   - [Test Explorer](#test-explorer)
   - [Incremental Coverage](#incremental-coverage)
@@ -400,6 +400,92 @@ Example:
 ```go
 func main(){
     clear := trap.RecordCall(...)
+    defer clear()
+    ...
+}
+```
+
+## Trap
+`xgo` **preprocess** the source code before invoking `go`, providing a chance for user to intercept any function when called.
+
+Trap allows developer to intercept function execution on the fly.
+
+Trap is the core of `xgo` as it is the basis of other abilities like Mock and Trace.
+
+The following example logs function execution trace by adding a Trap interceptor:
+
+(check [test/testdata/trap/trap.go](test/testdata/trap/trap.go) for more details.)
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/xhd2015/xgo/runtime/core"
+    "github.com/xhd2015/xgo/runtime/trap"
+)
+
+func init() {
+    trap.AddInterceptor(&trap.Interceptor{
+        Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
+            if f.Name == "A" {
+                fmt.Printf("trap A\n")
+                return nil, nil
+            }
+            if f.Name == "B" {
+                fmt.Printf("abort B\n")
+                return nil, trap.ErrAbort
+            }
+            return nil, nil
+        },
+    })
+}
+
+func main() {
+    A()
+    B()
+}
+
+func A() {
+    fmt.Printf("A\n")
+}
+
+func B() {
+    fmt.Printf("B\n")
+}
+```
+
+Run with `go`:
+
+```sh
+go run ./
+# output:
+#   A
+#   B
+```
+
+Run with `xgo`:
+
+```sh
+xgo run ./
+# output:
+#   trap A
+#   A
+#   abort B
+```
+
+`AddInterceptor()` add given interceptor to either global or local, depending on whether it is called from `init` or after `init`:
+- Before `init`: effective globally for all goroutines,
+- After `init`: effective only for current goroutine, and will be cleared after current goroutine exits.
+
+When `AddInterceptor()` is called after `init`, it will return a dispose function to clear the interceptor earlier before current goroutine exits.
+
+Example:
+
+```go
+func main(){
+    clear := trap.AddInterceptor(...)
     defer clear()
     ...
 }

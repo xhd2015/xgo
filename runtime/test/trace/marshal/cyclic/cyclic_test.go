@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xhd2015/xgo/runtime/trace/signal"
-	"github.com/xhd2015/xgo/runtime/trap/stack_model"
+	"github.com/xhd2015/xgo/runtime/trace"
+	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
 
 type Ref struct {
@@ -31,7 +31,7 @@ const supportCyclic = false
 
 func TestMarshalCyclic(t *testing.T) {
 	var exportedStack stack_model.IStack
-	signal.StartXgoTrace(signal.StartXgoTraceConfig{
+	trace.Trace(trace.Config{
 		OnFinish: func(stack stack_model.IStack) {
 			exportedStack = stack
 		},

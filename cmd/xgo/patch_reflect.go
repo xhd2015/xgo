@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	instrument_patch "github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
-	instrument_patch "github.com/xhd2015/xgo/support/instrument/patch"
 	"github.com/xhd2015/xgo/support/transform"
 )
 

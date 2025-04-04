@@ -60,6 +60,9 @@ type FuncInfo struct {
 	File string
 	Line int
 
+	// PC is the function entry point
+	// if it's a method, it is the underlying entry point
+	// for all instances, it is the same
 	PC   uintptr     `json:"-"`
 	Func interface{} `json:"-"`
 	Var  interface{} `json:"-"` // var address

@@ -13,9 +13,9 @@ import (
 
 	"github.com/xhd2015/xgo"
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
+	instrument_patch "github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/goinfo"
-	instrument_patch "github.com/xhd2015/xgo/support/instrument/patch"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 

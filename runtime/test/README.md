@@ -1,12 +1,16 @@
 # Tests of the runtime package
 Runnable tests are listed in file [../../script/run-test/main.go](../../script/run-test/main.go).
 
+All tests must be run by xgo.
+
+`runtime/test` has special access to `runtime/internal` functions, like `trap.Inspect()`.
+
 # Run tests
 ```sh
 # all
 
 # patch
-go run -tags dev ./cmd/xgo test --with-goroot go1.19.13 --project-dir runtime/test ./patch
+go run -tags dev ./cmd/xgo test --with-goroot go1.19.13 --project-dir ./runtime/test/patch
 
 # trace
 go run -tags dev ./cmd/xgo test --with-goroot go1.19.13 --project-dir runtime/test ./trace

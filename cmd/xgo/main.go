@@ -17,10 +17,10 @@ import (
 	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 	test_explorer "github.com/xhd2015/xgo/cmd/xgo/test-explorer"
+	"github.com/xhd2015/xgo/instrument/overlay"
 	cmd_support "github.com/xhd2015/xgo/support/cmd"
 	debug_support "github.com/xhd2015/xgo/support/debug"
 	"github.com/xhd2015/xgo/support/goinfo"
-	"github.com/xhd2015/xgo/support/instrument/overlay"
 	"github.com/xhd2015/xgo/support/netutil"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
@@ -220,9 +220,20 @@ func handleBuild(cmd string, args []string) error {
 		return err
 	}
 
+	subPaths, mainModule, err := goinfo.ResolveMainModule(projectDir)
+	if err != nil {
+		if !errors.Is(err, goinfo.ErrGoModNotFound) && !errors.Is(err, goinfo.ErrGoModDoesNotHaveModule) {
+			return err
+		}
+	}
+	projectRootDir := projectDir
+	for i, n := 0, len(subPaths); i < n; i++ {
+		projectRootDir = filepath.Dir(projectRootDir)
+	}
+
 	// generate at .xgo/gen
 	// and add .xgo/gen to .gitignore
-	localXgoGenDir, err := getLocalXgoGenDir(projectDir)
+	localXgoGenDir, err := getLocalXgoGenDir(projectRootDir)
 	if err != nil {
 		return err
 	}
@@ -558,12 +569,6 @@ func handleBuild(cmd string, args []string) error {
 			}
 		}
 		instrumentGo := filepath.Join(instrumentGoroot, "bin", "go"+osinfo.EXE_SUFFIX)
-		subPaths, mainModule, err := goinfo.ResolveMainModule(projectDir)
-		if err != nil {
-			if !errors.Is(err, goinfo.ErrGoModNotFound) && !errors.Is(err, goinfo.ErrGoModDoesNotHaveModule) {
-				return err
-			}
-		}
 		if debugCompile != nil {
 			if *debugCompile != "" {
 				debugCompilePkg = *debugCompile

@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
+	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
-	"github.com/xhd2015/xgo/support/instrument/patch"
 )
 
 const convertXY = `

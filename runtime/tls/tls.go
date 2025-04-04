@@ -1,7 +1,13 @@
+// package tls provides goroutine-local storage
+// it is meant to be used only for tooling
+// and instrumenting purpose,
+// and should be avoided in production code
 package tls
 
 import (
 	"sync"
+
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
 
 var mut sync.Mutex
@@ -16,7 +22,6 @@ type TLSKey interface {
 type tlsKey struct {
 	name    string // for debugging purepose
 	inherit bool
-	store   sync.Map // <goroutine ptr> -> interface{}
 }
 
 var _ TLSKey = (*tlsKey)(nil)
@@ -27,6 +32,7 @@ func Declare(name string) TLSKey {
 	}
 	return b.Declare()
 }
+
 func DeclareInherit(name string) TLSKey {
 	b := &TLSBuilder{
 		name:    name,
@@ -66,20 +72,13 @@ func (c *TLSBuilder) Declare() TLSKey {
 }
 
 func (c *tlsKey) Get() interface{} {
-	key := uintptr(__xgo_link_getcurg())
-	val, ok := c.store.Load(key)
-	if !ok {
-		return nil
-	}
-	return val
+	return runtime.GetG().Get(c)
 }
 
 func (c *tlsKey) GetOK() (interface{}, bool) {
-	key := uintptr(__xgo_link_getcurg())
-	return c.store.Load(key)
+	return runtime.GetG().GetOK(c)
 }
 
 func (c *tlsKey) Set(v interface{}) {
-	key := uintptr(__xgo_link_getcurg())
-	c.store.Store(key, v)
+	runtime.GetG().Set(c, v)
 }

@@ -50,10 +50,11 @@ type TestArg struct {
 var defaultTestArgs = []*TestArg{
 	{
 		// test using go
-		Dir:  "",
+		Dir: "",
 		Args: []string{
 			// "./...",
 			// "./test",
+			"./support/...",
 		},
 	},
 	{
@@ -69,12 +70,19 @@ var defaultTestArgs = []*TestArg{
 		Dir: "runtime/test",
 		Args: []string{
 			// "./...",
-			"./patch",
 			"./functab",
+			"./patch",
+			"./mock/mock_by_name",
+			"./mock/mock_func",
+			"./mock/mock_generic",
+			"./mock/mock_method",
+			"./mock/mock_var",
 			"./trace/record",
 			"./trace/go_trace",
 			"./trace/marshal/cyclic",
 			"./trap/inspect",
+			"./trap/interceptor",
+			"./tls",
 		},
 	},
 }
@@ -89,26 +97,20 @@ func main() {
 	var remainTests []string
 
 	var resetInstrument bool
-	var xgoTestOnly bool
-	var xgoRuntimeTestOnly bool
-	var xgoRuntimeSubTestOnly bool
-	var xgoDefaultTestOnly bool
 
 	var installXgo bool
 
 	var debug bool
+	var debugXgo bool
 	var cover bool
 	var coverpkgs []string
 	var coverprofile string
-	var names []string
 
 	var projectDir string
-	var legacyV1_0 bool
 
 	var logDebug bool
 	var withSetup bool
 
-	var list bool
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--" {
@@ -164,39 +166,6 @@ func main() {
 			withSetup = true
 			continue
 		}
-		if arg == "--xgo-test-only" {
-			xgoTestOnly = true
-			xgoRuntimeTestOnly = false
-			xgoRuntimeSubTestOnly = false
-			xgoDefaultTestOnly = false
-			continue
-		}
-		if arg == "--xgo-runtime-test-only" {
-			xgoTestOnly = false
-			xgoRuntimeTestOnly = true
-			xgoRuntimeSubTestOnly = false
-			xgoDefaultTestOnly = false
-			continue
-		}
-		if arg == "--xgo-runtime-sub-test-only" {
-			xgoTestOnly = false
-			xgoRuntimeTestOnly = false
-			xgoRuntimeSubTestOnly = true
-			xgoDefaultTestOnly = false
-			continue
-		}
-		if arg == "--xgo-default-test-only" {
-			xgoTestOnly = false
-			xgoRuntimeTestOnly = false
-			xgoRuntimeSubTestOnly = false
-			xgoDefaultTestOnly = true
-			continue
-		}
-		if arg == "--name" {
-			names = append(names, args[i+1])
-			i++
-			continue
-		}
 		if arg == "-cover" {
 			cover = true
 			continue
@@ -215,16 +184,12 @@ func main() {
 			debug = true
 			continue
 		}
+		if arg == "--debug-xgo" {
+			debugXgo = true
+			continue
+		}
 		if arg == "--install-xgo" {
 			installXgo = true
-			continue
-		}
-		if arg == "--list" {
-			list = true
-			continue
-		}
-		if arg == "--legacy-v1.0" {
-			legacyV1_0 = true
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
@@ -260,14 +225,6 @@ func main() {
 	if !atRoot {
 		fmt.Fprintf(os.Stderr, "run-test requires executing from project root, current: %s\n", wd)
 		os.Exit(1)
-	}
-	if list {
-		for _, test := range extraSubTests {
-			if test.name != "" {
-				fmt.Println(test.name)
-			}
-		}
-		return
 	}
 	if coverprofile != "" {
 		absProfile, err := filepath.Abs(coverprofile)
@@ -381,124 +338,60 @@ func main() {
 			}
 		}
 
-		if legacyV1_0 {
-			runDefault := true
-			runXgoTestFlag := true
-			runRuntimeTestFlag := true
-			runRuntimeSubTestFlag := true
-			if len(names) > 0 {
-				runRuntimeTestFlag = false
-				runRuntimeSubTestFlag = true
-				runXgoTestFlag = false
-				runDefault = false
-			} else if xgoTestOnly {
-				runRuntimeTestFlag = false
-				runRuntimeSubTestFlag = false
-				runXgoTestFlag = true
-				runDefault = false
-			} else if xgoRuntimeTestOnly {
-				runRuntimeTestFlag = true
-				runRuntimeSubTestFlag = false
-				runXgoTestFlag = false
-				runDefault = false
-			} else if xgoRuntimeSubTestOnly {
-				runRuntimeTestFlag = false
-				runRuntimeSubTestFlag = true
-				runXgoTestFlag = false
-				runDefault = false
-			} else if xgoDefaultTestOnly {
-				runRuntimeTestFlag = false
-				runRuntimeSubTestFlag = false
-				runXgoTestFlag = false
-				runDefault = true
-			}
-			addArgs := func(args []string, variant string) []string {
-				args = addGoFlags(args, cover, coverpkgs, coverprofile, variant)
-				if debug && (variant == "xgo" || variant == "runtime" || variant == "runtime-sub") {
-					args = append(args, "--log-debug=stdout")
+		if projectDir != "" {
+			fmt.Fprintf(os.Stderr, "--project-dir is not supported\n")
+			os.Exit(1)
+		}
+		testArgs := getTestArgs(remainTests)
+		if len(testArgs) == 0 {
+			fmt.Fprintf(os.Stderr, "no tests to run: %v\n", remainTests)
+			os.Exit(1)
+		}
+		for _, testArg := range testArgs {
+			if len(testArg.Args) == 0 {
+				logDir := testArg.Dir
+				if logDir == "" {
+					logDir = "."
 				}
-				return args
+				fmt.Fprintf(os.Stderr, "SKIP %s: no tests to run\n", logDir)
+				continue
 			}
-			if runXgoTestFlag {
-				err := runXgoTest(goroot, addArgs(remainArgs, "xgo"), remainTests)
-				if err != nil {
-					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
-					os.Exit(1)
+			usePlainGo := testArg.Dir == "" || testArg.Dir == "runtime"
+			// projectDir
+			runArgs := make([]string, 0, len(remainArgs)+1)
+			var opts Opts
+			if !usePlainGo {
+				if logDebug {
+					runArgs = append(runArgs, "--log-debug")
+				}
+				if debug {
+					runArgs = append(runArgs, "--debug")
+				}
+				if debugXgo {
+					opts.Debug = true
 				}
 			}
+			var coverageVariant string
+			var dir string
+			if testArg.Dir != "" {
+				// runtime, runtime-test
+				coverageVariant = strings.ReplaceAll(strings.ReplaceAll(testArg.Dir, "/", "-"), "\\", "-")
+				if usePlainGo {
+					dir = testArg.Dir
+				} else {
+					runArgs = append(runArgs, "--project-dir", testArg.Dir)
+				}
+			}
+			runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
 
-			if runRuntimeTestFlag {
-				err := runRuntimeTest(goroot, addArgs(remainArgs, "runtime"), remainTests)
-				if err != nil {
-					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
-					os.Exit(1)
-				}
-			}
-			if runRuntimeSubTestFlag {
-				err := runRuntimeSubTest(goroot, addArgs(remainArgs, "runtime-sub"), remainTests, names)
-				if err != nil {
-					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
-					os.Exit(1)
-				}
-			}
-			if runDefault {
-				err := runDefaultTest(goroot, addArgs(remainArgs, "default"), remainTests)
-				if err != nil {
-					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
-					os.Exit(1)
-				}
-			}
-		} else {
-			if projectDir != "" {
-				fmt.Fprintf(os.Stderr, "--project-dir is not supported\n")
+			runArgs = append(runArgs, remainArgs...)
+			err := doRunTest(goroot, usePlainGo, dir, runArgs, testArg.Args, nil, opts)
+			if err != nil {
+				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
 				os.Exit(1)
-			}
-			testArgs := getTestArgs(remainTests)
-			if len(testArgs) == 0 {
-				fmt.Fprintf(os.Stderr, "no tests to run: %v\n", remainTests)
-				os.Exit(1)
-			}
-			for _, testArg := range testArgs {
-				if len(testArg.Args) == 0 {
-					logDir := testArg.Dir
-					if logDir == "" {
-						logDir = "."
-					}
-					fmt.Fprintf(os.Stderr, "SKIP %s: no tests to run\n", logDir)
-					continue
-				}
-				usePlainGo := testArg.Dir == "" || testArg.Dir == "runtime"
-				// projectDir
-				runArgs := make([]string, 0, len(remainArgs)+1)
-				if !usePlainGo {
-					if logDebug {
-						runArgs = append(runArgs, "--log-debug")
-					}
-					if debug {
-						runArgs = append(runArgs, "--debug")
-					}
-				}
-				var coverageVariant string
-				var dir string
-				if testArg.Dir != "" {
-					// runtime, runtime-test
-					coverageVariant = strings.ReplaceAll(strings.ReplaceAll(testArg.Dir, "/", "-"), "\\", "-")
-					if usePlainGo {
-						dir = testArg.Dir
-					} else {
-						runArgs = append(runArgs, "--project-dir", testArg.Dir)
-					}
-				}
-				runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
-
-				runArgs = append(runArgs, remainArgs...)
-				err := doRunTest(goroot, testKind_xgoAny, usePlainGo, dir, runArgs, testArg.Args, nil)
-				if err != nil {
-					fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
-					os.Exit(1)
-				}
 			}
 		}
+
 		fmt.Fprintf(os.Stdout, "PASS %s(%v)\n", goroot, time.Since(begin))
 	}
 }
@@ -644,22 +537,6 @@ func listGoroots(dir string) ([]string, error) {
 	return dirs, nil
 }
 
-func runDefaultTest(goroot string, args []string, tests []string) error {
-	return doRunTest(goroot, testKind_default, false, "", args, tests, nil)
-}
-
-func runXgoTest(goroot string, args []string, tests []string) error {
-	return doRunTest(goroot, testKind_xgoTest, false, "", args, tests, nil)
-}
-
-func runRuntimeTest(goroot string, args []string, tests []string) error {
-	err := doRunTest(goroot, testKind_runtimeTest, false, "", args, tests, nil)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func hasName(names []string, name string) bool {
 	if len(names) == 0 {
 		return true
@@ -721,7 +598,7 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 		}
 
 		if hasHook {
-			err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPreCheck"}...), nil), []string{"./hook_test.go"}, env)
+			err := doRunTest(goroot, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPreCheck"}...), nil), []string{"./hook_test.go"}, env)
 			if err != nil {
 				return err
 			}
@@ -737,7 +614,7 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 			testFlags = tt.windowsFlags
 		}
 		var skipped bool
-		runErr := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(extraArgs, testFlags), []string{testArgDir}, env)
+		runErr := doRunTest(goroot, tt.usePlainGo, runDir, amendArgs(extraArgs, testFlags), []string{testArgDir}, env)
 		if runErr != nil {
 			if tt.windowsFailIgnore && runtime.GOOS == "windows" {
 				skipped = true
@@ -756,14 +633,15 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 		}
 
 		if !skipped && hasHook {
-			err := doRunTest(goroot, testKind_xgoAny, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPostCheck"}...), nil), []string{"./hook_test.go"}, env)
+			err := doRunTest(goroot, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPostCheck"}...), nil), []string{"./hook_test.go"}, env)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	if len(names) == 0 {
-		err := doRunTest(goroot, testKind_runtimeSubTest, false, "", args, tests, nil)
+		panic("TODO fix")
+		err := doRunTest(goroot, false, "", args, tests, nil)
 		if err != nil {
 			return err
 		}
@@ -773,97 +651,37 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 
 type testKind string
 
-const (
-	// Deprecated: use testKind_xgoAny instead
-	testKind_default testKind = ""
-	// Deprecated: use testKind_xgoAny instead
-	testKind_xgoTest testKind = "xgo-test"
-	// Deprecated: use testKind_xgoAny instead
-	testKind_runtimeTest testKind = "runtime-test"
-	// Deprecated: use testKind_xgoAny instead
-	testKind_runtimeSubTest testKind = "runtime-sub-test"
+type Opts struct {
+	Debug bool
+}
 
-	testKind_xgoAny testKind = "xgo-any"
-)
-
-func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args []string, tests []string, env []string) error {
+func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests []string, env []string, opts ...Opts) error {
+	var debug bool
+	if len(opts) > 0 {
+		if len(opts) != 1 {
+			panic("only one opts is allowed")
+		}
+		opt := opts[0]
+		debug = opt.Debug
+	}
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
 		return err
 	}
 	var testArgs []string
-	switch kind {
-	case testKind_default:
-		testArgs = []string{"test"}
-		testArgs = append(testArgs, globalFlags...)
-		testArgs = append(testArgs, args...)
-		if len(tests) > 0 {
-			testArgs = append(testArgs, tests...)
-		} else {
-			// TODO: enable integration tests on windows
-			if runtime.GOOS != "windows" {
-				testArgs = append(testArgs, "./test")
-			}
-			testArgs = append(testArgs, "./support/...")
-			// exclude ./cmd/xgo/runtime_gen
-			testArgs = append(testArgs, "./cmd/xgo")
-			testArgs = append(testArgs, "./cmd/xgo/exec_tool/...")
-			testArgs = append(testArgs, "./cmd/xgo/patch/...")
-			testArgs = append(testArgs, "./cmd/xgo/pathsum/...")
-			testArgs = append(testArgs, "./cmd/xgo/trace/...")
-			testArgs = append(testArgs, "./cmd/xgo/upgrade/...")
-		}
-	case testKind_xgoTest:
-		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test"}
-		testArgs = append(testArgs, globalFlags...)
-		testArgs = append(testArgs, args...)
-		if len(tests) > 0 {
-			testArgs = append(testArgs, tests...)
-		} else {
-			testArgs = append(testArgs, "./test/xgo_test/...")
-		}
-	case testKind_runtimeTest:
-		testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test", "--project-dir", "runtime"}
-		testArgs = append(testArgs, args...)
-		if len(tests) > 0 {
-			testArgs = append(testArgs, tests...)
-		} else {
-			testArgs = append(testArgs,
-				"./core/...",
-				"./functab/...",
-				"./trace/...",
-				"./trap/...",
-				"./mock/...",
-				"./tls/...",
-			)
-		}
-	case testKind_runtimeSubTest:
-		if !usePlainGo {
-			testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test", "--project-dir", "runtime/test"}
-		} else {
-			testArgs = []string{"test"}
-		}
-
-		testArgs = append(testArgs, globalFlags...)
-		testArgs = append(testArgs, args...)
-		if len(tests) > 0 {
-			testArgs = append(testArgs, tests...)
-		} else {
-			for _, runtimeTest := range runtimeSubTests {
-				testArgs = append(testArgs, "./"+runtimeTest+"/...")
-			}
-		}
-	case testKind_xgoAny:
-		if !usePlainGo {
+	if !usePlainGo {
+		if !debug {
 			testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test"}
 		} else {
-			testArgs = []string{"test"}
+			testArgs = []string{"run", "./cmd/xgo", "test"}
 		}
-
-		testArgs = append(testArgs, globalFlags...)
-		testArgs = append(testArgs, args...)
-		testArgs = append(testArgs, tests...)
+	} else {
+		testArgs = []string{"test"}
 	}
+
+	testArgs = append(testArgs, globalFlags...)
+	testArgs = append(testArgs, args...)
+	testArgs = append(testArgs, tests...)
 
 	// remove extra xgo flags
 	if usePlainGo {
@@ -879,9 +697,23 @@ func doRunTest(goroot string, kind testKind, usePlainGo bool, dir string, args [
 		testArgs = testArgs[:i]
 	}
 	// debug
-	fmt.Printf("go %s\n", strings.Join(testArgs, " "))
 
-	execCmd := exec.Command(filepath.Join(goroot, "bin", "go"), testArgs...)
+	var binary string
+	if debug {
+		fmt.Printf("testArgs: %v\n", testArgs)
+		binary = "xgo"
+		newTestArgs := make([]string, 2, len(testArgs)+1)
+		newTestArgs[0] = testArgs[0]
+		newTestArgs[1] = "--debug"
+		newTestArgs = append(newTestArgs, testArgs[1:]...)
+		testArgs = newTestArgs
+		fmt.Printf("xgo %s\n", strings.Join(testArgs, " "))
+	} else {
+		binary = filepath.Join(goroot, "bin", "go")
+		fmt.Printf("go %s\n", strings.Join(testArgs, " "))
+	}
+
+	execCmd := exec.Command(binary, testArgs...)
 	dt := detector{
 		match: []byte("panic: test timed out after"),
 	}

@@ -6,10 +6,10 @@ import (
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/mock_by_name/sub"
+	"github.com/xhd2015/xgo/runtime/test/mock/mock_by_name/sub"
 )
 
-const subPkg = "github.com/xhd2015/xgo/runtime/test/mock_by_name/sub"
+const subPkg = "github.com/xhd2015/xgo/runtime/test/mock/mock_by_name/sub"
 
 // go run ./cmd/xgo test --project-dir runtime -run TestMockByName -v ./test/mock_by_name
 // go run ./script/run-test/ --include go1.22.1 --xgo-runtime-test-only -run TestMockByName -v ./test/mock_by_name

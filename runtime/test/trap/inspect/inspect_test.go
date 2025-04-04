@@ -4,12 +4,12 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/trap"
+	"github.com/xhd2015/xgo/runtime/internal/trap"
 )
 
 func TestInspectFunc(t *testing.T) {
 	// plain function
-	recv, f, _, _ := trap.InspectPC(F)
+	recv, f, _, _ := trap.Inspect(F)
 	if f == nil {
 		t.Fatalf("F not found")
 	}
@@ -19,7 +19,7 @@ func TestInspectFunc(t *testing.T) {
 
 	// struct method
 	s := &struct_{}
-	srecv, sf, _, _ := trap.InspectPC(s.F)
+	srecv, sf, _, _ := trap.Inspect(s.F)
 	if sf == nil {
 		t.Fatalf("struct_.F not found")
 	}
@@ -36,7 +36,7 @@ func TestInspectFunc(t *testing.T) {
 
 	// interface method
 	var intf interface_ = s
-	irecv, if_, _, _ := trap.InspectPC(intf.F)
+	irecv, if_, _, _ := trap.Inspect(intf.F)
 	if if_ == nil {
 		t.Fatalf("interface_.F not found")
 	}

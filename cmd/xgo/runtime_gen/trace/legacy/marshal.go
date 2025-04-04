@@ -27,7 +27,7 @@ func MarshalAnyJSON(v interface{}) ([]byte, error) {
 	var data []byte
 	var err error
 	// mock the encoding json
-	trap.WithFuncOverride(newTypeEncoder, &trap.Interceptor{
+	trap.WithFuncOverride(newTypeEncoder, &trap.InterceptorFunc{
 		// Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (interface{}, error) {
 		// 	return nil, nil
 		// },

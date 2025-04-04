@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	internal_trap "github.com/xhd2015/xgo/runtime/internal/trap"
 	"github.com/xhd2015/xgo/runtime/trap"
 )
 
@@ -21,8 +22,9 @@ const __xgo_trap_cfg2 = 1
 var cfg2 Config
 
 func TestConfigAllowIntercept(t *testing.T) {
+	t.Skip("stdlib is skipped since xgo v1.1.0")
 	var buf bytes.Buffer
-	_, bufFn := trap.Inspect((*bytes.Buffer).String)
+	_, bufFn, _, _ := internal_trap.Inspect((*bytes.Buffer).String)
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
 			if f == bufFn {

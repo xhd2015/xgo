@@ -411,6 +411,88 @@ func main(){
 }
 ```
 
+## Trap
+Trap允许对几乎所有函数进行拦截, 它是`xgo`的核心机制, 是其他功能, 如Mock和Trace的基础。
+
+下面的例子对函数的执行进行拦截并打印日志:
+
+(查看 [test/testdata/trap/trap.go](test/testdata/trap/trap.go) 获取更多细节.)
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/xhd2015/xgo/runtime/core"
+    "github.com/xhd2015/xgo/runtime/trap"
+)
+
+func init() {
+    trap.AddInterceptor(&trap.Interceptor{
+        Pre: func(ctx context.Context, f *core.FuncInfo, args core.Object, results core.Object) (interface{}, error) {
+            if f.Name == "A" {
+                fmt.Printf("trap A\n")
+                return nil, nil
+            }
+            if f.Name == "B" {
+                fmt.Printf("abort B\n")
+                return nil, trap.ErrAbort
+            }
+            return nil, nil
+        },
+    })
+}
+
+func main() {
+    A()
+    B()
+}
+
+func A() {
+    fmt.Printf("A\n")
+}
+
+func B() {
+    fmt.Printf("B\n")
+}
+```
+
+使用`go`运行:
+
+```sh
+go run ./
+# 输出:
+#   A
+#   B
+```
+
+使用`xgo`运行:
+
+```sh
+xgo run ./
+# 输出:
+#   trap A
+#   A
+#   abort B
+```
+
+`AddInterceptor()`将一个拦截器添加到全局或当前Goroutine,取决于当前是在`init`中还是`init`完成后:
+- `init`中: 对所有Goroutine中的函数拦截都生效,
+- `init`完成后: 仅对当前Goroutine生效, 并且在当前Goroutine退出后清理.
+
+当在`init`完成之后调用`AddInterceptor()`, 它还会返回一个额外的清理函数, 用于提前清理设置的拦截器.
+
+例子:
+
+```go
+func main(){
+    clear := trap.AddInterceptor(...)
+    defer clear()
+    ...
+}
+```
+
 # 工具
 
 ## Test Explorer

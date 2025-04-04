@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xhd2015/xgo/runtime/trace/signal"
-	"github.com/xhd2015/xgo/runtime/trap/stack_model"
+	"github.com/xhd2015/xgo/runtime/trace"
+	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
 
 func hello(s string) string {
@@ -37,11 +37,15 @@ func runHelloAsync() (interface{}, error) {
 
 func TestGoTraceSync(t *testing.T) {
 	var stack stack_model.IStack
-	signal.StartXgoTrace(signal.StartXgoTraceConfig{
+	trace.Trace(trace.Config{
 		OnFinish: func(s stack_model.IStack) {
 			stack = s
 		},
 	}, nil, runHello)
+
+	if stack == nil {
+		t.Fatalf("stack is nil")
+	}
 
 	json, err := stack.JSON()
 	if err != nil {
@@ -56,7 +60,7 @@ func TestGoTraceSync(t *testing.T) {
 
 func TestGoTraceAsync(t *testing.T) {
 	var stack stack_model.IStack
-	signal.StartXgoTrace(signal.StartXgoTraceConfig{
+	trace.Trace(trace.Config{
 		OnFinish: func(s stack_model.IStack) {
 			stack = s
 		},

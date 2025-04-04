@@ -1,7 +1,7 @@
 package mock
 
 import (
-	"github.com/xhd2015/xgo/runtime/trap"
+	"github.com/xhd2015/xgo/runtime/internal/trap"
 )
 
 // Patch replaces `fn` with `replacer` in current goroutine.
@@ -12,5 +12,13 @@ import (
 // this function returns a clean up function that can be
 // used to clear the replacer.
 func Patch(fn interface{}, replacer interface{}) func() {
-	return trap.PushMockByPatch(fn, replacer)
+	return trap.PushMockReplacer(fn, replacer)
+}
+
+func PatchByName(pkgPath string, funcName string, replacer interface{}) func() {
+	return trap.PushMockReplacerByName(pkgPath, funcName, replacer)
+}
+
+func PatchMethodByName(instance interface{}, method string, replacer interface{}) func() {
+	return trap.PushMockReplacerMethodByName(instance, method, replacer)
 }

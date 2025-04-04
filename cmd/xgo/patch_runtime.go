@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
+	"github.com/xhd2015/xgo/instrument/instrument_runtime"
+	instrument_patch "github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
-	"github.com/xhd2015/xgo/support/instrument/instrument_runtime"
-	instrument_patch "github.com/xhd2015/xgo/support/instrument/patch"
 	ast_patch "github.com/xhd2015/xgo/support/transform/patch"
 )
 
