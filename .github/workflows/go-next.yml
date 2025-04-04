@@ -12,9 +12,13 @@ on:
 jobs:
 
   tests-with-go-next:
+    # go1.25 to be released 2025-08
+    # see https://tip.golang.org/doc/go1.25
+    # skip this job until go1.25 is released
+    if: false  
     strategy:
       matrix:
-        os: [ ubuntu-latest]
+        os: [ ubuntu-latest ]
         go: [ '1.25rc1' ]
     runs-on: ${{ matrix.os }}
     steps:
