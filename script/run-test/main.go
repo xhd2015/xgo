@@ -305,7 +305,7 @@ func main() {
 	if withSetup {
 		setupGoroots = make([]string, len(goroots))
 		for i, goroot := range goroots {
-			setupGoroots[i], err = setupGoroot(goroot)
+			setupGoroots[i], err = setupGoroot(goroot, logDebug)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "setup goroot: %s %v\n", goroot, err)
 				os.Exit(1)
@@ -396,8 +396,14 @@ func main() {
 	}
 }
 
-func setupGoroot(goroot string) (string, error) {
-	out, err := cmd.Output("go", "run", "./cmd/xgo", "setup", "--with-goroot", goroot)
+func setupGoroot(goroot string, logDebug bool) (string, error) {
+	args := []string{
+		"run", "./cmd/xgo", "setup", "--with-goroot", goroot,
+	}
+	if logDebug {
+		args = append(args, "--log-debug")
+	}
+	out, err := cmd.Output("go", args...)
 	if err != nil {
 		return "", fmt.Errorf("setup goroot: %s %w", goroot, err)
 	}
