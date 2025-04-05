@@ -14,7 +14,8 @@ import (
 //go:embed shadow
 var shadowFS embed.FS
 
-func handleShadow() error {
+// Deprecated: use `xgo setup` instead
+func handleShawdow() error {
 	xgoHome, err := getOrMakeAbsXgoHome("")
 	if err != nil {
 		return err

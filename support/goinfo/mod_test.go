@@ -12,6 +12,12 @@ func TestParseMode(t *testing.T) {
 			`a`,
 		},
 		{
+			`  module a
+			require something
+			`,
+			`a`,
+		},
+		{
 			`module    a/bc//yes it me`,
 			`a/bc`,
 		},

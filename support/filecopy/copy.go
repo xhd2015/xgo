@@ -252,12 +252,20 @@ func copyDirHandle(srcDir string, targetAbsDir string, opts *copyOptions, handle
 	}
 	actualDir := srcDir
 	if !stat.IsDir() {
+		// example:
+		//   - link: C:\hostedtoolcache\windows\go\1.24.2\x64
+		//   - resolved: D:\hostedtoolcache\windows\go\1.24.2\x64\
 		linkDir, err := os.Readlink(srcDir)
 		if err != nil {
 			return err
 		}
 		actualDir = linkDir
 	}
+	// clean example:
+	//   - before: D:\hostedtoolcache\windows\go\1.24.2\x64\
+	//   - after: D:\hostedtoolcache\windows\go\1.24.2\x64
+	actualDir = filepath.Clean(actualDir)
+	actualDir = strings.TrimRight(actualDir, string(filepath.Separator))
 	n := len(actualDir)
 	prefixLen := n + len(string(filepath.Separator))
 	return filepath.WalkDir(actualDir, func(path string, d fs.DirEntry, err error) error {

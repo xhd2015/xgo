@@ -1,40 +1,73 @@
 package main
 
 import (
-	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
+	"github.com/xhd2015/xgo/instrument/constants"
+	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/goparse"
 )
 
-const RUNTIME_MODULE = "github.com/xhd2015/xgo/runtime"
-const RUNTIME_TRACE_PKG = RUNTIME_MODULE + "/trace"
-
 type importResult struct {
-	overlayFile string
-	mod         string
-	modfile     string
+	mod              string
+	modfile          string
+	runtimeModuleDir string
+	// modReplace contains:
+	//   /project/go.sum => /project/.xgo/gen/overlay/project/go.sum
+	//   /project/vendor/some/pkg/go.mod => /project/.xgo/gen/overlay/project/vendor/some/pkg/go.mod
+	// and also a go.sum update:
+	//   /project/go.sum => /project/.xgo/gen/overlay/project/go.sum
+	modReplace  map[overlay.AbsFile]overlay.AbsFile
+	fileReplace map[overlay.AbsFile]overlay.AbsFile
 }
 
 //go:embed runtime_gen
 var runtimeGenFS embed.FS
 
-// TODO: may apply tags
-// importRuntimeDep detect if the target package already
+func getProjectRoot(projectDir string, modRootRel []string) string {
+	projectRoot := projectDir
+	n := len(modRootRel)
+	for i := 0; i < n; i++ {
+		projectRoot = filepath.Dir(projectRoot)
+	}
+	return projectRoot
+}
+
+// projectRoot is the directory containing go.mod
+func getVendorDir(projectRoot string) (string, error) {
+	// not forcing mod
+	vendor := filepath.Join(projectRoot, "vendor")
+	_, statErr := os.Stat(vendor)
+	if statErr != nil {
+		if !errors.Is(statErr, os.ErrNotExist) {
+			return "", statErr
+		}
+		return "", nil
+	}
+	return vendor, nil
+}
+
+// importRuntimeDepGenOverlay detect if the target package already
 // has github.com/xhd2015/xgo/runtime as dependency,
 // if not, dynamically modify the go.mod to include that,
 // and add a blank import in the main package
-func importRuntimeDep(test bool, mayHaveCover bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, modRootRel []string, mainModule string, mod string, args []string) (*importResult, error) {
+// after the dependency is added, the -mod flag will be forced setting to -mod=mod
+// even if the original build has -mod=vendor.
+// by employing this technique with -modfile=replacedModFile, we can instruct go
+// to build with different modules.
+// TODO: may apply tags
+func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, projectRoot string, localXgoGenDir string, mainModule string, mod string, forceCopyRuntime bool, forceLoad bool, args []string) (*importResult, error) {
 	if mainModule == "" {
 		// only work with module
 		return nil, nil
@@ -43,71 +76,82 @@ func importRuntimeDep(test bool, mayHaveCover bool, goroot string, goBinary stri
 	if err != nil {
 		return nil, err
 	}
-	projectRoot := projectDir
-	n := len(modRootRel)
-	for i := 0; i < n; i++ {
-		projectRoot = filepath.Dir(projectRoot)
-	}
 	var vendorDir string
 	if mod == "vendor" || mod == "" {
-		// not forcing mod
-		testVendorDir := filepath.Join(projectRoot, "vendor")
-		_, statErr := os.Stat(testVendorDir)
-		if statErr != nil {
-			if !errors.Is(statErr, os.ErrNotExist) {
-				return nil, statErr
-			}
-		} else {
-			vendorDir = testVendorDir
+		vendorDir, err = getVendorDir(projectDir)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if mod == "vendor" && vendorDir == "" {
 		return nil, fmt.Errorf("-mod=vendor: vendor dir not found")
 	}
-	needLoad, err := checkNeedLoadDep(goroot, goBinary, projectRoot, vendorDir, absModFile)
+	var needLoad bool
+	if forceLoad {
+		needLoad = true
+	} else {
+		needLoad, err = checkNeedLoadDep(goroot, goBinary, projectRoot, vendorDir, absModFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// use .xgo/gen/runtime, .xgo/gen/project
+	// to hold tmp files
+	absGenDir, err := filepath.Abs(localXgoGenDir)
+	if err != nil {
+		return nil, err
+	}
+	overlayDir := filepath.Join(absGenDir, "overlay")
+	err = os.MkdirAll(overlayDir, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	tmpRoot, tmpProjectDir, err := createWorkDir(projectRoot)
+	modulesDir := filepath.Join(absGenDir, "modules")
+	err = os.MkdirAll(modulesDir, 0755)
 	if err != nil {
 		return nil, err
 	}
+	suffix := ""
+	if isDevelopment {
+		suffix = "_dev"
+	}
 
-	var modReplace map[string]string
 	res := &importResult{}
 	if needLoad {
-		overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, vendorDir, tmpRoot, tmpProjectDir)
+		runtimeModuleDir := filepath.Join(modulesDir, filepath.Join(strings.Split(constants.RUNTIME_MODULE, "/")...)+suffix)
+		logDebug("loading dependency: %s into %s", constants.RUNTIME_MODULE, runtimeModuleDir)
+		err := os.MkdirAll(runtimeModuleDir, 0755)
+		if err != nil {
+			return nil, err
+		}
+
+		overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, vendorDir, overlayDir, runtimeModuleDir, forceCopyRuntime)
 		if err != nil {
 			return nil, err
 		}
 		if overlayInfo != nil {
-			modReplace = overlayInfo.modReplace
+			logDebug("go mod replace: %d", len(overlayInfo.modReplace))
+			res.modReplace = overlayInfo.modReplace
 			res.mod = overlayInfo.mod
 			res.modfile = overlayInfo.modfile
+			res.runtimeModuleDir = runtimeModuleDir
 		}
 	}
 
 	pkgArgs := getPkgArgs(args)
-	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, mayHaveCover, tmpProjectDir)
+	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, overlayDir)
 	if err != nil {
 		return nil, err
 	}
 
-	replace := make(map[string]string, len(modReplace)+len(fileReplace))
-	for k, v := range modReplace {
-		replace[k] = v
-	}
+	absFileReplace := make(map[overlay.AbsFile]overlay.AbsFile, len(fileReplace))
 	for k, v := range fileReplace {
-		replace[k] = v
+		absFileReplace[overlay.AbsFile(k)] = overlay.AbsFile(v)
 	}
-
-	overlayFile, err := createOverlayFile(tmpProjectDir, replace)
-	if err != nil {
-		return nil, err
-	}
-	logDebug("mod replace: %d, go file replace: %d, overlay: %s", len(modReplace), len(fileReplace), overlayFile)
-	res.overlayFile = overlayFile
+	res.fileReplace = absFileReplace
+	logDebug("go file replace: %d", len(fileReplace))
 
 	return res, nil
 }
@@ -137,7 +181,7 @@ func checkNeedLoadDep(goroot string, goBinary string, projectRoot string, vendor
 	if modfile != "" {
 		listArgs = append(listArgs, "-modfile", modfile)
 	}
-	listArgs = append(listArgs, RUNTIME_MODULE)
+	listArgs = append(listArgs, constants.RUNTIME_MODULE)
 
 	logDebug("go %v", listArgs)
 	// go list -m -json -mod=$effective_mod -modfile $modfile -e github.com/xhd2015/xgo
@@ -165,107 +209,62 @@ func checkNeedLoadDep(goroot string, goBinary string, projectRoot string, vendor
 	if effectiveMod != "vendor" {
 		return false, nil
 	}
-	// check if vendor/${trace} exists
-	if !isDir(filepath.Join(vendorDir, RUNTIME_TRACE_PKG)) {
+	// check if vendor/${trace}/trace.go exists
+	if !isFile(filepath.Join(vendorDir, constants.RUNTIME_TRACE_PKG, "trace.go")) {
 		return true, nil
 	}
 	return false, nil
 }
 
-type Overlay struct {
-	Replace map[string]string
-}
-
 type dependencyInfo struct {
-	modReplace map[string]string
+	modReplace map[overlay.AbsFile]overlay.AbsFile
 	// the -mod flag
 	mod string
 	// the -modfile flag
 	modfile string // alternative go.mod
 }
 
-func createWorkDir(projectRoot string) (tmpRoot string, tmpProjectDir string, err error) {
-	// try /tmp first
-	tmpDir := "/tmp"
-	_, statErr := os.Stat(tmpDir)
-	if statErr != nil {
-		tmpDir = os.TempDir()
-	}
-
-	tmpRoot = filepath.Join(tmpDir, "xgo_"+fileutil.CleanSpecial(getCoreRevision()))
-	err = os.MkdirAll(tmpRoot, 0755)
-	if err != nil {
-		return "", "", err
-	}
-	logDebug("xgo tmp dir: %s", tmpRoot)
-
-	// create project
-	projectSum, err := pathsum.PathSum("", projectRoot)
-	if err != nil {
-		return "", "", err
-	}
-	tmpProjectDir = filepath.Join(tmpRoot, "projects", projectSum)
-	logDebug("tmp project dir: %s", tmpProjectDir)
-	err = os.MkdirAll(tmpProjectDir, 0755)
-	if err != nil {
-		return "", "", err
-	}
-	return tmpRoot, tmpProjectDir, nil
-}
-
-func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion, modfileOption string, xgoSrc string, projectRoot string, vendorDir string, tmpRoot string, tmpProjectDir string) (*dependencyInfo, error) {
-	suffix := ""
+func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion, modfileOption string, xgoSrc string, projectRoot string, vendorDir string, tmpOverlayDir string, tmpRuntime string, forceCopyRuntime bool) (*dependencyInfo, error) {
 	if isDevelopment {
-		suffix = "_dev"
-	}
-	tmpRuntime := filepath.Join(tmpRoot, "runtime"+suffix)
-	err := os.MkdirAll(tmpRuntime, 0755)
-	if err != nil {
-		return nil, err
-	}
-	if isDevelopment {
-		err = filecopy.CopyReplaceDir(filepath.Join(xgoSrc, "runtime"), tmpRuntime, false)
+		err := filecopy.NewOptions().Ignore(".xgo", "test").CopyReplaceDir(filepath.Join(xgoSrc, "runtime"), tmpRuntime)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		var skipCopy bool
-
-		const runtimeGenRoot = "runtime_gen"
-		// compare version
-		versionFilePath := []string{"core", "version.go"}
-
-		fsVersionFile := filepath.Join(tmpRuntime, filepath.Join(versionFilePath...))
-		fsVersion, readFsVersionErr := os.ReadFile(fsVersionFile)
-		if readFsVersionErr != nil {
-			if !os.IsNotExist(readFsVersionErr) {
-				return nil, readFsVersionErr
-			}
-		}
-		if len(fsVersion) > 0 {
-			genFSVersion, err := runtimeGenFS.ReadFile(concatEmbedPath(runtimeGenRoot, joinEmbedPath(versionFilePath)))
+		var skipFullCopy bool
+		if !forceCopyRuntime {
+			ok, err := needCopyRuntimeFromXgo(tmpRuntime)
 			if err != nil {
 				return nil, err
 			}
-			// you need to run go run ./script/generate to sync runtime and cmd/xgo/runtime_gen
-			if bytes.Equal(fsVersion, genFSVersion) {
-				logDebug("fs and embed runtime version same, skip extracting from xgo")
-				skipCopy = true
+			if !ok {
+				skipFullCopy = true
 			}
 		}
 
 		//  cache copy
-		if !skipCopy {
+		if !skipFullCopy {
 			logDebug("extracting runtime from xgo to %s", tmpRuntime)
 			err := os.RemoveAll(tmpRuntime)
 			if err != nil {
 				return nil, err
 			}
-			err = copyEmbedDir(runtimeGenFS, runtimeGenRoot, tmpRuntime)
+			err = copyEmbedDir(runtimeGenFS, "runtime_gen", tmpRuntime)
 			if err != nil {
 				return nil, err
 			}
 			err = os.Rename(filepath.Join(tmpRuntime, "go.mod.txt"), filepath.Join(tmpRuntime, "go.mod"))
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// always copy trace.go because it will be instrumented
+			logDebug("extracting runtime/trace/trace.go from xgo to %s", tmpRuntime)
+			content, err := runtimeGenFS.ReadFile("runtime_gen/trace/trace.go")
+			if err != nil {
+				return nil, err
+			}
+			err = os.WriteFile(filepath.Join(tmpRuntime, "trace", "trace.go"), content, 0755)
 			if err != nil {
 				return nil, err
 			}
@@ -276,9 +275,8 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 	if modfileOption == "" {
 		goMod = filepath.Join(projectRoot, "go.mod")
 	}
-
-	tmpGoMod := filepath.Join(tmpProjectDir, "go.mod")
-	err = filecopy.CopyFile(goMod, tmpGoMod)
+	tmpGoMod := fileutil.RebaseAbs(tmpOverlayDir, goMod)
+	err := filecopy.CopyFileAll(goMod, tmpGoMod)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +284,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 	// use -modfile ?
 	var modfile string
 	var mod string
-	goModReplace := make(map[string]string)
+	goModReplace := make(map[overlay.AbsFile]overlay.AbsFile)
 	if vendorDir != "" {
 		var hasReplace bool
 
@@ -307,7 +305,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			}
 			vendorModPath := filepath.Join(vendorDir, modPath)
 			vendorModFile := filepath.Join(vendorModPath, "go.mod")
-			replaceModFile := filepath.Join(tmpProjectDir, asSubPath(vendorModFile))
+			replaceModFile := fileutil.RebaseAbs(tmpOverlayDir, vendorModFile)
 			// replace goMod => vendor=>
 
 			// NOTE: if replace without require, go will automatically add
@@ -336,7 +334,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			if err != nil {
 				return nil, err
 			}
-			goModReplace[vendorModFile] = replaceModFile
+			goModReplace[overlay.AbsFile(vendorModFile)] = overlay.AbsFile(replaceModFile)
 		}
 		logDebug("num replaced modules: %d", len(replacedModules)/2)
 
@@ -344,18 +342,23 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			if false {
 				// go.sum needs to be synced?
 				goSum := filepath.Join(projectRoot, "go.sum")
-				tmpGoSum := filepath.Join(tmpProjectDir, "go.sum")
-				// write an empty go.sum
-				err := os.WriteFile(tmpGoSum, nil, 0755)
+				tmpGoSum := fileutil.RebaseAbs(tmpOverlayDir, goSum)
+				err := os.MkdirAll(filepath.Dir(tmpGoSum), 0755)
 				if err != nil {
 					return nil, err
 				}
-				goModReplace[goSum] = tmpGoSum
+				// write an empty go.sum
+				err = os.WriteFile(tmpGoSum, nil, 0755)
+				if err != nil {
+					return nil, err
+				}
+				goModReplace[overlay.AbsFile(goSum)] = overlay.AbsFile(tmpGoSum)
 			}
 			// force use -mod=mod
 			mod = "mod" // force use mod after replaced vendor
 			modfile = tmpGoMod
 			for _, replaceModuleGroup := range splitArgsBatch(replacedModules, 100) {
+				// go mod edit -replace go.mod
 				editArgs := make([]string, 0, 3+len(replaceModuleGroup))
 				editArgs = append(editArgs, "mod", "edit")
 				editArgs = append(editArgs, replaceModuleGroup...)
@@ -369,22 +372,25 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			}
 
 		}
+	} else {
+		// TODO: why
+		modfile = tmpGoMod
 	}
 
-	logDebug("require %s v%s, replaced: %s", RUNTIME_MODULE, VERSION, tmpRuntime)
+	logDebug("require %s v%s, replaced: %s", constants.RUNTIME_MODULE, VERSION, tmpRuntime)
 	err = cmd.Env([]string{
 		"GOROOT=" + goroot,
 	}).Run(goBinary, "mod", "edit",
-		fmt.Sprintf("-require=%s@v%s", RUNTIME_MODULE, VERSION),
-		fmt.Sprintf("-replace=%s=%s", RUNTIME_MODULE, tmpRuntime),
+		fmt.Sprintf("-require=%s@v%s", constants.RUNTIME_MODULE, VERSION),
+		fmt.Sprintf("-replace=%s=%s", constants.RUNTIME_MODULE, tmpRuntime),
 		tmpGoMod,
 	)
-	logDebug("replaced go.mod: %s", tmpGoMod)
+	logDebug("copy and edit go.mod: %s", tmpGoMod)
 	if err != nil {
 		return nil, err
 	}
 	if modfile == "" {
-		goModReplace[goMod] = tmpGoMod
+		goModReplace[overlay.AbsFile(goMod)] = overlay.AbsFile(tmpGoMod)
 	}
 
 	return &dependencyInfo{
@@ -392,6 +398,62 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 		mod:        mod,
 		modfile:    modfile,
 	}, nil
+}
+
+func needCopyRuntimeFromXgo(targetRuntimeDir string) (bool, error) {
+	const runtimeGenRoot = "runtime_gen"
+	// compare version
+	versionFilePath := []string{"core", "version.go"}
+
+	fsVersionFile := filepath.Join(targetRuntimeDir, filepath.Join(versionFilePath...))
+	fsVersion, readFsVersionErr := os.ReadFile(fsVersionFile)
+	if readFsVersionErr != nil {
+		if !os.IsNotExist(readFsVersionErr) {
+			return false, readFsVersionErr
+		}
+		return true, nil
+	}
+	if len(fsVersion) == 0 {
+		return true, nil
+	}
+	// you need to run `go run ./script/generate` to sync runtime and cmd/xgo/runtime_gen
+	embedPath := concatEmbedPath(runtimeGenRoot, joinEmbedPath(versionFilePath))
+	emebedVersion, err := runtimeGenFS.ReadFile(embedPath)
+	if err != nil {
+		return false, err
+	}
+
+	fsConstants, fsErr := goparse.ExtractConstants(fsVersionFile, string(fsVersion))
+	if fsErr != nil {
+		return true, nil
+	}
+	embedConstants, err := goparse.ExtractConstants(embedPath, string(emebedVersion))
+	if err != nil {
+		return false, err
+	}
+
+	fsNumber, ok := fsConstants["NUMBER"]
+	if !ok {
+		return true, nil
+	}
+	fsNumberInt, _ := strconv.Atoi(fsNumber)
+	if fsNumberInt <= 0 {
+		return true, nil
+	}
+	embedNumber, ok := embedConstants["NUMBER"]
+	if !ok {
+		return true, nil
+	}
+	embedNumberInt, _ := strconv.Atoi(embedNumber)
+	if embedNumberInt <= 0 {
+		return true, nil
+	}
+	if fsNumberInt < embedNumberInt {
+		logDebug("fs version number: %d < embed version number: %d, need extracting from xgo", fsNumberInt, embedNumberInt)
+		return true, nil
+	}
+	logDebug("fs version number: %d >= embed version number: %d, skip extracting from xgo", fsNumberInt, embedNumberInt)
+	return false, nil
 }
 
 // system may have limit on single go command
@@ -440,21 +502,7 @@ func isLocalReplace(modPath string) bool {
 	return false
 }
 
-func createOverlayFile(tmpProjectDir string, replace map[string]string) (string, error) {
-	overlay := Overlay{Replace: replace}
-	overlayData, err := json.Marshal(overlay)
-	if err != nil {
-		return "", err
-	}
-	overlayFile := filepath.Join(tmpProjectDir, "overlay.json")
-	err = os.WriteFile(overlayFile, overlayData, 0755)
-	if err != nil {
-		return "", err
-	}
-	return overlayFile, nil
-}
-
-func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs []string, test bool, mayHaveCover bool, tmpProjectDir string) (replace map[string]string, err error) {
+func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs []string, test bool, tmpProjectDir string) (replace map[string]string, err error) {
 	// list files, add init
 	// NOTE: go build tag applies,
 	// ignored files will be placed to IgnoredGoFiles
@@ -506,8 +554,9 @@ func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs 
 			hasGoFiles = true
 			pkgInfos = append(pkgInfos, pkgInfo{pkg.Imports, pkg.GoFiles, false})
 		}
-		if !hasGoFiles || mayHaveCover {
-			// mayHaveCover: see https://github.com/xhd2015/xgo/issues/285
+		if !hasGoFiles {
+			// previous we check mayHaveCover: https://github.com/xhd2015/xgo/issues/285
+			// now fixed: https://github.com/xhd2015/xgo/issues/300
 			pkgInfos = append(pkgInfos, pkgInfo{nil, pkg.TestGoFiles, true})
 			pkgInfos = append(pkgInfos, pkgInfo{nil, pkg.XTestGoFiles, true})
 		}
@@ -523,12 +572,6 @@ func addBlankImports(goroot string, goBinary string, projectDir string, pkgArgs 
 	}
 	return replace, nil
 }
-
-// when doing filepath.Join(a,b),
-// on windows, if b has :, everything fails
-func asSubPath(path string) string {
-	return fileutil.CleanSpecial(path)
-}
 func addBlankImportForPackage(srcDir string, dstDir string, imports []string, files []string, allFile bool) (map[string]string, error) {
 	if len(files) == 0 {
 		// no files
@@ -537,7 +580,7 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 	if !allFile {
 		// check if already has trace
 		for _, imp := range imports {
-			if imp == RUNTIME_TRACE_PKG {
+			if imp == constants.RUNTIME_TRACE_PKG {
 				return nil, nil
 			}
 		}
@@ -548,7 +591,7 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 	mapping := make(map[string]string, len(files))
 	for _, file := range files {
 		srcFile := filepath.Join(srcDir, file)
-		dstFile := filepath.Join(dstDir, asSubPath(srcFile))
+		dstFile := fileutil.RebaseAbs(dstDir, srcFile)
 		err := filecopy.CopyFileAll(srcFile, dstFile)
 		if err != nil {
 			return nil, err
@@ -571,6 +614,7 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 	}
 	return mapping, nil
 }
+
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
@@ -582,6 +626,14 @@ func isDir(path string) bool {
 		return false
 	}
 	return stat.IsDir()
+}
+
+func isFile(path string) bool {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !stat.IsDir()
 }
 
 // see go-release/go1.22.2/src/cmd/go/internal/list/list.go
@@ -616,7 +668,7 @@ func addBlankImport(content string) (string, bool) {
 		base += rIdx
 		subContent = subContent[rIdx+1:]
 	}
-	q := fmt.Sprintf(";import _ %q", RUNTIME_TRACE_PKG)
+	q := fmt.Sprintf(";import _ %q", constants.RUNTIME_TRACE_PKG)
 	nIdx := strings.Index(subContent, "\n")
 	if nIdx < 0 {
 		return content + q, true

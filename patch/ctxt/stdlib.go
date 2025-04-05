@@ -77,7 +77,7 @@ var stdBlocklist = map[string]map[string]bool{
 	},
 	// testing is not harmful
 	// but may cause infinite loop?
-	// we may dig later or just add somce whitelist
+	// we may dig later or just add some whitelist
 	"testing": map[string]bool{
 		"*": true,
 	},

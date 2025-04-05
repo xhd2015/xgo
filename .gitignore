@@ -23,6 +23,7 @@
 
 # generated traces
 /runtime/test/**/*.json
+/runtime/test/build/legacy_depend_vendor/vendor
 /test/**/*.json
 
 # coverage
@@ -38,3 +39,8 @@ debug-compile.json
 
 
 /cmd/xgo/internal/src/vendor
+**/.xgo/gen
+
+__debug_bin*
+
+cover.out

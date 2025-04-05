@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/xhd2015/xgo/cmd/xgo/trace/render/stack_model"
 )
 
 const allowPkgName = false
 
-func marshalStackWithoutChildren(stack *StackEntry) ([]byte, error) {
+func marshalStackWithoutChildren(stack *stack_model.StackEntry) ([]byte, error) {
 	s := stack.Children
 	stack.Children = nil
 	defer func() {

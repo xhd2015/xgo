@@ -3,9 +3,11 @@ package render
 import (
 	"fmt"
 	"html"
+
+	"github.com/xhd2015/xgo/cmd/xgo/trace/render/stack_model"
 )
 
-func renderItem(h func(string), stack *StackEntry, traceIDMapping map[*StackEntry]int64) {
+func renderItem(h func(string), stack *stack_model.StackEntry, traceIDMapping map[*stack_model.StackEntry]int64) {
 	var name string
 	if stack.FuncInfo != nil {
 		name = stack.FuncInfo.Name

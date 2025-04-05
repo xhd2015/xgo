@@ -2,6 +2,8 @@ package test_explorer
 
 import (
 	"time"
+
+	"github.com/xhd2015/xgo/cmd/xgo/trace/render/stack_model"
 )
 
 type MockStatus string
@@ -37,13 +39,14 @@ type CallRecord struct {
 type traceConverter struct {
 }
 
-func (c *traceConverter) convertRoot(root *RootExport) *RootRecord {
+func (c *traceConverter) convertRoot(root *stack_model.Stack) *RootRecord {
 	if root == nil {
 		return nil
 	}
 	children := c.convertStacks(root.Children)
+	begin, _ := time.Parse(time.RFC3339, root.Begin)
 	record := &RootRecord{
-		Start: root.Begin,
+		Start: begin,
 		Root: &CallRecord{
 			Children: children,
 		},
@@ -65,7 +68,7 @@ func (c *traceConverter) convertRoot(root *RootExport) *RootRecord {
 	return record
 }
 
-func (c *traceConverter) convertStacks(stacks []*StackExport) []*CallRecord {
+func (c *traceConverter) convertStacks(stacks []*stack_model.StackEntry) []*CallRecord {
 	if stacks == nil {
 		return nil
 	}
@@ -77,13 +80,13 @@ func (c *traceConverter) convertStacks(stacks []*StackExport) []*CallRecord {
 	return convStacks
 }
 
-func (c *traceConverter) convertStack(stack *StackExport) *CallRecord {
+func (c *traceConverter) convertStack(stack *stack_model.StackEntry) *CallRecord {
 	if stack == nil {
 		return nil
 	}
 	funcInfo := stack.FuncInfo
 	if funcInfo == nil {
-		funcInfo = &FuncInfoExport{}
+		funcInfo = &stack_model.FuncInfo{}
 	}
 	var args interface{} = stack.Args
 	var results interface{} = stack.Results
@@ -91,12 +94,12 @@ func (c *traceConverter) convertStack(stack *StackExport) *CallRecord {
 	// stack.Args
 	return &CallRecord{
 		Pkg:  funcInfo.Pkg,
-		Func: funcInfo.IdentityName,
+		Func: funcInfo.Name,
 		File: file,
 		Line: funcInfo.Line,
 
-		Start: stack.Begin,
-		End:   stack.End,
+		Start: stack.BeginNs,
+		End:   stack.EndNs,
 
 		Args: args,
 

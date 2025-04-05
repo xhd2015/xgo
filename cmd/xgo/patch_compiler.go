@@ -13,6 +13,7 @@ import (
 
 	"github.com/xhd2015/xgo"
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
+	instrument_patch "github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/osinfo"
@@ -90,7 +91,7 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 	if err != nil {
 		return fmt.Errorf("patching noder: %w", err)
 	}
-	if goVersion.Major == GO_MAJOR_1 && (goVersion.Minor == GO_VERSION_18 || goVersion.Minor == GO_VERSION_19) {
+	if goVersion.Major == goinfo.GO_MAJOR_1 && (goVersion.Minor == goinfo.GO_VERSION_18 || goVersion.Minor == goinfo.GO_VERSION_19) {
 		err := poatchIRGenericGen(goroot, goVersion)
 		if err != nil {
 			return fmt.Errorf("patching generic trap: %w", err)
@@ -120,16 +121,16 @@ func getInternalPatch(goroot string, subDirs ...string) string {
 }
 
 func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major > 1 || goVersion.Minor >= GO_VERSION_22 {
+	if goVersion.Major > 1 || goVersion.Minor >= goinfo.GO_VERSION_22 {
 		return nil
 	}
 	var fragments []string
 
 	if goVersion.Major == 1 {
-		if goVersion.Minor <= GO_VERSION_21 {
+		if goVersion.Minor <= goinfo.GO_VERSION_21 {
 			fragments = append(fragments, patch.NodesGen)
 		}
-		if goVersion.Minor <= GO_VERSION_17 {
+		if goVersion.Minor <= goinfo.GO_VERSION_17 {
 			fragments = append(fragments, patch.Nodes_Inspect_117)
 		}
 	}
@@ -142,22 +143,22 @@ func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
 
 func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 	file := filepath.Join(goroot, filepath.Join(gcMain...))
-	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= GO_VERSION_16
-	go117 := goVersion.Major == 1 && goVersion.Minor == GO_VERSION_17
-	go118 := goVersion.Major == 1 && goVersion.Minor == GO_VERSION_18
-	go119 := goVersion.Major == 1 && goVersion.Minor == GO_VERSION_19
-	go119AndUnder := goVersion.Major == 1 && goVersion.Minor <= GO_VERSION_19
-	go120 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_20
-	go121 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_21
-	go122 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_22
-	go123 := goVersion.Major == GO_MAJOR_1 && goVersion.Minor == GO_VERSION_23
+	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= goinfo.GO_VERSION_16
+	go117 := goVersion.Major == 1 && goVersion.Minor == goinfo.GO_VERSION_17
+	go118 := goVersion.Major == 1 && goVersion.Minor == goinfo.GO_VERSION_18
+	go119 := goVersion.Major == 1 && goVersion.Minor == goinfo.GO_VERSION_19
+	go119AndUnder := goVersion.Major == 1 && goVersion.Minor <= goinfo.GO_VERSION_19
+	go120 := goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor == goinfo.GO_VERSION_20
+	go121 := goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor == goinfo.GO_VERSION_21
+	go122 := goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor == goinfo.GO_VERSION_22
+	go123 := goVersion.Major == goinfo.GO_MAJOR_1 && goVersion.Minor == goinfo.GO_VERSION_23
 
-	return editFile(file, func(content string) (string, error) {
+	return instrument_patch.EditFile(file, func(content string) (string, error) {
 		imports := []string{
 			`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
 			`xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"`,
 		}
-		content = addCodeAfterImports(content,
+		content = instrument_patch.AddCodeAfterImports(content,
 			"/*<begin gc_import>*/", "/*<end gc_import>*/",
 			imports,
 		)
@@ -184,7 +185,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 			}
 		}
 		patchAnchors = append(patchAnchors, "\n")
-		content = addContentAfter(content,
+		content = instrument_patch.AddContentAfter(content,
 			"/*<begin patch>*/", "/*<end patch>*/",
 			patchAnchors,
 			`	// insert trap points
@@ -195,7 +196,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 
 		if go117 {
 			// go1.17 needs to adjust typecheck.InitRuntime before patch
-			content = replaceContentAfter(content,
+			content = instrument_patch.ReplaceContentAfter(content,
 				"/*<begin patch_init_runtime_type>*/", "/*<end patch_init_runtime_type>*/",
 				[]string{`escape.Funcs(typecheck.Target.Decls)`, `if base.Flag.CompilingRuntime {`, "}", "\n"},
 				initRuntimeTypeCheckGo117,
@@ -225,7 +226,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 				`if Debug_typecheckinl != 0 {`,
 				"\n",
 			}
-			content = replaceContentAfter(content,
+			content = instrument_patch.ReplaceContentAfter(content,
 				"/*<begin prevent_inline>*/", "/*<end prevent_inline>*/",
 				inlineAnchors,
 				inlineGuard,
@@ -238,7 +239,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 				inlineCall = `inline.InlinePackage()`
 			}
 			// go1.20 does not respect rewritten content when inlined
-			content = replaceContentAfter(content,
+			content = instrument_patch.ReplaceContentAfter(content,
 				"/*<begin prevent_inline>*/", "/*<end prevent_inline>*/",
 				[]string{`base.Timer.Start("fe", "inlining")`, `if base.Flag.LowerL != 0 {`, "\n"},
 				inlineCall,
@@ -251,7 +252,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		} else if go122 || go123 {
 			// go1.22 also does not respect rewritten content when inlined
 			// NOTE: the override of LowerL is inserted after xgo_patch.Patch()
-			content = addContentAfter(content,
+			content = instrument_patch.AddContentAfter(content,
 				"/*<begin prevent_inline_by_override_flag>*/", "/*<end prevent_inline_by_override_flag>*/",
 				[]string{`if base.Flag.LowerL <= 1 {`, `base.Flag.LowerL = 1 - base.Flag.LowerL`, "}", "xgo_patch.Patch()", "}", "\n"},
 				`	// NOTE: turn off inline if there is any rewrite
@@ -270,24 +271,24 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	files := []string(noderFile)
 	var noderFiles string
-	if goVersion.Major == GO_MAJOR_1 {
+	if goVersion.Major == goinfo.GO_MAJOR_1 {
 		minor := goVersion.Minor
-		if minor == GO_VERSION_16 {
+		if minor == goinfo.GO_VERSION_16 {
 			files = []string(noderFile16)
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == GO_VERSION_17 {
+		} else if minor == goinfo.GO_VERSION_17 {
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == GO_VERSION_18 {
+		} else if minor == goinfo.GO_VERSION_18 {
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == GO_VERSION_19 {
+		} else if minor == goinfo.GO_VERSION_19 {
 			noderFiles = patch.NoderFiles_1_17
-		} else if minor == GO_VERSION_20 {
+		} else if minor == goinfo.GO_VERSION_20 {
 			noderFiles = patch.NoderFiles_1_20
-		} else if minor == GO_VERSION_21 {
+		} else if minor == goinfo.GO_VERSION_21 {
 			noderFiles = patch.NoderFiles_1_21
-		} else if minor == GO_VERSION_22 {
+		} else if minor == goinfo.GO_VERSION_22 {
 			noderFiles = patch.NoderFiles_1_21
-		} else if minor == GO_VERSION_23 {
+		} else if minor == goinfo.GO_VERSION_23 {
 			// TODO: verify
 			noderFiles = patch.NoderFiles_1_21
 		}
@@ -296,8 +297,8 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 		return fmt.Errorf("unsupported: %v", goVersion)
 	}
 	file := filepath.Join(files...)
-	return editFile(filepath.Join(goroot, file), func(content string) (string, error) {
-		content = addCodeAfterImports(content,
+	return instrument_patch.EditFile(filepath.Join(goroot, file), func(content string) (string, error) {
+		content = instrument_patch.AddCodeAfterImports(content,
 			"/*<begin file_autogen_import>*/", "/*<end file_autogen_import>*/",
 			[]string{
 				`xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"`,
@@ -320,28 +321,28 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 				"\n",
 			}
 		}
-		content = addContentAfter(content, "/*<begin file_autogen>*/", "/*<end file_autogen>*/", anchors,
+		content = instrument_patch.AddContentAfter(content, "/*<begin file_autogen>*/", "/*<end file_autogen>*/", anchors,
 			noderFiles)
 
 		// expose the trimFilename func for recording
 		if goVersion.Major == 1 && goVersion.Minor <= 17 {
-			content = addContentAtIndex(content,
+			content = instrument_patch.UpdateContentLines(content,
 				"/*<begin expose_abs_filename>*/", "/*<end expose_abs_filename>*/",
 				[]string{
 					`func absFilename(name string) string {`,
 				},
 				0,
-				true,
+				instrument_patch.UpdatePosition_Before,
 				"func init(){ xgo_syntax.AbsFilename = absFilename;}\n",
 			)
 		} else {
-			content = addContentAtIndex(content,
+			content = instrument_patch.UpdateContentLines(content,
 				"/*<begin expose_trim_filename>*/", "/*<end expose_trim_filename>*/",
 				[]string{
 					`func trimFilename(b *syntax.PosBase) string {`,
 				},
 				0,
-				true,
+				instrument_patch.UpdatePosition_Before,
 				"func init(){ xgo_syntax.TrimFilename = trimFilename;}\n",
 			)
 		}
@@ -352,19 +353,19 @@ func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
 }
 
 func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
-	file := irgenFile.Join(goroot)
-	return editFile(file, func(content string) (string, error) {
+	file := irgenFile.JoinPrefix(goroot)
+	return instrument_patch.EditFile(file, func(content string) (string, error) {
 		imports := []string{
 			`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
 		}
 		if goVersion.Major == 1 && goVersion.Minor >= 19 {
 			imports = append(imports, `"os"`)
 		}
-		content = addCodeAfterImports(content,
+		content = instrument_patch.AddCodeAfterImports(content,
 			"/*<begin irgen_autogen_import>*/", "/*<end irgen_autogen_import>*/",
 			imports,
 		)
-		content = addContentAfter(content, "/*<begin irgen_generic_trap_autogen>*/", "/*<end irgen_generic_trap_autogen>*/", []string{
+		content = instrument_patch.AddContentAfter(content, "/*<begin irgen_generic_trap_autogen>*/", "/*<end irgen_generic_trap_autogen>*/", []string{
 			`func (g *irgen) generate(noders []*noder) {`,
 			`types.DeferCheckSize()`,
 			`base.ExitIfErrors()`,
@@ -525,8 +526,8 @@ func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
 	fullFile := filepath.Join(goRoot, runtimeDefFile)
 
 	extraDef := patch.RuntimeExtraDef
-	return editFile(fullFile, func(content string) (string, error) {
-		content = addContentAfter(content,
+	return instrument_patch.EditFile(fullFile, func(content string) (string, error) {
+		content = instrument_patch.AddContentAfter(content,
 			`/*<begin extra_runtime_func>*/`, `/*<end extra_runtime_func>*/`,
 			[]string{`var x86HasFMA bool`, `var armHasVFPv4 bool`, `var arm64HasATOMICS bool`},
 			extraDef,

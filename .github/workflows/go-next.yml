@@ -12,10 +12,14 @@ on:
 jobs:
 
   tests-with-go-next:
+    # go1.25 to be released 2025-08
+    # see https://tip.golang.org/doc/go1.25
+    # skip this job until go1.25 is released
+    if: false  
     strategy:
       matrix:
-        os: [ ubuntu-latest]
-        go: [ '1.23rc1' ]
+        os: [ ubuntu-latest ]
+        go: [ '1.25rc1' ]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
@@ -30,4 +34,4 @@ jobs:
         GOROOT=$PWD/setup/go PATH=$PWD/setup/go/bin:$PATH go version
     
     - name: Test
-      run: GOROOT=$PWD/setup/go GOPATH=$PWD/setup/gopath PATH=$PWD/setup/go/bin:$PWD/setup/gopath/bin:$PATH go run ./script/run-test --install-xgo --reset-instrument --debug -v
+      run: GOROOT=$PWD/setup/go GOPATH=$PWD/setup/gopath PATH=$PWD/setup/go/bin:$PWD/setup/gopath/bin:$PATH go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v

@@ -201,6 +201,7 @@ func (c *BlockContext) Add(name string) {
 	}
 	c.Names[name] = true
 }
+
 func (c *BlockContext) Has(name string) bool {
 	if c == nil {
 		return false

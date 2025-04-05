@@ -19,6 +19,7 @@
 - [Tools](#tools):
   - [Test Explorer](#test-explorer)
   - [Incremental Coverage](#incremental-coverage)
+- [IDE Setup](#ide-setup)
 
 As for the monkey patching part, `xgo` works as a preprocessor for `go run`,`go build`, and `go test`(see our [blog](https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec)).
 
@@ -311,26 +312,101 @@ Real world examples:
 
 Trace helps you get started to a new project quickly.
 
-By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `XGO_TRACE_OUTPUT` to different values:
-- `XGO_TRACE_OUTPUT=stdout`: traces will be written to stdout, for debugging purpose,
-- `XGO_TRACE_OUTPUT=<dir>`: traces will be written to `<dir>`,
-- `XGO_TRACE_OUTPUT=off`: turn off trace.
+By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `--strace-dir=<DIR>`.
 
-Besides the `--strace` flag, xgo allows you to define which span should be collected, using `trace.Begin()`:
+Besides the `--strace` flag, xgo allows you to define which span should be collected, using `signal.StartXgoTrace()`:
 ```go
-import "github.com/xhd2015/xgo/runtime/trace"
+import "github.com/xhd2015/xgo/runtime/trace/signal"
 
 func TestTrace(t *testing.T) {
     A()
-    finish := trace.Begin()
-    defer finish()
-    B()
-    C()
+    signal.StartXgoTrace(signal.StartXgoTraceConfig{OutputFile:"demo.json"},nil,func() (interface{},error){
+        B()
+        C()
+    return nil,nil
+    })
 }
 ```
 The trace will only include `B()` and `C()`.
-## Trap
+
+## Recorder
 Xgo **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, providing a chance for user to intercept any function when called.
+
+Trap allows developer to intercept function execution on the fly.
+
+Trap is the core of `xgo` as it is the basis of other abilities like Mock and Trace.
+
+The following example logs function execution trace by adding a Trap interceptor:
+
+(check [test/testdata/trap/trap.go](test/testdata/trap/trap.go) for more details.)
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/xhd2015/xgo/runtime/trace"
+)
+
+func main() {
+    trace.RecordCall(A, func(){
+        fmt.Printf("record A\n")
+    })
+    trace.RecordCall(B,func(){
+        fmt.Printf("record B\n")
+    })
+    A()
+    B()
+}
+
+func A() {
+    fmt.Printf("A\n")
+}
+
+func B() {
+    fmt.Printf("B\n")
+}
+```
+
+Run with `go`:
+
+```sh
+go run ./
+# output:
+#   A
+#   B
+```
+
+Run with `xgo`:
+
+```sh
+xgo run ./
+# output:
+#   record A
+#   A
+#   record B
+#   B
+```
+
+`RecordCall()` add given interceptor to either global or local, depending on whether it is called from `init` or after `init`:
+- Before `init`: effective globally for all goroutines,
+- After `init`: effective only for current goroutine, and will be cleared after current goroutine exits.
+
+When `RecordCall()` is called after `init`, it will return a dispose function to clear the interceptor earlier before current goroutine exits.
+
+Example:
+
+```go
+func main(){
+    clear := trap.RecordCall(...)
+    defer clear()
+    ...
+}
+```
+
+## Trap
+`xgo` **preprocess** the source code before invoking `go`, providing a chance for user to intercept any function when called.
 
 Trap allows developer to intercept function execution on the fly.
 
@@ -415,8 +491,6 @@ func main(){
 }
 ```
 
-Trap also have a helper function called `Direct(fn)`, which can be used to bypass any trap and mock interceptors, calling directly into the original function.
-
 # Tools
 ## Test Explorer
 
@@ -459,6 +533,31 @@ The displayed coverage is a combination of coverage and git diff. By default, on
 - Uncovered lines shown as light yellow
 
 This helps to quickly locate changes that were not covered, and add tests for them incrementally.
+
+# IDE Setup
+To use `xgo` with IDEs like VSCode, GoLand and many others, follow these steps:
+- setup GOROOT
+```sh
+xgo setup
+```
+
+This will output an xgo-instrumented GOROOT from your current GOROOT:
+```sh
+/Users/xhd2015/.xgo/go-instrument/go1.24.2_Us_xh_in_go_994c1863/go1.24.2
+```
+
+- Add instrumented GOROOT to IDE's env
+  - VSCode: add to `.vscode/settings.json`
+```json
+{
+    "go.goroot": "/Users/xhd2015/.xgo/go-instrument/go1.24.2_Us_xh_in_go_994c1863/go1.24.2",
+    "go.testFlags": [
+        "-v"
+    ]
+}
+```
+  - GoLand: add to project settings, see [GoLand: GOROOT and GOPATH](https://www.jetbrains.com/help/go/configuring-goroot-and-gopath.html)
+  - Others: refer to the IDE's documentation
 
 # Concurrent safety
 I know you guys from other monkey patching library suffer from the unsafety implied by these frameworks.

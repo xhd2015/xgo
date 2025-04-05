@@ -1,27 +1,38 @@
 package trace
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/mock"
 	"github.com/xhd2015/xgo/runtime/test/util"
-	"github.com/xhd2015/xgo/runtime/trace"
+	"github.com/xhd2015/xgo/runtime/trace/signal"
+	"github.com/xhd2015/xgo/runtime/trap/stack_model"
 )
 
 func TestMockedFuncShouldShowInTrace(t *testing.T) {
-	var root *trace.Root
-	trace.Options().OnComplete(func(r *trace.Root) {
-		root = r
-	}).Collect(func() {
+	// testing.tRunner
+	var pcs [1]uintptr
+	runtime.Callers(2, pcs[:])
+	pc := pcs[0]
+	funcInfo := runtime.FuncForPC(pc)
+
+	t.Logf("funcInfo: %s", funcInfo.Name())
+
+	_, file, line, _ := runtime.Caller(1)
+	t.Logf("called from %s:%d", file, line)
+	var data []byte
+	signal.StartXgoTrace(signal.StartXgoTraceConfig{
+		OnFinish: func(stack stack_model.IStack) {
+			data, _ = stack.JSON()
+		},
+	}, nil, func() (interface{}, error) {
 		mock.Patch(A, func() string {
 			return "mock_A"
 		})
 		h()
+		return nil, nil
 	})
-	data, err := trace.MarshalAnyJSON(root.Export(nil))
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// t.Logf("trace: %s", data)
 
@@ -35,7 +46,7 @@ func TestMockedFuncShouldShowInTrace(t *testing.T) {
 		`"Name":"C",`,
 		"}",
 	}
-	err = util.CheckSequence(string(data), expectTraceSequence)
+	err := util.CheckSequence(string(data), expectTraceSequence)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}

@@ -97,3 +97,13 @@ func (b *Buffer) Bytes() []byte {
 func (b *Buffer) String() string {
 	return string(b.Bytes())
 }
+
+func (b *Buffer) HasEdits() bool {
+	return len(b.q) > 0
+}
+
+func (b *Buffer) RangeEdits(f func(start int, end int, new string)) {
+	for _, e := range b.q {
+		f(e.start, e.end, e.new)
+	}
+}
