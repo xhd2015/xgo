@@ -17,6 +17,8 @@ import (
 	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 	test_explorer "github.com/xhd2015/xgo/cmd/xgo/test-explorer"
+	"github.com/xhd2015/xgo/instrument/constants"
+	"github.com/xhd2015/xgo/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	cmd_support "github.com/xhd2015/xgo/support/cmd"
 	debug_support "github.com/xhd2015/xgo/support/debug"
@@ -610,6 +612,19 @@ func handleBuild(cmd string, args []string) error {
 				overlayFS.OverrideFile(k, v)
 			}
 		}
+		// TODO: remove this check once most clients are updated
+		needUpgrade, coreVersion, err := instrument_xgo_runtime.CheckRuntimeLegacyVersion(projectDir, overlayFS, mod, modfile)
+		if err != nil {
+			return fmt.Errorf("checking version %s: %w", constants.RUNTIME_CORE_PKG, err)
+		}
+		logDebug("need upgrade: %v, core version: %s", needUpgrade, coreVersion)
+
+		if needUpgrade {
+			fmt.Fprintf(os.Stderr, `WARNING: xgo v%s cannot work with deprecated xgo/runtime v%s.
+xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upgrade via:
+  go get %s@latest
+`, VERSION, coreVersion, CORE_VERSION, constants.RUNTIME_MODULE)
+		}
 
 		projectRoot := getProjectRoot(projectDir, subPaths)
 		var xgoRuntimeModuleDir string
@@ -621,12 +636,12 @@ func handleBuild(cmd string, args []string) error {
 		// sticks to old mod and modfile
 		modForLoad := mod
 		modfileForLoad := modfile
-		if enableStackTrace {
+		if enableStackTrace || needUpgrade {
 			// check if xgo/runtime ready
-			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, remainArgs)
+			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, needUpgrade, remainArgs)
 			if impRuntimeErr != nil {
 				// can be silently ignored
-				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", RUNTIME_TRACE_PKG, RUNTIME_TRACE_PKG, impRuntimeErr)
+				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", constants.RUNTIME_TRACE_PKG, constants.RUNTIME_TRACE_PKG, impRuntimeErr)
 			} else if impResult != nil {
 				if impResult.mod != "" {
 					mod = impResult.mod
@@ -676,7 +691,7 @@ func handleBuild(cmd string, args []string) error {
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag)
+		err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag, needUpgrade)
 		if err != nil {
 			return err
 		}

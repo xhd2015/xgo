@@ -100,6 +100,50 @@ var defaultTestArgs = []*TestArg{
 			"./bugs/...",
 		},
 	},
+
+	// special boundaries
+	{
+		Dir: "runtime/test/trace/trace_without_dep",
+		Flags: []string{
+			"--strace",
+		},
+		Args: []string{
+			"./...",
+		},
+	},
+	// TODO: check extraSubTests why windows needs extra flags
+	// see https://github.com/xhd2015/xgo/issues/144#issuecomment-2138565532
+	// windowsFlags: []string{"--trap-stdlib=false", "--strace"},
+	{
+		Dir: "runtime/test/trace/trace_without_dep_vendor",
+		Flags: []string{
+			"--strace",
+		},
+		Args: []string{
+			"./...",
+		},
+	},
+	{
+		Dir: "runtime/test/trace/trace_without_dep_vendor_replace",
+		Flags: []string{
+			"--strace",
+		},
+		Args: []string{
+			"./...",
+		},
+	},
+	{
+		Dir: "runtime/test/build/legacy_depend",
+		Args: []string{
+			"./...",
+		},
+	},
+	{
+		Dir: "runtime/test/build/legacy_depend_vendor",
+		Args: []string{
+			"./...",
+		},
+	},
 }
 
 func main() {
@@ -516,11 +560,30 @@ func splitXgoRelative(relative []string, fullArg string) (string, string) {
 		return "", fullArg
 	}
 	if len(relative) >= 2 && relative[1] == "test" {
-		return filepath.Join("runtime", "test"), "./" + strings.Join(relative[2:], "/")
+		runtimeTestDir := filepath.Join("runtime", "test")
+		dirPath, modPath := findMostInnerGoMod(runtimeTestDir, relative[2:])
+
+		//  auto scan go.mod to find boundaries
+		return filepath.Join(runtimeTestDir, filepath.Join(dirPath...)), "./" + strings.Join(modPath, "/")
 	}
 	return "runtime", "./" + strings.Join(relative[1:], "/")
 }
 
+func findMostInnerGoMod(prefixDir string, path []string) (dirPath []string, modPath []string) {
+	n := len(path)
+	for i := n - 1; i >= 0; i-- {
+		if hasGoMod(filepath.Join(prefixDir, filepath.Join(path[:i+1]...))) {
+			return path[:i+1], path[i+1:]
+		}
+	}
+	return nil, path
+}
+
+func hasGoMod(dir string) bool {
+	goMod := filepath.Join(dir, "go.mod")
+	_, err := os.Stat(goMod)
+	return err == nil
+}
 func isList(a []string, b []string) bool {
 	if len(a) != len(b) {
 		return false

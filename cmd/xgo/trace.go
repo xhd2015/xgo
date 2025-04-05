@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/filecopy"
@@ -17,9 +18,6 @@ import (
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/goparse"
 )
-
-const RUNTIME_MODULE = "github.com/xhd2015/xgo/runtime"
-const RUNTIME_TRACE_PKG = "github.com/xhd2015/xgo/runtime/trace"
 
 type importResult struct {
 	mod              string
@@ -69,7 +67,7 @@ func getVendorDir(projectRoot string) (string, error) {
 // by employing this technique with -modfile=replacedModFile, we can instruct go
 // to build with different modules.
 // TODO: may apply tags
-func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, projectRoot string, localXgoGenDir string, mainModule string, mod string, forceCopyRuntime bool, args []string) (*importResult, error) {
+func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, projectRoot string, localXgoGenDir string, mainModule string, mod string, forceCopyRuntime bool, forceLoad bool, args []string) (*importResult, error) {
 	if mainModule == "" {
 		// only work with module
 		return nil, nil
@@ -88,9 +86,14 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 	if mod == "vendor" && vendorDir == "" {
 		return nil, fmt.Errorf("-mod=vendor: vendor dir not found")
 	}
-	needLoad, err := checkNeedLoadDep(goroot, goBinary, projectRoot, vendorDir, absModFile)
-	if err != nil {
-		return nil, err
+	var needLoad bool
+	if forceLoad {
+		needLoad = true
+	} else {
+		needLoad, err = checkNeedLoadDep(goroot, goBinary, projectRoot, vendorDir, absModFile)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// use .xgo/gen/runtime, .xgo/gen/project
@@ -117,8 +120,8 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 
 	res := &importResult{}
 	if needLoad {
-		runtimeModuleDir := filepath.Join(modulesDir, filepath.Join(strings.Split(RUNTIME_MODULE, "/")...)+suffix)
-		logDebug("loading dependency: %s into %s", RUNTIME_MODULE, runtimeModuleDir)
+		runtimeModuleDir := filepath.Join(modulesDir, filepath.Join(strings.Split(constants.RUNTIME_MODULE, "/")...)+suffix)
+		logDebug("loading dependency: %s into %s", constants.RUNTIME_MODULE, runtimeModuleDir)
 		err := os.MkdirAll(runtimeModuleDir, 0755)
 		if err != nil {
 			return nil, err
@@ -178,7 +181,7 @@ func checkNeedLoadDep(goroot string, goBinary string, projectRoot string, vendor
 	if modfile != "" {
 		listArgs = append(listArgs, "-modfile", modfile)
 	}
-	listArgs = append(listArgs, RUNTIME_MODULE)
+	listArgs = append(listArgs, constants.RUNTIME_MODULE)
 
 	logDebug("go %v", listArgs)
 	// go list -m -json -mod=$effective_mod -modfile $modfile -e github.com/xhd2015/xgo
@@ -207,7 +210,7 @@ func checkNeedLoadDep(goroot string, goBinary string, projectRoot string, vendor
 		return false, nil
 	}
 	// check if vendor/${trace}/trace.go exists
-	if !isFile(filepath.Join(vendorDir, RUNTIME_TRACE_PKG, "trace.go")) {
+	if !isFile(filepath.Join(vendorDir, constants.RUNTIME_TRACE_PKG, "trace.go")) {
 		return true, nil
 	}
 	return false, nil
@@ -223,24 +226,24 @@ type dependencyInfo struct {
 
 func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion, modfileOption string, xgoSrc string, projectRoot string, vendorDir string, tmpOverlayDir string, tmpRuntime string, forceCopyRuntime bool) (*dependencyInfo, error) {
 	if isDevelopment {
-		err := filecopy.CopyReplaceDir(filepath.Join(xgoSrc, "runtime"), tmpRuntime, false)
+		err := filecopy.NewOptions().Ignore(".xgo", "test").CopyReplaceDir(filepath.Join(xgoSrc, "runtime"), tmpRuntime)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		var skipCopy bool
+		var skipFullCopy bool
 		if !forceCopyRuntime {
 			ok, err := needCopyRuntimeFromXgo(tmpRuntime)
 			if err != nil {
 				return nil, err
 			}
 			if !ok {
-				skipCopy = true
+				skipFullCopy = true
 			}
 		}
 
 		//  cache copy
-		if !skipCopy {
+		if !skipFullCopy {
 			logDebug("extracting runtime from xgo to %s", tmpRuntime)
 			err := os.RemoveAll(tmpRuntime)
 			if err != nil {
@@ -251,6 +254,17 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 				return nil, err
 			}
 			err = os.Rename(filepath.Join(tmpRuntime, "go.mod.txt"), filepath.Join(tmpRuntime, "go.mod"))
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// always copy trace.go because it will be instrumented
+			logDebug("extracting runtime/trace/trace.go from xgo to %s", tmpRuntime)
+			content, err := runtimeGenFS.ReadFile("runtime_gen/trace/trace.go")
+			if err != nil {
+				return nil, err
+			}
+			err = os.WriteFile(filepath.Join(tmpRuntime, "trace", "trace.go"), content, 0755)
 			if err != nil {
 				return nil, err
 			}
@@ -358,14 +372,17 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			}
 
 		}
+	} else {
+		// TODO: why
+		modfile = tmpGoMod
 	}
 
-	logDebug("require %s v%s, replaced: %s", RUNTIME_MODULE, VERSION, tmpRuntime)
+	logDebug("require %s v%s, replaced: %s", constants.RUNTIME_MODULE, VERSION, tmpRuntime)
 	err = cmd.Env([]string{
 		"GOROOT=" + goroot,
 	}).Run(goBinary, "mod", "edit",
-		fmt.Sprintf("-require=%s@v%s", RUNTIME_MODULE, VERSION),
-		fmt.Sprintf("-replace=%s=%s", RUNTIME_MODULE, tmpRuntime),
+		fmt.Sprintf("-require=%s@v%s", constants.RUNTIME_MODULE, VERSION),
+		fmt.Sprintf("-replace=%s=%s", constants.RUNTIME_MODULE, tmpRuntime),
 		tmpGoMod,
 	)
 	logDebug("copy and edit go.mod: %s", tmpGoMod)
@@ -563,7 +580,7 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 	if !allFile {
 		// check if already has trace
 		for _, imp := range imports {
-			if imp == RUNTIME_TRACE_PKG {
+			if imp == constants.RUNTIME_TRACE_PKG {
 				return nil, nil
 			}
 		}
@@ -650,7 +667,7 @@ func addBlankImport(content string) (string, bool) {
 		base += rIdx
 		subContent = subContent[rIdx+1:]
 	}
-	q := fmt.Sprintf(";import _ %q", RUNTIME_TRACE_PKG)
+	q := fmt.Sprintf(";import _ %q", constants.RUNTIME_TRACE_PKG)
 	nIdx := strings.Index(subContent, "\n")
 	if nIdx < 0 {
 		return content + q, true

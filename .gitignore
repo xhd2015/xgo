@@ -23,6 +23,7 @@
 
 # generated traces
 /runtime/test/**/*.json
+/runtime/**/vendor
 /test/**/*.json
 
 # coverage

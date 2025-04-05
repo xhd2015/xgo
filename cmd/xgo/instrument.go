@@ -17,6 +17,7 @@ import (
 	"github.com/xhd2015/xgo/instrument/instrument_go"
 	"github.com/xhd2015/xgo/instrument/instrument_intf"
 	"github.com/xhd2015/xgo/instrument/instrument_reg"
+	"github.com/xhd2015/xgo/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/instrument/load"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/fileutil"
@@ -45,7 +46,7 @@ var PREDEFINED_STD_PKGS = []string{
 }
 
 // goroot is critical for stdlib
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool) error {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -72,20 +73,26 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, mo
 	}
 	xgoPkgs, err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir, overrideXgoContent)
 	if err != nil {
-		if err == instrument.ErrLinkFileNotFoundIgnorable {
+		if err == instrument_xgo_runtime.ErrLinkFileNotRequired {
 			return nil
 		}
-		if err == instrument.ErrLinkFileNotFound {
+		if err == instrument_xgo_runtime.ErrLinkFileNotFound {
 			if !goFlag {
 				fmt.Fprintf(os.Stderr, `WARNING: xgo: skip runtime instrumentation, upgrade:
-	  go get %s@latest
-	  import _ %q
+  go get %s@latest
+  import _ %q
 	`, constants.RUNTIME_INTERNAL_TRAP_PKG, constants.RUNTIME_INTERNAL_TRAP_PKG)
 			}
 			return nil
 		}
-		if errors.Is(err, instrument.ErrRuntimeVersionDeprecatedV1_0_0) {
-			return fmt.Errorf("xgo v%s cannot work with deprecated xgo/runtime: %w, upgrade with:\n  go get %s@latest", VERSION, err, constants.RUNTIME_MODULE)
+		if errors.Is(err, instrument_xgo_runtime.ErrRuntimeVersionDeprecatedV1_0_0) {
+			if !goFlag {
+				if triedUpgrade {
+					return fmt.Errorf("xgo v%s auto upgrade failed, you can fix this by:\n  go get %s@latest", VERSION, constants.RUNTIME_MODULE)
+				}
+				return fmt.Errorf("xgo v%s cannot work with deprecated xgo/runtime: %w, upgrade with:\n  go get %s@latest", VERSION, err, constants.RUNTIME_MODULE)
+			}
+			return nil
 		}
 		return err
 	}
