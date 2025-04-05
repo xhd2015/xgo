@@ -322,20 +322,23 @@ func handleBuild(cmd string, args []string) error {
 		}
 	}
 
+	// only put cache in tmp dir, which is perdiocally cleaned
+	// for cache
+	// /tmp/xgo/go-instrument/go1.21.0
+	instrumentCacheDir := filepath.Join(globalXgoTmpDir, "go-instrument"+instrumentSuffix, mappedGorootName)
 	if !instrumented {
-		if !cmdSetup {
-			// /tmp/xgo/go-instrument/go1.21.0
-			instrumentDir = filepath.Join(globalXgoTmpDir, "go-instrument"+instrumentSuffix, mappedGorootName)
-		} else {
-			// ~/.xgo/go-instrument/go1.21.0
-			instrumentDir = filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
-		}
+		// ~/.xgo/go-instrument/go1.21.0
+		instrumentDir = filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
 	}
 
 	logDebug("instrument dir: %s", instrumentDir)
 	if cmdSetup && deleteFlag {
 		logDebug("delete instrument dir: %s", instrumentDir)
 		err := os.RemoveAll(instrumentDir)
+		if err != nil {
+			return err
+		}
+		err = os.RemoveAll(instrumentCacheDir)
 		if err != nil {
 			return err
 		}
@@ -355,10 +358,7 @@ func handleBuild(cmd string, args []string) error {
 
 	// gcflags can cause the build cache to invalidate
 	// so separate them with normal one
-	buildCacheSuffix := ""
-	if trapStdlib {
-		buildCacheSuffix += "-trapstd"
-	}
+	var buildCacheSuffix string
 	if len(gcflags) > 0 || debug != nil {
 		buildCacheSuffix += "-gcflags"
 	}
@@ -390,10 +390,14 @@ func handleBuild(cmd string, args []string) error {
 		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
 	}
 
-	buildCacheDir := filepath.Join(instrumentDir, "build-cache"+buildCacheSuffix)
-
+	buildCacheDir := filepath.Join(instrumentCacheDir, "build-cache"+buildCacheSuffix)
 	revisionFile := filepath.Join(instrumentDir, INSTRUMENT_XGO_REVISION_FILE)
 	fullSyncRecord := filepath.Join(instrumentDir, "full-sync-record.txt")
+
+	err = os.MkdirAll(buildCacheDir, 0755)
+	if err != nil {
+		return err
+	}
 
 	var realXgoSrc string
 	if isDevelopment {
@@ -441,6 +445,10 @@ func handleBuild(cmd string, args []string) error {
 			if err != nil {
 				return err
 			}
+			err = os.RemoveAll(instrumentCacheDir)
+			if err != nil {
+				return err
+			}
 		}
 		if !cmdSetup && (resetInstrument || flagA) {
 			logDebug("reset overlay %s", localXgoGenDir)
@@ -466,7 +474,7 @@ func handleBuild(cmd string, args []string) error {
 				fmt.Fprintf(os.Stderr, "patch GOROOT\n")
 			}
 			logDebug("patch runtime at: %s", instrumentGoroot)
-			err = patchRuntimeAndCompiler(goroot, instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged)
+			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged)
 			if err != nil {
 				return err
 			}
@@ -520,7 +528,9 @@ func handleBuild(cmd string, args []string) error {
 		fmt.Printf("%s\n", compilerBin)
 		return nil
 	}
-
+	if trapStdlib {
+		trapPkgs = append(trapPkgs, PREDEFINED_STD_PKGS...)
+	}
 	logDebug("trap stdlib: %v", trapStdlib)
 
 	// before invoking exec_tool, tail follow its log
@@ -666,7 +676,7 @@ func handleBuild(cmd string, args []string) error {
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		err = instrumentUserSpace(instrumentGoroot, projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag)
+		err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag)
 		if err != nil {
 			return err
 		}
@@ -854,13 +864,6 @@ func handleBuild(cmd string, args []string) error {
 			execCmdEnv = append(execCmdEnv, exec_tool.XGO_STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT+"="+straceSnapshotMainModuleDefault)
 		}
 
-		// trap stdlib
-		var trapStdlibEnv string
-		if trapStdlib {
-			trapStdlibEnv = "true"
-		}
-		execCmdEnv = append(execCmdEnv, exec_tool.XGO_STD_LIB_TRAP_DEFAULT_ALLOW+"="+trapStdlibEnv)
-
 		// compiler options (make abs)
 		var absOptionsFromFile string
 		if optionsFromFile != "" {
@@ -882,7 +885,7 @@ func handleBuild(cmd string, args []string) error {
 		// filter env
 		var logEnv []string
 		for _, env := range execCmdEnv {
-			if !strings.HasPrefix(env, "GO") && !strings.HasPrefix(env, "XGO") {
+			if !strings.HasPrefix(env, "GO") && !strings.HasPrefix(env, "XGO") && !strings.HasPrefix(env, "PATH=") {
 				continue
 			}
 			logEnv = append(logEnv, env)
@@ -910,6 +913,7 @@ func handleBuild(cmd string, args []string) error {
 	if err != nil {
 		return err
 	}
+	logDebug("command success")
 
 	if debugMode {
 		err := netutil.ServePort("localhost", 2345, true, 500*time.Millisecond, func(port int) {
@@ -1123,10 +1127,35 @@ func patchEnvWithGoroot(env []string, goroot string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(env,
+
+	newEnv := makeGorootEnv(env, goroot)
+	return newEnv, nil
+}
+
+// makeGorootEnv makes a new env with GOROOT and PATH set
+func makeGorootEnv(env []string, goroot string) []string {
+	newEnv := make([]string, 0, len(env))
+	var lastPath string
+	for _, e := range env {
+		if strings.HasPrefix(e, "GOROOT=") {
+			continue
+		}
+		if strings.HasPrefix(e, "PATH=") {
+			lastPath = e
+			continue
+		}
+		newEnv = append(newEnv, e)
+	}
+	gorootBin := filepath.Join(goroot, "bin")
+	pathEnv := gorootBin
+	if lastPath != "" {
+		pathEnv = pathEnv + string(filepath.ListSeparator) + strings.TrimPrefix(lastPath, "PATH=")
+	}
+	newEnv = append(newEnv,
 		"GOROOT="+goroot,
-		fmt.Sprintf("PATH=%s%c%s", filepath.Join(goroot, "bin"), filepath.ListSeparator, os.Getenv("PATH")),
-	), nil
+		"PATH="+pathEnv,
+	)
+	return newEnv
 }
 
 func assertDir(dir string) error {

@@ -31,7 +31,7 @@ type _FilePath = patch.FilePath
 // assume go 1.20
 // the patch should be idempotent
 // the origGoroot is used to generate runtime defs, see https://github.com/xhd2015/xgo/issues/4#issuecomment-2017880791
-func patchRuntimeAndCompiler(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrCoreRevisionChanged bool) error {
+func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrCoreRevisionChanged bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}

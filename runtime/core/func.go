@@ -6,6 +6,8 @@ import (
 	"github.com/xhd2015/xgo/runtime/core/info"
 )
 
+// core.Object, core.FuncInfo are used in interceptor signature
+
 type Kind = info.Kind
 
 const (
@@ -15,10 +17,7 @@ const (
 	Kind_Const  = info.Kind_Const
 )
 
-// Deprecated: use info.Func instead
 type FuncInfo = info.Func
-
-type Func = info.Func
 
 // a/b/c.A
 // a/b/c.(*C).X

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"os"
@@ -33,8 +34,18 @@ import (
 // known for: go1.19
 const MAX_FILE_SIZE = 1 * 1024 * 1024
 
+var PREDEFINED_STD_PKGS = []string{
+	"time",
+	"os",
+	"os/exec",
+	"net",
+	"net/http",
+	"io",
+	"io/ioutil",
+}
+
 // goroot is critical for stdlib
-func instrumentUserSpace(goroot string, projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool) error {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -61,16 +72,22 @@ func instrumentUserSpace(goroot string, projectDir string, projectRoot string, m
 	}
 	xgoPkgs, err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir, overrideXgoContent)
 	if err != nil {
-		if err != instrument.ErrLinkFileNotFound {
-			return err
+		if err == instrument.ErrLinkFileNotFoundIgnoreable {
+			return nil
 		}
-		if !goFlag {
-			fmt.Fprintf(os.Stderr, `WARNING: xgo: skip runtime instrumentation, upgrade:
-  go get %s@latest
-  import _ %q
-`, constants.RUNTIME_TRAP_PKG, constants.RUNTIME_TRAP_PKG)
+		if err == instrument.ErrLinkFileNotFound {
+			if !goFlag {
+				fmt.Fprintf(os.Stderr, `WARNING: xgo: skip runtime instrumentation, upgrade:
+	  go get %s@latest
+	  import _ %q
+	`, constants.RUNTIME_INTERNAL_TRAP_PKG, constants.RUNTIME_INTERNAL_TRAP_PKG)
+			}
+			return nil
 		}
-		return nil
+		if errors.Is(err, instrument.ErrRuntimeVersionDeprecatedV1_0_0) {
+			return fmt.Errorf("xgo v%s cannot work with deprecated xgo/runtime: %w, upgrade with:\n  go get %s@latest", VERSION, err, constants.RUNTIME_MODULE)
+		}
+		return err
 	}
 
 	includeMain, loadPkgs, err := getLoadPackages(rules)

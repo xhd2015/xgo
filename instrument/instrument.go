@@ -1,6 +1,7 @@
 package instrument
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,7 +17,9 @@ import (
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
-var ErrLinkFileNotFound = fmt.Errorf("xgo: link file not found")
+var ErrLinkFileNotFound = errors.New("xgo: link file not found")
+var ErrLinkFileNotFoundIgnoreable = errors.New("xgo: link file not found, ignoreable")
+var ErrRuntimeVersionDeprecatedV1_0_0 = errors.New("runtime version deprecated")
 
 // create an overlay: abs file -> content
 type Overlay map[string]string
@@ -39,8 +42,10 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 		constants.RUNTIME_INTERNAL_RUNTIME_PKG,
 		constants.RUNTIME_CORE_PKG,
 		constants.RUNTIME_TRAP_FLAGS_PKG,
-		constants.RUNTIME_TRACE_PKG,
 		constants.RUNTIME_FUNC_INFO_PKG,
+		constants.RUNTIME_MOCK_PKG,
+		constants.RUNTIME_TRACE_PKG,
+		constants.RUNTIME_TRAP_PKG,
 	}, opts)
 	if err != nil {
 		// TODO: handle the case where error indicates the package is not found
@@ -48,14 +53,31 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 	}
 	editPackages := edit.Edit(packages)
 	var foundLink bool
+	var foundMock bool
+	var foundTrace bool
+	var foundTrap bool
 	for _, pkg := range editPackages.Packages {
-		importPath := pkg.LoadPackage.GoPackage.ImportPath
-		if !strings.HasPrefix(importPath, constants.RUNTIME_MODULE) || importPath[len(constants.RUNTIME_MODULE)] != '/' {
+		goPkg := pkg.LoadPackage.GoPackage
+		if goPkg.Incomplete {
+			continue
+		}
+		importPath := goPkg.ImportPath
+		suffixPkg, ok := goinfo.PkgWithinModule(importPath, constants.RUNTIME_MODULE)
+		if !ok {
 			continue
 		}
 		n := len(constants.RUNTIME_MODULE) + 1
-		suffixPkg := importPath[n:]
-		if suffixPkg == constants.RUNTIME_FUNC_INFO_PKG[n:] {
+		switch suffixPkg {
+		case constants.RUNTIME_MOCK_PKG[n:]:
+			foundMock = true
+		case constants.RUNTIME_TRACE_PKG[n:]:
+			foundTrace = true
+		case constants.RUNTIME_TRAP_PKG[n:]:
+			foundTrap = true
+		}
+		if suffixPkg == constants.RUNTIME_FUNC_INFO_PKG[n:] ||
+			suffixPkg == constants.RUNTIME_MOCK_PKG[n:] ||
+			suffixPkg == constants.RUNTIME_TRAP_PKG[n:] {
 			// only for lookup
 			continue
 		}
@@ -72,7 +94,14 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 				}
 			case constants.VERSION_FILE:
 				if suffixPkg == constants.RUNTIME_CORE_PKG[n:] {
-					versionContent := instrument_xgo_runtime.ReplaceVersion(content, xgoVersion, xgoRevision, xgoNumber)
+					coreVersion, err := instrument_xgo_runtime.ParseCoreVersion(content)
+					if err != nil {
+						return nil, err
+					}
+					if strings.HasPrefix(coreVersion, "1.0.") {
+						return nil, fmt.Errorf("%w: %s", ErrRuntimeVersionDeprecatedV1_0_0, coreVersion)
+					}
+					versionContent := instrument_xgo_runtime.ReplaceActualXgoVersion(content, xgoVersion, xgoRevision, xgoNumber)
 					overrideContent(absFile, versionContent)
 				}
 			case constants.FLAG_FILE:
@@ -92,8 +121,13 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 			file.TrapFuncs = funcInfos
 		}
 	}
+	// found any usage of xgo public API, but does not found
+	// link file, it means the runtime is not instrumented
 	if !foundLink {
-		return editPackages, ErrLinkFileNotFound
+		if foundMock || foundTrace || foundTrap {
+			return editPackages, ErrLinkFileNotFound
+		}
+		return editPackages, ErrLinkFileNotFoundIgnoreable
 	}
 	return editPackages, nil
 }

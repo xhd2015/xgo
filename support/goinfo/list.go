@@ -25,6 +25,15 @@ type Package struct {
 
 	Goroot   bool // is this package in the Go root?
 	Standard bool // is this package part of the standard Go library?
+
+	Incomplete bool          // this package or a dependency has an error
+	Error      *PackageError // error loading package
+}
+
+type PackageError struct {
+	ImportStack []string // shortest path from package named on command line to this one
+	Pos         string   // position of error (if present, file:line:col)
+	Err         string   // the error itself
 }
 
 type LoadPackageOptions struct {

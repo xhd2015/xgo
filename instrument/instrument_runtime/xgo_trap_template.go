@@ -73,7 +73,7 @@ type __xgo_g struct {
 func XgoGetCurG() unsafe.Pointer {
 	curg := getg().m.curg
 	if curg == nil {
-		// this happens when m is bootstraping
+		// this happens when m is bootstrapping
 		return nil
 	}
 	// println("get g:", hex(uintptr(unsafe.Pointer(curg))))

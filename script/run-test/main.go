@@ -75,13 +75,15 @@ var defaultTestArgs = []*TestArg{
 		Dir: "runtime/test",
 		Flags: []string{
 			// for mock_stdlib
-			"--trap=net",
-			"--trap=net/http",
-			"--trap=time",
-			"--trap=os",
-			"--trap=os/exec",
-			"--trap=io",
-			"--trap=io/ioutil",
+			"--trap-stdlib",
+			// equivalent to:
+			// "--trap=net",
+			// "--trap=net/http",
+			// "--trap=time",
+			// "--trap=os",
+			// "--trap=os/exec",
+			// "--trap=io",
+			// "--trap=io/ioutil",
 		},
 		Args: []string{
 			// "./...",
