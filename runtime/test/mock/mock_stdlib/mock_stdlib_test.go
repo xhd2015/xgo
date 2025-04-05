@@ -54,6 +54,11 @@ func TestMockHTTP(t *testing.T) {
 	}
 }
 
+// time.Sleep is linked by runtime/time.go
+//
+//	//go:linkname timeSleep time.Sleep
+//	func timeSleep(ns int64) {
+//
 // execution log(NOTE the cost is not 1s):
 //
 // === RUN   TestMockTimeSleep

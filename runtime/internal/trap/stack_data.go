@@ -11,6 +11,10 @@ type dataKeyType struct{}
 var dataKey = dataKeyType{}
 
 type StackData struct {
+	// when handling trapping, prohibit
+	// another trapping from the handler
+	handlingTrapping bool
+
 	hasStartedTracing bool
 
 	onFinish        func(stack stack_model.IStack)
@@ -28,10 +32,6 @@ type StackData struct {
 	varRecorder    map[uintptr][]*varRecordHolder
 	varPtrRecorder map[uintptr][]*varRecordHolder
 
-	// interceptors are not targeted to any function
-	// so when we are calling interceptors, we need to
-	// avoid infinite loop
-	callingInterceptors bool
 	// general purpose interceptors
 	interceptors []*recorderHolder
 }

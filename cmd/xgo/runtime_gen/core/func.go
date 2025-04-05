@@ -1,88 +1,24 @@
 package core
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/xhd2015/xgo/runtime/core/info"
 )
 
-const __XGO_SKIP_TRAP = true
-
-type Kind int
+type Kind = info.Kind
 
 const (
-	Kind_Func   Kind = 0
-	Kind_Var    Kind = 1
-	Kind_VarPtr Kind = 2
-	Kind_Const  Kind = 3
+	Kind_Func   = info.Kind_Func
+	Kind_Var    = info.Kind_Var
+	Kind_VarPtr = info.Kind_VarPtr
+	Kind_Const  = info.Kind_Const
 )
 
-func (c Kind) String() string {
-	switch c {
-	case Kind_Func:
-		return "func"
-	case Kind_Var:
-		return "var"
-	case Kind_VarPtr:
-		return "var_ptr"
-	case Kind_Const:
-		return "const"
-	default:
-		return fmt.Sprintf("kind_%d", int(c))
-	}
-}
+// Deprecated: use info.Func instead
+type FuncInfo = info.Func
 
-type FuncInfo struct {
-	Kind Kind
-	// full name, format: {pkgPath}.{receiver}.{funcName}
-	// example:  github.com/xhd2015/xgo/runtime/core.(*SomeType).SomeFunc
-	FullName string
-	Pkg      string
-	// identity name within a package, for ptr-method, it's something like `(*SomeType).SomeFunc`
-	// run `go run ./test/example/method` to verify
-	IdentityName string
-	Name         string
-	RecvType     string
-	RecvPtr      bool
-
-	// is this an interface method?
-	Interface bool
-
-	// is this a generic function?
-	Generic bool
-
-	// is this a closure?
-	Closure bool
-
-	// is this function from stdlib
-	Stdlib bool
-
-	// source info
-	File string
-	Line int
-
-	// PC is the function entry point
-	// if it's a method, it is the underlying entry point
-	// for all instances, it is the same
-	PC   uintptr     `json:"-"`
-	Func interface{} `json:"-"`
-	Var  interface{} `json:"-"` // var address
-
-	RecvName string
-	ArgNames []string
-	ResNames []string
-
-	// is first argument ctx
-	FirstArgCtx bool
-	// last last result error
-	LastResultErr bool
-}
-
-func (c *FuncInfo) DisplayName() string {
-	if c.RecvType != "" {
-		return c.RecvType + "." + c.Name
-	}
-	return c.Name
-}
+type Func = info.Func
 
 // a/b/c.A
 // a/b/c.(*C).X

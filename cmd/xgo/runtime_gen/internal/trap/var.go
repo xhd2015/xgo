@@ -7,16 +7,15 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/functab"
+	"github.com/xhd2015/xgo/runtime/core/info"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/internal/stack"
 )
 
-func trapVar(info unsafe.Pointer, varAddr interface{}, res interface{}) {
-	funcInfo := (*functab.FuncInfo)(info)
+func trapVar(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
+	funcInfo := (*info.Func)(infoPtr)
 
-	begin := time.Now()
+	begin := xgo_runtime.XgoRealTimeNow()
 	stk := stack.Get()
 	if stk == nil {
 		return
@@ -33,10 +32,10 @@ func trapVar(info unsafe.Pointer, varAddr interface{}, res interface{}) {
 	doTrapVar(funcInfo, stk, stkData, begin, res, recorders, mock, res)
 }
 
-func trapVarPtr(info unsafe.Pointer, varAddr interface{}, res interface{}) {
-	funcInfo := (*functab.FuncInfo)(info)
+func trapVarPtr(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
+	funcInfo := (*info.Func)(infoPtr)
 
-	begin := time.Now()
+	begin := xgo_runtime.XgoRealTimeNow()
 	stk := stack.Get()
 	if stk == nil {
 		return
@@ -64,7 +63,7 @@ func trapVarPtr(info unsafe.Pointer, varAddr interface{}, res interface{}) {
 	doTrapVar(funcInfo, stk, stkData, begin, res, recorders, mock, mockRes)
 }
 
-func doTrapVar(funcInfo *functab.FuncInfo, stk *stack.Stack, stkData *StackData, begin time.Time, res interface{}, recorders []*varRecordHolder, mock func(fnInfo *core.FuncInfo, res interface{}), mockRes interface{}) {
+func doTrapVar(funcInfo *info.Func, stk *stack.Stack, stkData *StackData, begin time.Time, res interface{}, recorders []*varRecordHolder, mock func(fnInfo *info.Func, res interface{}), mockRes interface{}) {
 	var postRecorders []func()
 	for _, recorder := range recorders {
 		var data interface{}
@@ -113,5 +112,5 @@ func doTrapVar(funcInfo *functab.FuncInfo, stk *stack.Stack, stkData *StackData,
 	cur.FuncInfo = funcInfo
 	cur.Results = json.RawMessage(xgo_runtime.MarshalNoError(res))
 	stk.Top = stk.Push(cur)
-	cur.EndNs = time.Now().UnixNano() - stk.Begin.UnixNano()
+	cur.EndNs = xgo_runtime.XgoRealTimeNow().UnixNano() - stk.Begin.UnixNano()
 }

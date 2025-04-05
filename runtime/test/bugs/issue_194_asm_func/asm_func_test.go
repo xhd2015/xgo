@@ -1,6 +1,3 @@
-//go:build !noasm && amd64
-// +build !noasm,amd64
-
 package asm_func
 
 import (

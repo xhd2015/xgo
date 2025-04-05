@@ -7,6 +7,7 @@ package runtime
 
 import (
 	"runtime"
+	"time"
 	"unsafe"
 )
 
@@ -43,4 +44,10 @@ func XgoOnCreateG(callback func(g unsafe.Pointer, childG unsafe.Pointer)) {
 
 func XgoOnExitG(callback func()) {
 	runtime.XgoOnExitG(callback)
+}
+
+// .
+// .
+func XgoRealTimeNow() time.Time {
+	return time.XgoRealNow()
 }

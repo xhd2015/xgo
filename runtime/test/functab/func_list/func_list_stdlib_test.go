@@ -64,8 +64,8 @@ func TestListStdlib(t *testing.T) {
 		"net.DialUnix":    true,
 		"net.DialTimeout": true,
 
-		//json
-		"encoding/json.newTypeEncoder": true,
+		// json
+		// "encoding/json.newTypeEncoder": true, // not required since xgo v1.1.0
 	}
 	// debug
 	// stdPkgs = map[string]bool{

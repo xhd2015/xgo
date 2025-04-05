@@ -22,12 +22,16 @@ type Package struct {
 	// declares package as xxx_test, while the
 	// package name of normal file is xxx
 	XTestGoFiles []string
+
+	Goroot   bool // is this package in the Go root?
+	Standard bool // is this package part of the standard Go library?
 }
 
 type LoadPackageOptions struct {
 	Dir     string
 	Mod     string
 	ModFile string // -modfile flag
+	Goroot  string // GOROOT env
 }
 
 // go list -e -json ./pkg
@@ -40,7 +44,13 @@ func ListPackages(args []string, opts LoadPackageOptions) ([]*Package, error) {
 		flags = append(flags, "-modfile="+opts.ModFile)
 	}
 	flags = append(flags, args...)
-	output, err := cmd.Dir(opts.Dir).Output("go", flags...)
+	var env []string
+	goCmd := "go"
+	if opts.Goroot != "" {
+		goCmd = filepath.Join(opts.Goroot, "bin", "go")
+		env = append(env, "GOROOT="+opts.Goroot)
+	}
+	output, err := cmd.Dir(opts.Dir).Env(env).Output(goCmd, flags...)
 	if err != nil {
 		return nil, err
 	}

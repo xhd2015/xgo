@@ -1,11 +1,16 @@
 package stack
 
 import (
-	"time"
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
+
+// NilGStack is a guard pointer for when g is nil
+// because m is just starting on g0
+var NilGStack = &Stack{}
+
+const NilG = G(uintptr(0)) // nil
 
 // G points to runtime.G
 type G uintptr
@@ -31,6 +36,9 @@ func (g G) AttachStack(stack *Stack) {
 }
 
 func (g G) GetStack() *Stack {
+	if g == NilG {
+		return NilGStack
+	}
 	stack := runtime.AsG(unsafe.Pointer(g)).Get(gStackKey)
 	if stack == nil {
 		return nil
@@ -39,12 +47,15 @@ func (g G) GetStack() *Stack {
 }
 
 func (g G) GetOrAttachStack() *Stack {
+	if g == NilG {
+		panic("cannot attach stack on nil g(m might just be starting)")
+	}
 	prevStack := runtime.AsG(unsafe.Pointer(g)).Get(gStackKey)
 	if prevStack != nil {
 		return prevStack.(*Stack)
 	}
 	stack := &Stack{
-		Begin: time.Now(),
+		Begin: runtime.XgoRealTimeNow(),
 	}
 	runtime.AsG(unsafe.Pointer(g)).Set(gStackKey, stack)
 	return stack

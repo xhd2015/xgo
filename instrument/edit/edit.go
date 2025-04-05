@@ -55,8 +55,13 @@ type File struct {
 }
 
 type FuncInfo struct {
-	InfoVar  string
-	FuncDecl *ast.FuncDecl
+	InfoVar      string
+	FuncDecl     *ast.FuncDecl
+	IdentityName string
+	RecvPtr      bool
+	RecvGeneric  bool
+	RecvType     *ast.Ident
+
 	Receiver *Field
 	Params   Fields
 	Results  Fields

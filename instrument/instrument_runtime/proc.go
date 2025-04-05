@@ -55,7 +55,7 @@ func instrumentNewGroutineV2(goVersion *goinfo.GoVersion, procContent string) (s
 		},
 		1,
 		patch.UpdatePosition_Before,
-		"__xgo_curg := gp.m.curg;",
+		"__xgo_curg := gp.m.curg;var __xgo_newg *g;",
 	)
 	procContent = patch.UpdateContent(procContent,
 		"/*<begin add_go_newproc_callback_v2>*/",
@@ -70,7 +70,8 @@ func instrumentNewGroutineV2(goVersion *goinfo.GoVersion, procContent string) (s
 		},
 		2,
 		patch.UpdatePosition_After,
-		";__xgo_callback_on_create_g(__xgo_curg,newg);",
+		// avoid executing xgo code on system stack
+		";__xgo_newg=newg});__xgo_callback_on_create_g(__xgo_curg,__xgo_newg);systemstack(func(){newg:=__xgo_newg;",
 	)
 	return procContent, nil
 }
@@ -93,6 +94,7 @@ func instrumentGoexit(goVersion *goinfo.GoVersion, procContent string) (string, 
 // InstrumentGoroutineCreation instruments newproc, which is
 // called when `go func(){}` is executed
 // `procContent` is the content of runtime/proc.go
+// Deprecated
 func InstrumentGoroutineCreation(goVersion *goinfo.GoVersion, procContent string) (string, error) {
 	procDecl, newProc := getProcAnchor(goVersion)
 	// see https://github.com/xhd2015/xgo/issues/67

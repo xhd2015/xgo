@@ -1,3 +1,6 @@
+//go:build xgo_1_0_0
+// +build xgo_1_0_0
+
 package mock_closuer
 
 import "testing"

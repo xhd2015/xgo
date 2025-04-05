@@ -10,7 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/patch_const/sub"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_const/sub"
 )
 
 const pkgPath = "github.com/xhd2015/xgo/runtime/test/patch_const"
@@ -20,6 +20,7 @@ const testVersion = "1.0"
 const N = 50
 
 func TestPatchInElseShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	if os.Getenv("nothing") == "nothing" {
 		t.Fatalf("should go else")
 	} else {
@@ -35,6 +36,7 @@ func TestPatchInElseShouldWork(t *testing.T) {
 }
 
 func TestPatchConstByNamePtrTest(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(pkgPath, "testVersion", func() string {
 		return "1.5"
 	})
@@ -45,6 +47,7 @@ func TestPatchConstByNamePtrTest(t *testing.T) {
 }
 
 func TestPatchConstByNameWrongTypeShouldFail(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	var pe interface{}
 	func() {
 		defer func() {
@@ -65,6 +68,7 @@ func TestPatchConstByNameWrongTypeShouldFail(t *testing.T) {
 }
 
 func TestPatchConstOperationShouldCompileAndSkipMock(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	// should have effect
 	mock.PatchByName(pkgPath, "N", func() int {
 		return 10
@@ -79,6 +83,7 @@ func TestPatchConstOperationShouldCompileAndSkipMock(t *testing.T) {
 }
 
 func TestPatchOtherPkgConstOperationShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	// should have effect
 	mock.PatchByName(subPkgPath, "N", func() int {
 		return 10
@@ -93,6 +98,7 @@ func TestPatchOtherPkgConstOperationShouldWork(t *testing.T) {
 }
 
 func TestConstOperationNaked(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(pkgPath, "N", func() int {
 		return 10
 	})
@@ -105,6 +111,7 @@ func TestConstOperationNaked(t *testing.T) {
 const M = 10
 
 func TestTwoConstAdd(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(pkgPath, "N", func() int {
 		return 10
 	})
@@ -115,6 +122,7 @@ func TestTwoConstAdd(t *testing.T) {
 }
 
 func TestConstOperationParen(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(pkgPath, "N", func() int {
 		return 10
 	})
@@ -126,6 +134,7 @@ func TestConstOperationParen(t *testing.T) {
 
 // local const
 func TestPatchConstInAssignmentShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(pkgPath, "N", func() int {
 		return 10
 	})
@@ -137,6 +146,7 @@ func TestPatchConstInAssignmentShouldWork(t *testing.T) {
 }
 
 func TestPatchConstInAssignmentNoDefShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(pkgPath, "N", func() int {
 		return 10
 	})
@@ -151,6 +161,7 @@ func TestPatchConstInAssignmentNoDefShouldWork(t *testing.T) {
 }
 
 func TestPatchConstInFuncArgShouldSkip(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(pkgPath, "N", func() int {
 		return 10
 	})
@@ -161,6 +172,7 @@ func TestPatchConstInFuncArgShouldSkip(t *testing.T) {
 }
 
 func TestPatchConstInTypeConvertArgShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(pkgPath, "N", func() int {
 		return 10
 	})
@@ -174,6 +186,7 @@ func f(a int64) int64 {
 }
 
 func TestCaseConstShouldSkip(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	n := int64(50)
 	switch n {
 	case N:
@@ -191,6 +204,7 @@ func TestCaseConstShouldSkip(t *testing.T) {
 }
 
 func TestReturnConstShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(pkgPath, "N", func() int {
 		return 10
 	})
@@ -206,6 +220,7 @@ func getN() int64 {
 
 // other package
 func TestPatchOtherPackageConstInAssignmentShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(subPkgPath, "N", func() int {
 		return 10
 	})
@@ -217,6 +232,7 @@ func TestPatchOtherPackageConstInAssignmentShouldWork(t *testing.T) {
 }
 
 func TestPatchOtherPackageConstInAssignmentNoDefShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(subPkgPath, "N", func() int {
 		return 10
 	})
@@ -231,6 +247,7 @@ func TestPatchOtherPackageConstInAssignmentNoDefShouldWork(t *testing.T) {
 }
 
 func TestPatchOtherPackageConstInFuncArgShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(subPkgPath, "N", func() int {
 		return 10
 	})
@@ -241,6 +258,7 @@ func TestPatchOtherPackageConstInFuncArgShouldWork(t *testing.T) {
 }
 
 func TestPatchOtherPackageConstInTypeConvertArgShouldWork(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	mock.PatchByName(subPkgPath, "N", func() int {
 		return 10
 	})
@@ -253,6 +271,7 @@ func TestPatchOtherPackageConstInTypeConvertArgShouldWork(t *testing.T) {
 const x = "123"
 
 func TestPatchConstOverlappingNameShouldSkip(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	x := make([]int, 0, 10)
 	x = append(x, 10)
 	if x[0] != 10 {
@@ -264,6 +283,7 @@ func exampleSprintf(args ...interface{}) string {
 	return fmt.Sprintf("%v", args...)
 }
 func TestPatchLitPlusLitShouldCompile(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	s := "should "
 	a := exampleSprintf(s + "compile")
 	b := exampleSprintf("should " + "compile") // this skips from wrapping
@@ -278,6 +298,7 @@ func convertLabel(label Label) string {
 	return string(label)
 }
 func TestPatchOtherPkgConst(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	label := convertLabel(sub.LabelPrefix + "v2")
 	if label != "label:v2" {
 		t.Fatalf("bad label: %s", label)
@@ -288,6 +309,7 @@ const good = 2
 const reason = "test"
 
 func TestNameConflictWithArgShouldSkip(t *testing.T) {
+	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	reasons := getReasons("good")
 	if len(reasons) != 2 || reasons[0] != "ok" || reasons[1] != "good" {
 		t.Fatalf("bad reason: %v", reasons)

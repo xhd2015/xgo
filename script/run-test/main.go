@@ -34,7 +34,8 @@ import (
 //   go run ./script/run-test --include go1.18.10 --log-debug ./runtime/test/patch
 
 // debug:
-//   go run ./script/run-test --include go1.20.14 --debug ./runtime/test/patch
+//   go run ./script/run-test --include go1.20.14 --debug ./runtime/test/patch      # will debug runtime
+//   go run ./script/run-test --include go1.20.14 --debug-xgo ./runtime/test/patch  # will debug instrumentation
 
 // when will cache affect?
 //   -tags dev : cache is off by default, so revision is not significant
@@ -43,14 +44,17 @@ import (
 var globalFlags = []string{"-timeout=60s"}
 
 type TestArg struct {
-	Dir  string
-	Args []string
+	Dir        string
+	UsePlainGo bool
+	Args       []string
+	Flags      []string
 }
 
 var defaultTestArgs = []*TestArg{
 	{
 		// test using go
-		Dir: "",
+		Dir:        "",
+		UsePlainGo: true,
 		Args: []string{
 			// "./...",
 			// "./test",
@@ -59,7 +63,8 @@ var defaultTestArgs = []*TestArg{
 	},
 	{
 		// test using go
-		Dir: "runtime",
+		Dir:        "runtime",
+		UsePlainGo: true,
 		Args: []string{
 			// "./...",
 			"./core/...",
@@ -68,21 +73,29 @@ var defaultTestArgs = []*TestArg{
 	{
 		// test using xgo
 		Dir: "runtime/test",
+		Flags: []string{
+			// for mock_stdlib
+			"--trap=net",
+			"--trap=net/http",
+			"--trap=time",
+			"--trap=os",
+			"--trap=os/exec",
+			"--trap=io",
+			"--trap=io/ioutil",
+		},
 		Args: []string{
 			// "./...",
-			"./functab",
-			"./patch",
-			"./mock/mock_by_name",
-			"./mock/mock_func",
-			"./mock/mock_generic",
-			"./mock/mock_method",
-			"./mock/mock_var",
+			"./functab/...",
+			"./patch/...",
+			"./core/...",
+			"./mock/...",
 			"./trace/record",
 			"./trace/go_trace",
 			"./trace/marshal/cyclic",
 			"./trap/inspect",
 			"./trap/interceptor",
 			"./tls",
+			"./bugs/...",
 		},
 	},
 }
@@ -191,6 +204,12 @@ func main() {
 		if arg == "--install-xgo" {
 			installXgo = true
 			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			if strings.Contains(arg, "=") {
+				remainArgs = append(remainArgs, arg)
+				continue
+			}
 		}
 		fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
 		os.Exit(1)
@@ -356,7 +375,7 @@ func main() {
 				fmt.Fprintf(os.Stderr, "SKIP %s: no tests to run\n", logDir)
 				continue
 			}
-			usePlainGo := testArg.Dir == "" || testArg.Dir == "runtime"
+			usePlainGo := testArg.UsePlainGo
 			// projectDir
 			runArgs := make([]string, 0, len(remainArgs)+1)
 			var opts Opts
@@ -383,7 +402,7 @@ func main() {
 				}
 			}
 			runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
-
+			runArgs = append(runArgs, testArg.Flags...)
 			runArgs = append(runArgs, remainArgs...)
 			err := doRunTest(goroot, usePlainGo, dir, runArgs, testArg.Args, nil, opts)
 			if err != nil {
@@ -431,7 +450,21 @@ func getTestArgs(args []string) []*TestArg {
 	if len(args) == 0 {
 		return defaultTestArgs
 	}
-	return splitArgs(args)
+	presentArgs := splitArgs(args)
+	for _, p := range presentArgs {
+		var found *TestArg
+		for _, d := range defaultTestArgs {
+			if d.Dir == p.Dir {
+				found = d
+				break
+			}
+		}
+		if found != nil {
+			p.Flags = found.Flags
+			p.UsePlainGo = found.UsePlainGo
+		}
+	}
+	return presentArgs
 }
 
 func splitArgs(args []string) []*TestArg {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/core/info"
 	"github.com/xhd2015/xgo/runtime/mock"
 )
 
@@ -71,11 +72,11 @@ func TestNestedMock(t *testing.T) {
 	if beforeMock != beforeMockExpect {
 		t.Fatalf("expect before mock: %q, actual: %q", beforeMockExpect, beforeMock)
 	}
-	mock.Mock(B, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+	mock.Mock(B, func(ctx context.Context, fn *info.Func, args, results core.Object) error {
 		results.GetFieldIndex(0).Set("b")
 		return nil
 	})
-	mock.Mock(A, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+	mock.Mock(A, func(ctx context.Context, fn *info.Func, args, results core.Object) error {
 		results.GetFieldIndex(0).Set("a " + B())
 		return nil
 	})

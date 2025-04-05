@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	astutil "github.com/xhd2015/xgo/instrument/ast"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/support/edit/goedit"
@@ -33,8 +34,10 @@ const (
 //		func add(a, b int) int {defer runtime.XgoTrap()();
 //			return a+b
 //		}
-func InjectRuntimeTrap(editor *goedit.Edit, file *ast.File, fileIndex int) []*edit.FuncInfo {
+func InjectRuntimeTrap(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int) []*edit.FuncInfo {
 	fset := editor.Fset()
+
+	cfg, cfgOk := stdPkgConfigMapping[pkgPath]
 
 	var funcInfos []*edit.FuncInfo
 	// Visit all nodes in the AST
@@ -52,7 +55,17 @@ func InjectRuntimeTrap(editor *goedit.Edit, file *ast.File, fileIndex int) []*ed
 		}
 		// Check if it's a method (has a receiver) with empty or "_" receiver name
 		_, receiver := processReceiverNames(funcDecl, fset, editor)
-		if receiver == nil && funcDecl.Name.Name == "init" {
+		funcName := funcDecl.Name.Name
+		if receiver == nil && funcName == "init" {
+			return true
+		}
+		if pkgPath == "time" && (funcName == constants.XGO_REAL_NOW || funcName == constants.XGO_REAL_SLEEP) {
+			// certain function is specifically left for xgo to call
+			return true
+		}
+		identityName, recvPtr, recvGeneric, recvType := ParseReceiverInfo(funcName, receiver)
+		if cfgOk && !cfg.whitelistFunc[identityName] && !matchAnyPrefix(cfg.whitelistFuncPrefix, identityName) {
+			// TODO: may enforce only exporeted function on standard lib?
 			return true
 		}
 
@@ -90,11 +103,15 @@ func InjectRuntimeTrap(editor *goedit.Edit, file *ast.File, fileIndex int) []*ed
 		))
 
 		funcInfos = append(funcInfos, &edit.FuncInfo{
-			InfoVar:  funcInfo,
-			FuncDecl: funcDecl,
-			Receiver: receiver,
-			Params:   paramFields,
-			Results:  resultFields,
+			InfoVar:      funcInfo,
+			FuncDecl:     funcDecl,
+			IdentityName: identityName,
+			RecvPtr:      recvPtr,
+			RecvGeneric:  recvGeneric,
+			RecvType:     recvType,
+			Receiver:     receiver,
+			Params:       paramFields,
+			Results:      resultFields,
 		})
 		return true
 	})
@@ -108,6 +125,23 @@ func InjectRuntimeTrap(editor *goedit.Edit, file *ast.File, fileIndex int) []*ed
 			`;import `+constants.UNSAFE_PKG_NAME_FUNC+` "unsafe"`,
 	)
 	return funcInfos
+}
+
+func ParseReceiverInfo(fnName string, receiver *edit.Field) (identityName string, recvPtr bool, recvGeneric bool, recvType *ast.Ident) {
+	if receiver == nil {
+		identityName = fnName
+		return
+	}
+	return astutil.ParseReceiverInfo(fnName, receiver.Type)
+}
+
+func matchAnyPrefix(list []string, s string) bool {
+	for _, p := range list {
+		if p != "" && strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func toNameAddr(name *edit.Field) (string, string) {

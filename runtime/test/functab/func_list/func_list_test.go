@@ -7,7 +7,7 @@ import (
 	"github.com/xhd2015/xgo/runtime/functab"
 )
 
-const testPkgPath = "github.com/xhd2015/xgo/runtime/test/func_list"
+const testPkgPath = "github.com/xhd2015/xgo/runtime/test/functab/func_list"
 
 var addExtraPkgsAssert func(m map[string]bool)
 

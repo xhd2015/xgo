@@ -8,10 +8,9 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
-	"time"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/core/info"
 	"github.com/xhd2015/xgo/runtime/internal/constants"
 	"github.com/xhd2015/xgo/runtime/internal/flags"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
@@ -29,13 +28,13 @@ const SKIP = 2
 //   - mapping by pc and variable pointer
 //
 // this avoids the infinite trap problem
-func trap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	funcInfo := (*core.FuncInfo)(info)
+func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool) {
+	funcInfo := (*info.Func)(infoPtr)
 	recvName := funcInfo.RecvName
 	argNames := funcInfo.ArgNames
 	resultNames := funcInfo.ResNames
 
-	begin := time.Now()
+	begin := xgo_runtime.XgoRealTimeNow()
 
 	var pcs [1]uintptr
 	runtime.Callers(SKIP+1, pcs[:])
@@ -46,7 +45,7 @@ func trap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results 
 	pkg := funcInfo.Pkg
 	name := funcInfo.IdentityName
 
-	var mock func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool
+	var mock func(fnInfo *info.Func, recvPtr interface{}, args []interface{}, results []interface{}) bool
 
 	var isStartTracing bool
 	var isTesting bool
@@ -55,21 +54,27 @@ func trap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results 
 	var postRecorder func()
 
 	stk := stack.Get()
+	if stk == stack.NilGStack {
+		return nil, false
+	}
 	stackData := getStackDataOf(stk)
 	if stackData != nil {
-		if stackData.callingInterceptors {
-			// return immediately to avoid infinite loop
-			return nil, false
-		}
 		if stackData.inspecting != nil {
 			stackData.inspecting(pc, funcInfo, recvPtr, args, results)
 			return nil, true
 		}
+
+		stackIsTrapping := stackData.handlingTrapping
+		stackData.handlingTrapping = true
+		defer func() {
+			stackData.handlingTrapping = false
+		}()
+
 		wantPtr, mockFn := stackData.getLastMock(fnPC)
 		if mockFn != nil && (wantPtr == nil || (recvPtr != nil && sameReceiver(recvPtr, wantPtr))) {
 			mock = mockFn
 		}
-		if !stackData.hasStartedTracing {
+		if !stackIsTrapping && !stackData.hasStartedTracing {
 			if pkg == constants.TRACE_PKG && name == constants.TRACE_FUNC {
 				stackData.hasStartedTracing = true
 				isStartTracing = true
@@ -98,22 +103,20 @@ func trap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results 
 		// reocorders and mock does not have such
 		// problem because they explicitly have
 		// targeted function
-		interceptors := stackData.interceptors
-		for _, h := range interceptors {
-			var data interface{}
-			if h.pre != nil {
-				// TODO: handle abort
-				callInterceptor(stackData, func() {
+		if !stackIsTrapping {
+			interceptors := stackData.interceptors
+			for _, h := range interceptors {
+				var data interface{}
+				if h.pre != nil {
+					// TODO: handle abort
 					data, _ = h.pre(funcInfo, recvPtr, args, results)
-				})
-			}
+				}
 
-			if h.post != nil {
-				postRecordersAndInterceptors = append(postRecordersAndInterceptors, func() {
-					callInterceptor(stackData, func() {
+				if h.post != nil {
+					postRecordersAndInterceptors = append(postRecordersAndInterceptors, func() {
 						h.post(funcInfo, recvPtr, args, results, data)
 					})
-				})
+				}
 			}
 		}
 		if len(postRecordersAndInterceptors) > 0 {
@@ -129,14 +132,35 @@ func trap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results 
 				}
 			}
 		}
+
+		var callPosRecorder func()
+		if postRecorder != nil {
+			callPosRecorder = func() {
+				stackData.handlingTrapping = true
+				defer func() {
+					stackData.handlingTrapping = false
+				}()
+				postRecorder()
+			}
+		}
+		if stackIsTrapping {
+			// when stack is trapping, only allow pc-related
+			// mock and recorders to run
+			if mock != nil {
+				ok := mock(funcInfo, recvPtr, args, results)
+				// ok=true indicates not call old function
+				return callPosRecorder, ok
+			}
+			return callPosRecorder, false
+		}
 		if !stackData.hasStartedTracing {
 			// without tracing, mock becomes simpler
 			if mock != nil {
 				ok := mock(funcInfo, recvPtr, args, results)
 				// ok=true indicates not call old function
-				return postRecorder, ok
+				return callPosRecorder, ok
 			}
-			return postRecorder, false
+			return callPosRecorder, false
 		}
 	} else {
 		if stk != nil {
@@ -169,8 +193,12 @@ func trap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results 
 		}
 		isStartTracing = true
 		stackData = &StackData{
+			handlingTrapping:  true,
 			hasStartedTracing: true,
 		}
+		defer func() {
+			stackData.handlingTrapping = false
+		}()
 		stk = &stack.Stack{
 			Begin: begin,
 			Data: map[interface{}]interface{}{
@@ -244,10 +272,16 @@ func trap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results 
 
 	var hitMock bool
 	post := func() {
+		stackData.handlingTrapping = true
+		defer func() {
+			stackData.handlingTrapping = false
+		}()
+		// NOTE: this defer might be executed on system stack
+		// so cannot defer
 		if postRecorder != nil {
 			postRecorder()
 		}
-		end := time.Now()
+		end := xgo_runtime.XgoRealTimeNow()
 		cur.EndNs = end.UnixNano() - stk.Begin.UnixNano()
 		cur.HitMock = hitMock
 		var hasPanic bool
@@ -314,12 +348,4 @@ func (c *StackDataExportImpl) Data() *stack_model.Stack {
 
 func (c *StackDataExportImpl) JSON() ([]byte, error) {
 	return c.json, nil
-}
-
-func callInterceptor(stackData *StackData, f func()) {
-	stackData.callingInterceptors = true
-	defer func() {
-		stackData.callingInterceptors = false
-	}()
-	f()
 }

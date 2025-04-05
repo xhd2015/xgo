@@ -14,9 +14,9 @@ import (
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/legacy"
+	"github.com/xhd2015/xgo/runtime/internal/flags"
+	"github.com/xhd2015/xgo/runtime/internal/legacy"
 	"github.com/xhd2015/xgo/runtime/trap"
-	"github.com/xhd2015/xgo/runtime/trap/flags"
 )
 
 // hold goroutine stacks, keyed by goroutine ptr

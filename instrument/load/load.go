@@ -25,6 +25,8 @@ type LoadOptions struct {
 	// for more background
 	MaxFileSize int64
 
+	Goroot string
+
 	FilterErrorFile bool
 }
 
@@ -53,11 +55,13 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 	modFile := opts.ModFile
 	maxFileSize := opts.MaxFileSize
 	filterErrorFile := opts.FilterErrorFile
+	goroot := opts.Goroot
 
 	pkgs, err := goinfo.ListPackages(args, goinfo.LoadPackageOptions{
 		Dir:     dir,
 		Mod:     mod,
 		ModFile: modFile,
+		Goroot:  goroot,
 	})
 	if err != nil {
 		return nil, err

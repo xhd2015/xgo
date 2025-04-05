@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/xhd2015/xgo/runtime/legacy"
+	"github.com/xhd2015/xgo/runtime/internal/legacy"
 	"github.com/xhd2015/xgo/runtime/mock"
 	"github.com/xhd2015/xgo/runtime/test/patch/sub"
 )

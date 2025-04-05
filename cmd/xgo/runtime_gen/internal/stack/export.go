@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
 
@@ -50,13 +51,13 @@ func ExportStackEntry(entry *Entry, rootBegin time.Time, offsetNS int64) *stack_
 			children = append(children, exportedStack.Children...)
 			if stack.End.IsZero() {
 				isRunning = true
-				endNs = time.Now().UnixNano() - stack.Begin.UnixNano() + beginNs
+				endNs = runtime.XgoRealTimeNow().UnixNano() - stack.Begin.UnixNano() + beginNs
 			} else {
 				endNs = stack.End.UnixNano() - stack.Begin.UnixNano() + beginNs
 			}
 		}
 	} else if entry.EndNs == 0 {
-		endNs += time.Now().UnixNano() - rootBegin.UnixNano()
+		endNs += runtime.XgoRealTimeNow().UnixNano() - rootBegin.UnixNano()
 		isRunning = true
 	}
 	if isRunning {

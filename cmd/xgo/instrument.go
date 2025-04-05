@@ -20,6 +20,7 @@ import (
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/git"
+	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/strutil"
 )
 
@@ -32,7 +33,8 @@ import (
 // known for: go1.19
 const MAX_FILE_SIZE = 1 * 1024 * 1024
 
-func instrumentUserSpace(projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool) error {
+// goroot is critical for stdlib
+func instrumentUserSpace(goroot string, projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -92,6 +94,7 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 		ModFile:         modfile,
 		MaxFileSize:     MAX_FILE_SIZE,
 		FilterErrorFile: true,
+		Goroot:          goroot,
 	})
 	if err != nil {
 		return err
@@ -99,25 +102,13 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 
 	// insert func trap
 	packages := edit.Edit(loadPackages)
-	packages = packages.Filter(func(pkg *edit.Package) bool {
-		// avoid instrument runtime package
-		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
-		suffix, isRuntime := pkgWithinModule(pkgPath, constants.RUNTIME_MODULE)
-		if !isRuntime {
-			return true
-		}
-		// check if is runtime/test
-		_, ok := pkgWithinModule(suffix, "test")
-		if ok {
-			return true
-		}
-		// a regular runtime package
-		return false
-	})
+	// disable instrumenting xgo/runtime, except xgo/runtime/test
+	packages = packages.Filter(instrument_func.IsPkgAllowed)
 	logDebug("start instrumentFuncTrap: len(packages)=%d", len(packages.Packages))
 	for _, pkg := range packages.Packages {
+		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
 		for _, file := range pkg.Files {
-			funcs := instrument_func.InjectRuntimeTrap(file.Edit, file.File.Syntax, file.Index)
+			funcs := instrument_func.InjectRuntimeTrap(file.Edit, pkgPath, file.File.Syntax, file.Index)
 			file.TrapFuncs = append(file.TrapFuncs, funcs...)
 
 			// interface types
@@ -128,7 +119,7 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 
 	// trap var for packages in main module
 	varPkgs := packages.Filter(func(pkg *edit.Package) bool {
-		_, ok := pkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
+		_, ok := goinfo.PkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
 		return ok
 	})
 	logDebug("start instrumentVarTrap: len(varPkgs)=%d", len(varPkgs.Packages))
@@ -136,8 +127,8 @@ func instrumentUserSpace(projectDir string, projectRoot string, mod string, modf
 	if err != nil {
 		return err
 	}
-	funcTabPkg := xgoPkgs.PackageByPath[constants.RUNTIME_FUNCTAB_PKG]
-	if funcTabPkg == nil || !hasFunc(funcTabPkg, constants.RUNTIME_REGISTER_FUNC_TAB) {
+	funcTabPkg := xgoPkgs.PackageByPath[constants.RUNTIME_FUNC_INFO_PKG]
+	if funcTabPkg == nil || !hasFunc(funcTabPkg, constants.RUNTIME_REGISTER_FUNC) {
 		logDebug("skip functab registering")
 	} else {
 		logDebug("generate functab register")
@@ -162,8 +153,9 @@ func registerFuncTab(packages *edit.Packages) {
 	fset := packages.Fset
 	for _, pkg := range packages.Packages {
 		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
+		stdlib := pkg.LoadPackage.GoPackage.Standard
 		for _, file := range pkg.Files {
-			instrument_reg.RegisterFuncTab(fset, file, pkgPath)
+			instrument_reg.RegisterFuncTab(fset, file, pkgPath, stdlib)
 		}
 	}
 }
@@ -217,27 +209,6 @@ func hasFunc(pkg *edit.Package, fn string) bool {
 		}
 	}
 	return false
-}
-
-func pkgWithinModule(pkgPath string, module string) (suffix string, ok bool) {
-	n := len(pkgPath)
-	m := len(module)
-	if n < m {
-		return "", false
-	}
-	// check prefix
-	for i := 0; i < m; i++ {
-		if pkgPath[i] != module[i] {
-			return "", false
-		}
-	}
-	if n == m {
-		return "", true
-	}
-	if pkgPath[m] != '/' {
-		return "", false
-	}
-	return pkgPath[m+1:], true
 }
 
 func getLoadPackages(rules []Rule) (includeMain bool, packages []string, err error) {

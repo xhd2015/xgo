@@ -5,6 +5,7 @@ package runtime
 
 import (
 	// "runtime"
+	"time"
 	"unsafe"
 )
 
@@ -41,4 +42,10 @@ func XgoOnCreateG(callback func(g unsafe.Pointer, childG unsafe.Pointer)) {
 
 func XgoOnExitG(callback func()) {
 	logError("WARNING: failed to link runtime.XgoOnExitG(requires xgo).")
+}
+
+// XgoRealTimeNow returns the true time.Now()
+// this will be rewritten to time.XgoRealNow() if time.Now was rewritten
+func XgoRealTimeNow() time.Time {
+	return time.Now()
 }

@@ -1,7 +1,6 @@
 package trap
 
 import (
-	"time"
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/internal/runtime"
@@ -23,7 +22,7 @@ func init() {
 		}
 		if stack.End.IsZero() {
 			// fill end
-			stack.End = time.Now()
+			stack.End = runtime.XgoRealTimeNow()
 		}
 	})
 }

@@ -3,63 +3,38 @@ package functab
 import (
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
 	"unsafe"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/core/info"
 	"github.com/xhd2015/xgo/runtime/internal/runtime"
-	"github.com/xhd2015/xgo/runtime/legacy"
-)
-
-type FuncInfo = core.FuncInfo
-
-const (
-	Kind_Func   = core.Kind_Func
-	Kind_Var    = core.Kind_Var
-	Kind_VarPtr = core.Kind_VarPtr
-	Kind_Const  = core.Kind_Const
 )
 
 // all func infos
-var funcInfos []*core.FuncInfo
-var funcInfoMapping map[string]map[string]*core.FuncInfo         // pkg -> identifyName -> FuncInfo
-var funcPCMapping map[uintptr]*core.FuncInfo                     // pc->FuncInfo
-var varAddrMapping map[uintptr]*core.FuncInfo                    // addr->FuncInfo
-var funcFullNameMapping map[string]*core.FuncInfo                // fullName -> FuncInfo
-var interfaceMapping map[string]map[string]*core.FuncInfo        // pkg -> interfaceName -> FuncInfo
-var typeMethodMapping map[reflect.Type]map[string]*core.FuncInfo // reflect.Type -> interfaceName -> FuncInfo
+var funcInfos []*info.Func
+var funcInfoMapping map[string]map[string]*info.Func         // pkg -> identifyName -> FuncInfo
+var funcPCMapping map[uintptr]*info.Func                     // pc->FuncInfo
+var varAddrMapping map[uintptr]*info.Func                    // addr->FuncInfo
+var funcFullNameMapping map[string]*info.Func                // fullName -> FuncInfo
+var interfaceMapping map[string]map[string]*info.Func        // pkg -> interfaceName -> FuncInfo
+var typeMethodMapping map[reflect.Type]map[string]*info.Func // reflect.Type -> interfaceName -> FuncInfo
 
 func init() {
-	funcPCMapping = make(map[uintptr]*core.FuncInfo)
-	funcInfoMapping = make(map[string]map[string]*core.FuncInfo)
-	funcFullNameMapping = make(map[string]*core.FuncInfo)
-	interfaceMapping = make(map[string]map[string]*core.FuncInfo)
-	varAddrMapping = make(map[uintptr]*core.FuncInfo)
+	funcPCMapping = make(map[uintptr]*info.Func)
+	funcInfoMapping = make(map[string]map[string]*info.Func)
+	funcFullNameMapping = make(map[string]*info.Func)
+	interfaceMapping = make(map[string]map[string]*info.Func)
+	varAddrMapping = make(map[uintptr]*info.Func)
 
 	// this will consume all staged func infos in runtime,
 	// and set registerFuncInfo for later registering
-	__xgo_link_retrieve_all_funcs_and_clear(registerFuncInfo)
+	info.SetupRegisterHandler(RegisterFunc)
 }
 
-// rewrite at compile time by compiler, the body will be replaced with
-// a call to runtime.__xgo_for_each_func
-func __xgo_link_retrieve_all_funcs_and_clear(f func(fn interface{})) {
-	if !legacy.V1_0_0 {
-		return
-	}
-	// linked at runtime
-	fmt.Fprintln(os.Stderr, "WARNING: failed to link __xgo_link_retrieve_all_funcs_and_clear(requires xgo).")
-}
-
-func __xgo_link_get_pc_name(pc uintptr) string {
-	fmt.Fprintf(os.Stderr, "WARNING: failed to link __xgo_link_get_pc_name(requires xgo).\n")
-	return ""
-}
-
-func RegisterFunc(funcInfo *FuncInfo) {
+func RegisterFunc(funcInfo *info.Func) {
 	if funcInfo == nil {
 		panic("funcInfo is nil")
 	}
@@ -67,11 +42,11 @@ func RegisterFunc(funcInfo *FuncInfo) {
 	registerIndex(funcInfo)
 }
 
-func GetFuncs() []*core.FuncInfo {
+func GetFuncs() []*info.Func {
 	return funcInfos
 }
 
-func InfoFunc(fn interface{}) *core.FuncInfo {
+func InfoFunc(fn interface{}) *info.Func {
 	v := reflect.ValueOf(fn)
 	if v.Kind() != reflect.Func {
 		panic(fmt.Errorf("given type is not a func: %T", fn))
@@ -81,7 +56,7 @@ func InfoFunc(fn interface{}) *core.FuncInfo {
 	return funcPCMapping[pc]
 }
 
-func InfoVar(addr interface{}) *core.FuncInfo {
+func InfoVar(addr interface{}) *info.Func {
 	v := reflect.ValueOf(addr)
 	if v.Kind() != reflect.Ptr {
 		panic(fmt.Errorf("given type is not a pointer: %T", addr))
@@ -91,16 +66,16 @@ func InfoVar(addr interface{}) *core.FuncInfo {
 }
 
 // maybe rename to FuncForPC
-func InfoPC(pc uintptr) *core.FuncInfo {
+func InfoPC(pc uintptr) *info.Func {
 	return funcPCMapping[pc]
 }
 
-func InfoVarAddr(addr uintptr) *core.FuncInfo {
+func InfoVarAddr(addr uintptr) *info.Func {
 	return varAddrMapping[addr]
 }
 
 // maybe rename to FuncForGeneric
-func Info(pkg string, identityName string) *core.FuncInfo {
+func Info(pkg string, identityName string) *info.Func {
 	return funcInfoMapping[pkg][identityName]
 }
 
@@ -109,7 +84,7 @@ func Info(pkg string, identityName string) *core.FuncInfo {
 //	pkg.Func
 //	pkg.Recv.Func
 //	pkg.(*Recv).Func
-func GetFuncByPkg(pkg string, name string) *core.FuncInfo {
+func GetFuncByPkg(pkg string, name string) *info.Func {
 	pkgMapping := funcInfoMapping[pkg]
 	if pkgMapping == nil {
 		return nil
@@ -134,7 +109,7 @@ func GetFuncByPkg(pkg string, name string) *core.FuncInfo {
 	return pkgMapping["(*"+typName+")."+funcName]
 }
 
-func GetFuncByFullName(fullName string) *core.FuncInfo {
+func GetFuncByFullName(fullName string) *info.Func {
 	f := funcFullNameMapping[fullName]
 	if f != nil {
 		return f
@@ -142,11 +117,11 @@ func GetFuncByFullName(fullName string) *core.FuncInfo {
 	return getInterfaceOrGenericByFullName(fullName)
 }
 
-func GetTypeMethods(typ reflect.Type) map[string]*core.FuncInfo {
+func GetTypeMethods(typ reflect.Type) map[string]*info.Func {
 	return getTypeMethodMapping()[typ]
 }
 
-func getInterfaceOrGenericByFullName(fullName string) *core.FuncInfo {
+func getInterfaceOrGenericByFullName(fullName string) *info.Func {
 	pkgPath, recvName, recvPtr, typeGeneric, funcGeneric, funcName := core.ParseFuncName(fullName)
 	if typeGeneric != "" || funcGeneric != "" {
 		// generic, currently does not solve generic interface
@@ -251,18 +226,18 @@ func registerFuncInfo(fnInfo interface{}) {
 	registerIndex(info)
 }
 
-func registerIndex(info *core.FuncInfo) {
-	identityName := info.IdentityName
-	generic := info.Generic
-	interface_ := info.Interface
-	recvTypeName := info.RecvType
-	pkgPath := info.Pkg
-	fnKind := info.Kind
-	infoVar := info.Var
+func registerIndex(funcInfo *info.Func) {
+	identityName := funcInfo.IdentityName
+	generic := funcInfo.Generic
+	interface_ := funcInfo.Interface
+	recvTypeName := funcInfo.RecvType
+	pkgPath := funcInfo.Pkg
+	fnKind := funcInfo.Kind
+	infoVar := funcInfo.Var
 
-	closure := info.Closure
+	closure := funcInfo.Closure
 
-	f := info.Func
+	f := funcInfo.Func
 
 	var pcFullName string
 	var firstArgCtx bool
@@ -291,66 +266,66 @@ func registerIndex(info *core.FuncInfo) {
 			}
 		}
 	}
-	info.PC = pc
+	funcInfo.PC = pc
 
-	if info.FullName == "" {
-		info.FullName = pcFullName
-	} else if info.FullName != pcFullName {
-		panic(fmt.Errorf("func name mismatch: %s != %s", info.FullName, pcFullName))
+	if funcInfo.FullName == "" {
+		funcInfo.FullName = pcFullName
+	} else if funcInfo.FullName != pcFullName {
+		panic(fmt.Errorf("func name mismatch: %s != %s", funcInfo.FullName, pcFullName))
 	}
 
 	// brief info
-	info.FirstArgCtx = firstArgCtx
-	info.LastResultErr = lastResErr
+	funcInfo.FirstArgCtx = firstArgCtx
+	funcInfo.LastResultErr = lastResErr
 
 	// register index
-	if info.FullName != "" {
-		funcFullNameMapping[info.FullName] = info
+	if funcInfo.FullName != "" {
+		funcFullNameMapping[funcInfo.FullName] = funcInfo
 	}
 
-	if !generic && info.PC != 0 {
-		funcPCMapping[info.PC] = info
+	if !generic && funcInfo.PC != 0 {
+		funcPCMapping[funcInfo.PC] = funcInfo
 	}
 	if identityName != "" {
 		pkgMapping := funcInfoMapping[pkgPath]
 		if pkgMapping == nil {
-			pkgMapping = make(map[string]*core.FuncInfo, 1)
+			pkgMapping = make(map[string]*info.Func, 1)
 			funcInfoMapping[pkgPath] = pkgMapping
 		}
-		pkgMapping[identityName] = info
+		pkgMapping[identityName] = funcInfo
 	}
 	if interface_ && recvTypeName != "" {
 		pkgMapping := interfaceMapping[pkgPath]
 		if pkgMapping == nil {
-			pkgMapping = make(map[string]*core.FuncInfo, 1)
+			pkgMapping = make(map[string]*info.Func, 1)
 			interfaceMapping[pkgPath] = pkgMapping
 		}
-		pkgMapping[recvTypeName] = info
+		pkgMapping[recvTypeName] = funcInfo
 	}
 	if fnKind == core.Kind_Var {
 		if infoVar != nil {
 			// infoVar is &v
 			varAddr := reflect.ValueOf(infoVar).Pointer()
-			varAddrMapping[varAddr] = info
+			varAddrMapping[varAddr] = funcInfo
 		}
 	}
 }
 
 var mappingTypeOnce sync.Once
 
-func getTypeMethodMapping() map[reflect.Type]map[string]*core.FuncInfo {
+func getTypeMethodMapping() map[reflect.Type]map[string]*info.Func {
 	mappingTypeOnce.Do(initTypeMethodMapping)
 	return typeMethodMapping
 }
 
 func initTypeMethodMapping() {
-	typeMethodMapping = make(map[reflect.Type]map[string]*core.FuncInfo)
+	typeMethodMapping = make(map[reflect.Type]map[string]*info.Func)
 	for _, funcInfo := range funcInfos {
 		registerTypeMethod(funcInfo)
 	}
 }
 
-func registerTypeMethod(funcInfo *core.FuncInfo) {
+func registerTypeMethod(funcInfo *info.Func) {
 	if funcInfo.Kind != core.Kind_Func {
 		return
 	}
@@ -363,7 +338,7 @@ func registerTypeMethod(funcInfo *core.FuncInfo) {
 	recvType := reflect.TypeOf(funcInfo.Func).In(0)
 	methodMapping := typeMethodMapping[recvType]
 	if methodMapping == nil {
-		methodMapping = make(map[string]*core.FuncInfo, 1)
+		methodMapping = make(map[string]*info.Func, 1)
 		typeMethodMapping[recvType] = methodMapping
 	}
 	methodMapping[funcInfo.Name] = funcInfo

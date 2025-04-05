@@ -666,7 +666,7 @@ func handleBuild(cmd string, args []string) error {
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		err = instrumentUserSpace(projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag)
+		err = instrumentUserSpace(instrumentGoroot, projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag)
 		if err != nil {
 			return err
 		}

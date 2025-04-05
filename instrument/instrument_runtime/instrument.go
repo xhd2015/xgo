@@ -15,7 +15,6 @@ var xgoTrapFile string
 
 var instrumentMarkPath = patch.FilePath{"xgo_trap_instrument_mark.txt"}
 var xgoTrapFilePath = patch.FilePath{"src", "runtime", "xgo_trap.go"}
-var runtime2Path = patch.FilePath{"src", "runtime", "runtime2.go"}
 var procPath = patch.FilePath{"src", "runtime", "proc.go"}
 
 var jsonEncodingPath = patch.FilePath{"src", "encoding", "json", "encode.go"}
@@ -74,6 +73,21 @@ func InstrumentRuntime(goroot string, goVersion *goinfo.GoVersion, opts Instrume
 	err = instrumentProc(goroot, goVersion)
 	if err != nil {
 		return fmt.Errorf("instrument proc: %w", err)
+	}
+
+	err = instrumentTimeNow(goroot, goVersion.Major, goVersion.Minor)
+	if err != nil {
+		return fmt.Errorf("instrument time: %w", err)
+	}
+
+	err = instrumentTimeSleep(goroot, goVersion.Major, goVersion.Minor)
+	if err != nil {
+		return fmt.Errorf("instrument time sleep: %w", err)
+	}
+
+	err = instrumentRuntimeTimeSleep(goroot, goVersion.Major, goVersion.Minor)
+	if err != nil {
+		return fmt.Errorf("instrument runtime time sleep: %w", err)
 	}
 
 	err = instrumentJsonEncoding(goroot, goVersion.Major, goVersion.Minor)

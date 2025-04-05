@@ -11,6 +11,7 @@ import (
 const corePkg = "github.com/xhd2015/xgo/runtime/test/core"
 
 func TestCheckVersion(t *testing.T) {
+	t.Skip("constant patching is prohibited since xgo v1.1.0")
 	tests := []struct {
 		xgo     VersionInfo
 		runtime VersionInfo

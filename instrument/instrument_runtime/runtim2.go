@@ -6,6 +6,8 @@ import (
 	"github.com/xhd2015/xgo/instrument/patch"
 )
 
+var runtime2Path = patch.FilePath{"src", "runtime", "runtime2.go"}
+
 func instrumentRuntime2(goroot string, goMajor int, goMinor int) error {
 	if goMajor != 1 || (goMinor < 17 || goMinor > 24) {
 		// src/runtime/runtime2.go

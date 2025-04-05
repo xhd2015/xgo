@@ -40,7 +40,7 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 		constants.RUNTIME_CORE_PKG,
 		constants.RUNTIME_TRAP_FLAGS_PKG,
 		constants.RUNTIME_TRACE_PKG,
-		constants.RUNTIME_FUNCTAB_PKG,
+		constants.RUNTIME_FUNC_INFO_PKG,
 	}, opts)
 	if err != nil {
 		// TODO: handle the case where error indicates the package is not found
@@ -55,7 +55,7 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 		}
 		n := len(constants.RUNTIME_MODULE) + 1
 		suffixPkg := importPath[n:]
-		if suffixPkg == constants.RUNTIME_FUNCTAB_PKG[n:] {
+		if suffixPkg == constants.RUNTIME_FUNC_INFO_PKG[n:] {
 			// only for lookup
 			continue
 		}
@@ -83,7 +83,7 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 			case constants.TRACE_FILE:
 				if suffixPkg == constants.RUNTIME_TRACE_PKG[n:] {
 					edit := file.Edit
-					funcInfos = instrument_func.InjectRuntimeTrap(edit, loadFile.Syntax, file.Index)
+					funcInfos = instrument_func.InjectRuntimeTrap(edit, importPath, loadFile.Syntax, file.Index)
 					if edit.HasEdit() {
 						overrideContent(absFile, edit.Buffer().String())
 					}
@@ -105,8 +105,9 @@ func InstrumentVarTrap(packages *edit.Packages) error {
 
 func InstrumentFuncTrap(packages *edit.Packages) error {
 	for _, pkg := range packages.Packages {
+		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
 		for _, file := range pkg.Files {
-			instrument_func.InjectRuntimeTrap(file.Edit, file.File.Syntax, file.Index)
+			instrument_func.InjectRuntimeTrap(file.Edit, pkgPath, file.File.Syntax, file.Index)
 		}
 	}
 	return nil

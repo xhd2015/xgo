@@ -2,7 +2,6 @@ package instrument_reg
 
 import (
 	"fmt"
-	"go/ast"
 	"go/token"
 	"strings"
 
@@ -12,13 +11,12 @@ import (
 	"github.com/xhd2015/xgo/instrument/patch"
 )
 
-func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string) {
-	const FUNC_INFO = "FuncInfo"
-
+func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdlib bool) {
 	fileIndex := file.Index
 
-	FUNC_TAB := constants.RUNTIME_PKG_NAME_FUNCTAB
-	REGISTER := constants.RUNTIME_REGISTER_FUNC_TAB
+	const FUNC_INFO = constants.RUNTIME_FUNC_TYPE
+	const PKG_FUNC_INFO = constants.RUNTIME_PKG_FUNC_INFO_REF
+	const REGISTER = constants.RUNTIME_REGISTER_FUNC
 
 	pkgVar := fmt.Sprintf("__xgo_pkg_%d", fileIndex)
 	fileVar := fmt.Sprintf("__xgo_file_%d", fileIndex)
@@ -32,7 +30,7 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string) {
 	addLiteral := func(infoVar string, literal string, delayInitProp string, delayInitValue string) {
 		idx++
 		varDefs = append(varDefs, fmt.Sprintf("var %s=%s", infoVar, literal))
-		varRegs = append(varRegs, fmt.Sprintf("%s.%s(%s)", FUNC_TAB, REGISTER, infoVar))
+		varRegs = append(varRegs, fmt.Sprintf("%s.%s(%s)", PKG_FUNC_INFO, REGISTER, infoVar))
 		if delayInitProp != "" {
 			delayInits = append(delayInits, fmt.Sprintf("%s.%s=%s", infoVar, delayInitProp, delayInitValue))
 		}
@@ -42,8 +40,11 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string) {
 		if len(extra) > 0 {
 			suffix = "," + strings.Join(extra, ",")
 		}
+		if stdlib {
+			suffix = suffix + ",Stdlib:true"
+		}
 		lineNum := fset.Position(pos).Line
-		return fmt.Sprintf("&%s.%s{Kind:%s.%s,Pkg:%s,Name:%q,IdentityName:%q,File:%s,Line:%d%s}", FUNC_TAB, FUNC_INFO, FUNC_TAB, kind,
+		return fmt.Sprintf("&%s.%s{Kind:%s.%s,Pkg:%s,Name:%q,IdentityName:%q,File:%s,Line:%d%s}", PKG_FUNC_INFO, FUNC_INFO, PKG_FUNC_INFO, kind,
 			pkgVar,
 			name,
 			identityName,
@@ -61,31 +62,16 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string) {
 		literal := makeLiteral("Kind_Var", varInfo.Name, varInfo.Name, varInfo.Decl.Decl.Pos(), extra)
 		addLiteral(varInfo.InfoVar, literal, "", "")
 	}
-	getCode := func(start token.Pos, end token.Pos) string {
-		return file.File.Content[fset.Position(start).Offset:fset.Position(end).Offset]
-	}
 	for _, funcInfo := range file.TrapFuncs {
+		identityName := funcInfo.IdentityName
+		recvGeneric := funcInfo.RecvGeneric
 		var extra []string
-
-		var recvGeneric bool
-		var identityName string
-		fnName := funcInfo.FuncDecl.Name.Name
 		if funcInfo.Receiver != nil {
-			recvPtr, rGeneric, recvType := parseReceiverType(funcInfo.Receiver.Type)
-			recvTypeCode := getCode(recvType.Pos(), recvType.End())
 			extra = append(extra,
-				fmt.Sprintf("RecvPtr:%v", recvPtr),
-				fmt.Sprintf("RecvType: %q", recvTypeCode),
+				fmt.Sprintf("RecvPtr:%v", funcInfo.RecvPtr),
+				fmt.Sprintf("RecvType: %q", funcInfo.RecvType.Name),
 				fmt.Sprintf("RecvName:%q", funcInfo.Receiver.Name),
 			)
-			if recvPtr {
-				identityName = "(*" + recvTypeCode + ")." + fnName
-			} else {
-				identityName = recvTypeCode + "." + fnName
-			}
-			recvGeneric = rGeneric
-		} else {
-			identityName = fnName
 		}
 
 		// avoid initialization cycle
@@ -121,7 +107,7 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string) {
 	fileEdit := file.Edit
 	fileSyntax := file.File.Syntax
 
-	patch.AddImport(fileEdit, fileSyntax, FUNC_TAB, constants.RUNTIME_FUNCTAB_PKG)
+	patch.AddImport(fileEdit, fileSyntax, PKG_FUNC_INFO, constants.RUNTIME_FUNC_INFO_PKG)
 
 	absFile := file.File.AbsPath
 	defLines := make([]string, 0, len(varDefs)+2)
@@ -140,18 +126,4 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string) {
 	regCodeInit := "func init(){" + regCode + ";}"
 	pos := patch.GetFuncInsertPosition(fileSyntax)
 	patch.AddCode(fileEdit, pos, defCode+delayInitCode+";"+regCodeInit)
-}
-
-func parseReceiverType(typeExpr ast.Expr) (ptr bool, generic bool, recvType ast.Expr) {
-	starExpr, ok := typeExpr.(*ast.StarExpr)
-	if ok {
-		ptr = true
-		typeExpr = starExpr.X
-	}
-	indexExpr, ok := typeExpr.(*ast.IndexExpr)
-	if ok {
-		generic = true
-		typeExpr = indexExpr.X
-	}
-	return ptr, generic, typeExpr
 }
