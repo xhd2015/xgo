@@ -23,7 +23,7 @@
 
 # generated traces
 /runtime/test/**/*.json
-/runtime/**/vendor
+/runtime/test/build/legacy_depend_vendor/vendor
 /test/**/*.json
 
 # coverage

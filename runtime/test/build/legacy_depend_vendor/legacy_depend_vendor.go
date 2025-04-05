@@ -9,7 +9,7 @@ import (
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/mock"
 	"github.com/xhd2015/xgo/runtime/trap"
-	"golang.org/x/net/netutil"
+	"golang.org/x/example/hello/reverse"
 )
 
 func greet(name string) string {
@@ -17,17 +17,14 @@ func greet(name string) string {
 }
 
 func main() {
-	fmt.Println(greet("world"))
+	fmt.Println(reverse.String(greet("world")))
 
 	if os.Getenv("TEST_MOCK_PATCH") == "true" {
 		t := testing.T{}
 		exampleMockPatch(&t)
 		exampleMockInterceptor(&t)
 		exampleTrap(&t)
-
-		netutil.LimitListener(nil, 1)
 	}
-
 }
 
 func exampleMockPatch(t *testing.T) {

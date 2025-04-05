@@ -1,4 +1,4 @@
 github.com/xhd2015/xgo/runtime v1.0.52 h1:njcRzY3Xo2AFu/qQSC4ak9+JN7xFmaI3iEUyJxoErWM=
 github.com/xhd2015/xgo/runtime v1.0.52/go.mod h1:9GBQ2SzJCzpD3T+HRN+2C0TUOGv7qIz4s0mad1xJ8Jo=
-golang.org/x/net v0.38.0 h1:vRMAPTMaeGqVhG5QyLJHqNDwecKTomGeqbnfZyKlBI8=
-golang.org/x/net v0.38.0/go.mod h1:ivrbrMbzFq5J41QOQh0siUuly180yBYtLp+CKbEaFx8=
+golang.org/x/example/hello v0.0.0-20250326195304-398e112173f4 h1:X5juhb+BgLzVNlvGYV5x4UUfxHxjqe08he4SoiqdTz8=
+golang.org/x/example/hello v0.0.0-20250326195304-398e112173f4/go.mod h1:UhUKOXx5fMcLZxwL20DUrWWBBoRYG9Jvc8FiwZhRHCI=

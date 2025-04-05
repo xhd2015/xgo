@@ -44,10 +44,11 @@ import (
 var globalFlags = []string{"-timeout=60s"}
 
 type TestArg struct {
-	Dir        string
-	UsePlainGo bool
-	Args       []string
-	Flags      []string
+	Dir             string
+	UsePlainGo      bool
+	Args            []string
+	Flags           []string
+	VendorIfMissing bool
 }
 
 var defaultTestArgs = []*TestArg{
@@ -139,7 +140,10 @@ var defaultTestArgs = []*TestArg{
 		},
 	},
 	{
-		Dir: "runtime/test/build/legacy_depend_vendor",
+		// this directory's vendor is excluded, so need to
+		// vendor when it is missing
+		Dir:             "runtime/test/build/legacy_depend_vendor",
+		VendorIfMissing: true,
 		Args: []string{
 			"./...",
 		},
@@ -447,6 +451,16 @@ func main() {
 					runArgs = append(runArgs, "--project-dir", testArg.Dir)
 				}
 			}
+			if testArg.VendorIfMissing {
+				if !hasSubDir(testArg.Dir, "vendor") {
+					fmt.Fprintf(os.Stderr, "cd %s && go mod vendor\n", testArg.Dir)
+					err := cmd.Dir(testArg.Dir).Run("go", "mod", "vendor")
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "vendor: %v\n", err)
+						os.Exit(1)
+					}
+				}
+			}
 			runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
 			runArgs = append(runArgs, testArg.Flags...)
 			runArgs = append(runArgs, remainArgs...)
@@ -508,6 +522,7 @@ func getTestArgs(args []string) []*TestArg {
 		if found != nil {
 			p.Flags = found.Flags
 			p.UsePlainGo = found.UsePlainGo
+			p.VendorIfMissing = found.VendorIfMissing
 		}
 	}
 	return presentArgs
@@ -584,6 +599,13 @@ func hasGoMod(dir string) bool {
 	_, err := os.Stat(goMod)
 	return err == nil
 }
+
+func hasSubDir(dir string, subDir string) bool {
+	subDirPath := filepath.Join(dir, subDir)
+	_, err := os.Stat(subDirPath)
+	return err == nil
+}
+
 func isList(a []string, b []string) bool {
 	if len(a) != len(b) {
 		return false
