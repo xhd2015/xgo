@@ -148,13 +148,21 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 		}
 		return content, nil
 	})
-
 }
 
 func buildBinary(goroot string, srcDir string, outputDir string, outputName string, arg string) error {
-	origGo := filepath.Join(goroot, "bin", "go"+osinfo.EXE_SUFFIX)
+	const useRename = false
 
+	origGo := filepath.Join(goroot, "bin", "go"+osinfo.EXE_SUFFIX)
 	origFile := filepath.Join(outputDir, outputName+osinfo.EXE_SUFFIX)
+	if !useRename {
+		return cmd.Dir(srcDir).
+			Env([]string{
+				"GOROOT=" + goroot,
+				"GO_BYPASS_XGO=true", // avoid calling xgo recursively
+			}).
+			Run(origGo, "build", "-o", origFile, arg)
+	}
 	tmpBuiltOutput := filepath.Join(outputDir, "__xgo_"+outputName+osinfo.EXE_SUFFIX)
 	err := cmd.Dir(srcDir).
 		Env([]string{

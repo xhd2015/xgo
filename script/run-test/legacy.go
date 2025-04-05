@@ -20,26 +20,6 @@ type TestCase struct {
 //
 // to list all names
 var extraSubTests = []*TestCase{
-	{
-		name:  "trace_without_dep",
-		dir:   "runtime/test/trace_without_dep",
-		flags: []string{"--strace"},
-		// see https://github.com/xhd2015/xgo/issues/144#issuecomment-2138565532
-		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
-	},
-	{
-		name:         "trace_without_dep_vendor",
-		dir:          "runtime/test/trace_without_dep_vendor",
-		flags:        []string{"--strace"},
-		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
-	},
-	{
-		// see https://github.com/xhd2015/xgo/issues/87
-		name:         "trace_without_dep_vendor_replace",
-		dir:          "runtime/test/trace_without_dep_vendor_replace",
-		flags:        []string{"--strace"},
-		windowsFlags: []string{"--trap-stdlib=false", "--strace"},
-	},
 	// trap
 	{
 		name: "trap_flags_persistent",

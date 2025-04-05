@@ -65,10 +65,12 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		}
 
 		stackIsTrapping := stackData.handlingTrapping
-		stackData.handlingTrapping = true
-		defer func() {
-			stackData.handlingTrapping = false
-		}()
+		if !stackIsTrapping {
+			stackData.handlingTrapping = true
+			defer func() {
+				stackData.handlingTrapping = false
+			}()
+		}
 
 		wantPtr, mockFn := stackData.getLastMock(fnPC)
 		if mockFn != nil && (wantPtr == nil || (recvPtr != nil && sameReceiver(recvPtr, wantPtr))) {
@@ -97,10 +99,11 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 			}
 		}
 
-		// we need to set a flag to indicate
-		// when we are calling interceptors
-		// so that we can avoid infinite loop
-		// reocorders and mock does not have such
+		// when stack is trapping, we cannot not
+		// call into interceptors which are not
+		// targeting specific functions, can
+		// cause infinite loop.
+		// mock and recorders do not have such
 		// problem because they explicitly have
 		// targeted function
 		if !stackIsTrapping {
@@ -136,10 +139,12 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		var callPosRecorder func()
 		if postRecorder != nil {
 			callPosRecorder = func() {
-				stackData.handlingTrapping = true
-				defer func() {
-					stackData.handlingTrapping = false
-				}()
+				if !stackData.handlingTrapping {
+					stackData.handlingTrapping = true
+					defer func() {
+						stackData.handlingTrapping = false
+					}()
+				}
 				postRecorder()
 			}
 		}
@@ -272,10 +277,12 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 
 	var hitMock bool
 	post := func() {
-		stackData.handlingTrapping = true
-		defer func() {
-			stackData.handlingTrapping = false
-		}()
+		if !stackData.handlingTrapping {
+			stackData.handlingTrapping = true
+			defer func() {
+				stackData.handlingTrapping = false
+			}()
+		}
 		// NOTE: this defer might be executed on system stack
 		// so cannot defer
 		if postRecorder != nil {

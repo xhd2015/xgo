@@ -112,9 +112,7 @@ var defaultTestArgs = []*TestArg{
 			"./...",
 		},
 	},
-	// TODO: check extraSubTests why windows needs extra flags
-	// see https://github.com/xhd2015/xgo/issues/144#issuecomment-2138565532
-	// windowsFlags: []string{"--trap-stdlib=false", "--strace"},
+	// TODO: check extraSubTests for remaining tests
 	{
 		Dir: "runtime/test/trace/trace_without_dep_vendor",
 		Flags: []string{
