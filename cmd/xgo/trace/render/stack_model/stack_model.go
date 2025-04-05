@@ -56,6 +56,6 @@ type FuncInfo struct {
 
 	// is first argument ctx
 	FirstArgCtx bool
-	// last last result error
+	// last result error
 	LastResultErr bool
 }

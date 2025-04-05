@@ -18,7 +18,7 @@ import (
 )
 
 var ErrLinkFileNotFound = errors.New("xgo: link file not found")
-var ErrLinkFileNotFoundIgnoreable = errors.New("xgo: link file not found, ignoreable")
+var ErrLinkFileNotFoundIgnorable = errors.New("xgo: link file not found, ignorable")
 var ErrRuntimeVersionDeprecatedV1_0_0 = errors.New("runtime version deprecated")
 
 // create an overlay: abs file -> content
@@ -127,7 +127,7 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 		if foundMock || foundTrace || foundTrap {
 			return editPackages, ErrLinkFileNotFound
 		}
-		return editPackages, ErrLinkFileNotFoundIgnoreable
+		return editPackages, ErrLinkFileNotFoundIgnorable
 	}
 	return editPackages, nil
 }

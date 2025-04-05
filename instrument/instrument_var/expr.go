@@ -124,7 +124,21 @@ func (ctx *BlockContext) traverseExpr(node ast.Expr, pkgScopeNames PkgScopeNames
 		// interface{...}
 	case *ast.KeyValueExpr:
 		// key: value
-		ctx.traverseExpr(node.Key, pkgScopeNames, imports)
+		// map[string]int{ SomeVar: 10 }
+		// v.s.
+		// SomeStruct{ SomeVar: 10}
+		// we cannot know if SomeVar is a field or a variable
+		// if there is an identical variable, we will not intercept it
+		// see test: ./runtime/test/mock/mock_var/same_field
+		var keyMightConflict bool
+		if idt, ok := node.Key.(*ast.Ident); ok {
+			if ctx.Has(idt.Name) || pkgScopeNames[idt.Name] != nil {
+				keyMightConflict = true
+			}
+		}
+		if !keyMightConflict {
+			ctx.traverseExpr(node.Key, pkgScopeNames, imports)
+		}
 		ctx.traverseExpr(node.Value, pkgScopeNames, imports)
 	default:
 		errorUnknown("expr", node)

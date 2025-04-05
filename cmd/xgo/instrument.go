@@ -72,7 +72,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, mo
 	}
 	xgoPkgs, err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir, overrideXgoContent)
 	if err != nil {
-		if err == instrument.ErrLinkFileNotFoundIgnoreable {
+		if err == instrument.ErrLinkFileNotFoundIgnorable {
 			return nil
 		}
 		if err == instrument.ErrLinkFileNotFound {
