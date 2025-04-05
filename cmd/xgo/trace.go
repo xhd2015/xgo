@@ -591,7 +591,7 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 	mapping := make(map[string]string, len(files))
 	for _, file := range files {
 		srcFile := filepath.Join(srcDir, file)
-		dstFile := filepath.Join(dstDir, srcFile)
+		dstFile := fileutil.RebaseAbs(dstDir, srcFile)
 		err := filecopy.CopyFileAll(srcFile, dstFile)
 		if err != nil {
 			return nil, err
@@ -614,6 +614,7 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 	}
 	return mapping, nil
 }
+
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil

@@ -641,7 +641,13 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, needUpgrade, remainArgs)
 			if impRuntimeErr != nil {
 				// can be silently ignored
-				fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", constants.RUNTIME_TRACE_PKG, constants.RUNTIME_TRACE_PKG, impRuntimeErr)
+				if enableStackTrace {
+					fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", constants.RUNTIME_TRACE_PKG, constants.RUNTIME_TRACE_PKG, impRuntimeErr)
+				} else if needUpgrade {
+					fmt.Fprintf(os.Stderr, "WARNING: auto upgrade fails: %v\n", impRuntimeErr)
+				} else {
+					return impRuntimeErr
+				}
 			} else if impResult != nil {
 				if impResult.mod != "" {
 					mod = impResult.mod
