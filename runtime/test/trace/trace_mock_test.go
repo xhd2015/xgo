@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/util"
-	"github.com/xhd2015/xgo/runtime/trace/signal"
-	"github.com/xhd2015/xgo/runtime/trap/stack_model"
+	"github.com/xhd2015/xgo/runtime/test/debug/util"
+	"github.com/xhd2015/xgo/runtime/trace"
+	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
 
 func TestMockedFuncShouldShowInTrace(t *testing.T) {
@@ -22,7 +22,7 @@ func TestMockedFuncShouldShowInTrace(t *testing.T) {
 	_, file, line, _ := runtime.Caller(1)
 	t.Logf("called from %s:%d", file, line)
 	var data []byte
-	signal.StartXgoTrace(signal.StartXgoTraceConfig{
+	trace.Trace(trace.Config{
 		OnFinish: func(stack stack_model.IStack) {
 			data, _ = stack.JSON()
 		},

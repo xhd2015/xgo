@@ -95,6 +95,7 @@ var defaultTestArgs = []*TestArg{
 			"./mock/...",
 			"./patch/...",
 			"./tls/...",
+			"./trace",
 			"./trace/go_trace/...",
 			"./trace/marshal/cyclic/...",
 			"./trace/record/...",

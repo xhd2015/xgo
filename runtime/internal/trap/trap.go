@@ -288,8 +288,13 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		if postRecorder != nil {
 			postRecorder()
 		}
+		// on Windows, short stack might resolve to same
+		// nanosecond
+		// see https://github.com/xhd2015/xgo/issues/307
+		// so we add a standalone flag `Finished`
 		end := xgo_runtime.XgoRealTimeNow()
 		cur.EndNs = end.UnixNano() - stk.Begin.UnixNano()
+		cur.Finished = true
 		cur.HitMock = hitMock
 		var hasPanic bool
 		if pe := xgo_runtime.XgoPeekPanic(); pe != nil {

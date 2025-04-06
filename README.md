@@ -314,13 +314,13 @@ Trace helps you get started to a new project quickly.
 
 By default, Trace will write traces to a temp directory under current working directory. This behavior can be overridden by setting `--strace-dir=<DIR>`.
 
-Besides the `--strace` flag, xgo allows you to define which span should be collected, using `signal.StartXgoTrace()`:
+Besides the `--strace` flag, xgo allows you to define which span should be collected, using `trace.Trace()`:
 ```go
-import "github.com/xhd2015/xgo/runtime/trace/signal"
+import "github.com/xhd2015/xgo/runtime/trace"
 
 func TestTrace(t *testing.T) {
     A()
-    signal.StartXgoTrace(signal.StartXgoTraceConfig{OutputFile:"demo.json"},nil,func() (interface{},error){
+    trace.Trace(trace.Config{OutputFile:"demo.json"},nil,func() (interface{},error){
         B()
         C()
     return nil,nil

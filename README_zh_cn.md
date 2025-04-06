@@ -324,13 +324,13 @@ xgo tool trace TestTrace.json
 
 默认情况下, Trace会在当前目录下写入堆栈记录, 可通过`--strace-dir=<DIR>`进行控制。
 
-除了使用`--strace`之外, xgo还允许你通过`signal.StartXgoTrace()`的方式手动控制追踪范围:
+除了使用`--strace`之外, xgo还允许你通过`trace.Trace()`的方式手动控制追踪范围:
 ```go
-import "github.com/xhd2015/xgo/runtime/trace/signal"
+import "github.com/xhd2015/xgo/runtime/trace"
 
 func TestTrace(t *testing.T) {
     A()
-    signal.StartXgoTrace(signal.StartXgoTraceConfig{OutputFile:"demo.json"},nil,func() (interface{},error){
+    trace.Trace(trace.Config{OutputFile:"demo.json"},nil,func() (interface{},error){
         B()
         C()
     return nil,nil

@@ -34,8 +34,9 @@ type Entry struct {
 
 	FuncInfo *core.FuncInfo
 
-	BeginNs int64
-	EndNs   int64
+	BeginNs  int64
+	EndNs    int64
+	Finished bool
 
 	Children []*Entry
 	Data     EntryData

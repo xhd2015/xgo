@@ -56,7 +56,7 @@ func ExportStackEntry(entry *Entry, rootBegin time.Time, offsetNS int64) *stack_
 				endNs = stack.End.UnixNano() - stack.Begin.UnixNano() + beginNs
 			}
 		}
-	} else if entry.EndNs == 0 {
+	} else if !entry.Finished {
 		endNs += runtime.XgoRealTimeNow().UnixNano() - rootBegin.UnixNano()
 		isRunning = true
 	}
