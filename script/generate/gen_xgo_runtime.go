@@ -22,7 +22,7 @@ func genXgoRuntime(cmd string, rootDir string) error {
 	}
 
 	// then copy runtime to xgo/runtime_gen
-	err = filecopy.NewOptions().Ignore("test").IncludeSuffix(".go", "go.mod").IgnoreSuffix("_test.go").CopyReplaceDir(runtimeDir, genRuntimeDir)
+	err = filecopy.NewOptions().Ignore(".xgo", "test").IncludeSuffix(".go", "go.mod").IgnoreSuffix("_test.go").CopyReplaceDir(runtimeDir, genRuntimeDir)
 	if err != nil {
 		return err
 	}

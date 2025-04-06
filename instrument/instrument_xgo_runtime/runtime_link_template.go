@@ -51,3 +51,12 @@ func XgoOnExitG(callback func()) {
 func XgoRealTimeNow() time.Time {
 	return time.XgoRealNow()
 }
+
+func XgoOnInitFinished(callback func()) {
+	runtime.XgoOnInitFinished(callback)
+}
+
+func XgoInitFinished() bool {
+	//
+	return runtime.XgoInitFinished()
+}

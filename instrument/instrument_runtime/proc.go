@@ -17,6 +17,7 @@ func instrumentProc(goroot string, goVersion *goinfo.GoVersion) error {
 		if err != nil {
 			return "", err
 		}
+		procContent = instrumentInitFinished(procContent)
 		return procContent, nil
 	})
 }
@@ -74,6 +75,26 @@ func instrumentNewGroutineV2(goVersion *goinfo.GoVersion, procContent string) (s
 		";__xgo_newg=newg});__xgo_callback_on_create_g(__xgo_curg,__xgo_newg);systemstack(func(){newg:=__xgo_newg;",
 	)
 	return procContent, nil
+}
+
+func instrumentInitFinished(content string) string {
+	content = patch.UpdateContent(content,
+		"/*<begin set_init_finished_mark>*/",
+		"/*<end set_init_finished_mark>*/",
+		[]string{
+			"func main() {",
+			"doInit(",
+			"runtime_inittask",
+			")",       // first doInit for runtime
+			"doInit(", // second init for main
+			"close(main_init_done)",
+			"\n",
+		},
+		5,
+		patch.UpdatePosition_Before,
+		"__xgo_callback_on_init_finished();",
+	)
+	return content
 }
 
 func instrumentGoexit(goVersion *goinfo.GoVersion, procContent string) (string, error) {

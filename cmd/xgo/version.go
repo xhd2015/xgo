@@ -7,15 +7,15 @@ import "fmt"
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
 const VERSION = "1.1.0"
-const REVISION = "b1b25f6f706f9667bcc14c8b9672062744c7d445+1"
-const NUMBER = 373
+const REVISION = "ee9fc3d7efb214c84dbdcdaf418913514f3423bb+1"
+const NUMBER = 374
 
 // the wanted runtime/core's version
 // manually updated
 // see runtime/core/version.go
 const CORE_VERSION = "1.1.0"
-const CORE_REVISION = "c4a8899c3c25a6701effd940ac2950ad65aed6ab+1"
-const CORE_NUMBER = 327
+const CORE_REVISION = "ee9fc3d7efb214c84dbdcdaf418913514f3423bb+1"
+const CORE_NUMBER = 374
 
 func getRevision() string {
 	return formatRevision(VERSION, REVISION, NUMBER)

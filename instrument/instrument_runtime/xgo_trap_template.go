@@ -141,3 +141,24 @@ func __xgo_callback_on_exit_g() {
 		callback()
 	}
 }
+
+// package inits
+var __xgo_on_init_finished_callbacks []func()
+var __xgo_is_init_finished bool
+
+func __xgo_callback_on_init_finished() {
+	__xgo_is_init_finished = true
+	callbacks := __xgo_on_init_finished_callbacks
+	__xgo_on_init_finished_callbacks = nil
+	for _, callback := range callbacks {
+		callback()
+	}
+}
+
+func XgoOnInitFinished(callback func()) {
+	__xgo_on_init_finished_callbacks = append(__xgo_on_init_finished_callbacks, callback)
+}
+
+func XgoInitFinished() bool {
+	return __xgo_is_init_finished
+}

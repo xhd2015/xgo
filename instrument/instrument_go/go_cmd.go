@@ -151,36 +151,16 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 }
 
 func buildBinary(goroot string, srcDir string, outputDir string, outputName string, arg string) error {
-	const useRename = false
+	// on Windows, rename failed with
+	//  rename C:\Users\runneradmin\.xgo\go-instrument\go1.24.2_C_ho_wi_go_1._x6_339c415e\go1.24.2\bin\go.exe C:\Users\runneradmin\.xgo\go-instrument\go1.24.2_C_ho_wi_go_1._x6_339c415e\go1.24.2\bin\go.exe.bak: Access is denied.
+	// const USE_RENAME = false
 
 	origGo := filepath.Join(goroot, "bin", "go"+osinfo.EXE_SUFFIX)
 	origFile := filepath.Join(outputDir, outputName+osinfo.EXE_SUFFIX)
-	if !useRename {
-		return cmd.Dir(srcDir).
-			Env([]string{
-				"GOROOT=" + goroot,
-				"GO_BYPASS_XGO=true", // avoid calling xgo recursively
-			}).
-			Run(origGo, "build", "-o", origFile, arg)
-	}
-	tmpBuiltOutput := filepath.Join(outputDir, "__xgo_"+outputName+osinfo.EXE_SUFFIX)
-	err := cmd.Dir(srcDir).
+	return cmd.Dir(srcDir).
 		Env([]string{
 			"GOROOT=" + goroot,
 			"GO_BYPASS_XGO=true", // avoid calling xgo recursively
 		}).
-		Run(origGo, "build", "-o", tmpBuiltOutput, arg)
-	if err != nil {
-		return err
-	}
-
-	err = os.Rename(origFile, origFile+".bak")
-	if err != nil {
-		return err
-	}
-	err = os.Rename(tmpBuiltOutput, origFile)
-	if err != nil {
-		return err
-	}
-	return nil
+		Run(origGo, "build", "-o", origFile, arg)
 }

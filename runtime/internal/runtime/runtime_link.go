@@ -49,3 +49,12 @@ func XgoOnExitG(callback func()) {
 func XgoRealTimeNow() time.Time {
 	return time.Now()
 }
+
+func XgoOnInitFinished(callback func()) {
+	logError("WARNING: failed to link runtime.XgoOnInitFinished(requires xgo).")
+}
+
+func XgoInitFinished() bool {
+	logError("WARNING: failed to link runtime.XgoInitFinished(requires xgo).")
+	return false
+}

@@ -7,8 +7,8 @@ import (
 )
 
 const VERSION = "1.1.0"
-const REVISION = "c4a8899c3c25a6701effd940ac2950ad65aed6ab+1"
-const NUMBER = 327
+const REVISION = "ee9fc3d7efb214c84dbdcdaf418913514f3423bb+1"
+const NUMBER = 374
 
 // these fields will be filled by compiler, see CORE_VERSION in cmd/xgo/version.go
 const XGO_VERSION = ""
