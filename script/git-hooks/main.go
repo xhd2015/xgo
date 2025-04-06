@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/script/build-release/revision"
+	"github.com/xhd2015/xgo/script/generate/gen_defs"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/git"
@@ -101,55 +102,30 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 	var affectedFiles []string
 	const updateRevision = true
 	if updateRevision {
-		refLast := "HEAD"
-		if amend {
-			refLast = "HEAD~1"
+		xgoArgs := []string{
+			"run",
+			"./script/generate",
+			string(gen_defs.GenernateType_CmdXgoVersion),
+			string(gen_defs.GenernateType_RuntimeCoreVersion),
 		}
-		commitHash, err := revision.GetCommitHash(rootDir, refLast)
+		if amend {
+			xgoArgs = append(xgoArgs, "--amend")
+		}
+		if noUpdateVersion {
+			xgoArgs = append(xgoArgs, "--no-update-version")
+		}
+		err = cmd.Dir(rootDir).Run("go", xgoArgs...)
 		if err != nil {
 			return err
 		}
-
-		// due to the nature of git, we cannot
-		// know the commit hash of current commit
-		// which has not yet happened, so we add
-		// suffix "+1" to indicate this
-		rev := commitHash + "+1"
 
 		// cmd/xgo/version.go
-		xgoVersionRelFile := revision.GetXgoVersionFile("")
 		// runtime/core/version.go
-		runtimeVersionRelFile := revision.GetRuntimeVersionFile("")
-
-		xgoVersionFile := filepath.Join(rootDir, xgoVersionRelFile)
-		runtimeVersionFile := filepath.Join(rootDir, runtimeVersionRelFile)
-
-		relVersionFiles := []string{xgoVersionRelFile}
-		for _, relFile := range relVersionFiles {
-			file := filepath.Join(rootDir, relFile)
-			content, err := revision.GetFileContent(rootDir, commitHash, relFile)
-			if err != nil {
-				return err
-			}
-			version, err := revision.GetVersionNumber(content)
-			if err != nil {
-				return err
-			}
-			err = revision.PatchVersionFile(file, "", rev, !noUpdateVersion, version+1)
-			if err != nil {
-				return err
-			}
-		}
-		err = revision.CopyCoreVersion(xgoVersionFile, runtimeVersionFile)
-		if err != nil {
-			return err
-		}
-
-		affectedFiles = append(affectedFiles, xgoVersionFile, runtimeVersionFile)
+		affectedFiles = append(affectedFiles, revision.GetXgoVersionFile(rootDir), revision.GetRuntimeVersionFile(rootDir))
 	}
 
 	// run generate
-	err = cmd.Dir(rootDir).Run("go", "run", "./script/generate", "cmd/xgo/runtime_gen")
+	err = cmd.Dir(rootDir).Run("go", "run", "./script/generate", string(gen_defs.GenernateType_XgoRuntimeGen))
 	if err != nil {
 		return err
 	}

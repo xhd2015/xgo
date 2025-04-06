@@ -11,38 +11,35 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/script/build-release/revision"
+	"github.com/xhd2015/xgo/script/generate/gen_defs"
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/git"
 	"github.com/xhd2015/xgo/support/goparse"
 	"github.com/xhd2015/xgo/support/transform"
-
-	"github.com/xhd2015/xgo/support/filecopy"
 )
 
-type GenernateType string
+type GenernateType = gen_defs.GenernateType
 
 const (
-	GenernateType_DotAll              GenernateType = "./..."
-	GenernateType_CompilerPatch       GenernateType = "compiler-patch"
-	GenernateType_CompilerHelperCode  GenernateType = "compiler-helper-code"
-	GenernateType_CompilerPatternCode GenernateType = "compiler-pattern-code"
-	GenernateType_RuntimeDef          GenernateType = "runtime-def"
-	GenernateType_RuntimeVersion      GenernateType = "runtime-version"
-	GenernateType_StackTraceDef       GenernateType = "stack-trace-def"
-	GenernateType_InstallSrc          GenernateType = "install-src"
-	GenernateType_XgoRuntimeGen       GenernateType = "cmd/xgo/runtime_gen"
+	GenernateType_DotAll               GenernateType = "./..."
+	GenernateType_CompilerPatch        GenernateType = "compiler-patch"
+	GenernateType_CompilerHelperCode   GenernateType = "compiler-helper-code"
+	GenernateType_CompilerPatternCode  GenernateType = "compiler-pattern-code"
+	GenernateType_RuntimeDef           GenernateType = "runtime-def"
+	GenernateType_RuntimeTraceModel    GenernateType = gen_defs.GenernateType_RuntimeTraceModel
+	GenernateType_ScriptInstallUpgrade GenernateType = gen_defs.GenernateType_ScriptInstallUpgrade
+	GenernateType_CmdXgoVersion        GenernateType = gen_defs.GenernateType_CmdXgoVersion
+	GenernateType_RuntimeCoreVersion   GenernateType = gen_defs.GenernateType_RuntimeCoreVersion
+	GenernateType_XgoRuntimeGen        GenernateType = gen_defs.GenernateType_XgoRuntimeGen
 )
 
 var allGenerateTypes = []GenernateType{
-	GenernateType_DotAll,
-	GenernateType_CompilerPatch,
-	GenernateType_CompilerHelperCode,
-	GenernateType_CompilerPatternCode,
-	GenernateType_RuntimeDef,
-	GenernateType_RuntimeVersion,
-	GenernateType_StackTraceDef,
-	GenernateType_InstallSrc,
-	GenernateType_XgoRuntimeGen,
+	gen_defs.GenernateType_CmdXgoVersion,
+	gen_defs.GenernateType_RuntimeCoreVersion,
+	gen_defs.GenernateType_RuntimeTraceModel,
+	gen_defs.GenernateType_XgoRuntimeGen,
+	gen_defs.GenernateType_ScriptInstallUpgrade,
 }
 
 func main() {
@@ -51,9 +48,20 @@ func main() {
 	var rootDir string
 	var subGens []GenernateType
 	var list bool
+	var amend bool
+	var noUpdateVersion bool
+	if len(args) > 0 && args[0] == "list" {
+		list = true
+		args = args[1:]
+	}
 	n := len(args)
+	var remainArgs []string
 	for i := 0; i < n; i++ {
 		arg := args[i]
+		if arg == "--" {
+			remainArgs = append(remainArgs, args[i+1:]...)
+			break
+		}
 		if arg == "--root-dir" {
 			rootDir = args[i+1]
 			i++
@@ -61,6 +69,14 @@ func main() {
 		}
 		if arg == "--list" {
 			list = true
+			continue
+		}
+		if arg == "--amend" {
+			amend = true
+			continue
+		}
+		if arg == "--no-update-version" {
+			noUpdateVersion = true
 			continue
 		}
 		if !strings.HasPrefix(arg, "-") {
@@ -77,7 +93,11 @@ func main() {
 		}
 		return
 	}
-	err := generate(rootDir, subGens)
+	if len(remainArgs) > 0 {
+		fmt.Fprintf(os.Stderr, "unrecognized remaining flags: %s\n", strings.Join(remainArgs, " "))
+		os.Exit(1)
+	}
+	err := generate(rootDir, subGens, amend, noUpdateVersion)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -98,7 +118,60 @@ func (c SubGens) Has(genType GenernateType) bool {
 	return false
 }
 
-func generate(rootDir string, subGens SubGens) error {
+func generate(rootDir string, subGens SubGens, amend bool, noUpdateVersion bool) error {
+	if rootDir == "" {
+		resolvedRoot, err := git.ShowTopLevel("")
+		if err != nil {
+			return err
+		}
+		rootDir = resolvedRoot
+	}
+
+	if subGens.Has(GenernateType_CmdXgoVersion) {
+		err := revision.IncrementXgoVersion(rootDir, amend, !noUpdateVersion)
+		if err != nil {
+			return err
+		}
+	}
+	if subGens.Has(GenernateType_RuntimeCoreVersion) {
+		err := revision.CopyCoreVersion(revision.GetXgoVersionFile(rootDir), revision.GetRuntimeVersionFile(rootDir))
+		if err != nil {
+			return err
+		}
+	}
+	needCopyTrace := true
+	if subGens.Has(GenernateType_RuntimeTraceModel) {
+		err := copyTraceModel(rootDir)
+		if err != nil {
+			return err
+		}
+		needCopyTrace = false
+	}
+	if subGens.Has(GenernateType_XgoRuntimeGen) {
+		err := genXgoRuntime(string(GenernateType_XgoRuntimeGen), rootDir, needCopyTrace)
+		if err != nil {
+			return err
+		}
+	}
+	if subGens.Has(GenernateType_ScriptInstallUpgrade) {
+		upgradeDst := filepath.Join(rootDir, "script", "install", "upgrade")
+		err := os.RemoveAll(upgradeDst)
+		if err != nil {
+			return err
+		}
+
+		err = copyUpgrade(filepath.Join(rootDir, "cmd", "xgo", "upgrade"), upgradeDst)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Deprecated: xgo v1.1.0 has deprecated other generates
+// since except the runtime_gen, other generates target
+// seems vague.
+func generateV1_0(rootDir string, subGens SubGens) error {
 	if rootDir == "" {
 		resolvedRoot, err := git.ShowTopLevel("")
 		if err != nil {
@@ -124,24 +197,6 @@ func generate(rootDir string, subGens SubGens) error {
 			filepath.Join(rootDir, "cmd", "xgo", "patch", "runtime_def_gen.go"),
 			filepath.Join(rootDir, "patch", "syntax", "syntax_gen.go"),
 			filepath.Join(rootDir, "patch", "trap_gen.go"),
-		)
-		if err != nil {
-			return err
-		}
-	}
-	if subGens.Has(GenernateType_RuntimeVersion) {
-		err := generateRunTimeVersion(
-			revision.GetXgoVersionFile(rootDir),
-			revision.GetRuntimeVersionFile(rootDir),
-		)
-		if err != nil {
-			return err
-		}
-	}
-	if subGens.Has(GenernateType_StackTraceDef) {
-		err := copyTraceExport(
-			filepath.Join(rootDir, "runtime", "trace", "stack_export.go"),
-			filepath.Join(rootDir, "cmd", "xgo", "trace", "stack_export.go"),
 		)
 		if err != nil {
 			return err
@@ -178,25 +233,6 @@ func generate(rootDir string, subGens SubGens) error {
 		}
 		infoCode := info.formatCode("syntax")
 		err = os.WriteFile(filepath.Join(rootDir, "patch", "syntax", "helper_code_gen.go"), []byte(infoCode), 0755)
-		if err != nil {
-			return err
-		}
-	}
-
-	if subGens.Has(GenernateType_InstallSrc) {
-		upgradeDst := filepath.Join(rootDir, "script", "install", "upgrade")
-		err := os.RemoveAll(upgradeDst)
-		if err != nil {
-			return err
-		}
-
-		err = copyUpgrade(filepath.Join(rootDir, "cmd", "xgo", "upgrade"), upgradeDst)
-		if err != nil {
-			return err
-		}
-	}
-	if subGens.Has(GenernateType_XgoRuntimeGen) {
-		err := genXgoRuntime(string(GenernateType_XgoRuntimeGen), rootDir)
 		if err != nil {
 			return err
 		}
@@ -273,10 +309,6 @@ func generateRunTimeDefs(file string, defFile string, syntaxFile string, trapFil
 	}
 
 	return nil
-}
-
-func generateRunTimeVersion(xgoVersionFile string, runtimeVersionFile string) error {
-	return revision.CopyCoreVersion(xgoVersionFile, runtimeVersionFile)
 }
 
 type genInfo struct {

@@ -28,7 +28,9 @@ type StackEntry struct {
 	Results interface{}
 
 	Panic bool
-	Error string
+	// optional line info for panic
+	PanicLine int
+	Error     string
 
 	Children []*StackEntry
 }

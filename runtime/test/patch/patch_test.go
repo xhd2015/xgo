@@ -8,8 +8,6 @@ import (
 	"github.com/xhd2015/xgo/runtime/mock"
 )
 
-// go install github.com/xhd2015/kool@latest
-// kool with-go1.19.13 go run -tags dev ./cmd/xgo test --log-debug --project-dir runtime/test -run TestPatchSimpleFunc ./patch
 func TestPatchSimpleFunc(t *testing.T) {
 	mock.Patch(greet, func(s string) string {
 		return "mock " + s

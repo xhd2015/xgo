@@ -6,11 +6,15 @@ import (
 	"os"
 )
 
+// these fields are automatically copied
+// from when running
+// `go run ./script/generate runtime/core/version.go`
 const VERSION = "1.1.0"
-const REVISION = "ee9fc3d7efb214c84dbdcdaf418913514f3423bb+1"
-const NUMBER = 374
+const REVISION = "e6145d35e5bb55867b84e35fc55d5d66e7e2f734+1"
+const NUMBER = 375
 
-// these fields will be filled by compiler, see CORE_VERSION in cmd/xgo/version.go
+// these fields will be filled by compiler when xgo builds with xgo/runtime
+// see CORE_VERSION in cmd/xgo/version.go
 const XGO_VERSION = ""
 const XGO_REVISION = ""
 const XGO_NUMBER = 0

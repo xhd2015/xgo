@@ -9,6 +9,7 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 )
 
+// Deprecated: xgo v1.1.0 does not instrument compiler
 func generateCompilerPatch(rootDir string) error {
 	if true {
 		return nil

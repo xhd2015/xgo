@@ -38,6 +38,23 @@ The above command will prepare a instrumented GOROOT and print the directory.
 
 You can open that directory and check the internals.
 
+# Code generation
+xgo relies on code generation to eliminate module dependency.
+
+However we do not adopt the `//go:generate` idea because that is too decentrialized and hard to reason about.
+
+Instead, everything is defined in `script/generate`:
+```sh
+# list all possible targets
+go run ./script/generate list
+
+# generate all
+go run ./script/generate
+
+# generate a specific target
+go run ./script/generate cmd/xgo/runtime_gen
+```
+
 # Adding Tests Before Adding Feature
 Xgo prefers TDD to bring new features. 
 
@@ -55,12 +72,14 @@ If there isn't any, the default go is used.
 Run a specific test:
 ```sh
 # list all tests runnable by names
-go run ./script/run-test --list
+go run ./script/run-test list
 
-# run test by name
-go run ./script/run-test --name trace-snapshot
-# -a: reset caches
-go run ./script/run-test --name trace-snapshot -run TestNoSnapshot -v --debug -a
+# run test
+go run ./script/run-test ./runtime/test/patch/...
+
+# add flags
+#  -a: reset caches
+go run ./script/run-test -run TestPatchSimpleFunc -v --log-debug -a ./runtime/test/patch
 ```
 
 We can also explicitly specify all expected go versions we want to pass:
@@ -84,7 +103,7 @@ Just clone the repository, and run:
 go install ./cmd/xgo
 ```
 
-It's totally the same as `go install github.com/xhd2015/xgo/cmd/xgo@latest`, but for local.
+It's totally the same as `go install github.com/xhd2015/xgo/cmd/xgo@latest`, but from local.
 
 # Debug the go compiler
 First, build a package with `--debug-compile` flag:
@@ -96,7 +115,6 @@ Then, run `go-tool-debug-compile`
 ```sh
 go run ./cmd/go-tool-debug-compile
 ```
-
 
 Output:
 ```log

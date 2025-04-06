@@ -57,7 +57,7 @@ func MultipleStatements() {
 	}
 
 	// Run the function under test
-	modified, err := InjectRuntimeTrap(testFilePath)
+	modified, _, err := InjectRuntimeTrap(testFilePath)
 	if err != nil {
 		t.Fatalf("insertRuntimeTrap failed: %v", err)
 	}

@@ -95,9 +95,10 @@ var defaultTestArgs = []*TestArg{
 			"./mock/...",
 			"./patch/...",
 			"./tls/...",
-			"./trace/record/...",
 			"./trace/go_trace/...",
 			"./trace/marshal/cyclic/...",
+			"./trace/record/...",
+			"./trace/trace_panic_peek/...",
 			"./trap/inspect/...",
 			"./trap/interceptor/...",
 		},
@@ -154,7 +155,6 @@ func main() {
 	var excludes []string
 	var includes []string
 
-	n := len(args)
 	var remainArgs []string
 	var remainTests []string
 
@@ -173,6 +173,12 @@ func main() {
 	var logDebug bool
 	var withSetup bool
 
+	var list bool
+	if len(args) > 0 && args[0] == "list" {
+		list = true
+		args = args[1:]
+	}
+	n := len(args)
 	for i := 0; i < n; i++ {
 		arg := args[i]
 		if arg == "--" {
@@ -262,6 +268,24 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
 		os.Exit(1)
+	}
+	if list {
+		testArgs := getTestArgs(remainTests)
+		if len(testArgs) == 0 {
+			fmt.Fprintf(os.Stderr, "no tests\n")
+			return
+		}
+		for _, testArg := range testArgs {
+			logDir := testArg.Dir
+			if len(testArg.Args) == 0 {
+				fmt.Fprintf(os.Stdout, "./%s\n", logDir)
+				continue
+			}
+			for _, arg := range testArg.Args {
+				fmt.Fprintf(os.Stdout, "./%s/%s\n", logDir, strings.TrimPrefix(arg, "./"))
+			}
+		}
+		return
 	}
 	_ = projectDir
 	topLevel, err := git.ShowTopLevel("")

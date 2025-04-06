@@ -4,28 +4,29 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"testing"
 
-	"github.com/xhd2015/xgo/runtime/test/util"
+	"github.com/xhd2015/xgo/runtime/test/debug/util"
 	"github.com/xhd2015/xgo/runtime/trace"
+	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
-
-func init() {
-	trace.Enable()
-}
 
 func TestTracePanicPeek(t *testing.T) {
 	var buf bytes.Buffer
 
 	var traceData []byte
-	trace.Options().OnComplete(func(root *trace.Root) {
-		var err error
-		traceData, err = trace.MarshalAnyJSON(root.Export(nil))
-		if err != nil {
-			t.Fatal(err)
-		}
-	}).Collect(func() {
+	trace.Trace(trace.Config{
+		OnFinish: func(stack stack_model.IStack) {
+			var err error
+			traceData, err = stack.JSON()
+			if err != nil {
+				t.Fatal(err)
+			}
+		},
+	}, nil, func() (interface{}, error) {
 		run(&buf)
+		return nil, nil
 	})
 
 	output := buf.String()
@@ -36,17 +37,31 @@ func TestTracePanicPeek(t *testing.T) {
 	}
 
 	// t.Logf("traceData: %s", traceData)
+	traceFileName := t.Name() + ".json"
+	err := os.WriteFile(traceFileName, traceData, 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
 	expectTraceSequence := []string{
 		"{",
 		`"Name":"run",`,
 		`"Name":"Work",`,
-		`"Name":"doWork",`,
-		`"Error":"panic: doWork panic",`,
+
+		// caller error marshalled before callees
 		`"Error":"Work panic: doWork panic",`,
+		`"Name":"doWork",`,
+		`"Error":"doWork panic",`,
 		"}",
 	}
-	err := util.CheckSequence(string(traceData), expectTraceSequence)
+	err = util.CheckSequence(string(traceData), expectTraceSequence)
 	if err != nil {
+		t.Logf("traceData: %s", string(traceData))
+		stat, statErr := os.Stat(traceFileName)
+		if statErr != nil {
+			t.Logf("traceFile statErr: %v", statErr)
+		} else {
+			t.Logf("traceFile size: %d", stat.Size())
+		}
 		t.Fatalf("%v", err)
 	}
 }
