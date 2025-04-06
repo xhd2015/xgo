@@ -64,14 +64,15 @@ func ExportStackEntry(entry *Entry, rootBegin time.Time, offsetNS int64) *stack_
 		fnInfo.Name += " (running)"
 	}
 	return &stack_model.StackEntry{
-		FuncInfo: fnInfo,
-		BeginNs:  beginNs,
-		EndNs:    endNs,
-		Args:     entry.Args,
-		Results:  entry.Results,
-		Panic:    entry.Panic,
-		Error:    entry.Error,
-		Children: children,
+		FuncInfo:  fnInfo,
+		BeginNs:   beginNs,
+		EndNs:     endNs,
+		Args:      entry.Args,
+		Results:   entry.Results,
+		Panic:     entry.Panic,
+		PanicLine: entry.PanicLine,
+		Error:     entry.Error,
+		Children:  children,
 	}
 }
 

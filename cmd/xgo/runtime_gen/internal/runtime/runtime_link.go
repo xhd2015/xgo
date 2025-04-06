@@ -26,9 +26,9 @@ func XgoGetCurG() unsafe.Pointer {
 	return nil
 }
 
-func XgoPeekPanic() interface{} {
+func XgoPeekPanic() (interface{}, uintptr) {
 	logError("WARNING: failed to link runtime.XgoPeekPanic(requires xgo).")
-	return nil
+	return nil, 0
 }
 
 func XgoGetFullPCName(pc uintptr) string {

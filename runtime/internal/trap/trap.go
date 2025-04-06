@@ -293,13 +293,56 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		// see https://github.com/xhd2015/xgo/issues/307
 		// so we add a standalone flag `Finished`
 		end := xgo_runtime.XgoRealTimeNow()
+		if isStartTracing {
+			stk.End = end
+		}
 		cur.EndNs = end.UnixNano() - stk.Begin.UnixNano()
 		cur.Finished = true
 		cur.HitMock = hitMock
 		var hasPanic bool
-		if pe := xgo_runtime.XgoPeekPanic(); pe != nil {
+		if pe, retpc := xgo_runtime.XgoPeekPanic(); pe != nil {
 			hasPanic = true
 			cur.Panic = true
+			// frame:
+			//   0: trap.trap
+			//   1: runtime.gopanic
+			//   2: <func1>
+			//   3: <func2> -- may have recover()
+			//   ...
+			fnPC := funcInfo.PC
+			if fnPC == 0 {
+				fnPC = retpc
+			}
+			retEntryPC := runtime.FuncForPC(fnPC).Entry()
+
+			// we look back at most 10 frames
+			// to find which ret pc matches the
+			// frame, and us that pc as line
+			//
+			// when panic inside a deferred func,
+			// which does not belong to the
+			// caller itself, this reports the
+			// last line that sees the panic,
+			// not the inside
+			// example:
+			//    func SomeFunc(){
+			//      defer func(){
+			//         panic("panic in defer")  <-- this does not belong to SomeFunc
+			//      }()
+			//      doThingsPanic()  <-- this reported
+			//    }
+			callerPCs := make([]uintptr, 10)
+			npc := runtime.Callers(2, callerPCs)
+			callerPCs = callerPCs[:npc]
+			// check which pc matches
+			for _, pc := range callerPCs {
+				entryPC := runtime.FuncForPC(pc).Entry()
+				if entryPC == retEntryPC {
+					frame, _ := runtime.CallersFrames([]uintptr{pc}).Next()
+					cur.PanicLine = frame.Line
+					break
+				}
+			}
 			cur.Error = fmt.Sprint(pe)
 		}
 
@@ -312,7 +355,6 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		stk.Top = oldTop
 		stk.Depth--
 		if isStartTracing {
-			stk.End = end
 			exportedStack := stack.Export(stk, 0)
 			exportedStackJSON := xgo_runtime.MarshalNoError(exportedStack)
 			if isTesting {
@@ -336,15 +378,12 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 					}
 				}
 			}
-			// DetachStack()
-			// fmt.Fprintf(os.Stderr, "trace end\n")
 			stack.Detach()
 		}
 	}
 	if mock != nil {
-		defer post()
 		hitMock = mock(funcInfo, recvPtr, args, results)
-		return nil, hitMock
+		return post, hitMock
 	}
 	return post, false
 }

@@ -73,6 +73,11 @@
     flex-grow: 1;
 }
 
+.panic-line-info {
+    margin-left: 4px;
+    color: red;
+}
+
 #detail-request {
     flex-grow: 1;
     resize: none;

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -96,13 +97,20 @@ func InstrumentRuntime(goroot string, goVersion *goinfo.GoVersion, opts Instrume
 	}
 
 	// instrument xgo_trap.go
-	xgoTrapFileStripped, err := patch.RemoveBuildIgnore(xgoTrapFile)
+	xgoTrapContent, err := patch.RemoveBuildIgnore(xgoTrapFile)
 	if err != nil {
 		return fmt.Errorf("remove build ignore: %w", err)
 	}
-	xgoTrapFileStripped = AppendGetFuncNameImpl(goVersion, xgoTrapFileStripped)
+	// type _panic has a major upgrade from go1.21 to go1.22
+	// go1.21 and before use pc, go1.22 and after use retpc
+	retpc := "retpc"
+	if goVersion.Major == 1 && goVersion.Minor <= 21 {
+		retpc = "pc"
+	}
+	xgoTrapContent = strings.ReplaceAll(xgoTrapContent, "__RETPC__", retpc)
+	xgoTrapContent = AppendGetFuncNameImpl(goVersion, xgoTrapContent)
 
-	err = os.WriteFile(xgoTrapFilePath.JoinPrefix(goroot), []byte(xgoTrapFileStripped), 0644)
+	err = os.WriteFile(xgoTrapFilePath.JoinPrefix(goroot), []byte(xgoTrapContent), 0644)
 	if err != nil {
 		return err
 	}

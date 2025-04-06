@@ -49,9 +49,10 @@ type Entry struct {
 	File     string
 	Line     int
 
-	HitMock bool
-	Panic   bool
-	Error   string
+	HitMock   bool
+	Panic     bool
+	PanicLine int
+	Error     string
 
 	Args    interface{}
 	Results interface{}

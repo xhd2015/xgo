@@ -177,7 +177,7 @@ func RenderStacks(stacks []*stack_model.Stack, file string, w io.Writer) (err er
 	</div>`)
 	h(`<label>Request</label>`)
 	h(`<textarea id="detail-request"  placeholder="request..."></textarea>`)
-	h(`<label>Response</label>`)
+	h(`<div><label>Response</label> <span id="panic-line-info" class="panic-line-info"></span></div>`)
 	h(`<textarea id="detail-response" placeholder="response..."></textarea>`)
 	h("</div>")
 

@@ -28,7 +28,7 @@ func XgoGetCurG() unsafe.Pointer {
 	return runtime.XgoGetCurG()
 }
 
-func XgoPeekPanic() interface{} {
+func XgoPeekPanic() (interface{}, uintptr) {
 	//
 	return runtime.XgoPeekPanic()
 }

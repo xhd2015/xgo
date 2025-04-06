@@ -173,6 +173,7 @@ func main() {
 
 	var logDebug bool
 	var withSetup bool
+	var devTag bool
 
 	var list bool
 	if len(args) > 0 && args[0] == "list" {
@@ -259,6 +260,10 @@ func main() {
 		}
 		if arg == "--install-xgo" {
 			installXgo = true
+			continue
+		}
+		if arg == "--dev-tag" {
+			devTag = true
 			continue
 		}
 		if strings.HasPrefix(arg, "-") {
@@ -462,6 +467,9 @@ func main() {
 				}
 				if debugXgo {
 					opts.Debug = true
+				}
+				if devTag {
+					opts.DevTag = true
 				}
 			}
 			var coverageVariant string
@@ -802,17 +810,20 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 type testKind string
 
 type Opts struct {
-	Debug bool
+	Debug  bool
+	DevTag bool
 }
 
 func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests []string, env []string, opts ...Opts) error {
 	var debug bool
+	var devTag bool
 	if len(opts) > 0 {
 		if len(opts) != 1 {
 			panic("only one opts is allowed")
 		}
 		opt := opts[0]
 		debug = opt.Debug
+		devTag = opt.DevTag
 	}
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
@@ -821,7 +832,11 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 	var testArgs []string
 	if !usePlainGo {
 		if !debug {
-			testArgs = []string{"run", "-tags", "dev", "./cmd/xgo", "test"}
+			testArgs = []string{"run"}
+			if devTag {
+				testArgs = append(testArgs, "-tags", "dev")
+			}
+			testArgs = append(testArgs, "./cmd/xgo", "test")
 		} else {
 			testArgs = []string{"run", "./cmd/xgo", "test"}
 		}

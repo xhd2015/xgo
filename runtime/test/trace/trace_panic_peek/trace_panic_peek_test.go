@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/test/debug/util"
@@ -31,7 +32,14 @@ func TestTracePanicPeek(t *testing.T) {
 
 	output := buf.String()
 	// t.Logf("output: %s", s)
-	expected := "call: main\ncall: Work\ncall: doWork\nmain panic: Work panic: doWork panic"
+	expected := `
+call: main
+call: Work
+call: doWorkBypass
+call: doWork
+main panic: Work panic: doWork panic
+`
+	expected = strings.TrimSpace(expected)
 	if output != expected {
 		t.Fatalf("expect program output: %s, actual: %q", expected, output)
 	}
@@ -82,6 +90,11 @@ func Work(w io.Writer) {
 		}
 	}()
 	fmt.Fprintf(w, "call: Work\n")
+	doWorkBypass(w)
+}
+
+func doWorkBypass(w io.Writer) {
+	fmt.Fprintf(w, "call: doWorkBypass\n")
 	doWork(w)
 }
 

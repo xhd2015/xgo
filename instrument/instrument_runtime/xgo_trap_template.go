@@ -82,13 +82,13 @@ func XgoGetCurG() unsafe.Pointer {
 
 // Peek panic without recover
 // check gorecover() for implementation details
-func XgoPeekPanic() interface{} {
+func XgoPeekPanic() (interface{}, uintptr) {
 	gp := getg()
 	p := gp._panic
 	if p == nil || p.goexit || p.recovered {
-		return nil
+		return nil, 0
 	}
-	return p.arg
+	return p.arg, p.__RETPC__
 }
 
 func XgoIsLooseJsonMarshaling() bool {

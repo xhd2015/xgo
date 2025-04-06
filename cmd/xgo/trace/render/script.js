@@ -39,6 +39,7 @@ function onClickHead(id) {
     const vscodeIcon = document.getElementById("vscode-icon")
     const req = document.getElementById("detail-request")
     const resp = document.getElementById("detail-response")
+    const panicLineInfo = document.getElementById("panic-line-info")
     const traceData = traces[id]
 
     if (traceData.error) {
@@ -47,6 +48,7 @@ function onClickHead(id) {
         vscodeIcon.classList.add("disabled")
         req.value = traceData.error
         resp.value = ''
+        panicLineInfo.innerText = ""
         return
     }
 
@@ -58,6 +60,11 @@ function onClickHead(id) {
     infoPkg.innerText = traceData.FuncInfo?.Pkg || ""
     infoFunc.innerText = traceData.FuncInfo?.Name || ""
     req.value = JSON.stringify(traceData.Args, null, "    ")
+    if (traceData.PanicLine > 0) {
+        panicLineInfo.innerText = `panic at line ${traceData.PanicLine}`
+    } else {
+        panicLineInfo.innerText = ""
+    }
     if (traceData.Error) {
         let msg = traceData.Error
         if (!msg.includes("err")) {
