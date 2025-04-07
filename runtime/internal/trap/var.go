@@ -113,4 +113,5 @@ func doTrapVar(funcInfo *info.Func, stk *stack.Stack, stkData *StackData, begin 
 	cur.Results = json.RawMessage(xgo_runtime.MarshalNoError(res))
 	stk.Top = stk.Push(cur)
 	cur.EndNs = xgo_runtime.XgoRealTimeNow().UnixNano() - stk.Begin.UnixNano()
+	cur.Finished = true
 }

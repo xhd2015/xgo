@@ -1,4 +1,4 @@
-package instrument_runtime
+package template
 
 import (
 	"github.com/xhd2015/xgo/support/goinfo"

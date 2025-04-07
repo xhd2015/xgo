@@ -1,4 +1,4 @@
-package instrument_runtime
+package template
 
 const RuntimeGetFuncName_Go117_120 = `
 func __xgo_get_pc_name_impl(pc uintptr) string {

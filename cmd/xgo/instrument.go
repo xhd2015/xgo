@@ -10,13 +10,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xhd2015/xgo/instrument"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/instrument_func"
 	"github.com/xhd2015/xgo/instrument/instrument_go"
 	"github.com/xhd2015/xgo/instrument/instrument_intf"
 	"github.com/xhd2015/xgo/instrument/instrument_reg"
+	"github.com/xhd2015/xgo/instrument/instrument_var"
 	"github.com/xhd2015/xgo/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/instrument/load"
 	"github.com/xhd2015/xgo/instrument/overlay"
@@ -46,7 +46,7 @@ var PREDEFINED_STD_PKGS = []string{
 }
 
 // goroot is critical for stdlib
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -71,7 +71,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, mo
 			panic(err)
 		}
 	}
-	xgoPkgs, err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir, overrideXgoContent)
+	xgoPkgs, err := instrument_xgo_runtime.LinkXgoRuntime(goroot, projectDir, xgoRuntimeModuleDir, goVersion, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir, overrideXgoContent)
 	if err != nil {
 		if err == instrument_xgo_runtime.ErrLinkFileNotRequired {
 			return nil
@@ -147,7 +147,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, mo
 		return ok
 	})
 	logDebug("start instrumentVarTrap: len(varPkgs)=%d", len(varPkgs.Packages))
-	err = instrument.InstrumentVarTrap(varPkgs)
+	err = instrument_var.Instrument(varPkgs)
 	if err != nil {
 		return err
 	}

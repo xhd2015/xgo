@@ -11,7 +11,7 @@ import (
 
 type PkgScopeNames map[string]*edit.Decl
 
-func Instrument(packages *edit.Packages) {
+func Instrument(packages *edit.Packages) error {
 	// first, collect all toplevel variables
 	for _, pkg := range packages.Packages {
 		decls := make(map[string]*edit.Decl)
@@ -102,6 +102,7 @@ func Instrument(packages *edit.Packages) {
 			}
 		}
 	}
+	return nil
 }
 
 func instrumentFunction(packages *edit.Packages, pkg *edit.Package, file *edit.File) {

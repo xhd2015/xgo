@@ -697,7 +697,7 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag, needUpgrade)
+		err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag, needUpgrade)
 		if err != nil {
 			return err
 		}

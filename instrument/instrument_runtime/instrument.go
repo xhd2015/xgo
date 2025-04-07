@@ -1,21 +1,17 @@
 package instrument_runtime
 
 import (
-	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/xhd2015/xgo/instrument/constants"
+	"github.com/xhd2015/xgo/instrument/instrument_runtime/template"
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
-//go:embed xgo_trap_template.go
-var xgoTrapFile string
-
 var instrumentMarkPath = patch.FilePath{"xgo_trap_instrument_mark.txt"}
-var xgoTrapFilePath = patch.FilePath{"src", "runtime", "xgo_trap.go"}
 var procPath = patch.FilePath{"src", "runtime", "proc.go"}
 
 var jsonEncodingPath = patch.FilePath{"src", "encoding", "json", "encode.go"}
@@ -34,7 +30,7 @@ type InstrumentRuntimeOptions struct {
 }
 
 // only support go1.19 for now
-func InstrumentRuntime(goroot string, goVersion *goinfo.GoVersion, opts InstrumentRuntimeOptions) error {
+func InstrumentRuntime(goroot string, goVersion *goinfo.GoVersion, xgoTrapTemplate string, opts InstrumentRuntimeOptions) error {
 	srcDir := filepath.Join(goroot, "src")
 
 	srcStat, statErr := os.Stat(srcDir)
@@ -97,20 +93,12 @@ func InstrumentRuntime(goroot string, goVersion *goinfo.GoVersion, opts Instrume
 	}
 
 	// instrument xgo_trap.go
-	xgoTrapContent, err := patch.RemoveBuildIgnore(xgoTrapFile)
+	xgoTrapContent, err := template.InstantiateXgoTrap(xgoTrapTemplate, goVersion)
 	if err != nil {
-		return fmt.Errorf("remove build ignore: %w", err)
+		return err
 	}
-	// type _panic has a major upgrade from go1.21 to go1.22
-	// go1.21 and before use pc, go1.22 and after use retpc
-	retpc := "retpc"
-	if goVersion.Major == 1 && goVersion.Minor <= 21 {
-		retpc = "pc"
-	}
-	xgoTrapContent = strings.ReplaceAll(xgoTrapContent, "__RETPC__", retpc)
-	xgoTrapContent = AppendGetFuncNameImpl(goVersion, xgoTrapContent)
-
-	err = os.WriteFile(xgoTrapFilePath.JoinPrefix(goroot), []byte(xgoTrapContent), 0644)
+	xgoTrapFile := constants.GetGoRuntimeXgoTrapFile(goroot)
+	err = os.WriteFile(xgoTrapFile, []byte(xgoTrapContent), 0644)
 	if err != nil {
 		return err
 	}

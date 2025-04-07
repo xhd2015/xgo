@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/instrument_go"
 	"github.com/xhd2015/xgo/instrument/instrument_runtime"
 	"github.com/xhd2015/xgo/instrument/patch"
@@ -53,9 +54,14 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 	if err != nil {
 		return err
 	}
+	xgoTrapTemplateBytes, err := getRuntimeGenFile(xgoSrc, constants.RUNTIME_XGO_TRAP_TEMPLATE_PATH)
+	if err != nil {
+		return err
+	}
+	xgoTrapTemplate := string(xgoTrapTemplateBytes)
 
 	// instrument runtime
-	err = instrument_runtime.InstrumentRuntime(goroot, goVersion, instrument_runtime.InstrumentRuntimeOptions{
+	err = instrument_runtime.InstrumentRuntime(goroot, goVersion, xgoTrapTemplate, instrument_runtime.InstrumentRuntimeOptions{
 		Mode: instrument_runtime.InstrumentMode_ForceAndIgnoreMark,
 	})
 	if err != nil {

@@ -3,12 +3,16 @@ package instrument_xgo_runtime
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/instrument_func"
+	"github.com/xhd2015/xgo/instrument/instrument_runtime/template"
 	"github.com/xhd2015/xgo/instrument/load"
 	"github.com/xhd2015/xgo/instrument/overlay"
+	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
@@ -16,7 +20,7 @@ var ErrLinkFileNotFound = errors.New("xgo: link file not found")
 var ErrLinkFileNotRequired = errors.New("xgo: link file not required")
 var ErrRuntimeVersionDeprecatedV1_0_0 = errors.New("runtime version deprecated")
 
-func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS overlay.Overlay, mod string, modfile string, xgoVersion string, xgoRevision string, xgoNumber int, collectTestTrace bool, collectTestTraceDir string, overrideContent func(absFile overlay.AbsFile, content string)) (*edit.Packages, error) {
+func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string, goVersion *goinfo.GoVersion, overlayFS overlay.Overlay, mod string, modfile string, xgoVersion string, xgoRevision string, xgoNumber int, collectTestTrace bool, collectTestTraceDir string, overrideContent func(absFile overlay.AbsFile, content string)) (*edit.Packages, error) {
 	opts := load.LoadOptions{
 		Dir:     projectDir,
 		Overlay: overlayFS,
@@ -42,6 +46,20 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 	if err != nil {
 		// TODO: handle the case where error indicates the package is not found
 		return nil, err
+	}
+	overrideWithFile := func(absFile overlay.AbsFile, targetFile overlay.AbsFile, filter func(content string) (string, error)) error {
+		_, content, err := overlayFS.Read(targetFile)
+		if err != nil {
+			return err
+		}
+		if filter != nil {
+			content, err = filter(content)
+			if err != nil {
+				return err
+			}
+		}
+		overrideContent(absFile, content)
+		return nil
 	}
 	editPackages := edit.Edit(packages)
 	var foundLink bool
@@ -73,17 +91,58 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 			// only for lookup
 			continue
 		}
+		if suffixPkg == constants.RUNTIME_INTERNAL_RUNTIME_PKG[n:] {
+
+			var runtimeLinkFile *edit.File
+			for _, file := range pkg.Files {
+				switch file.File.Name {
+				case constants.RUNTIME_LINK_FILE:
+					foundLink = true
+					runtimeLinkFile = file
+				}
+				if foundLink {
+					break
+				}
+			}
+
+			// why these two files cannot be found by list?
+			// because they have special build tag:
+			//  '//go:build ignore'
+			dir := pkg.LoadPackage.GoPackage.Dir
+			runtimeLinkTemplateFile := checkJoinFile(dir, constants.RUNTIME_LINK_TEMPLATE_FILE)
+			trapTemplateFile := checkJoinFile(dir, constants.XGO_TRAP_TEMPLATE_FILE)
+
+			if runtimeLinkFile != nil && runtimeLinkTemplateFile != "" {
+				err := overrideWithFile(overlay.AbsFile(runtimeLinkFile.File.AbsPath), overlay.AbsFile(runtimeLinkTemplateFile), func(content string) (string, error) {
+					return patch.RemoveBuildIgnore(content)
+				})
+				if err != nil {
+					return nil, err
+				}
+			}
+			if trapTemplateFile != "" {
+				// override file under GOROOT
+				// by always use the one bind with runtime ensures the trap file's
+				// API always matches the one that's expected by xgo/runtime
+				gorootTrapFile := overlay.AbsFile(constants.GetGoRuntimeXgoTrapFile(goroot))
+				_, templateContent, err := overlayFS.Read(overlay.AbsFile(trapTemplateFile))
+				if err != nil {
+					return nil, err
+				}
+				content, err := template.InstantiateXgoTrap(templateContent, goVersion)
+				if err != nil {
+					return nil, err
+				}
+				overlayFS.OverrideContent(gorootTrapFile, content)
+			}
+			continue
+		}
 		for _, file := range pkg.Files {
 			loadFile := file.File
 			content := loadFile.Content
 			absFile := overlay.AbsFile(loadFile.AbsPath)
 			var funcInfos []*edit.FuncInfo
 			switch loadFile.Name {
-			case constants.RUNTIME_LINK_FILE:
-				if suffixPkg == constants.RUNTIME_INTERNAL_RUNTIME_PKG[n:] {
-					foundLink = true
-					overrideContent(absFile, GetLinkRuntimeCode())
-				}
 			case constants.VERSION_FILE:
 				if suffixPkg == constants.RUNTIME_CORE_PKG[n:] {
 					coreVersion, err := ParseCoreVersion(content)
@@ -122,4 +181,13 @@ func LinkXgoRuntime(projectDir string, xgoRuntimeModuleDir string, overlayFS ove
 		return editPackages, ErrLinkFileNotRequired
 	}
 	return editPackages, nil
+}
+
+func checkJoinFile(dir string, fileName string) string {
+	filePath := filepath.Join(dir, fileName)
+	fi, err := os.Stat(filePath)
+	if err == nil && !fi.IsDir() {
+		return filePath
+	}
+	return ""
 }

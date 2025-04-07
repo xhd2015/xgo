@@ -36,20 +36,13 @@ jobs:
           echo 'after'
           cat cmd/xgo/version.go
           git diff || true
-    # TODO: remove the following 2 checks once merged
-    # - name: Check If Git Hooks Generate No New Files
-    #   run: |
-    #       if ! git diff --quiet;then
-    #           echo "diff found after run 'go run ./script/git-hooks pre-commit --no-commit', ensure run git hooks before you commit" >&2
-    #           branch=$(git branch --show-current)
-    #           echo "branch: $branch"
-    #           if [[ $branch == "lightweight-trap" ]]; then
-    #               echo "TODO: remove this check once merged"
-    #               echo "skip this check for lightweight-trap branch"
-    #               exit 0
-    #           fi
-    #           exit 1
-    #       fi
+    # if error, remove the following 2 checks once merged
+    - name: Check If Git Hooks Generate No New Files
+      run: |
+          if ! git diff --quiet;then
+              echo "diff found after run 'go run ./script/git-hooks pre-commit --no-commit', ensure run git hooks before you commit" >&2
+              exit 1
+          fi
       
-    # - name: Check If Can Merge Into Master Without Intermediate Commit
-    #   run: go run ./script/github-actions check-merge
+    - name: Check If Can Merge Into Master Without Intermediate Commit
+      run: go run ./script/github-actions check-merge

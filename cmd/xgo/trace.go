@@ -400,6 +400,14 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 	}, nil
 }
 
+func getRuntimeGenFile(xgoSrc string, path []string) ([]byte, error) {
+	if isDevelopment {
+		rtPath := filepath.Join(xgoSrc, "runtime", filepath.Join(path...))
+		return os.ReadFile(rtPath)
+	}
+	return runtimeGenFS.ReadFile("runtime_gen/" + strings.Join(path, "/"))
+}
+
 func needCopyRuntimeFromXgo(targetRuntimeDir string) (bool, error) {
 	const runtimeGenRoot = "runtime_gen"
 	// compare version

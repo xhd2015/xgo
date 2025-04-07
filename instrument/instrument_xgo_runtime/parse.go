@@ -1,7 +1,6 @@
 package instrument_xgo_runtime
 
 import (
-	_ "embed"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,9 +10,6 @@ import (
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/instrument/patch"
 )
-
-//go:embed runtime_link_template.go
-var runtimeLinkTemplate string
 
 func CheckRuntimeLegacyVersion(projectDir string, overlayFS overlay.Overlay, mod string, modfile string) (bool, string, error) {
 	opts := load.LoadOptions{
@@ -63,7 +59,7 @@ func isDeprecatedCoreVersion(coreVersion string) bool {
 	return strings.HasPrefix(coreVersion, "1.0.")
 }
 
-func GetLinkRuntimeCode() string {
+func GetLinkRuntimeCode(runtimeLinkTemplate string) string {
 	code, err := patch.RemoveBuildIgnore(runtimeLinkTemplate)
 	if err != nil {
 		panic(err)
