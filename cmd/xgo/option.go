@@ -297,8 +297,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	for i := 0; i < nArg; i++ {
 		arg := args[i]
 		if !strings.HasPrefix(arg, "-") {
-			if cmd == "run" {
-				// run consumes all remain args
+			if cmd == "run" || cmd == "exec" {
+				// run and exec consumes all remain args
 				remainArgs = append(remainArgs, args[i:]...)
 				break
 			}

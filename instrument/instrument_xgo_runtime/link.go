@@ -109,8 +109,8 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			// because they have special build tag:
 			//  '//go:build ignore'
 			dir := pkg.LoadPackage.GoPackage.Dir
-			runtimeLinkTemplateFile := checkJoinFile(dir, constants.RUNTIME_LINK_TEMPLATE_FILE)
-			trapTemplateFile := checkJoinFile(dir, constants.XGO_TRAP_TEMPLATE_FILE)
+			runtimeLinkTemplateFile := hasFile(dir, constants.RUNTIME_LINK_TEMPLATE_FILE)
+			trapTemplateFile := hasFile(dir, constants.XGO_TRAP_TEMPLATE_FILE)
 
 			if runtimeLinkFile != nil && runtimeLinkTemplateFile != "" {
 				err := overrideWithFile(overlay.AbsFile(runtimeLinkFile.File.AbsPath), overlay.AbsFile(runtimeLinkTemplateFile), func(content string) (string, error) {
@@ -183,7 +183,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	return editPackages, nil
 }
 
-func checkJoinFile(dir string, fileName string) string {
+func hasFile(dir string, fileName string) string {
 	filePath := filepath.Join(dir, fileName)
 	fi, err := os.Stat(filePath)
 	if err == nil && !fi.IsDir() {

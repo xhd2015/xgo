@@ -13,10 +13,13 @@ import (
 	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
 
+var a int
+
 func TestTracePanicPeek(t *testing.T) {
 	var buf bytes.Buffer
 
 	var traceData []byte
+	var traceStack *stack_model.Stack
 	trace.Trace(trace.Config{
 		OnFinish: func(stack stack_model.IStack) {
 			var err error
@@ -24,6 +27,7 @@ func TestTracePanicPeek(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			traceStack = stack.Data()
 		},
 	}, nil, func() (interface{}, error) {
 		run(&buf)
@@ -36,12 +40,18 @@ func TestTracePanicPeek(t *testing.T) {
 call: main
 call: Work
 call: doWorkBypass
-call: doWork
+call: doWork a=0
 main panic: Work panic: doWork panic
 `
 	expected = strings.TrimSpace(expected)
 	if output != expected {
 		t.Fatalf("expect program output: %s, actual: %q", expected, output)
+	}
+
+	var hasErr bool
+	if bytes.Contains(traceData, []byte("running")) {
+		t.Errorf("expect traceData not to contain 'running'")
+		hasErr = true
 	}
 
 	// t.Logf("traceData: %s", traceData)
@@ -50,19 +60,22 @@ main panic: Work panic: doWork panic
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectTraceSequence := []string{
-		"{",
-		`"Name":"run",`,
-		`"Name":"Work",`,
-
-		// caller error marshalled before callees
-		`"Error":"Work panic: doWork panic",`,
-		`"Name":"doWork",`,
-		`"Error":"doWork panic",`,
-		"}",
+	expectStack := `
+Trace
+ run
+  Work
+   doWorkBypass
+    doWork
+     a
+`
+	expectStack = strings.TrimSpace(expectStack)
+	stackBrief := util.BriefStack(traceStack)
+	if stackBrief != expectStack {
+		hasErr = true
+		t.Errorf("expect stack: %s, actual: %s", expectStack, stackBrief)
 	}
-	err = util.CheckSequence(string(traceData), expectTraceSequence)
-	if err != nil {
+
+	if hasErr {
 		t.Logf("traceData: %s", string(traceData))
 		stat, statErr := os.Stat(traceFileName)
 		if statErr != nil {
@@ -70,7 +83,6 @@ main panic: Work panic: doWork panic
 		} else {
 			t.Logf("traceFile size: %d", stat.Size())
 		}
-		t.Fatalf("%v", err)
 	}
 }
 
@@ -99,6 +111,6 @@ func doWorkBypass(w io.Writer) {
 }
 
 func doWork(w io.Writer) {
-	fmt.Fprintf(w, "call: doWork\n")
+	fmt.Fprintf(w, "call: doWork a=%d\n", a)
 	panic("doWork panic")
 }

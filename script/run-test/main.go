@@ -100,6 +100,8 @@ var defaultTestArgs = []*TestArg{
 			"./trace/marshal/cyclic/...",
 			"./trace/record/...",
 			"./trace/trace_panic_peek/...",
+			"./trace/trace_sleep/...",
+			"./trace/trace_variable/...",
 			"./trap/inspect/...",
 			"./trap/interceptor/...",
 		},

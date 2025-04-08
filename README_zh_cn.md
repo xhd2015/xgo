@@ -340,11 +340,6 @@ func TestTrace(t *testing.T) {
 结果中只会包含`B()`和`C()`.
 
 ## Recorder
-Trap允许对几乎所有函数进行记录, 它是`xgo`的核心机制, 是Mock和Trace的基础。
-
-下面的例子对函数的执行进行拦截并打印日志:
-
-(查看 [test/testdata/trap/trap.go](test/testdata/trap/trap.go) 获取更多细节.)
 ```go
 package main
 
@@ -375,15 +370,6 @@ func B() {
 }
 ```
 
-使用`go`运行:
-
-```sh
-go run ./
-# 输出:
-#   A
-#   B
-```
-
 使用`xgo`运行:
 
 ```sh
@@ -399,17 +385,7 @@ xgo run ./
 - `init`中: 对所有Goroutine中的函数拦截都生效,
 - `init`完成后: 仅对当前Goroutine生效, 并且在当前Goroutine退出后清理.
 
-当在`init`完成之后调用`AddInterceptor()`, 它还会返回一个额外的清理函数, 用于提前清理设置的拦截器.
-
-例子:
-
-```go
-func main(){
-    clear := trap.RecordCall(...)
-    defer clear()
-    ...
-}
-```
+当在`init`完成之后调用`RecordCall()`, 它还会返回一个额外的清理函数, 用于提前清理设置的拦截器.
 
 ## Trap
 Trap允许对几乎所有函数进行拦截, 它是`xgo`的核心机制, 是其他功能, 如Mock和Trace的基础。
@@ -571,6 +547,13 @@ xgo setup
 ```
   - GoLand: 添加到工程配置, 参考[GoLand: GOROOT and GOPATH](https://www.jetbrains.com/help/go/configuring-goroot-and-gopath.html)
   - 其他IDE: 参考IDE的说明
+
+如果需要调试`xgo`, 添加`XGO_FLAGS=--log-debug ...`到IDE的环境变量中。
+
+你也可以使用`xgo exec <cmd>`来执行需要`xgo`环境的命令:
+```sh
+xgo exec go test -v ./
+```
 
 # 实现原理
 

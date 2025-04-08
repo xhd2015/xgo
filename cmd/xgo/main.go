@@ -126,13 +126,43 @@ func main() {
 	logDebug("finished successfully")
 }
 
+func parseXgoFlags(s string) []string {
+	n := len(s)
+	var list []string
+	var bytes []byte
+	for i := 0; i < n; i++ {
+		if isFlagSpace(s[i]) {
+			if len(bytes) > 0 {
+				list = append(list, string(bytes))
+				bytes = bytes[:0]
+			}
+			continue
+		}
+		bytes = append(bytes, s[i])
+	}
+	if len(bytes) > 0 {
+		list = append(list, string(bytes))
+	}
+	return list
+}
+func isFlagSpace(s byte) bool {
+	return s == ' ' || s == '\t' || s == '\r' || s == '\n'
+}
+
 func handleBuild(cmd string, args []string) error {
 	cmdRun := cmd == "run"
 	cmdBuild := cmd == "build"
 	cmdTest := cmd == "test"
 	cmdExec := cmd == "exec"
 	cmdSetup := cmd == "setup"
-	opts, err := parseOptions(cmd, args)
+	var xgoFlags []string
+	actualArgs := args
+	if !cmdExec {
+		// exec does not consume XGO_FLAGS
+		xgoFlags = parseXgoFlags(os.Getenv(exec_tool.XGO_FLAGS))
+		actualArgs = append(xgoFlags, args...)
+	}
+	opts, err := parseOptions(cmd, actualArgs)
 	if err != nil {
 		return err
 	}
@@ -191,6 +221,12 @@ func handleBuild(cmd string, args []string) error {
 	}
 	if logDebugOption != nil {
 		logStartup()
+	}
+	logDebug("XGO_FLAGS: %s", __DEBUG_CMD_ARGS(xgoFlags))
+
+	if logDebugFile != nil {
+		wd, _ := os.Getwd()
+		logDebug("current working dir: %s", wd)
 	}
 
 	goroot, err := checkGoroot(projectDir, withGoroot)
@@ -310,7 +346,7 @@ func handleBuild(cmd string, args []string) error {
 	// detect if the GOROOT is already instrumented
 	var instrumented bool
 	gorootParent := filepath.Dir(goroot)
-	if gorootParent != "/" && gorootParent != goroot {
+	if gorootParent != "/" && gorootParent != goroot && filepath.Base(goroot) == goVersionName {
 		revisionFile := filepath.Join(gorootParent, INSTRUMENT_XGO_REVISION_FILE)
 		stat, statErr := os.Stat(revisionFile)
 		if statErr != nil && !os.IsNotExist(statErr) {
@@ -318,15 +354,17 @@ func handleBuild(cmd string, args []string) error {
 		}
 		// the revision exists as a file
 		if stat != nil && !stat.IsDir() {
-			logDebug("%s exists, GOROOT %s is already instrumented", revisionFile, goroot)
-			instrumented = true
 			instrumentDir = gorootParent
+			instrumented = true
+			logDebug("%s exists, GOROOT %s is already instrumented", revisionFile, goroot)
 		}
 	}
 
 	// only put cache in tmp dir, which is perdiocally cleaned
-	// for cache
-	// /tmp/xgo/go-instrument/go1.21.0
+	// if put GOROOT into tmp dir, it can be partially cleaned
+	// which causes incomplete directory and thus break build
+	//
+	// for cache: /tmp/xgo/go-instrument/go1.21.0
 	instrumentCacheDir := filepath.Join(globalXgoTmpDir, "go-instrument"+instrumentSuffix, mappedGorootName)
 	if !instrumented {
 		// ~/.xgo/go-instrument/go1.21.0
@@ -357,6 +395,13 @@ func handleBuild(cmd string, args []string) error {
 	compilerBuildID := filepath.Join(instrumentDir, "compile.buildid.txt")
 	instrumentGoroot := filepath.Join(instrumentDir, goVersionName)
 	packageDataDir := filepath.Join(instrumentDir, "pkgdata")
+
+	// also ensure GOROOT itself exists
+	gstat, gstatErr := os.Stat(instrumentGoroot)
+	instrumentedGorootNeedRecreate := true
+	if gstatErr == nil && gstat.IsDir() {
+		instrumentedGorootNeedRecreate = false
+	}
 
 	// gcflags can cause the build cache to invalidate
 	// so separate them with normal one
@@ -459,9 +504,9 @@ func handleBuild(cmd string, args []string) error {
 				return err
 			}
 		}
-		resetOrRevisionChanged := resetInstrument || buildCompiler || coreRevisionChanged
+		resetOrRevisionChanged := resetInstrument || buildCompiler || coreRevisionChanged || instrumentedGorootNeedRecreate
 		if isDevelopment || resetOrRevisionChanged {
-			if !instrumented {
+			if instrumentedGorootNeedRecreate || !instrumented {
 				if cmdSetup && flagV {
 					fmt.Fprintf(os.Stderr, "sync GOROOT %s -> %s\n", goroot, instrumentGoroot)
 				}
@@ -830,21 +875,34 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			}
 		}
 		logCmdExec = func() {
-			logDebug("command: %s %v", instrumentGo, buildCmdArgs)
+			logDebug("command: %s %s", instrumentGo, __DEBUG_CMD_ARGS(buildCmdArgs))
 			if len(runFlagsAfterBuild) > 0 {
 				logDebug("prog flags: %v", runFlagsAfterBuild)
 			}
 		}
 		execCmd = exec.Command(instrumentGo, buildCmdArgs...)
 	} else {
-		logCmdExec = func() {
-			logDebug("command: %v", remainArgs)
+		execCmdPath := remainArgs[0]
+		// is just a name, we check if it inside instrumented GOROOT/bin
+		if !strings.Contains(execCmdPath, string(filepath.Separator)) {
+			checkCmdPath := filepath.Join(instrumentGoroot, "bin", remainArgs[0])
+			fi, statErr := os.Stat(checkCmdPath)
+			if statErr == nil && !fi.IsDir() {
+				logDebug("replace command %s with: %s", remainArgs[0], checkCmdPath)
+				execCmdPath = checkCmdPath
+			}
 		}
-		execCmd = exec.Command(remainArgs[0], remainArgs[1:]...)
+		logCmdExec = func() {
+			logDebug("command: %s %s", execCmdPath, __DEBUG_CMD_ARGS(remainArgs[1:]))
+		}
+		execCmd = exec.Command(execCmdPath, remainArgs[1:]...)
 	}
 	if !noInstrument {
 		execCmdEnv = append(execCmdEnv, "GOCACHE="+buildCacheDir)
-		execCmdEnv = append(execCmdEnv, exec_tool.GO_BYPASS_XGO+"=true")
+		if !cmdExec {
+			// exec allows go to call `go build`,`go test` and `go run` in turn
+			execCmdEnv = append(execCmdEnv, exec_tool.GO_BYPASS_XGO+"=true")
+		}
 	}
 
 	if !noInstrument && V1_0_0 {
@@ -1208,4 +1266,32 @@ func consumeErrAndExit(err error) {
 		os.Stderr.WriteString("\n")
 	}
 	os.Exit(code)
+}
+
+type __DEBUG_CMD_ARGS []string
+
+func (c __DEBUG_CMD_ARGS) String() string {
+	list := make([]string, 0, len(c))
+	for _, arg := range c {
+		if arg == "" {
+			list = append(list, `""`)
+			continue
+		}
+		idxSpace := strings.Index(arg, " ")
+		if idxSpace < 0 {
+			list = append(list, arg)
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") {
+			list = append(list, strconv.Quote(arg))
+			continue
+		}
+		idxEq := strings.Index(arg, "=")
+		if idxEq < 0 {
+			list = append(list, strconv.Quote(arg))
+			continue
+		}
+		list = append(list, arg[:idxEq+1]+strconv.Quote(arg[idxEq+1:]))
+	}
+	return strings.Join(list, " ")
 }

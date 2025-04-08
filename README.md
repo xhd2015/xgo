@@ -330,15 +330,8 @@ func TestTrace(t *testing.T) {
 The trace will only include `B()` and `C()`.
 
 ## Recorder
-Xgo **preprocess** the source code and IR(Intermediate Representation) before invoking `go`, providing a chance for user to intercept any function when called.
+The following example logs function execution trace by adding a Recorder:
 
-Trap allows developer to intercept function execution on the fly.
-
-Trap is the core of `xgo` as it is the basis of other abilities like Mock and Trace.
-
-The following example logs function execution trace by adding a Trap interceptor:
-
-(check [test/testdata/trap/trap.go](test/testdata/trap/trap.go) for more details.)
 ```go
 package main
 
@@ -369,15 +362,6 @@ func B() {
 }
 ```
 
-Run with `go`:
-
-```sh
-go run ./
-# output:
-#   A
-#   B
-```
-
 Run with `xgo`:
 
 ```sh
@@ -389,21 +373,11 @@ xgo run ./
 #   B
 ```
 
-`RecordCall()` add given interceptor to either global or local, depending on whether it is called from `init` or after `init`:
+`RecordCall()` add given recorder to either global or local, depending on whether it is called from `init` or after `init`:
 - Before `init`: effective globally for all goroutines,
 - After `init`: effective only for current goroutine, and will be cleared after current goroutine exits.
 
-When `RecordCall()` is called after `init`, it will return a dispose function to clear the interceptor earlier before current goroutine exits.
-
-Example:
-
-```go
-func main(){
-    clear := trap.RecordCall(...)
-    defer clear()
-    ...
-}
-```
+When `RecordCall()` is called after `init`, it will return a dispose function to clear the recorder earlier before current goroutine exits.
 
 ## Trap
 `xgo` **preprocess** the source code before invoking `go`, providing a chance for user to intercept any function when called.
@@ -558,6 +532,13 @@ This will output an xgo-instrumented GOROOT from your current GOROOT:
 ```
   - GoLand: add to project settings, see [GoLand: GOROOT and GOPATH](https://www.jetbrains.com/help/go/configuring-goroot-and-gopath.html)
   - Others: refer to the IDE's documentation
+
+To debug `xgo`, you can add `XGO_FLAGS=--log-debug ...` to IDE's env, which will automatically applied when `xgo` runs.
+
+You can also use `xgo exec <cmd>` to run commands under the `xgo`'s environment:
+```sh
+xgo exec go test -v ./
+```
 
 # Concurrent safety
 I know you guys from other monkey patching library suffer from the unsafety implied by these frameworks.

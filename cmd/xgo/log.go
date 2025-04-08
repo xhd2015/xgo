@@ -68,7 +68,7 @@ func logDebug(format string, args ...interface{}) {
 }
 
 func logStartup() {
-	logDebug("start: %v", os.Args)
+	logDebug("start: %v", __DEBUG_CMD_ARGS(os.Args))
 	logDebug("runtime.GOOS=%s", runtime.GOOS)
 	logDebug("runtime.GOARCH=%s", runtime.GOARCH)
 	logDebug("runtime.Version()=%s", runtime.Version())
