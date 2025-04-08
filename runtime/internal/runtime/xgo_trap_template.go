@@ -12,6 +12,10 @@ import (
 // make unsafe always imported
 var _ = unsafe.Pointer(nil)
 
+// the Trap series function are also depended on
+// xgo instrument_func and instrument_var.
+// don't change the signature.
+
 // this signature is to avoid relying on defined type
 // just raw string,interface{},[]string, []interface{} are needed
 var __xgo_trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)
@@ -65,6 +69,8 @@ func XgoSetVarPtrTrap(trap func(info unsafe.Pointer, varAddr interface{}, res in
 // to avoid exposing the runtime.G struct to the user
 // and to avoid having to import the runtime package
 // in the user's code.
+// don't change the name. only add fields, don't remove
+// or change orders
 type __xgo_g struct {
 	gls                 map[interface{}]interface{}
 	looseJsonMarshaling bool
@@ -91,11 +97,6 @@ func XgoPeekPanic() (interface{}, uintptr) {
 	return p.arg, p.__RETPC__
 }
 
-func XgoIsLooseJsonMarshaling() bool {
-	curg := getg().m.curg
-	return curg.__xgo_g.looseJsonMarshaling
-}
-
 // XgoGetFullPCName returns full name
 // without ellipsis
 func XgoGetFullPCName(pc uintptr) string {
@@ -112,6 +113,42 @@ func XgoOnCreateG(callback func(g unsafe.Pointer, childG unsafe.Pointer)) {
 
 func XgoOnExitG(callback func()) {
 	__xgo_on_exit_g_callbacks = append(__xgo_on_exit_g_callbacks, callback)
+}
+
+// package inits
+var __xgo_on_init_finished_callbacks []func()
+var __xgo_is_init_finished bool
+
+func XgoOnInitFinished(callback func()) {
+	__xgo_on_init_finished_callbacks = append(__xgo_on_init_finished_callbacks, callback)
+}
+
+func XgoInitFinished() bool {
+	return __xgo_is_init_finished
+}
+
+// ==================================
+// the following code are used by xgo
+// instrument, don't change signature
+// ==================================
+func XgoIsLooseJsonMarshaling() bool {
+	curg := getg().m.curg
+	return curg.__xgo_g.looseJsonMarshaling
+}
+
+func __xgo_callback_on_init_finished() {
+	__xgo_is_init_finished = true
+	callbacks := __xgo_on_init_finished_callbacks
+	__xgo_on_init_finished_callbacks = nil
+	for _, callback := range callbacks {
+		callback()
+	}
+}
+
+func __xgo_callback_on_exit_g() {
+	for _, callback := range __xgo_on_exit_g_callbacks {
+		callback()
+	}
 }
 
 func __xgo_callback_on_create_g(curg *g, newg *g) {
@@ -134,31 +171,4 @@ func __xgo_callback_on_create_g(curg *g, newg *g) {
 	for _, callback := range __xgo_on_create_g_callbacks {
 		callback(curg_p, newg_p)
 	}
-}
-
-func __xgo_callback_on_exit_g() {
-	for _, callback := range __xgo_on_exit_g_callbacks {
-		callback()
-	}
-}
-
-// package inits
-var __xgo_on_init_finished_callbacks []func()
-var __xgo_is_init_finished bool
-
-func __xgo_callback_on_init_finished() {
-	__xgo_is_init_finished = true
-	callbacks := __xgo_on_init_finished_callbacks
-	__xgo_on_init_finished_callbacks = nil
-	for _, callback := range callbacks {
-		callback()
-	}
-}
-
-func XgoOnInitFinished(callback func()) {
-	__xgo_on_init_finished_callbacks = append(__xgo_on_init_finished_callbacks, callback)
-}
-
-func XgoInitFinished() bool {
-	return __xgo_is_init_finished
 }

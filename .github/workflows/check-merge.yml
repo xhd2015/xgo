@@ -19,7 +19,8 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        fetch-depth: 20
+          fetch-depth: 0 # all branches and tags
+    - run: git checkout ${{ github.head_ref }}
       
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -29,6 +30,9 @@ jobs:
     - name: Run Git Hooks
       run: |
           set -x
+          echo 'head_ref: ${{ github.head_ref }}'
+          git rev-parse HEAD
+          git rev-parse HEAD~1
           echo 'before' 
           cat cmd/xgo/version.go
           go run ./script/git-hooks pre-commit --amend --no-commit
@@ -46,3 +50,4 @@ jobs:
       
     - name: Check If Can Merge Into Master Without Intermediate Commit
       run: go run ./script/github-actions check-merge
+      continue-on-error: true

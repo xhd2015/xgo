@@ -96,6 +96,11 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		}
 		return err
 	}
+	funcTabPkg := xgoPkgs.PackageByPath[constants.RUNTIME_CORE_INFO_PKG]
+	if funcTabPkg == nil || !hasFunc(funcTabPkg, constants.RUNTIME_REGISTER_FUNC) {
+		logDebug("skip functab registering")
+		return nil
+	}
 
 	includeMain, loadPkgs, err := getLoadPackages(rules)
 	if err != nil {
@@ -151,14 +156,9 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	if err != nil {
 		return err
 	}
-	funcTabPkg := xgoPkgs.PackageByPath[constants.RUNTIME_FUNC_INFO_PKG]
-	if funcTabPkg == nil || !hasFunc(funcTabPkg, constants.RUNTIME_REGISTER_FUNC) {
-		logDebug("skip functab registering")
-	} else {
-		logDebug("generate functab register")
-		registerFuncTab(xgoPkgs)
-		registerFuncTab(packages)
-	}
+	logDebug("generate functab register")
+	registerFuncTab(xgoPkgs)
+	registerFuncTab(packages)
 
 	logDebug("collect edits")
 	updatedFiles, err := addEditNotes(overlayFS, packages, mayHaveCover, nil)

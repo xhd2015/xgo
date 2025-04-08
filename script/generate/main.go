@@ -22,16 +22,11 @@ import (
 type GenernateType = gen_defs.GenernateType
 
 const (
-	GenernateType_DotAll               GenernateType = "./..."
-	GenernateType_CompilerPatch        GenernateType = "compiler-patch"
-	GenernateType_CompilerHelperCode   GenernateType = "compiler-helper-code"
-	GenernateType_CompilerPatternCode  GenernateType = "compiler-pattern-code"
-	GenernateType_RuntimeDef           GenernateType = "runtime-def"
-	GenernateType_RuntimeTraceModel    GenernateType = gen_defs.GenernateType_RuntimeTraceModel
-	GenernateType_ScriptInstallUpgrade GenernateType = gen_defs.GenernateType_ScriptInstallUpgrade
-	GenernateType_CmdXgoVersion        GenernateType = gen_defs.GenernateType_CmdXgoVersion
-	GenernateType_RuntimeCoreVersion   GenernateType = gen_defs.GenernateType_RuntimeCoreVersion
-	GenernateType_XgoRuntimeGen        GenernateType = gen_defs.GenernateType_XgoRuntimeGen
+	GenernateType_DotAll              GenernateType = "./..."
+	GenernateType_CompilerPatch       GenernateType = "compiler-patch"
+	GenernateType_CompilerHelperCode  GenernateType = "compiler-helper-code"
+	GenernateType_CompilerPatternCode GenernateType = "compiler-pattern-code"
+	GenernateType_RuntimeDef          GenernateType = "runtime-def"
 )
 
 var allGenerateTypes = []GenernateType{
@@ -127,33 +122,33 @@ func generate(rootDir string, subGens SubGens, amend bool, noUpdateVersion bool)
 		rootDir = resolvedRoot
 	}
 
-	if subGens.Has(GenernateType_CmdXgoVersion) {
+	if subGens.Has(gen_defs.GenernateType_CmdXgoVersion) {
 		err := revision.IncrementXgoVersion(rootDir, amend, !noUpdateVersion)
 		if err != nil {
 			return err
 		}
 	}
-	if subGens.Has(GenernateType_RuntimeCoreVersion) {
+	if subGens.Has(gen_defs.GenernateType_RuntimeCoreVersion) {
 		err := revision.CopyCoreVersion(revision.GetXgoVersionFile(rootDir), revision.GetRuntimeVersionFile(rootDir))
 		if err != nil {
 			return err
 		}
 	}
 	needCopyTrace := true
-	if subGens.Has(GenernateType_RuntimeTraceModel) {
+	if subGens.Has(gen_defs.GenernateType_RuntimeTraceModel) {
 		err := copyTraceModel(rootDir)
 		if err != nil {
 			return err
 		}
 		needCopyTrace = false
 	}
-	if subGens.Has(GenernateType_XgoRuntimeGen) {
-		err := genXgoRuntime(string(GenernateType_XgoRuntimeGen), rootDir, needCopyTrace)
+	if subGens.Has(gen_defs.GenernateType_XgoRuntimeGen) {
+		err := genXgoRuntime(string(gen_defs.GenernateType_XgoRuntimeGen), rootDir, needCopyTrace)
 		if err != nil {
 			return err
 		}
 	}
-	if subGens.Has(GenernateType_ScriptInstallUpgrade) {
+	if subGens.Has(gen_defs.GenernateType_ScriptInstallUpgrade) {
 		upgradeDst := filepath.Join(rootDir, "script", "install", "upgrade")
 		err := os.RemoveAll(upgradeDst)
 		if err != nil {

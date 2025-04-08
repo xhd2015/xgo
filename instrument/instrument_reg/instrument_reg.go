@@ -107,7 +107,7 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 	fileEdit := file.Edit
 	fileSyntax := file.File.Syntax
 
-	patch.AddImport(fileEdit, fileSyntax, PKG_FUNC_INFO, constants.RUNTIME_FUNC_INFO_PKG)
+	patch.AddImport(fileEdit, fileSyntax, PKG_FUNC_INFO, constants.RUNTIME_CORE_INFO_PKG)
 
 	absFile := file.File.AbsPath
 	defLines := make([]string, 0, len(varDefs)+2)

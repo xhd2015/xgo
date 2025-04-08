@@ -38,7 +38,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		constants.RUNTIME_INTERNAL_RUNTIME_PKG,
 		constants.RUNTIME_CORE_PKG,
 		constants.RUNTIME_TRAP_FLAGS_PKG,
-		constants.RUNTIME_FUNC_INFO_PKG,
+		constants.RUNTIME_CORE_INFO_PKG,
 		constants.RUNTIME_MOCK_PKG,
 		constants.RUNTIME_TRACE_PKG,
 		constants.RUNTIME_TRAP_PKG,
@@ -66,6 +66,8 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	var foundMock bool
 	var foundTrace bool
 	var foundTrap bool
+	var foundInfoPkg bool
+	var traceFile *edit.File
 	for _, pkg := range editPackages.Packages {
 		goPkg := pkg.LoadPackage.GoPackage
 		if goPkg.Incomplete {
@@ -84,15 +86,16 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			foundTrace = true
 		case constants.RUNTIME_TRAP_PKG[n:]:
 			foundTrap = true
+		case constants.RUNTIME_CORE_INFO_PKG[n:]:
+			foundInfoPkg = true
 		}
-		if suffixPkg == constants.RUNTIME_FUNC_INFO_PKG[n:] ||
+		if suffixPkg == constants.RUNTIME_CORE_INFO_PKG[n:] ||
 			suffixPkg == constants.RUNTIME_MOCK_PKG[n:] ||
 			suffixPkg == constants.RUNTIME_TRAP_PKG[n:] {
 			// only for lookup
 			continue
 		}
 		if suffixPkg == constants.RUNTIME_INTERNAL_RUNTIME_PKG[n:] {
-
 			var runtimeLinkFile *edit.File
 			for _, file := range pkg.Files {
 				switch file.File.Name {
@@ -141,7 +144,6 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			loadFile := file.File
 			content := loadFile.Content
 			absFile := overlay.AbsFile(loadFile.AbsPath)
-			var funcInfos []*edit.FuncInfo
 			switch loadFile.Name {
 			case constants.VERSION_FILE:
 				if suffixPkg == constants.RUNTIME_CORE_PKG[n:] {
@@ -162,14 +164,9 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 				}
 			case constants.TRACE_FILE:
 				if suffixPkg == constants.RUNTIME_TRACE_PKG[n:] {
-					edit := file.Edit
-					funcInfos = instrument_func.InjectRuntimeTrap(edit, importPath, loadFile.Syntax, file.Index)
-					if edit.HasEdit() {
-						overrideContent(absFile, edit.Buffer().String())
-					}
+					traceFile = file
 				}
 			}
-			file.TrapFuncs = funcInfos
 		}
 	}
 	// found any usage of xgo public API, but does not found
@@ -179,6 +176,15 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			return editPackages, ErrLinkFileNotFound
 		}
 		return editPackages, ErrLinkFileNotRequired
+	}
+	if foundInfoPkg && traceFile != nil {
+		// trap trace.go
+		edit := traceFile.Edit
+		funcInfos := instrument_func.InjectRuntimeTrap(edit, constants.RUNTIME_TRACE_PKG, traceFile.File.Syntax, traceFile.Index)
+		if edit.HasEdit() {
+			overrideContent(overlay.AbsFile(traceFile.File.AbsPath), edit.Buffer().String())
+		}
+		traceFile.TrapFuncs = funcInfos
 	}
 	return editPackages, nil
 }

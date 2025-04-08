@@ -8,7 +8,7 @@ const (
 	RUNTIME_INTERNAL_RUNTIME_PKG = "github.com/xhd2015/xgo/runtime/internal/runtime"
 	RUNTIME_INTERNAL_TRAP_PKG    = "github.com/xhd2015/xgo/runtime/internal/trap"
 	RUNTIME_TRAP_FLAGS_PKG       = "github.com/xhd2015/xgo/runtime/internal/flags"
-	RUNTIME_FUNC_INFO_PKG        = "github.com/xhd2015/xgo/runtime/core/info"
+	RUNTIME_CORE_INFO_PKG        = "github.com/xhd2015/xgo/runtime/core/info"
 	RUNTIME_CORE_PKG             = "github.com/xhd2015/xgo/runtime/core"
 	RUNTIME_MOCK_PKG             = "github.com/xhd2015/xgo/runtime/mock"
 	RUNTIME_TRACE_PKG            = "github.com/xhd2015/xgo/runtime/trace"
