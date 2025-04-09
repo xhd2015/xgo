@@ -10,7 +10,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/core/info"
+	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/internal/constants"
 	"github.com/xhd2015/xgo/runtime/internal/flags"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
@@ -29,7 +29,7 @@ const SKIP = 2
 //
 // this avoids the infinite trap problem
 func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool) {
-	funcInfo := (*info.Func)(infoPtr)
+	funcInfo := (*core.FuncInfo)(infoPtr)
 	recvName := funcInfo.RecvName
 	argNames := funcInfo.ArgNames
 	resultNames := funcInfo.ResNames
@@ -45,7 +45,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 	pkg := funcInfo.Pkg
 	name := funcInfo.IdentityName
 
-	var mock func(fnInfo *info.Func, recvPtr interface{}, args []interface{}, results []interface{}) bool
+	var mock func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool
 
 	var isStartTracing bool
 	var isTesting bool

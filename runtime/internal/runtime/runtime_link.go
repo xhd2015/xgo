@@ -9,6 +9,8 @@ import (
 	"unsafe"
 )
 
+type XgoFuncInfo struct{}
+
 func XgoSetTrap(trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	logError("WARNING: failed to link runtime.XgoSetTrap(requires xgo).")
 }
@@ -19,6 +21,10 @@ func XgoSetVarTrap(trap func(info unsafe.Pointer, varAddr interface{}, res inter
 
 func XgoSetVarPtrTrap(trap func(info unsafe.Pointer, varAddr interface{}, res interface{})) {
 	logError("WARNING: failed to link runtime.XgoSetVarPtrTrap(requires xgo).")
+}
+
+func XgoSetupRegisterHandler(register func(fn unsafe.Pointer)) {
+	logError("WARNING: failed to link runtime.XgoSetupRegisterHandler(requires xgo).")
 }
 
 func XgoGetCurG() unsafe.Pointer {

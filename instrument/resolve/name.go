@@ -1,4 +1,4 @@
-package instrument_var
+package resolve
 
 import (
 	"fmt"

@@ -1,8 +1,8 @@
-package instrument_var
+package resolve
 
 import "go/ast"
 
-func (ctx *BlockContext) traverseDecl(node ast.Decl, pkgScopeNames PkgScopeNames, imports Imports) {
+func (ctx *Scope) traverseDecl(node ast.Decl) {
 	if node == nil {
 		return
 	}
@@ -16,7 +16,7 @@ func (ctx *BlockContext) traverseDecl(node ast.Decl, pkgScopeNames PkgScopeNames
 				}
 			case *ast.ValueSpec:
 				for _, value := range spec.Values {
-					ctx.traverseExpr(value, pkgScopeNames, imports)
+					ctx.traverseExpr(value)
 				}
 				// name after values
 				for _, name := range spec.Names {

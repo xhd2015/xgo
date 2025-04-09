@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/core/info"
 	"github.com/xhd2015/xgo/runtime/functab"
 )
 
@@ -82,7 +81,7 @@ func TestFuncTab(t *testing.T) {
 		},
 	}
 	allFuncInfos := functab.GetFuncs()
-	funcInfos := make([]*info.Func, 0, len(allFuncInfos))
+	funcInfos := make([]*core.FuncInfo, 0, len(allFuncInfos))
 	for _, fnInfo := range allFuncInfos {
 		// because we added --trap=time,..., so filter them out
 		if fnInfo.Stdlib {

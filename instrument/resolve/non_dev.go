@@ -1,5 +1,5 @@
 //go:build !dev
 
-package instrument_var
+package resolve
 
 const IS_DEV = false

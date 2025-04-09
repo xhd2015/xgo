@@ -6,9 +6,9 @@ import "fmt"
 // they correspond to a unique commit.
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
-const VERSION = "1.1.0"
-const REVISION = "27f35392cfb42397c7747d47c326c66baacc3e0d+1"
-const NUMBER = 382
+const VERSION = "1.1.1"
+const REVISION = "b385ec2f25f698ce2ee86ec091bf3e4499eb7762+1"
+const NUMBER = 383
 
 // the corresponding runtime/core's version
 // manually updated
@@ -25,9 +25,9 @@ const NUMBER = 382
 //  3. run `go run ./script/generate runtime/core/version.go`
 //
 // finally you will find that the two groups of constants are the same.
-const CORE_VERSION = "1.1.0"
-const CORE_REVISION = "2d734d2e2c0d29c25babfac2ee6b6473f9f068bf+1"
-const CORE_NUMBER = 377
+const CORE_VERSION = "1.1.1"
+const CORE_REVISION = "b385ec2f25f698ce2ee86ec091bf3e4499eb7762+1"
+const CORE_NUMBER = 383
 
 func getRevision() string {
 	return formatRevision(VERSION, REVISION, NUMBER)

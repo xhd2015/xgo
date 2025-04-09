@@ -35,6 +35,8 @@ var allGenerateTypes = []GenernateType{
 	gen_defs.GenernateType_RuntimeTraceModel,
 	gen_defs.GenernateType_XgoRuntimeGen,
 	gen_defs.GenernateType_ScriptInstallUpgrade,
+	gen_defs.GenernateType_RuntimeCoreFunc,
+	gen_defs.GenernateType_RuntimeXgoTrapTemplate,
 }
 
 func main() {
@@ -142,6 +144,21 @@ func generate(rootDir string, subGens SubGens, amend bool, noUpdateVersion bool)
 		}
 		needCopyTrace = false
 	}
+
+	if subGens.Has(gen_defs.GenernateType_RuntimeCoreFunc) {
+		err := replaceCoreFunc()
+		if err != nil {
+			return err
+		}
+
+	}
+	if subGens.Has(gen_defs.GenernateType_RuntimeXgoTrapTemplate) {
+		err := replaceXgoTrap()
+		if err != nil {
+			return err
+		}
+	}
+
 	if subGens.Has(gen_defs.GenernateType_XgoRuntimeGen) {
 		err := genXgoRuntime(string(gen_defs.GenernateType_XgoRuntimeGen), rootDir, needCopyTrace)
 		if err != nil {

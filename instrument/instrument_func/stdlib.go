@@ -36,6 +36,14 @@ func IsPkgAllowed(pkg *edit.Package) bool {
 	return true
 }
 
+func IsPkgNeverInstrument(pkgPath string) bool {
+	cfg, ok := stdPkgConfigMapping[pkgPath]
+	if ok && cfg.neverInstrument {
+		return true
+	}
+	return false
+}
+
 var stdPkgConfigMapping = map[string]stdPkgConfig{
 	"os": {
 		whitelistFunc: map[string]bool{

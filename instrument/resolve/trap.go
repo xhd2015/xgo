@@ -1,4 +1,4 @@
-package instrument_var
+package resolve
 
 import (
 	"go/ast"
@@ -7,7 +7,7 @@ import (
 	"github.com/xhd2015/xgo/instrument/edit"
 )
 
-func (ctx *BlockContext) trapIdent(addr *ast.UnaryExpr, idt *ast.Ident, pkgScopeNames PkgScopeNames, imports Imports) bool {
+func (ctx *Scope) trapIdent(addr *ast.UnaryExpr, idt *ast.Ident) bool {
 	if isBlankName(idt.Name) || ctx.Has(idt.Name) {
 		return false
 	}
@@ -24,7 +24,7 @@ func (ctx *BlockContext) trapIdent(addr *ast.UnaryExpr, idt *ast.Ident, pkgScope
 }
 
 // if is &pkg.VarName, return &pkg.VarName_xgo_get_addr()
-func (ctx *BlockContext) trapSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr, pkgScopeNames PkgScopeNames, imports Imports) bool {
+func (ctx *Scope) trapSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr) bool {
 	// form: pkg.var
 	xNode, ok := sel.X.(*ast.Ident)
 	if !ok {
@@ -36,7 +36,7 @@ func (ctx *BlockContext) trapSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr
 		return false
 	}
 	// import path
-	pkgPath := imports[xName]
+	pkgPath := ctx.Global.Imports[xName]
 	if pkgPath == "" {
 		// sel.X = ctx.trapValueNode(xNode, globaleNames)
 		return false
@@ -61,7 +61,7 @@ func (ctx *BlockContext) trapSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr
 	return true
 }
 
-func (ctx *BlockContext) applyVarRewrite(decl *edit.Decl, addr *ast.UnaryExpr, startPos token.Pos, endPos token.Pos) {
+func (ctx *Scope) applyVarRewrite(decl *edit.Decl, addr *ast.UnaryExpr, startPos token.Pos, endPos token.Pos) {
 	// change pkg.VarName to pkg.VarName_xgo_get()
 	decl.HasCallRewrite = true
 

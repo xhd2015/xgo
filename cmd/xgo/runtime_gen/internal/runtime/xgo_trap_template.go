@@ -127,6 +127,89 @@ func XgoInitFinished() bool {
 	return __xgo_is_init_finished
 }
 
+// keep sync with core.FuncInfo
+// don't change these markers
+// ==start xgo func==
+type XgoKind int
+
+const (
+	XgoKind_Func   XgoKind = 0
+	XgoKind_Var    XgoKind = 1
+	XgoKind_VarPtr XgoKind = 2
+	XgoKind_Const  XgoKind = 3
+)
+
+type XgoFuncInfo struct {
+	Kind XgoKind
+	// full name, format: {pkgPath}.{receiver}.{funcName}
+	// example:  github.com/xhd2015/xgo/runtime/core.(*SomeType).SomeFunc
+	FullName string
+	Pkg      string
+	// identity name within a package, for ptr-method, it's something like `(*SomeType).SomeFunc`
+	// run `go run ./test/example/method` to verify
+	IdentityName string
+	Name         string
+	RecvType     string
+	RecvPtr      bool
+
+	// is this an interface method?
+	Interface bool
+
+	// is this a generic function?
+	Generic bool
+
+	// is this a closure?
+	Closure bool
+
+	// is this function from stdlib
+	Stdlib bool
+
+	// source info
+	File string
+	Line int
+
+	// PC is the function entry point
+	// if it's a method, it is the underlying entry point
+	// for all instances, it is the same
+	PC   uintptr     `json:"-"`
+	Func interface{} `json:"-"`
+	Var  interface{} `json:"-"` // var address
+
+	RecvName string
+	ArgNames []string
+	ResNames []string
+
+	// is first argument ctx
+	FirstArgCtx bool
+	// last result error
+	LastResultErr bool
+}
+
+// ==end xgo func==
+
+var __xgo_staging_funcs []*XgoFuncInfo
+var __xgo_register_handler func(fn unsafe.Pointer)
+
+func XgoSetupRegisterHandler(register func(fn unsafe.Pointer)) {
+	if __xgo_register_handler != nil {
+		panic("registerHandler already set")
+	}
+	__xgo_register_handler = register
+	saved := __xgo_staging_funcs
+	__xgo_staging_funcs = nil
+	for _, fn := range saved {
+		register(unsafe.Pointer(fn))
+	}
+}
+
+func XgoRegister(fn *XgoFuncInfo) {
+	if __xgo_register_handler != nil {
+		__xgo_register_handler(unsafe.Pointer(fn))
+		return
+	}
+	__xgo_staging_funcs = append(__xgo_staging_funcs, fn)
+}
+
 // ==================================
 // the following code are used by xgo
 // instrument, don't change signature

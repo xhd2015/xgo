@@ -11,6 +11,8 @@ import (
 	"unsafe"
 )
 
+type XgoFuncInfo = runtime.XgoFuncInfo
+
 func XgoSetTrap(trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)) {
 	runtime.XgoSetTrap(trap)
 }
@@ -21,6 +23,10 @@ func XgoSetVarTrap(trap func(info unsafe.Pointer, varAddr interface{}, res inter
 
 func XgoSetVarPtrTrap(trap func(info unsafe.Pointer, varAddr interface{}, res interface{})) {
 	runtime.XgoSetVarPtrTrap(trap)
+}
+
+func XgoSetupRegisterHandler(register func(fn unsafe.Pointer)) {
+	runtime.XgoSetupRegisterHandler(register)
 }
 
 func XgoGetCurG() unsafe.Pointer {

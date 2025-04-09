@@ -7,13 +7,13 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/core/info"
+	"github.com/xhd2015/xgo/runtime/core"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/internal/stack"
 )
 
 func trapVar(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
-	funcInfo := (*info.Func)(infoPtr)
+	funcInfo := (*core.FuncInfo)(infoPtr)
 
 	begin := xgo_runtime.XgoRealTimeNow()
 	stk := stack.Get()
@@ -33,7 +33,7 @@ func trapVar(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 }
 
 func trapVarPtr(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
-	funcInfo := (*info.Func)(infoPtr)
+	funcInfo := (*core.FuncInfo)(infoPtr)
 
 	begin := xgo_runtime.XgoRealTimeNow()
 	stk := stack.Get()
@@ -63,7 +63,7 @@ func trapVarPtr(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 	doTrapVar(funcInfo, stk, stkData, begin, res, recorders, mock, mockRes)
 }
 
-func doTrapVar(funcInfo *info.Func, stk *stack.Stack, stkData *StackData, begin time.Time, res interface{}, recorders []*varRecordHolder, mock func(fnInfo *info.Func, res interface{}), mockRes interface{}) {
+func doTrapVar(funcInfo *core.FuncInfo, stk *stack.Stack, stkData *StackData, begin time.Time, res interface{}, recorders []*varRecordHolder, mock func(fnInfo *core.FuncInfo, res interface{}), mockRes interface{}) {
 	var postRecorders []func()
 	for _, recorder := range recorders {
 		var data interface{}

@@ -58,7 +58,8 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		constants.RUNTIME_INTERNAL_RUNTIME_PKG,
 		constants.RUNTIME_CORE_PKG,
 		constants.RUNTIME_TRAP_FLAGS_PKG,
-		constants.RUNTIME_CORE_INFO_PKG,
+		constants.RUNTIME_FUNCTAB_PKG,
+		constants.RUNTIME_LEGACY_CORE_INFO_PKG,
 		constants.RUNTIME_MOCK_PKG,
 		constants.RUNTIME_TRACE_PKG,
 		constants.RUNTIME_TRAP_PKG,
@@ -72,8 +73,10 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	var foundMock bool
 	var foundTrace bool
 	var foundTrap bool
-	var foundInfoPkg bool
+	var foundFunctabPkg bool
+	var foundLegacyCoreInfoPkg bool
 	var traceFile *edit.File
+	var funcTabPkg *edit.Package
 	for _, pkg := range editPackages.Packages {
 		goPkg := pkg.LoadPackage.GoPackage
 		if goPkg.Incomplete {
@@ -92,12 +95,16 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			foundTrace = true
 		case constants.RUNTIME_TRAP_PKG[n:]:
 			foundTrap = true
-		case constants.RUNTIME_CORE_INFO_PKG[n:]:
-			foundInfoPkg = true
+		case constants.RUNTIME_FUNCTAB_PKG[n:]:
+			foundFunctabPkg = true
+			funcTabPkg = pkg
+		case constants.RUNTIME_LEGACY_CORE_INFO_PKG[n:]:
+			foundLegacyCoreInfoPkg = true
 		}
-		if suffixPkg == constants.RUNTIME_CORE_INFO_PKG[n:] ||
+		if suffixPkg == constants.RUNTIME_FUNCTAB_PKG[n:] ||
 			suffixPkg == constants.RUNTIME_MOCK_PKG[n:] ||
-			suffixPkg == constants.RUNTIME_TRAP_PKG[n:] {
+			suffixPkg == constants.RUNTIME_TRAP_PKG[n:] ||
+			suffixPkg == constants.RUNTIME_LEGACY_CORE_INFO_PKG[n:] {
 			// only for lookup
 			continue
 		}
@@ -153,19 +160,24 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	// link file, it means the runtime is not instrumented
 	if !foundLink {
 		if foundMock || foundTrace || foundTrap {
+			// mock, trace and trap are public APIs of xgo/runtime
 			return editPackages, ErrLinkFileNotFound
 		}
 		return editPackages, ErrLinkFileNotRequired
 	}
-	if foundInfoPkg && traceFile != nil {
+	if foundFunctabPkg && traceFile != nil {
 		// trap trace.go
 		edit := traceFile.Edit
-		funcInfos := instrument_func.InjectRuntimeTrap(edit, constants.RUNTIME_TRACE_PKG, traceFile.File.Syntax, traceFile.Index)
+		funcInfos := instrument_func.TrapFunc(edit, constants.RUNTIME_TRACE_PKG, traceFile.File.Syntax, traceFile.Index, instrument_func.Options{})
 		if edit.HasEdit() {
 			overrideContent(overlay.AbsFile(traceFile.File.AbsPath), edit.Buffer().String())
 		}
 		traceFile.TrapFuncs = funcInfos
 	}
+	if foundLegacyCoreInfoPkg && foundFunctabPkg {
+		addLegacyFunctabInit(funcTabPkg, overrideContent)
+	}
+
 	return editPackages, nil
 }
 

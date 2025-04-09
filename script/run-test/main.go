@@ -60,6 +60,7 @@ var defaultTestArgs = []*TestArg{
 			// "./...",
 			// "./test",
 			"./support/...",
+			"./instrument/...",
 		},
 	},
 	{

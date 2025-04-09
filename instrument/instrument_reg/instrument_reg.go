@@ -59,7 +59,7 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 			fmt.Sprintf("ResNames:[]string{%q}", varInfo.Name),
 		}
 
-		literal := makeLiteral("Kind_Var", varInfo.Name, varInfo.Name, varInfo.Decl.Decl.Pos(), extra)
+		literal := makeLiteral("XgoKind_Var", varInfo.Name, varInfo.Name, varInfo.Decl.Decl.Pos(), extra)
 		addLiteral(varInfo.InfoVar, literal, "", "")
 	}
 	for _, funcInfo := range file.TrapFuncs {
@@ -90,11 +90,12 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 			extra = append(extra, fmt.Sprintf("ResNames:[]string{%s}", astutil.JoinQuoteNames(funcInfo.Results.Names(), ",")))
 		}
 
-		literal := makeLiteral("Kind_Func", funcInfo.FuncDecl.Name.Name, identityName, funcInfo.FuncDecl.Pos(), extra)
+		literal := makeLiteral("XgoKind_Func", funcInfo.FuncDecl.Name.Name, identityName, funcInfo.FuncDecl.Pos(), extra)
 		addLiteral(funcInfo.InfoVar, literal, delayInitProp, delayInitValue)
 	}
+
 	for _, intfType := range file.InterfaceTypes {
-		literal := makeLiteral("Kind_Func", intfType.Name, intfType.Name, intfType.Ident.Pos(), []string{
+		literal := makeLiteral("XgoKind_Func", intfType.Name, intfType.Name, intfType.Ident.Pos(), []string{
 			"Interface:true",
 			fmt.Sprintf("RecvType: %q", intfType.Name),
 		})
@@ -107,7 +108,7 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 	fileEdit := file.Edit
 	fileSyntax := file.File.Syntax
 
-	patch.AddImport(fileEdit, fileSyntax, PKG_FUNC_INFO, constants.RUNTIME_CORE_INFO_PKG)
+	patch.AddImport(fileEdit, fileSyntax, PKG_FUNC_INFO, constants.RUNTIME_REG_PKG)
 
 	absFile := file.File.AbsPath
 	defLines := make([]string, 0, len(varDefs)+2)

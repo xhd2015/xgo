@@ -10,6 +10,7 @@ import (
 	astutil "github.com/xhd2015/xgo/instrument/ast"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
+	"github.com/xhd2015/xgo/instrument/resolve"
 	"github.com/xhd2015/xgo/support/edit/goedit"
 )
 
@@ -19,7 +20,12 @@ const (
 	resultNamePrefix = "__xgo_auto_res_"
 )
 
-// InjectRuntimeTrap parses the given file as golang AST,
+type Options struct {
+	NoFilterStdlib bool
+	PkgRecorder    *resolve.PkgRecorder
+}
+
+// TrapFunc parses the given file as golang AST,
 // and then for each package level function decl that has a body,
 // it inserts a `defer runtime.XgoTrap()();` at the beginning of the body.
 // Returns the modified content.
@@ -34,10 +40,16 @@ const (
 //		func add(a, b int) int {defer runtime.XgoTrap()();
 //			return a+b
 //		}
-func InjectRuntimeTrap(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int) []*edit.FuncInfo {
+func TrapFunc(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int, opts Options) []*edit.FuncInfo {
 	fset := editor.Fset()
 
-	cfg, cfgOk := stdPkgConfigMapping[pkgPath]
+	recorder := opts.PkgRecorder
+
+	var cfg stdPkgConfig
+	var cfgOk bool
+	if !opts.NoFilterStdlib {
+		cfg, cfgOk = stdPkgConfigMapping[pkgPath]
+	}
 
 	var funcInfos []*edit.FuncInfo
 	// Visit all nodes in the AST
@@ -67,6 +79,24 @@ func InjectRuntimeTrap(editor *goedit.Edit, pkgPath string, file *ast.File, file
 		if cfgOk && !cfg.whitelistFunc[identityName] && !matchAnyPrefix(cfg.whitelistFuncPrefix, identityName) {
 			// TODO: may enforce only exporeted function on standard lib?
 			return true
+		}
+
+		if recorder != nil {
+			var hasFnRecord bool
+			var hasTypeMethodRecord bool
+			fnRecorder := recorder.Get(funcName)
+			if fnRecorder != nil && fnRecorder.HasMockPatch {
+				hasFnRecord = true
+			}
+			if !hasFnRecord && recvType != nil {
+				typeRecorder := recorder.Get(recvType.Name)
+				if typeRecorder != nil && typeRecorder.NamesHavingMock[funcName] {
+					hasTypeMethodRecord = true
+				}
+			}
+			if !hasFnRecord && !hasTypeMethodRecord {
+				return true
+			}
 		}
 
 		_, receiverAddr := toNameAddr(receiver)
