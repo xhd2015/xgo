@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
@@ -20,7 +19,28 @@ var ErrLinkFileNotFound = errors.New("xgo: link file not found")
 var ErrLinkFileNotRequired = errors.New("xgo: link file not required")
 var ErrRuntimeVersionDeprecatedV1_0_0 = errors.New("runtime version deprecated")
 
-func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string, goVersion *goinfo.GoVersion, overlayFS overlay.Overlay, mod string, modfile string, xgoVersion string, xgoRevision string, xgoNumber int, collectTestTrace bool, collectTestTraceDir string, overrideContent func(absFile overlay.AbsFile, content string)) (*edit.Packages, error) {
+type LinkOptions struct {
+	Mod                 string
+	Modfile             string
+	XgoVersion          string
+	XgoRevision         string
+	XgoNumber           int
+	CollectTestTrace    bool
+	CollectTestTraceDir string
+
+	ReadRuntimeGenFile func(path []string) ([]byte, error)
+}
+
+func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string, goVersion *goinfo.GoVersion, overlayFS overlay.Overlay, overrideContent func(absFile overlay.AbsFile, content string), linkOpts LinkOptions) (*edit.Packages, error) {
+	mod := linkOpts.Mod
+	modfile := linkOpts.Modfile
+	xgoVersion := linkOpts.XgoVersion
+	xgoRevision := linkOpts.XgoRevision
+	xgoNumber := linkOpts.XgoNumber
+	collectTestTrace := linkOpts.CollectTestTrace
+	collectTestTraceDir := linkOpts.CollectTestTraceDir
+	readRuntimeGenFile := linkOpts.ReadRuntimeGenFile
+
 	opts := load.LoadOptions{
 		Dir:     projectDir,
 		Overlay: overlayFS,
@@ -46,20 +66,6 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	if err != nil {
 		// TODO: handle the case where error indicates the package is not found
 		return nil, err
-	}
-	overrideWithFile := func(absFile overlay.AbsFile, targetFile overlay.AbsFile, filter func(content string) (string, error)) error {
-		_, content, err := overlayFS.Read(targetFile)
-		if err != nil {
-			return err
-		}
-		if filter != nil {
-			content, err = filter(content)
-			if err != nil {
-				return err
-			}
-		}
-		overrideContent(absFile, content)
-		return nil
 	}
 	editPackages := edit.Edit(packages)
 	var foundLink bool
@@ -108,35 +114,9 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 				}
 			}
 
-			// why these two files cannot be found by list?
-			// because they have special build tag:
-			//  '//go:build ignore'
-			dir := pkg.LoadPackage.GoPackage.Dir
-			runtimeLinkTemplateFile := hasFile(dir, constants.RUNTIME_LINK_TEMPLATE_FILE)
-			trapTemplateFile := hasFile(dir, constants.XGO_TRAP_TEMPLATE_FILE)
-
-			if runtimeLinkFile != nil && runtimeLinkTemplateFile != "" {
-				err := overrideWithFile(overlay.AbsFile(runtimeLinkFile.File.AbsPath), overlay.AbsFile(runtimeLinkTemplateFile), func(content string) (string, error) {
-					return patch.RemoveBuildIgnore(content)
-				})
-				if err != nil {
-					return nil, err
-				}
-			}
-			if trapTemplateFile != "" {
-				// override file under GOROOT
-				// by always use the one bind with runtime ensures the trap file's
-				// API always matches the one that's expected by xgo/runtime
-				gorootTrapFile := overlay.AbsFile(constants.GetGoRuntimeXgoTrapFile(goroot))
-				_, templateContent, err := overlayFS.Read(overlay.AbsFile(trapTemplateFile))
-				if err != nil {
-					return nil, err
-				}
-				content, err := template.InstantiateXgoTrap(templateContent, goVersion)
-				if err != nil {
-					return nil, err
-				}
-				overlayFS.OverrideContent(gorootTrapFile, content)
+			err := linkRuntimeTemplates(goroot, overlayFS, pkg.LoadPackage.GoPackage.Dir, goVersion, runtimeLinkFile, readRuntimeGenFile, overrideContent)
+			if err != nil {
+				return nil, err
 			}
 			continue
 		}
@@ -189,11 +169,62 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	return editPackages, nil
 }
 
-func hasFile(dir string, fileName string) string {
-	filePath := filepath.Join(dir, fileName)
-	fi, err := os.Stat(filePath)
-	if err == nil && !fi.IsDir() {
-		return filePath
+// linkRuntimeTemplates links the runtime templates:
+//
+//	runtime_link_template.go -> runtime_link.go
+//	xgo_trap_template.go -> GOROOT/src/runtime/xgo_trap.go
+//
+// why these two files cannot be found by list?
+// because they have special build tag:
+//
+//	'//go:build ignore'
+func linkRuntimeTemplates(goroot string, overlayFS overlay.Overlay, internalRuntimeDir string, goVersion *goinfo.GoVersion, runtimeLinkFile *edit.File, readRuntimeGenFile func(path []string) ([]byte, error), overrideContent func(absFile overlay.AbsFile, content string)) error {
+	if runtimeLinkFile != nil {
+		runtimeLinkTemplateContent, err := readRuntimeFileFromDirOrGen(internalRuntimeDir, constants.RUNTIME_LINK_TEMPLATE_PATH, overlayFS, readRuntimeGenFile)
+		if err != nil {
+			return err
+		}
+		runtimeLinkTemplateContent, err = patch.RemoveBuildIgnore(runtimeLinkTemplateContent)
+		if err != nil {
+			return err
+		}
+		// override: runtime_link_template.go -> runtime_link.go
+		overrideContent(overlay.AbsFile(runtimeLinkFile.File.AbsPath), runtimeLinkTemplateContent)
 	}
-	return ""
+
+	xgoTrapTemplateContent, err := readRuntimeFileFromDirOrGen(internalRuntimeDir, constants.RUNTIME_XGO_TRAP_TEMPLATE_PATH, overlayFS, readRuntimeGenFile)
+	if err != nil {
+		return err
+	}
+
+	// override file under GOROOT
+	// by always use the one bind with runtime ensures the trap file's
+	// API always matches the one that's expected by xgo/runtime
+	gorootTrapFile := overlay.AbsFile(constants.GetGoRuntimeXgoTrapFile(goroot))
+	content, err := template.InstantiateXgoTrap(xgoTrapTemplateContent, goVersion)
+	if err != nil {
+		return err
+	}
+
+	// override: xgo_trap_template.go -> GOROOT/src/runtime/xgo_trap.go
+	overlayFS.OverrideContent(gorootTrapFile, content)
+	return nil
+}
+
+func readRuntimeFileFromDirOrGen(internalRuntimeDir string, path []string, overlayFS overlay.Overlay, readRuntimeGenFile func(path []string) ([]byte, error)) (string, error) {
+	templateFile := hasFile(internalRuntimeDir, path[len(path)-1])
+	_, templateContent, readErr := overlayFS.Read(overlay.AbsFile(templateFile))
+	if readErr == nil {
+		return templateContent, nil
+	}
+	if !os.IsNotExist(readErr) {
+		return "", readErr
+	}
+
+	// fallback to the one that xgo embeds(this only happens in when transition from v1.1.0 to v1.1.1)
+	templateContentBytes, err := readRuntimeGenFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(templateContentBytes), nil
 }

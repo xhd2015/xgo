@@ -2,6 +2,8 @@ package instrument_xgo_runtime
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -116,4 +118,13 @@ func replaceByLine(code string, linePattern string, replacement string) string {
 	}
 	endIdx += base
 	return code[:idx] + replacement + "\n" + code[endIdx:]
+}
+
+func hasFile(dir string, fileName string) string {
+	filePath := filepath.Join(dir, fileName)
+	fi, err := os.Stat(filePath)
+	if err == nil && !fi.IsDir() {
+		return filePath
+	}
+	return ""
 }

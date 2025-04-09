@@ -54,7 +54,7 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 	if err != nil {
 		return err
 	}
-	xgoTrapTemplateBytes, err := getRuntimeGenFile(xgoSrc, constants.RUNTIME_XGO_TRAP_TEMPLATE_PATH)
+	xgoTrapTemplateBytes, err := readRuntimeGenFile(xgoSrc, constants.RUNTIME_XGO_TRAP_TEMPLATE_PATH)
 	if err != nil {
 		return err
 	}

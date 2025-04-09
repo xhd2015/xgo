@@ -46,7 +46,7 @@ var PREDEFINED_STD_PKGS = []string{
 }
 
 // goroot is critical for stdlib
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -71,7 +71,18 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 			panic(err)
 		}
 	}
-	xgoPkgs, err := instrument_xgo_runtime.LinkXgoRuntime(goroot, projectDir, xgoRuntimeModuleDir, goVersion, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir, overrideXgoContent)
+	xgoPkgs, err := instrument_xgo_runtime.LinkXgoRuntime(goroot, projectDir, xgoRuntimeModuleDir, goVersion, overlayFS, overrideXgoContent, instrument_xgo_runtime.LinkOptions{
+		Mod:                 mod,
+		Modfile:             modfile,
+		XgoVersion:          VERSION,
+		XgoRevision:         REVISION,
+		XgoNumber:           NUMBER,
+		CollectTestTrace:    collectTestTrace,
+		CollectTestTraceDir: collectTestTraceDir,
+		ReadRuntimeGenFile: func(path []string) ([]byte, error) {
+			return readRuntimeGenFile(xgoSrc, path)
+		},
+	})
 	if err != nil {
 		if err == instrument_xgo_runtime.ErrLinkFileNotRequired {
 			return nil

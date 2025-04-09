@@ -55,6 +55,7 @@ const (
 	LATEST_LEGACY_RUNTIME_NUMBER = 324
 )
 
+var RUNTIME_LINK_TEMPLATE_PATH = []string{"internal", "runtime", RUNTIME_LINK_TEMPLATE_FILE}
 var RUNTIME_XGO_TRAP_TEMPLATE_PATH = []string{"internal", "runtime", XGO_TRAP_TEMPLATE_FILE}
 var __GO_RUNTIME_XGO_TRAP_PATH = []string{"src", "runtime", XGO_TRAP_FILE}
 
