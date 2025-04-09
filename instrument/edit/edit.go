@@ -23,6 +23,7 @@ type Decl struct {
 	Type           ast.Expr // might be nil
 	Decl           *ast.GenDecl
 	HasCallRewrite bool
+	File           *File
 }
 
 type Packages struct {
@@ -30,13 +31,17 @@ type Packages struct {
 	Packages []*Package
 
 	PackageByPath map[string]*Package
+
+	LoadOptions load.LoadOptions
 }
 
 type Package struct {
 	LoadPackage *load.Package
 	Files       []*File
 
-	Decls map[string]*Decl
+	Decls        map[string]*Decl
+	HasVarDecls  bool
+	HasTypeDecls bool
 }
 
 type File struct {
@@ -101,13 +106,23 @@ func (c *File) HasEdit() bool {
 	return c.Edit != nil && c.Edit.Buffer().HasEdits()
 }
 
-func Edit(packages *load.Packages) *Packages {
+func New(packages *load.Packages) *Packages {
 	pkgs := &Packages{
-		Fset:          packages.Fset,
-		Packages:      make([]*Package, len(packages.Packages)),
-		PackageByPath: make(map[string]*Package, len(packages.Packages)),
+		Fset:     packages.Fset,
+		Packages: make([]*Package, 0, len(packages.Packages)),
 	}
-	for i, pkg := range packages.Packages {
+	pkgs.Add(packages)
+	return pkgs
+}
+
+func (c *Packages) Add(packages *load.Packages) {
+	if c.Fset != packages.Fset {
+		panic("token.FileSet mismatch")
+	}
+	if c.PackageByPath == nil {
+		c.PackageByPath = make(map[string]*Package, len(packages.Packages))
+	}
+	for _, pkg := range packages.Packages {
 		files := make([]*File, len(pkg.Files))
 		for j, file := range pkg.Files {
 			files[j] = &File{
@@ -120,17 +135,17 @@ func Edit(packages *load.Packages) *Packages {
 			LoadPackage: pkg,
 			Files:       files,
 		}
-		pkgs.Packages[i] = p
-		pkgs.PackageByPath[pkg.GoPackage.ImportPath] = p
+		c.Packages = append(c.Packages, p)
+		c.PackageByPath[pkg.GoPackage.ImportPath] = p
 	}
-
-	return pkgs
 }
 
 func (p *Packages) Filter(f func(pkg *Package) bool) *Packages {
 	filtered := &Packages{
 		Fset:          p.Fset,
-		PackageByPath: make(map[string]*Package),
+		Packages:      make([]*Package, 0, len(p.Packages)),
+		PackageByPath: make(map[string]*Package, len(p.PackageByPath)),
+		LoadOptions:   p.LoadOptions,
 	}
 	for _, pkg := range p.Packages {
 		if !f(pkg) {

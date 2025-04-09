@@ -15,7 +15,7 @@ func TestSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	packages := edit.Edit(loadPackages)
+	packages := edit.New(loadPackages)
 	err = resolve.Traverse(packages, &resolve.Recorder{})
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestVarGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	packages := edit.Edit(loadPackages)
+	packages := edit.New(loadPackages)
 	err = resolve.Traverse(packages, &resolve.Recorder{})
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestCustom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	packages := edit.Edit(loadPackages)
+	packages := edit.New(loadPackages)
 	err = resolve.Traverse(packages, &resolve.Recorder{})
 	if err != nil {
 		t.Fatal(err)

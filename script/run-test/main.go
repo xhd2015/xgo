@@ -118,6 +118,13 @@ var defaultTestArgs = []*TestArg{
 			"./...",
 		},
 	},
+	// mock third party
+	{
+		Dir: "runtime/test/mock/mock_third_party/service",
+		Args: []string{
+			"./...",
+		},
+	},
 	// TODO: check extraSubTests for remaining tests
 	{
 		Dir: "runtime/test/trace/trace_without_dep_vendor",

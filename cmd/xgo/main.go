@@ -199,6 +199,7 @@ func handleBuild(cmd string, args []string) error {
 	gcflags := opts.gcflags
 	overlayFile := opts.overlay
 	modfile := opts.modfile
+	tags := opts.tags
 	withGoroot := opts.withGoroot
 	dumpIR := opts.dumpIR
 	dumpAST := opts.dumpAST
@@ -811,6 +812,9 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		}
 		if modfile != "" {
 			buildCmdArgs = append(buildCmdArgs, "-modfile", modfile)
+		}
+		if tags != "" {
+			buildCmdArgs = append(buildCmdArgs, "-tags", tags)
 		}
 		var hasBuildDebug bool
 		for _, f := range gcflags {

@@ -68,7 +68,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		// TODO: handle the case where error indicates the package is not found
 		return nil, err
 	}
-	editPackages := edit.Edit(packages)
+	editPackages := edit.New(packages)
 	var foundLink bool
 	var foundMock bool
 	var foundTrace bool
@@ -168,7 +168,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	if foundFunctabPkg && traceFile != nil {
 		// trap trace.go
 		edit := traceFile.Edit
-		funcInfos := instrument_func.TrapFunc(edit, constants.RUNTIME_TRACE_PKG, traceFile.File.Syntax, traceFile.Index, instrument_func.Options{})
+		funcInfos := instrument_func.TrapFuncs(edit, constants.RUNTIME_TRACE_PKG, traceFile.File.Syntax, traceFile.Index, instrument_func.Options{})
 		if edit.HasEdit() {
 			overrideContent(overlay.AbsFile(traceFile.File.AbsPath), edit.Buffer().String())
 		}

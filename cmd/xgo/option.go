@@ -60,7 +60,7 @@ type options struct {
 
 	overlay string
 	modfile string
-
+	tags    string
 	// --trap-stdlib
 	trapStdlib bool
 
@@ -142,6 +142,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var gcflags []string
 	var overlay string
 	var modfile string
+	var tags string
 	var stackTrace string
 	var stackTraceDir string
 	var straceSnapshotMainModuleDefault string
@@ -238,6 +239,12 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			Flags: []string{"-modfile"},
 			Set: func(v string) {
 				modfile = v
+			},
+		},
+		{
+			Flags: []string{"-tags"},
+			Set: func(v string) {
+				tags = v
 			},
 		},
 		{
@@ -518,6 +525,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		gcflags:                         gcflags,
 		overlay:                         overlay,
 		modfile:                         modfile,
+		tags:                            tags,
 		stackTrace:                      stackTrace,
 		stackTraceDir:                   stackTraceDir,
 		straceSnapshotMainModuleDefault: straceSnapshotMainModuleDefault,

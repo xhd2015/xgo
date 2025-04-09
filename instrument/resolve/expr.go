@@ -3,8 +3,6 @@ package resolve
 import (
 	"go/ast"
 	"go/token"
-
-	"github.com/xhd2015/xgo/instrument/constants"
 )
 
 func (ctx *Scope) traverseExprs(nodes []ast.Expr) {
@@ -28,7 +26,7 @@ func (c *Scope) traverseCallExpr(callExpr *ast.CallExpr) {
 		}
 		if c.needDetectMock() && len(callExpr.Args) > 0 {
 			// check if mock.Patch
-			if c.isMockPatch(sel) {
+			if c.requireTrap(sel) {
 				// resolve the first argument's type
 				// to see its type so that we
 				// need to insert trap points
@@ -167,111 +165,4 @@ func deparen(expr ast.Expr) ast.Expr {
 		}
 		expr = p.X
 	}
-}
-
-func (c *Scope) isMockPatch(sel *ast.SelectorExpr) bool {
-	pkgPath, name, ok := c.tryAsPkgRef(sel)
-	if !ok {
-		return false
-	}
-	return pkgPath == constants.RUNTIME_MOCK_PKG && name == "Patch"
-}
-
-func (c *Scope) tryAsPkgRef(sel *ast.SelectorExpr) (pkgPath string, name string, ok bool) {
-	idt, ok := sel.X.(*ast.Ident)
-	if !ok {
-		return "", "", false
-	}
-	imp, ok := c.Global.Imports[idt.Name]
-	if !ok {
-		return "", "", false
-	}
-	return imp, sel.Sel.Name, true
-}
-
-// `mock.Patch(fn,...)`
-// fn examples:
-//
-//	(*ipc.Reader).Next
-//	vr.Reader.Next where vr.Reader is an embedded field: struct { *ipc.Reader }
-func (c *Scope) resolveMockRef(fn ast.Expr) {
-	switch node := fn.(type) {
-	case *ast.Ident:
-		def := c.GetDef(node.Name)
-		if def == nil {
-			return
-		}
-		// def example:
-		//   &flight.Writer{}
-		if def.Index == -1 {
-			// TODO
-		}
-	case *ast.SelectorExpr:
-		name := node.Sel.Name
-		if isBlankName(name) {
-			return
-		}
-		if idt, ok := node.X.(*ast.Ident); ok {
-			pkgPath, ok := c.Global.Imports[idt.Name]
-			if ok {
-				recorder := c.Global.Recorder
-				recorder.GetOrInit(pkgPath).GetOrInit(name).HasMockPatch = true
-				return
-			}
-			def := c.GetDef(idt.Name)
-			if def != nil {
-				// var.Name
-				if def.Index == -1 {
-					pkgPath, typeName, ok := c.tryCompositeLit(def.Expr)
-					if ok {
-						recorder := c.Global.Recorder
-						recorder.GetOrInit(pkgPath).GetOrInit(typeName).AddMockName(name)
-					}
-				}
-			}
-			return
-		}
-		if pkgPath, typeName, ok := c.tryPkgType(node.X); ok {
-			recorder := c.Global.Recorder
-			recorder.GetOrInit(pkgPath).GetOrInit(typeName).AddMockName(name)
-			return
-		}
-	}
-}
-
-// &flight.Writer{}
-func (c *Scope) tryCompositeLit(expr ast.Expr) (pkgPath string, name string, ok bool) {
-	unary, ok := expr.(*ast.UnaryExpr)
-	if ok {
-		if unary.Op != token.AND {
-			return "", "", false
-		}
-		expr = unary.X
-	}
-	lit, ok := expr.(*ast.CompositeLit)
-	if !ok {
-		return "", "", false
-	}
-	sel, ok := lit.Type.(*ast.SelectorExpr)
-	if !ok {
-		return "", "", false
-	}
-	return c.tryAsPkgRef(sel)
-}
-
-// (*ipc.Reader).Next or ipc.Reader.Next
-func (c *Scope) tryPkgType(expr ast.Expr) (pkgPath string, name string, ok bool) {
-	paren, ok := expr.(*ast.ParenExpr)
-	if ok {
-		starExpr, ok := paren.X.(*ast.StarExpr)
-		if !ok {
-			return "", "", false
-		}
-		expr = starExpr.X
-	}
-	sel, ok := expr.(*ast.SelectorExpr)
-	if !ok {
-		return "", "", false
-	}
-	return c.tryAsPkgRef(sel)
 }

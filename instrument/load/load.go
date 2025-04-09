@@ -28,6 +28,8 @@ type LoadOptions struct {
 	Goroot string
 
 	FilterErrorFile bool
+
+	Fset *token.FileSet
 }
 
 type Package struct {
@@ -56,6 +58,7 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 	maxFileSize := opts.MaxFileSize
 	filterErrorFile := opts.FilterErrorFile
 	goroot := opts.Goroot
+	fset := opts.Fset
 
 	pkgs, err := goinfo.ListPackages(args, goinfo.LoadPackageOptions{
 		Dir:     dir,
@@ -67,7 +70,9 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 		return nil, err
 	}
 
-	fset := token.NewFileSet()
+	if fset == nil {
+		fset = token.NewFileSet()
+	}
 	loadPkgs := make([]*Package, len(pkgs))
 	for i, pkg := range pkgs {
 		loadPkgs[i] = &Package{

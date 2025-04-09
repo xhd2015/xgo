@@ -7,9 +7,27 @@ import "fmt"
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
 const VERSION = "1.1.1"
-const REVISION = "b385ec2f25f698ce2ee86ec091bf3e4499eb7762+1"
-const NUMBER = 383
+const REVISION = "1f86eaebf5d2f4f9cda00ee1769ebc691162b909+1"
+const NUMBER = 384
 
+// TODO: decouple CORE_VERSION here and that in runtime/core/version.go
+// because this now only indicates lowest working version required by xgo.
+//
+// the CORE_VERSION marks the lowest working version required by xgo.
+// even if CORE_VERSION is lower than xgo's VERSION, xgo can still
+// work with the newest xgo/runtime.
+// As long as this holds, we don't need to change CORE_VERSION.
+//
+// Rationale: there is no reason to force user to upgrade xgo,
+// which is only upgraded for new feature. if that feature
+// is not required by user, user don't have to upgrade xgo.
+//
+// And xgo/runtime's API is quite stable except the internal
+// package, which we can rewrite in newer xgo.
+//
+// So in conclusion, across the life of a major version,
+// CORE_VERSION can remain the same.
+//
 // the corresponding runtime/core's version
 // manually updated
 // once updated, they will be copied to runtime/core/version.go
@@ -25,9 +43,9 @@ const NUMBER = 383
 //  3. run `go run ./script/generate runtime/core/version.go`
 //
 // finally you will find that the two groups of constants are the same.
-const CORE_VERSION = "1.1.1"
-const CORE_REVISION = "b385ec2f25f698ce2ee86ec091bf3e4499eb7762+1"
-const CORE_NUMBER = 383
+const CORE_VERSION = "1.1.0"
+const CORE_REVISION = "2d734d2e2c0d29c25babfac2ee6b6473f9f068bf+1"
+const CORE_NUMBER = 377
 
 func getRevision() string {
 	return formatRevision(VERSION, REVISION, NUMBER)

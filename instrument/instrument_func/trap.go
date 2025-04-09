@@ -25,7 +25,7 @@ type Options struct {
 	PkgRecorder    *resolve.PkgRecorder
 }
 
-// TrapFunc parses the given file as golang AST,
+// TrapFuncs parses the given file as golang AST,
 // and then for each package level function decl that has a body,
 // it inserts a `defer runtime.XgoTrap()();` at the beginning of the body.
 // Returns the modified content.
@@ -40,7 +40,7 @@ type Options struct {
 //		func add(a, b int) int {defer runtime.XgoTrap()();
 //			return a+b
 //		}
-func TrapFunc(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int, opts Options) []*edit.FuncInfo {
+func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int, opts Options) []*edit.FuncInfo {
 	fset := editor.Fset()
 
 	recorder := opts.PkgRecorder
@@ -52,33 +52,32 @@ func TrapFunc(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int
 	}
 
 	var funcInfos []*edit.FuncInfo
-	// Visit all nodes in the AST
-	ast.Inspect(file, func(n ast.Node) bool {
-		// Check if this is a function declaration
-		funcDecl, ok := n.(*ast.FuncDecl)
+	// Visit all decls in the AST
+	for _, decl := range file.Decls {
+		funcDecl, ok := decl.(*ast.FuncDecl)
 		if !ok {
-			return true
+			continue
 		}
 		if funcDecl.Body == nil {
-			return true
+			continue
 		}
 		if funcDecl.Name == nil || funcDecl.Name.Name == "" || funcDecl.Name.Name == "_" {
-			return true
+			continue
 		}
 		// Check if it's a method (has a receiver) with empty or "_" receiver name
 		_, receiver := processReceiverNames(funcDecl, fset, editor)
 		funcName := funcDecl.Name.Name
 		if receiver == nil && funcName == "init" {
-			return true
+			continue
 		}
 		if pkgPath == "time" && (funcName == constants.XGO_REAL_NOW || funcName == constants.XGO_REAL_SLEEP) {
 			// certain function is specifically left for xgo to call
-			return true
+			continue
 		}
 		identityName, recvPtr, recvGeneric, recvType := ParseReceiverInfo(funcName, receiver)
 		if cfgOk && !cfg.whitelistFunc[identityName] && !matchAnyPrefix(cfg.whitelistFuncPrefix, identityName) {
 			// TODO: may enforce only exporeted function on standard lib?
-			return true
+			continue
 		}
 
 		if recorder != nil {
@@ -95,7 +94,7 @@ func TrapFunc(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int
 				}
 			}
 			if !hasFnRecord && !hasTypeMethodRecord {
-				return true
+				continue
 			}
 		}
 
@@ -143,8 +142,7 @@ func TrapFunc(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int
 			Params:       paramFields,
 			Results:      resultFields,
 		})
-		return true
-	})
+	}
 
 	if len(funcInfos) == 0 {
 		return nil

@@ -2,10 +2,10 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -73,6 +73,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 			panic(err)
 		}
 	}
+
 	xgoPkgs, err := instrument_xgo_runtime.LinkXgoRuntime(goroot, projectDir, xgoRuntimeModuleDir, goVersion, overlayFS, overrideXgoContent, instrument_xgo_runtime.LinkOptions{
 		Mod:                 mod,
 		Modfile:             modfile,
@@ -127,45 +128,40 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	loadArgs = append(loadArgs, loadPkgs...)
 	loadArgs = append(loadArgs, trapPkgs...)
 
-	logDebug("start load: %v", loadArgs)
-	loadOpts := load.LoadOptions{
-		Dir:             projectDir,
-		Mod:             mod,
-		Overlay:         overlayFS,
-		IncludeTest:     includeTest,
-		ModFile:         modfile,
-		MaxFileSize:     MAX_FILE_SIZE,
-		FilterErrorFile: true,
-		Goroot:          goroot,
+	fset := token.NewFileSet()
+	nonXgoPkgs := &edit.Packages{
+		Fset: fset,
+		LoadOptions: load.LoadOptions{
+			Dir:             projectDir,
+			Mod:             mod,
+			Overlay:         overlayFS,
+			IncludeTest:     includeTest,
+			ModFile:         modfile,
+			MaxFileSize:     MAX_FILE_SIZE,
+			FilterErrorFile: true,
+			Goroot:          goroot,
+			Fset:            fset,
+		},
 	}
-	loadPackages, err := load.LoadPackages(loadArgs, loadOpts)
+	logDebug("start load: %v", loadArgs)
+	loadPackages, err := load.LoadPackages(loadArgs, nonXgoPkgs.LoadOptions)
 	if err != nil {
 		return err
 	}
+	nonXgoPkgs.Add(loadPackages)
 
 	// insert func trap
-	packages := edit.Edit(loadPackages)
 	// disable instrumenting xgo/runtime, except xgo/runtime/test
-	packages = packages.Filter(instrument_func.IsPkgAllowed)
-	logDebug("start instrumentFuncTrap: len(packages)=%d", len(packages.Packages))
-	for _, pkg := range packages.Packages {
-		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
-		for _, file := range pkg.Files {
-			funcs := instrument_func.TrapFunc(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{})
-			file.TrapFuncs = append(file.TrapFuncs, funcs...)
-
-			// interface types
-			intfTypes := instrument_intf.CollectInterfaces(file)
-			file.InterfaceTypes = append(file.InterfaceTypes, intfTypes...)
-		}
-	}
-
+	nonXgoPkgs = nonXgoPkgs.Filter(instrument_func.IsPkgAllowed)
 	// trap var for packages in main module
-	mainPkgs := packages.Filter(func(pkg *edit.Package) bool {
+	mainPkgs := nonXgoPkgs.Filter(func(pkg *edit.Package) bool {
 		_, ok := goinfo.PkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
 		return ok
 	})
 	var recorder resolve.Recorder
+	resolve.Collect(mainPkgs, resolve.Options{
+		RecordVariables: true,
+	})
 	err = resolve.Traverse(mainPkgs, &recorder)
 	if err != nil {
 		return err
@@ -177,9 +173,9 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		return err
 	}
 	// collect extra packages for mock patching
-	var extraPkgPaths []string
+	var thirdPkgPaths []string
 	for pkgPath := range recorder.Pkgs {
-		if _, ok := packages.PackageByPath[pkgPath]; ok {
+		if _, ok := nonXgoPkgs.PackageByPath[pkgPath]; ok {
 			continue
 		}
 		if _, ok := xgoPkgs.PackageByPath[pkgPath]; ok {
@@ -188,58 +184,44 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		if instrument_func.IsPkgNeverInstrument(pkgPath) {
 			continue
 		}
-		extraPkgPaths = append(extraPkgPaths, pkgPath)
+		thirdPkgPaths = append(thirdPkgPaths, pkgPath)
 	}
-	logDebug("instrument extra pkgs: len(extraPkgs)=%d", len(extraPkgPaths))
-	extraPkgsJSON, _ := json.Marshal(extraPkgPaths)
-	logDebug("DEBUG extraPkgsJSON: %s", string(extraPkgsJSON))
-	var extraPkgs *edit.Packages
-	if len(extraPkgPaths) > 0 {
-		extraLoadPkgs, err := load.LoadPackages(extraPkgPaths, loadOpts)
+	logDebug("instrument third pkgs: len(thirdPkgs)=%d", len(thirdPkgPaths))
+	if len(thirdPkgPaths) > 0 {
+		thirdLoadPkgs, err := load.LoadPackages(thirdPkgPaths, nonXgoPkgs.LoadOptions)
 		if err != nil {
 			return err
 		}
-		extraPkgs = edit.Edit(extraLoadPkgs)
-		for _, pkg := range extraPkgs.Packages {
-			pkgPath := pkg.LoadPackage.GoPackage.ImportPath
-			for _, file := range pkg.Files {
-				funcs := instrument_func.TrapFunc(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{
-					NoFilterStdlib: true,
-					PkgRecorder:    recorder.Pkgs[pkgPath],
-				})
-				file.TrapFuncs = append(file.TrapFuncs, funcs...)
+		nonXgoPkgs.Add(thirdLoadPkgs)
+	}
 
-				// interface types
-				intfTypes := instrument_intf.CollectInterfaces(file)
-				file.InterfaceTypes = append(file.InterfaceTypes, intfTypes...)
-			}
+	logDebug("start instrumentFuncTrap: len(packages)=%d", len(nonXgoPkgs.Packages))
+	for _, pkg := range nonXgoPkgs.Packages {
+		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
+		for _, file := range pkg.Files {
+			funcs := instrument_func.TrapFuncs(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{})
+			file.TrapFuncs = append(file.TrapFuncs, funcs...)
+
+			// interface types
+			intfTypes := instrument_intf.CollectInterfaces(file)
+			file.InterfaceTypes = append(file.InterfaceTypes, intfTypes...)
 		}
 	}
 
 	logDebug("generate functab register")
 	registerFuncTab(xgoPkgs)
-	registerFuncTab(packages)
-	if extraPkgs != nil {
-		registerFuncTab(extraPkgs)
-	}
+	registerFuncTab(nonXgoPkgs)
 
 	logDebug("collect edits")
-	updatedFiles, err := applyInstrumentWithEditNotes(overlayFS, packages, mayHaveCover, nil)
+	updatedFiles, err := applyInstrumentWithEditNotes(overlayFS, nonXgoPkgs, mayHaveCover, nil)
 	if err != nil {
 		return err
-	}
-	updatedExtra := 0
-	if extraPkgs != nil {
-		updatedExtra, err = applyInstrumentWithEditNotes(overlayFS, extraPkgs, mayHaveCover, overrideXgoContent)
-		if err != nil {
-			return err
-		}
 	}
 	_, err = applyInstrumentWithEditNotes(overlayFS, xgoPkgs, mayHaveCover, overrideXgoContent)
 	if err != nil {
 		return err
 	}
-	logDebug("finish instruments, updated %d files", updatedFiles+updatedExtra)
+	logDebug("finish instruments, updated %d files", updatedFiles)
 	return nil
 }
 

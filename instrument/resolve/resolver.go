@@ -30,6 +30,6 @@ func (r *Resolver) Resolve(packages *edit.Packages) error {
 
 // TODO: can we support generic functions and methods even in go1.18 and go1.19 with the
 // help of resolver?
-// through a rewritting of mock.Patch? If we know the function has been instrumented,
+// through a rewriting of mock.Patch? If we know the function has been instrumented,
 // we record that to some place, and replace the call with mock.AutoGenPatchGeneric(which is generated on the fly), in that function the pc lookup is done by inspecting directly.
 // or more generally, we generate the
