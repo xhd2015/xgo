@@ -66,26 +66,44 @@ func (c *NameRecorder) AddMockName(name string) {
 
 type GlobalScope struct {
 	Packages *edit.Packages
-	Package  *edit.Package
-	File     *edit.File
-
-	PkgScopeNames PkgScopeNames
-	Imports       Imports
-
 	Recorder *Recorder
 
 	detectVarTrap bool
 	detectMock    bool
 
 	// key is the expr, value is the type info
-	ObjectInfo map[ast.Expr]types.Type
+	ExprInfo map[ast.Expr]types.Info
 
-	NamedTypeToDecl map[types.NamedType]*edit.Decl
+	NamedTypeToDecl map[PkgName]*edit.Decl
+
+	cachedFileScopes map[*edit.File]*Scope
+}
+
+type PackageScope struct {
+	Package *edit.Package
+	Decls   PkgScopeNames
+}
+
+func (c PackageScope) PkgPath() string {
+	return c.Package.LoadPackage.GoPackage.ImportPath
+}
+
+type FileScope struct {
+	File    *edit.File
+	Imports Imports
+}
+
+type PkgName struct {
+	PkgPath string
+	Name    string
 }
 
 // a Scope provides a point where stmts can be prepended or inserted
 type Scope struct {
-	Global *GlobalScope
+	Global  *GlobalScope
+	Package *PackageScope
+	File    *FileScope
+
 	Parent *Scope
 	Defs   map[string]*Define
 	Names  map[string]bool
@@ -98,16 +116,36 @@ type Define struct {
 	Index int
 }
 
-func newFileScope(global *GlobalScope) *Scope {
-	return &Scope{
-		Global: global,
+func newFileScope(global *GlobalScope, pkg *edit.Package, file *edit.File) *Scope {
+	scope := global.cachedFileScopes[file]
+	if scope != nil {
+		return scope
 	}
+	imports := getFileImports(file.File.Syntax)
+	scope = &Scope{
+		Global: global,
+		Package: &PackageScope{
+			Package: pkg,
+			Decls:   pkg.Decls,
+		},
+		File: &FileScope{
+			File:    file,
+			Imports: imports,
+		},
+	}
+	if global.cachedFileScopes == nil {
+		global.cachedFileScopes = make(map[*edit.File]*Scope, 1)
+	}
+	global.cachedFileScopes[file] = scope
+	return scope
 }
 
 func (c *Scope) newScope() *Scope {
 	return &Scope{
-		Global: c.Global,
-		Parent: c,
+		Global:  c.Global,
+		Package: c.Package,
+		File:    c.File,
+		Parent:  c,
 	}
 }
 

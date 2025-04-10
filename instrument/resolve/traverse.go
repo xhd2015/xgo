@@ -81,6 +81,7 @@ func Collect(packages *edit.Packages) {
 							Name:   funcName,
 							Syntax: decl,
 						},
+						File: file,
 					}
 					if decl.Recv != nil && len(decl.Recv.List) > 0 {
 						recv := decl.Recv.List[0]
@@ -122,28 +123,23 @@ func Collect(packages *edit.Packages) {
 // functions `fn` such that `mock.Patch(fn)` is called.
 func Traverse(packages *edit.Packages, recorder *Recorder) error {
 	// rewrite selectors
+	global := &GlobalScope{
+		Packages:      packages,
+		Recorder:      recorder,
+		detectVarTrap: true,
+		detectMock:    true,
+	}
 	for _, pkg := range packages.Packages {
 		for _, file := range pkg.Files {
-			traverseFuncDecls(packages, pkg, file, recorder)
+			traverseFuncDecls(global, pkg, file, recorder)
 		}
 	}
 
 	return nil
 }
 
-func traverseFuncDecls(packages *edit.Packages, pkg *edit.Package, file *edit.File, recorder *Recorder) {
-	imports := getFileImports(file.File.Syntax)
-	fileScope := newFileScope(&GlobalScope{
-		Packages: packages,
-		Package:  pkg,
-		File:     file,
-
-		PkgScopeNames: pkg.Decls,
-		Imports:       imports,
-		Recorder:      recorder,
-		detectVarTrap: true,
-		detectMock:    true,
-	})
+func traverseFuncDecls(global *GlobalScope, pkg *edit.Package, file *edit.File, recorder *Recorder) {
+	fileScope := newFileScope(global, pkg, file)
 	// NOTE: statements like this will be ignored:
 	//  var _ = func() bool {
 	//     x = true()

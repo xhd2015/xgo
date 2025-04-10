@@ -13,7 +13,7 @@ func (c *Scope) trapIdent(addr *ast.UnaryExpr, idt *ast.Ident) bool {
 	if isBlankName(idt.Name) || c.Has(idt.Name) {
 		return false
 	}
-	decl := c.Global.Package.Decls[idt.Name]
+	decl := c.Package.Decls[idt.Name]
 	if decl == nil {
 		return false
 	}
@@ -41,18 +41,18 @@ func (c *Scope) trapSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr) bool {
 		return false
 	}
 	// import path
-	pkgPath := c.Global.Imports[xName]
+	pkgPath := c.File.Imports[xName]
 	if pkgPath == "" {
 		// X.Y where X is a variable
-		decl := c.Global.PkgScopeNames[xName]
+		decl := c.Package.Decls[xName]
 		if decl != nil {
-			selType := c.resolveType(sel)
+			selType := c.resolveInfo(sel)
 			if !types.IsUnknown(selType) {
 				// if addr is nil, we cannot explicitly get sel.X's type
 				// unless sel.X is a pointer
-				xInfo := c.Global.ObjectInfo[sel.X]
+				xInfo := c.Global.ExprInfo[sel.X]
 				if variable, ok := xInfo.(types.Variable); ok {
-					_, isPtr := variable.Type.(types.Ptr)
+					_, isPtr := variable.Type_.(types.Ptr)
 					c.applyVarRewrite(decl, nil, getSuffix(isPtr), sel.X.End(), sel.X.End())
 					return true
 				}
@@ -91,24 +91,34 @@ func (c *Scope) trapSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr) bool {
 }
 
 func (c *Scope) canDeclareType(decl *edit.Decl) bool {
-	if decl.Type == nil {
-		if decl.Value == nil {
-			return false
-		}
-		typ := decl.ResolvedValue
-		if typ == nil {
-			typ = c.resolveType(decl.Value)
-			decl.ResolvedValue = typ
-			if types.IsUnknown(typ) {
-				return false
-			}
-		}
-
-		// must be basic type
-		if _, ok := typ.(types.Basic); !ok {
-			return false
-		}
+	if decl.Type != nil {
+		return true
 	}
+	if decl.Value == nil {
+		return false
+	}
+	resolvedValue := decl.ResolvedValue
+	if resolvedValue != nil {
+		return true
+	}
+	info := c.resolveInfo(decl.Value)
+	if types.IsUnknown(info) {
+		return false
+	}
+	obj, ok := info.(types.Object)
+	if !ok {
+		return false
+	}
+	objType := obj.Type()
+	if types.IsUnknown(objType) {
+		return false
+	}
+	// must be basic type
+	_, ok = objType.(types.Basic)
+	if !ok {
+		return false
+	}
+	decl.ResolvedValue = obj
 	return true
 }
 
@@ -117,7 +127,7 @@ func (ctx *Scope) applyVarRewrite(decl *edit.Decl, addr *ast.UnaryExpr, suffix s
 	decl.HasCallRewrite = true
 
 	// TODO: support address
-	fileEdit := ctx.Global.File.Edit
+	fileEdit := ctx.File.File.Edit
 	if addr != nil {
 		// delete &
 		fileEdit.Delete(addr.OpPos, startPos)

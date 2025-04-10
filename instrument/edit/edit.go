@@ -23,10 +23,8 @@ type Decl struct {
 	Kind          DeclKind
 	Ident         *ast.Ident
 	Type          ast.Expr // might be nil
-	Value         ast.Expr // might be nil
-	ResolvedValue types.Type
-
-	ResolvedValueType types.Type
+	Value         ast.Expr // only for var, might be nil
+	ResolvedValue types.Object
 
 	Decl           *ast.GenDecl
 	HasCallRewrite bool // for var

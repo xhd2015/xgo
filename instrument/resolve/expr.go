@@ -143,7 +143,7 @@ func (c *Scope) traverseExpr(node ast.Expr) {
 		// see test: ./runtime/test/mock/mock_var/same_field
 		var keyMightConflict bool
 		if idt, ok := node.Key.(*ast.Ident); ok {
-			if c.Has(idt.Name) || c.Global.PkgScopeNames[idt.Name] != nil {
+			if c.Has(idt.Name) || c.Package.Decls[idt.Name] != nil {
 				keyMightConflict = true
 			}
 		}

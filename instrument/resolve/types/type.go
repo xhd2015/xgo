@@ -2,11 +2,23 @@ package types
 
 import "fmt"
 
-// Type represents type or an object
+type Info interface {
+	infoMark()
+}
+
+// Object represents type or an object
+type Object interface {
+	Info
+	objectMark()
+	String() string
+	Type() Type
+}
+
 type Type interface {
-	typeMark()
+	Info
 	String() string
 	Underlying() UnderlyingType
+	typeMark()
 }
 
 type UnderlyingType interface {
@@ -23,12 +35,15 @@ type ImportPath string
 type Variable struct {
 	PkgPath string
 	Name    string
-	Type    Type
+	Type_   Type
 }
 
-type VariableField struct {
-	Variable Variable
-	Field    string
+type Value struct {
+	Type_ Type
+}
+
+type Literal struct {
+	Type_ Type
 }
 
 type NamedType struct {
@@ -42,7 +57,19 @@ type Ptr struct {
 }
 
 type Func struct {
-	Recv    Type
+	PkgPath string
+	Name    string
+
+	Signature Signature
+}
+
+type Method struct {
+	Name      string
+	Recv      Type
+	Signature Signature
+}
+
+type Signature struct {
 	Params  []Type
 	Results []Type
 }
@@ -56,6 +83,7 @@ type StructField struct {
 	Type Type
 }
 
+func (c Basic) infoMark()           {}
 func (c Basic) typeMark()           {}
 func (c Basic) underlyingTypeMark() {}
 func (c Basic) Underlying() UnderlyingType {
@@ -65,15 +93,20 @@ func (c Basic) String() string {
 	return string(c)
 }
 
-func (c Unknown) typeMark()           {}
-func (c Unknown) underlyingTypeMark() {}
+func (c Unknown) infoMark()   {}
+func (c Unknown) objectMark() {}
+func (c Unknown) typeMark()   {}
+func (c Unknown) Type() Type {
+	panic("should not call Type() on unknown")
+}
+func (c Unknown) Underlying() UnderlyingType {
+	panic("should not call Type() on unknown")
+}
 func (c Unknown) String() string {
 	return "unknown"
 }
-func (c Unknown) Underlying() UnderlyingType {
-	return c
-}
 
+func (c ImportPath) infoMark()           {}
 func (c ImportPath) typeMark()           {}
 func (c ImportPath) underlyingTypeMark() {}
 func (c ImportPath) Underlying() UnderlyingType {
@@ -83,6 +116,7 @@ func (c ImportPath) String() string {
 	return string(c)
 }
 
+func (c Ptr) infoMark()           {}
 func (c Ptr) typeMark()           {}
 func (c Ptr) underlyingTypeMark() {}
 func (c Ptr) String() string {
@@ -92,23 +126,34 @@ func (c Ptr) Underlying() UnderlyingType {
 	return c.Elem.Underlying()
 }
 
-func (c Variable) typeMark() {}
-func (c Variable) Underlying() UnderlyingType {
-	return c.Type.Underlying()
+func (c Variable) infoMark()   {}
+func (c Variable) objectMark() {}
+func (c Variable) Type() Type {
+	return c.Type_
 }
 func (c Variable) String() string {
 	return fmt.Sprintf("%s.%s", c.PkgPath, c.Name)
 }
 
-func (c VariableField) typeMark()           {}
-func (c VariableField) underlyingTypeMark() {}
-func (c VariableField) Underlying() UnderlyingType {
-	return c.Variable.Underlying()
+func (c Value) infoMark()   {}
+func (c Value) objectMark() {}
+func (c Value) Type() Type {
+	return c.Type_
 }
-func (c VariableField) String() string {
-	return fmt.Sprintf("%s.%s", c.Variable.String(), c.Field)
+func (c Value) String() string {
+	return fmt.Sprintf("%s{}", c.Type_.String())
 }
 
+func (c Literal) infoMark()   {}
+func (c Literal) objectMark() {}
+func (c Literal) Type() Type {
+	return c.Type_
+}
+func (c Literal) String() string {
+	return fmt.Sprintf("%s{}", c.Type_.String())
+}
+
+func (c NamedType) infoMark() {}
 func (c NamedType) typeMark() {}
 func (c NamedType) Underlying() UnderlyingType {
 	return c.Type.Underlying()
@@ -117,19 +162,41 @@ func (c NamedType) String() string {
 	return fmt.Sprintf("%s.%s", c.PkgPath, c.Name)
 }
 
-func IsUnknown(typ Type) bool {
-	return typ == Unknown{}
+func IsUnknown(info Info) bool {
+	return info == Unknown{}
 }
 
+func (c Func) infoMark()           {}
 func (c Func) typeMark()           {}
 func (c Func) underlyingTypeMark() {}
 func (c Func) Underlying() UnderlyingType {
-	return c
+	return c.Signature.Underlying()
 }
 func (c Func) String() string {
-	return fmt.Sprintf("func(%s) %s", c.Params, c.Results)
+	return fmt.Sprintf("func(...)")
 }
 
+func (c Method) infoMark()           {}
+func (c Method) typeMark()           {}
+func (c Method) underlyingTypeMark() {}
+func (c Method) Underlying() UnderlyingType {
+	return c.Signature.Underlying()
+}
+func (c Method) String() string {
+	return fmt.Sprintf("func(...)")
+}
+
+func (c Signature) infoMark()           {}
+func (c Signature) typeMark()           {}
+func (c Signature) underlyingTypeMark() {}
+func (c Signature) Underlying() UnderlyingType {
+	return c
+}
+func (c Signature) String() string {
+	return fmt.Sprintf("func(...)")
+}
+
+func (c Struct) infoMark()           {}
 func (c Struct) typeMark()           {}
 func (c Struct) underlyingTypeMark() {}
 func (c Struct) Underlying() UnderlyingType {
