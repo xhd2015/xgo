@@ -13,7 +13,7 @@ func TestPatchUnmatchSignature(t *testing.T) {
 			return ""
 		})
 	})
-	expectS1 := "replacer should have type: func(*patch.struct_) string, actual: func() string"
+	expectS1 := "replacer should have type: `func(*patch.struct_) string`, actual: `func() string`"
 	if s1 != expectS1 {
 		t.Fatalf("expect s1 to be %q, actual: %q", expectS1, s1)
 	}
@@ -24,7 +24,7 @@ func TestPatchUnmatchSignature(t *testing.T) {
 			return ""
 		})
 	})
-	expectS2 := "replacer should have type: func() string, actual: func(*patch.struct_) string"
+	expectS2 := "replacer should have type: `func() string`, actual: `func(*patch.struct_) string`"
 	if s2 != expectS2 {
 		t.Fatalf("expect s2 to be %q, actual: %q", expectS2, s2)
 	}
@@ -37,7 +37,7 @@ func TestPatchMethodByNameUnmatchSignature(t *testing.T) {
 			return ""
 		})
 	})
-	expectS1 := "replacer should have type: func() string, actual: func(*patch.struct_) string"
+	expectS1 := "replacer should have type: `func() string`, actual: `func(*patch.struct_) string`"
 	if s1 != expectS1 {
 		t.Fatalf("expect s1 to be %q, actual: %q", expectS1, s1)
 	}
@@ -47,7 +47,7 @@ func TestPatchMethodByNameUnmatchSignature(t *testing.T) {
 			return ""
 		})
 	})
-	expectS2 := "replacer should have type: func(*patch.struct_) string, actual: func() string"
+	expectS2 := "replacer should have type: `func(*patch.struct_) string`, actual: `func() string`"
 	if s2 != expectS2 {
 		t.Fatalf("expect s2 to be %q, actual: %q", expectS2, s2)
 	}

@@ -194,7 +194,7 @@ func checkVarRecorderType(varPtrType reflect.Type, recorderType reflect.Type, su
 	varType := varPtrType.Elem()
 	printWantType := reflect.FuncOf([]reflect.Type{varType}, nil, false)
 	if recorderType.Kind() != reflect.Func {
-		panic(fmt.Errorf("recorder should have type: %v, actual: %s", printWantType, recorderType.String()))
+		panic(fmt.Errorf("recorder should have type: `%v`, actual: `%s`", printWantType, recorderType.String()))
 	}
 	recordArgTypes, ok := resolveArgTypes(recorderType, []reflect.Type{varType})
 	if ok {

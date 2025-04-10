@@ -19,7 +19,39 @@ func not instrumented by xgo,...
 
 It means there is not trap point inserted by xgo, either because the package is not in main module, or there is some inherent limitation.
 
+# When will this error happen?
+`xgo` scans the main module to find all `fn` such that they are provided to `mock.Patch(fn,...)` and `mock.Mock(fn,...)`, then insert trap points on these functions.
+
+However, due to performance issue, such scan only looks files in the main module. If the `mock.Patch` call happens in third party package, `xgo` ignores them. 
+
+However, if `fn` is referenced via `interface`, then `xgo` cannot figure out the function statically, so will not insert trap point for it:
+```go
+// some/pkg
+type Reader interface {
+    Read(data []byte) (int,error)
+}
+func NewReader() Reader {
+    ...
+}
+
+// main module
+func TestInterface(t *testing.T){
+    reader:=pkg.NewReader()
+    // xgo cannot detect reader's type statically
+    // see below sections for solution.
+    mock.Patch(reader.Read, func(data []byte) (int,error){
+        ...
+    })
+    ...
+}
+
+```
+
+# Variables
+`xgo` supports trapping variables, but only variables in main module can be mocked.
+
 # How to solve?
+## Option 1: `--trap pkg1 --trap pkg2`
 By default xgo will only insert trap for packages of main module, which is resolved by `go list ./...`.
 
 Packages not trapped by xgo cannot be mocked, the setup naturally fails.
@@ -32,6 +64,11 @@ xgo test --trap third.party/pkg <remaining args...>
 To add more packages, repeat this option multiple times.
 
 You can also specify `--trap third.part/...` to trap for all packages under `third.part`, including itself.
+
+## Option 2: `--trap-all`
+This causes `xgo` to call `go list` with `-deps` flag, and then insert trap points on all packages.
+
+This can slow down the compilation process a little bit for large projects with hundreds dependency.
 
 # Limitations on stdlib
 Due to performance and security reason, xgo by default only trap a very small portions [runtime/mock/STDLIB.md](../runtime/mock/STDLIB.md).

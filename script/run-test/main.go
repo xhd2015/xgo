@@ -118,9 +118,9 @@ var defaultTestArgs = []*TestArg{
 			"./...",
 		},
 	},
-	// mock third party
+	// patch third party
 	{
-		Dir: "runtime/test/mock/mock_third_party/service",
+		Dir: "runtime/test/patch/patch_third_party/service",
 		Args: []string{
 			"./...",
 		},

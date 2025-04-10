@@ -1,9 +1,11 @@
 package trap
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
@@ -53,7 +55,24 @@ func PushMockReplacerMethodByName(instance interface{}, method string, replacer 
 }
 
 func PushMockByName(pkgPath string, funcName string, interceptor Interceptor) func() {
-	recvPtr, _, _, trappingPC := getFuncByName(pkgPath, funcName)
+	recvPtr, funcInfo, _, trappingPC := getFuncByName(pkgPath, funcName)
+	if funcInfo.Kind == core.Kind_Var || funcInfo.Kind == core.Kind_VarPtr || funcInfo.Kind == core.Kind_Const {
+		if strings.HasPrefix(funcName, "*") {
+			// type: fun() *T
+			handler := func(fnInfo *core.FuncInfo, res interface{}) {
+				var argObj object
+				resObject := object{
+					{
+						name:   fnInfo.Name,
+						valPtr: res,
+					},
+				}
+				interceptor(context.Background(), fnInfo, argObj, resObject)
+			}
+			return pushVarPtrMockHandler(reflect.ValueOf(funcInfo.Var).Pointer(), handler)
+		}
+		return pushMockInterceptor(funcInfo.Var, interceptor)
+	}
 	handler := buildMockFromInterceptor(recvPtr, interceptor)
 	return pushMockHandler(trappingPC, recvPtr, handler)
 }
@@ -81,7 +100,7 @@ func pushMockInterceptor(fn interface{}, interceptor Interceptor) func() {
 					valPtr: res,
 				},
 			}
-			interceptor(nil, fnInfo, argObj, resObject)
+			interceptor(context.Background(), fnInfo, argObj, resObject)
 		}
 		return pushVarMockHandler(varPtr, handler)
 	} else if fnv.Kind() == reflect.Func {
@@ -104,11 +123,11 @@ func pushMockReplacer(fn interface{}, replacer interface{}) func() {
 			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
 		}
 		// variable
-		rv := reflect.ValueOf(replacer)
-		isPtr := checkVarType(fnv.Type(), rv.Type(), true)
+		replacerVal := reflect.ValueOf(replacer)
+		isPtr := checkVarType(fnv.Type(), replacerVal.Type(), true)
 		handler := func(fnInfo *core.FuncInfo, res interface{}) {
-			fnRes := rv.Call([]reflect.Value{})
-			reflect.ValueOf(res).Elem().Set(fnRes[0])
+			mockRes := replacerVal.Call([]reflect.Value{})
+			reflect.ValueOf(res).Elem().Set(mockRes[0])
 		}
 		if !isPtr {
 			return pushVarMockHandler(varPtr, handler)
@@ -125,7 +144,7 @@ func pushMockReplacer(fn interface{}, replacer interface{}) func() {
 			panic("replacer is nil")
 		}
 		if replacerType != fnv.Type() {
-			panic(fmt.Errorf("replacer should have type: %T, actual: %T", fn, replacer))
+			panic(fmt.Errorf("replacer should have type: `%T`, actual: `%T`", fn, replacer))
 		}
 	} else {
 		panic(fmt.Errorf("fn should be func or pointer to variable, actual: %T", fn))
@@ -225,50 +244,31 @@ func pushMockReplacerByName(pkgPath string, funcName string, replacer interface{
 		panic(fmt.Errorf("replacer should be func, actual: %T", replacer))
 	}
 
+	var funcInfo *core.FuncInfo
 	// check type
 	recvPtr, funcInfo, _, trappingPC := getFuncByName(pkgPath, funcName)
 	if funcInfo.Kind == core.Kind_Func {
 		if funcInfo.Func != nil {
 			calledType, replacerType, match := checkFuncTypeMatch(reflect.TypeOf(funcInfo.Func), t, recvPtr != nil)
 			if !match {
-				panic(fmt.Errorf("replacer should have type: %s, actual: %s", calledType, replacerType))
+				panic(fmt.Errorf("replacer should have type: `%s`, actual: `%s`", calledType, replacerType))
 			}
 		}
 	} else if funcInfo.Kind == core.Kind_Var || funcInfo.Kind == core.Kind_VarPtr || funcInfo.Kind == core.Kind_Const {
-		varPtrType := reflect.TypeOf(funcInfo.Var)
-		var wantValueType reflect.Type
-		if funcInfo.Kind == core.Kind_Var {
-			wantValueType = reflect.FuncOf(nil, []reflect.Type{varPtrType.Elem()}, false)
-		} else {
-			// const: type is not pointer
-			wantValueType = reflect.FuncOf(nil, []reflect.Type{varPtrType}, false)
-		}
-
-		var targetTypeStr string
-		var replacerTypeStr string
-		var match bool
-
-		var matchPtr bool
-		replacerType := reflect.TypeOf(replacer)
-		if replacerType.Kind() != reflect.Func {
-			targetTypeStr = wantValueType.String()
-			replacerTypeStr = replacerType.String()
-		} else {
-			targetTypeStr, replacerTypeStr, match = checkFuncTypeMatch(wantValueType, replacerType, false)
-			if !match && funcInfo.Kind != core.Kind_VarPtr {
-				_, replacerTypeStr, match = checkFuncTypeMatch(reflect.FuncOf(nil, []reflect.Type{varPtrType}, false), replacerType, false)
-				matchPtr = true
+		if strings.HasPrefix(funcName, "*") {
+			// be func() *T'
+			vr := funcInfo.Var
+			wantPtrType := reflect.FuncOf(nil, []reflect.Type{reflect.TypeOf(vr)}, false)
+			if t != wantPtrType {
+				panic(fmt.Errorf("replacer to value ptr should have type: `%s`, actual: `%s`", wantPtrType, t))
 			}
-		}
-		if !match {
-			panic(fmt.Errorf("replacer should have type: %s, actual: %s", targetTypeStr, replacerTypeStr))
-		}
-		if matchPtr {
-			funcInfo = functab.Info(pkgPath, "*"+funcName)
-			if funcInfo == nil {
-				panic(fmt.Errorf("failed to patch: %s *%s", pkgPath, funcName))
+			handler := func(fnInfo *core.FuncInfo, res interface{}) {
+				fnRes := reflect.ValueOf(replacer).Call([]reflect.Value{})
+				reflect.ValueOf(res).Elem().Set(fnRes[0])
 			}
+			return pushVarPtrMockHandler(reflect.ValueOf(vr).Pointer(), handler)
 		}
+		return pushMockReplacer(funcInfo.Var, replacer)
 	} else {
 		panic(fmt.Errorf("unrecognized func type: %s", funcInfo.Kind.String()))
 	}
@@ -291,7 +291,7 @@ func pushMockReplacerMethodByName(instance interface{}, method string, replacer 
 	if funcInfo.Func != nil {
 		calledType, replacerType, match := checkFuncTypeMatch(reflect.TypeOf(funcInfo.Func), t, recvPtr != nil)
 		if !match {
-			panic(fmt.Errorf("replacer should have type: %s, actual: %s", calledType, replacerType))
+			panic(fmt.Errorf("replacer should have type: `%s`, actual: `%s`", calledType, replacerType))
 		}
 	}
 	handler := buildMockHandler(recvPtr, funcInfo, replacer)
@@ -299,6 +299,12 @@ func pushMockReplacerMethodByName(instance interface{}, method string, replacer 
 }
 
 func getFuncByName(pkgPath string, funcName string) (recvPtr interface{}, fn *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
+	if strings.HasPrefix(funcName, "*") {
+		ptrFn := functab.GetFuncByPkg(pkgPath, funcName[1:])
+		if ptrFn.Kind == core.Kind_Var {
+			return ptrFn.Var, ptrFn, ptrFn.PC, ptrFn.PC
+		}
+	}
 	fn = functab.GetFuncByPkg(pkgPath, funcName)
 	if fn == nil {
 		panic(fmt.Errorf("failed to setup mock for: %s.%s", pkgPath, funcName))
@@ -337,19 +343,24 @@ func sameReceiver(recvPtr interface{}, actRecvPtr interface{}) bool {
 func checkVarType(varPtrType reflect.Type, replacerType reflect.Type, supportPtr bool) bool {
 	wantValueType := reflect.FuncOf(nil, []reflect.Type{varPtrType.Elem()}, false)
 	if replacerType.Kind() != reflect.Func {
-		panic(fmt.Errorf("replacer should have type: %s, actual: %s", wantValueType.String(), replacerType.String()))
+		panic(fmt.Errorf("replacer should have type: `%s`, actual: `%s`", wantValueType.String(), replacerType.String()))
 	}
 
 	targetTypeStr, replacerTypeStr, match := checkFuncTypeMatch(wantValueType, replacerType, false)
 	if match {
 		return false
 	}
+	var wantPtrType reflect.Type
 	if supportPtr {
-		wantPtrType := reflect.FuncOf(nil, []reflect.Type{varPtrType}, false)
+		wantPtrType = reflect.FuncOf(nil, []reflect.Type{varPtrType}, false)
 		_, _, matchPtr := checkFuncTypeMatch(wantPtrType, replacerType, false)
 		if matchPtr {
 			return true
 		}
 	}
-	panic(fmt.Errorf("replacer should have type: %s, actual: %s", targetTypeStr, replacerTypeStr))
+	var extraMsg string
+	if wantPtrType != nil {
+		extraMsg = fmt.Sprintf(" or `%s`", wantPtrType.String())
+	}
+	panic(fmt.Errorf("replacer should have type: `%s`%s, actual: `%s`", targetTypeStr, extraMsg, replacerTypeStr))
 }

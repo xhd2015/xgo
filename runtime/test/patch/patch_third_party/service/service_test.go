@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/mock/mock_third_party/third"
-	"github.com/xhd2015/xgo/runtime/test/mock/mock_third_party/third/embed_other_struct"
-	"github.com/xhd2015/xgo/runtime/test/mock/mock_third_party/third/intf"
-	"github.com/xhd2015/xgo/runtime/test/mock/mock_third_party/third/struct_field"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party/third"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party/third/embed_other_struct"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party/third/intf"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party/third/struct_field"
 )
 
 func TestGreet(t *testing.T) {
