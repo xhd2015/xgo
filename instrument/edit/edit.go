@@ -5,6 +5,7 @@ import (
 	"go/token"
 
 	"github.com/xhd2015/xgo/instrument/load"
+	"github.com/xhd2015/xgo/instrument/resolve/types"
 	"github.com/xhd2015/xgo/support/edit/goedit"
 )
 
@@ -15,15 +16,33 @@ const (
 	DeclKindVar
 	DeclKindConst
 	DeclKindType
+	DeclKindFunc // not including methods
 )
 
 type Decl struct {
-	Kind           DeclKind
-	Ident          *ast.Ident
-	Type           ast.Expr // might be nil
+	Kind          DeclKind
+	Ident         *ast.Ident
+	Type          ast.Expr // might be nil
+	Value         ast.Expr // might be nil
+	ResolvedValue types.Type
+
+	ResolvedValueType types.Type
+
 	Decl           *ast.GenDecl
-	HasCallRewrite bool
-	File           *File
+	HasCallRewrite bool // for var
+
+	// for Func
+	FuncDecl *FuncDecl
+
+	// for Type
+	Methods map[string]*FuncDecl
+	File    *File
+}
+
+type FuncDecl struct {
+	Name    string
+	RecvPtr bool
+	Syntax  *ast.FuncDecl
 }
 
 type Packages struct {
@@ -39,9 +58,9 @@ type Package struct {
 	LoadPackage *load.Package
 	Files       []*File
 
-	Decls        map[string]*Decl
-	HasVarDecls  bool
-	HasTypeDecls bool
+	Decls map[string]*Decl
+
+	Collected bool
 }
 
 type File struct {

@@ -65,7 +65,10 @@ func TestPatchVarNothingUnaffected(t *testing.T) {
 //
 //	-run 'TestPatchVarAndPtrTestSameVariableNoCancel|TestPatchVarNothingInTheEndUnaffected'
 //
-// cause TestPatchVarNothingInTheEndUnaffected fails
+// cause TestPatchVarNothingInTheEndUnaffected fails because
+// variable pointer patching fallback to value patching, which
+// modifies the original variable.
+//
 // TestPatchVarAndPtrTestSameVariable also validates
 // goroutine-separation: it does not interfere with TestPatchVarPtrTest
 func TestPatchVarAndPtrTestSameVariableNoCancel(t *testing.T) {

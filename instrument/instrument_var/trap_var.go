@@ -16,7 +16,7 @@ func TrapVariables(packages *edit.Packages) error {
 		for _, file := range pkg.Files {
 			var hasVar bool
 			for _, decl := range file.Decls {
-				if decl.Kind == edit.DeclKindVar && decl.Type != nil && decl.HasCallRewrite {
+				if decl.Kind == edit.DeclKindVar && decl.HasCallRewrite {
 					fileEdit := file.Edit
 					end := decl.Decl.End()
 					// TODO: check if the end is a semicolon
@@ -26,9 +26,14 @@ func TrapVariables(packages *edit.Packages) error {
 					infoVar := fmt.Sprintf("%s_%d_%d", constants.VAR_INFO, file.Index, len(file.TrapVars))
 
 					declType := decl.Type
-					typeStart := fset.Position(declType.Pos()).Offset
-					typeEnd := fset.Position(declType.End()).Offset
-					typeCode := file.File.Content[typeStart:typeEnd]
+					var typeCode string
+					if declType != nil {
+						typeStart := fset.Position(declType.Pos()).Offset
+						typeEnd := fset.Position(declType.End()).Offset
+						typeCode = file.File.Content[typeStart:typeEnd]
+					} else if decl.ResolvedValue != nil {
+						typeCode = decl.ResolvedValue.String()
+					}
 
 					varName := decl.Ident.Name
 					code := genCode(varName, infoVar, typeCode)

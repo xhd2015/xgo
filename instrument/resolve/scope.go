@@ -8,6 +8,7 @@ import (
 	"runtime"
 
 	"github.com/xhd2015/xgo/instrument/edit"
+	"github.com/xhd2015/xgo/instrument/resolve/types"
 )
 
 // imports: key is local name, value is import path
@@ -52,7 +53,7 @@ func (c *PkgRecorder) Get(name string) *NameRecorder {
 }
 
 type NameRecorder struct {
-	HasMockPatch    bool
+	HasMockRef      bool
 	NamesHavingMock map[string]bool
 }
 
@@ -75,6 +76,11 @@ type GlobalScope struct {
 
 	detectVarTrap bool
 	detectMock    bool
+
+	// key is the expr, value is the type info
+	ObjectInfo map[ast.Expr]types.Type
+
+	NamedTypeToDecl map[types.NamedType]*edit.Decl
 }
 
 // a Scope provides a point where stmts can be prepended or inserted
@@ -119,6 +125,7 @@ func (c *Scope) AddDef(name string, def *Define) {
 	c.Defs[name] = def
 }
 
+// Has checks if the name is defined in local scope
 func (c *Scope) Has(name string) bool {
 	_, ok := c.Names[name]
 	if ok {

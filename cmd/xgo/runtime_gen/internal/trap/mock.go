@@ -120,7 +120,7 @@ func pushMockReplacer(fn interface{}, replacer interface{}) func() {
 		varPtr := fnv.Pointer()
 		funcInfo := functab.InfoVarAddr(varPtr)
 		if funcInfo == nil {
-			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
+			panic(fmt.Errorf("variable %w: (%T)%v", ErrNotInstrumented, fn, fn))
 		}
 		// variable
 		replacerVal := reflect.ValueOf(replacer)

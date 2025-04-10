@@ -84,7 +84,7 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 			var hasFnRecord bool
 			var hasTypeMethodRecord bool
 			fnRecorder := recorder.Get(funcName)
-			if fnRecorder != nil && fnRecorder.HasMockPatch {
+			if fnRecorder != nil && fnRecorder.HasMockRef {
 				hasFnRecord = true
 			}
 			if !hasFnRecord && recvType != nil {

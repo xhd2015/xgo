@@ -49,11 +49,15 @@ func trapVarPtr(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 	ptr := reflect.ValueOf(varAddr).Pointer()
 	recorders := stkData.getVarPtrRecordHandlers(ptr)
 
-	// fallback is buggy, can affect program correctness
-	const ENABLE_PTR_FALLBACK = false
+	// var_ptr fallback to var is buggy, can affect program correctness
+	// because variable will be overridden
+	// and the original variable value will be lost.
+	// so we disable it.
+	const DISABLE_PTR_FALLBACK = true
+
 	mockRes := res
 	mock := stkData.getLastVarPtrMock(ptr)
-	if mock == nil && ENABLE_PTR_FALLBACK {
+	if mock == nil && !DISABLE_PTR_FALLBACK {
 		mock = stkData.getLastVarMock(ptr)
 		if mock != nil {
 			// input  res: **T

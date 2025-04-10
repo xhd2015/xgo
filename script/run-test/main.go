@@ -183,7 +183,7 @@ func main() {
 
 	var logDebug bool
 	var withSetup bool
-	var devTag bool
+	var tags string
 
 	var list bool
 	if len(args) > 0 && args[0] == "list" {
@@ -272,8 +272,12 @@ func main() {
 			installXgo = true
 			continue
 		}
-		if arg == "--dev-tag" {
-			devTag = true
+		if arg == "-tags" {
+			if i+1 >= n {
+				panic(fmt.Errorf("%v requires arg", arg))
+			}
+			tags = args[i+1]
+			i++
 			continue
 		}
 		if strings.HasPrefix(arg, "-") {
@@ -468,6 +472,9 @@ func main() {
 			// projectDir
 			runArgs := make([]string, 0, len(remainArgs)+1)
 			var opts Opts
+			if tags != "" {
+				runArgs = append(runArgs, "-tags", tags)
+			}
 			if !usePlainGo {
 				if logDebug {
 					runArgs = append(runArgs, "--log-debug")
@@ -477,9 +484,6 @@ func main() {
 				}
 				if debugXgo {
 					opts.Debug = true
-				}
-				if devTag {
-					opts.DevTag = true
 				}
 			}
 			var coverageVariant string

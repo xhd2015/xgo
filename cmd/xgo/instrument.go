@@ -159,9 +159,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		return ok
 	})
 	var recorder resolve.Recorder
-	resolve.Collect(mainPkgs, resolve.Options{
-		RecordVariables: true,
-	})
+	resolve.Collect(mainPkgs)
 	err = resolve.Traverse(mainPkgs, &recorder)
 	if err != nil {
 		return err

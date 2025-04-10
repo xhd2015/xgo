@@ -4,21 +4,21 @@ import (
 	"go/ast"
 	"go/token"
 
+	astutil "github.com/xhd2015/xgo/instrument/ast"
 	"github.com/xhd2015/xgo/instrument/edit"
 )
 
-type Options struct {
-	RecordVariables bool
-	RecordTypes     bool
-}
-
-func Collect(packages *edit.Packages, opts Options) {
+func Collect(packages *edit.Packages) {
 	// first, collect all toplevel variables
 	for _, pkg := range packages.Packages {
+		if pkg.Collected {
+			continue
+		}
 		decls := pkg.Decls
 		if decls == nil {
 			decls = make(map[string]*edit.Decl)
 		}
+		typesMethods := make(map[string]map[string]*edit.FuncDecl)
 		for _, file := range pkg.Files {
 			fileDecls := file.Decls
 			for _, decl := range file.File.Syntax.Decls {
@@ -29,19 +29,22 @@ func Collect(packages *edit.Packages, opts Options) {
 						for _, spec := range decl.Specs {
 							switch spec := spec.(type) {
 							case *ast.ValueSpec:
-								if opts.RecordVariables && !pkg.HasVarDecls {
-									for _, name := range spec.Names {
-										if isBlankName(name.Name) {
-											continue
-										}
-										fileDecls = append(fileDecls, &edit.Decl{
-											Kind:  edit.DeclKindVar,
-											Ident: name,
-											Type:  spec.Type,
-											Decl:  decl,
-											File:  file,
-										})
+								for i, name := range spec.Names {
+									if isBlankName(name.Name) {
+										continue
 									}
+									var value ast.Expr
+									if i < len(spec.Values) {
+										value = spec.Values[i]
+									}
+									fileDecls = append(fileDecls, &edit.Decl{
+										Kind:  edit.DeclKindVar,
+										Ident: name,
+										Type:  spec.Type,
+										Value: value,
+										Decl:  decl,
+										File:  file,
+									})
 								}
 							}
 						}
@@ -49,24 +52,52 @@ func Collect(packages *edit.Packages, opts Options) {
 						// TODO
 					case token.TYPE:
 						// type Some...
-						if opts.RecordTypes && !pkg.HasTypeDecls {
-							for _, spec := range decl.Specs {
-								spec, ok := spec.(*ast.TypeSpec)
-								if !ok {
-									continue
-								}
-								if isBlankName(spec.Name.Name) {
-									continue
-								}
-								fileDecls = append(fileDecls, &edit.Decl{
-									Kind:  edit.DeclKindType,
-									Ident: spec.Name,
-									Type:  spec.Type,
-									Decl:  decl,
-									File:  file,
-								})
+						for _, spec := range decl.Specs {
+							spec, ok := spec.(*ast.TypeSpec)
+							if !ok {
+								continue
 							}
+							if isBlankName(spec.Name.Name) {
+								continue
+							}
+							fileDecls = append(fileDecls, &edit.Decl{
+								Kind:  edit.DeclKindType,
+								Ident: spec.Name,
+								Type:  spec.Type,
+								Decl:  decl,
+								File:  file,
+							})
 						}
+					}
+				case *ast.FuncDecl:
+					funcName := decl.Name.Name
+					if isBlankName(funcName) {
+						continue
+					}
+					fnDecl := &edit.Decl{
+						Kind:  edit.DeclKindFunc,
+						Ident: decl.Name,
+						FuncDecl: &edit.FuncDecl{
+							Name:   funcName,
+							Syntax: decl,
+						},
+					}
+					if decl.Recv != nil && len(decl.Recv.List) > 0 {
+						recv := decl.Recv.List[0]
+						if recv.Type != nil {
+							ptr, _, typIdt := astutil.ParseReceiverType(recv.Type)
+							fnDecl.FuncDecl.RecvPtr = ptr
+							typeName := typIdt.Name
+							typeMethods := typesMethods[typeName]
+							if typeMethods == nil {
+								typeMethods = make(map[string]*edit.FuncDecl, 1)
+								typesMethods[typeName] = typeMethods
+							}
+							typeMethods[funcName] = fnDecl.FuncDecl
+							continue
+						}
+					} else {
+						fileDecls = append(fileDecls, fnDecl)
 					}
 				}
 			}
@@ -75,13 +106,15 @@ func Collect(packages *edit.Packages, opts Options) {
 			}
 			file.Decls = fileDecls
 		}
+		for typeName, methods := range typesMethods {
+			decl := decls[typeName]
+			if decl == nil || decl.Kind != edit.DeclKindType {
+				continue
+			}
+			decl.Methods = methods
+		}
 		pkg.Decls = decls
-		if opts.RecordVariables {
-			pkg.HasVarDecls = true
-		}
-		if opts.RecordTypes {
-			pkg.HasTypeDecls = true
-		}
+		pkg.Collected = true
 	}
 }
 

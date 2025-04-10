@@ -7,18 +7,39 @@ import (
 
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
+	"github.com/xhd2015/xgo/instrument/resolve/types"
 )
 
+// this package resolves type of an AST Expr.
+// a type is defined as giving the following information:
+// - package path
+// - type name
+// - has a receivier
+// - is the receiver a pointer
+// - is the receiver generic
+//
+// the result type are split into 3 parts:
+// - package-level variable
+// - package-level function
+// - package-level method of a type
+
+// TODO: can we support generic functions and methods even in go1.18 and go1.19 with the
+// help of resolver?
+// through a rewriting of mock.Patch? If we know the function has been instrumented,
+// we record that to some place, and replace the call with mock.AutoGenPatchGeneric(which is generated on the fly), in that function the pc lookup is done by inspecting directly.
+// or more generally, we generate the
+
 func (c *Scope) requireTrap(sel *ast.SelectorExpr) bool {
-	typInfo, ok := c.tryResolvePkgRef(sel)
+	typInfo := c.tryResolvePkgRef(sel)
+	if types.IsUnknown(typInfo) {
+		return false
+	}
+	pkgObject, ok := typInfo.(types.Variable)
 	if !ok {
 		return false
 	}
-	if typInfo.Name != "" {
-		return false
-	}
-	name := typInfo.TopName
-	pkgPath := typInfo.PkgPath
+	pkgPath := pkgObject.PkgPath
+	name := pkgObject.Name
 	if name == "Patch" || name == "Mock" {
 		return pkgPath == constants.RUNTIME_MOCK_PKG
 	}
@@ -36,201 +57,295 @@ func (c *Scope) requireTrap(sel *ast.SelectorExpr) bool {
 //
 //	(*ipc.Reader).Next
 //	vr.Reader.Next where vr.Reader is an embedded field: struct { *ipc.Reader }
-func (c *Scope) resolveMockRef(fn ast.Expr) {
-	typeInfo, ok := c.resolveType(fn)
-	if !ok {
+func (c *Scope) recordMockRef(fn ast.Expr) {
+	typeInfo := c.resolveType(fn)
+	if types.IsUnknown(typeInfo) {
 		return
 	}
 	recorder := c.Global.Recorder
-	pkgPath := typeInfo.PkgPath
-	topName := typeInfo.TopName
-	name := typeInfo.Name
 
-	topRecord := recorder.GetOrInit(pkgPath).GetOrInit(topName)
-	if name == "" {
-		topRecord.HasMockPatch = true
+	var pkgPath string
+	var name string
+	var field string
+	switch typeInfo := typeInfo.(type) {
+	case types.Variable:
+		pkgPath = typeInfo.PkgPath
+		name = typeInfo.Name
+	case types.VariableField:
+		pkgPath = typeInfo.Variable.PkgPath
+		name = typeInfo.Variable.Name
+		field = typeInfo.Field
+	default:
+		return
+	}
+
+	topRecord := recorder.GetOrInit(pkgPath).GetOrInit(name)
+	if field == "" {
+		topRecord.HasMockRef = true
 	} else {
-		topRecord.AddMockName(name)
+		topRecord.AddMockName(field)
 	}
 }
 
-type TypeInfo struct {
-	PkgPath string
-	TopName string
-	Name    string
-}
+// a -> look for definition
+// a.b -> look for a's definition first, a could a package name, a type or a variable.
+// a.b.c -> look for a.b's definition
 
-func (c *Scope) resolveType(expr ast.Expr) (TypeInfo, bool) {
+func (c *Scope) resolveType(expr ast.Expr) types.Type {
 	if expr == nil {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
+	typeInfo, ok := c.Global.ObjectInfo[expr]
+	if ok {
+		return typeInfo
+	}
+	typeInfo = c.doResolveType(expr)
+	if c.Global.ObjectInfo == nil {
+		c.Global.ObjectInfo = make(map[ast.Expr]types.Type, 1)
+	}
+	c.Global.ObjectInfo[expr] = typeInfo
+	return typeInfo
+}
+
+func (c *Scope) doResolveType(expr ast.Expr) types.Type {
 	switch expr := expr.(type) {
 	case *ast.Ident:
-		def := c.GetDef(expr.Name)
-		if def == nil {
-			return TypeInfo{}, false
+		name := expr.Name
+		def := c.GetDef(name)
+		if def != nil {
+			return c.resolveDefType(def)
 		}
-		// def example:
-		//   &flight.Writer{}
-		if def.Index == -1 {
-			// TODO
+		if !c.Has(expr.Name) {
+			// check decl before imports
+			decl := c.Global.PkgScopeNames[name]
+			if decl != nil {
+				if decl.Kind == edit.DeclKindType {
+					namedType := types.NamedType{
+						PkgPath: c.Global.Package.LoadPackage.GoPackage.ImportPath,
+						Name:    name,
+					}
+					if c.Global.NamedTypeToDecl == nil {
+						c.Global.NamedTypeToDecl = make(map[types.NamedType]*edit.Decl, 1)
+					}
+					c.Global.NamedTypeToDecl[namedType] = decl
+					return namedType
+				} else if decl.Kind == edit.DeclKindVar {
+					var varType types.Type
+					if decl.Type != nil {
+						varType = c.resolveType(decl.Type)
+					} else if decl.Value != nil {
+						varType = c.resolveType(decl.Value)
+					}
+					return types.Variable{
+						PkgPath: c.Global.Package.LoadPackage.GoPackage.ImportPath,
+						Name:    name,
+						Type:    varType,
+					}
+				}
+				return types.Unknown{}
+			}
+			pkgPath, ok := c.Global.Imports[expr.Name]
+			if ok {
+				// this only refers to a package
+				return types.ImportPath(pkgPath)
+			}
 		}
 	case *ast.SelectorExpr:
 		selName := expr.Sel.Name
+		if xInfo := c.resolveType(expr.X); !types.IsUnknown(xInfo) {
+			// if xType resolves to a Decl,
+			// check if Name resolves to method of that Decl
+			if xVar, ok := xInfo.(types.Variable); ok {
+				if namedType, ok := xVar.Type.(types.NamedType); ok {
+					decl := c.Global.NamedTypeToDecl[namedType]
+					if decl != nil {
+						method := decl.Methods[selName]
+						if method != nil && method.RecvPtr {
+							// update expr.X's type to be ptr
+							xVar.Type = types.Ptr{
+								Elem: xVar.Type,
+							}
+							c.Global.ObjectInfo[expr.X] = xVar
+						}
+						return types.Func{
+							Recv: namedType,
+							// TODO params
+						}
+					}
+				}
+			}
+		}
+		// X.Y X has a type
 		if isBlankName(selName) {
-			return TypeInfo{}, false
+			return types.Unknown{}
 		}
 		if idt, idtOK := expr.X.(*ast.Ident); idtOK {
 			pkgPath, ok := c.Global.Imports[idt.Name]
 			if ok {
 				// pkg.Name
-				return TypeInfo{
+				return types.Variable{
 					PkgPath: pkgPath,
-					TopName: selName,
-				}, true
+					Name:    selName,
+				}
 			}
 			def := c.GetDef(idt.Name)
 			if def != nil {
 				// var.Name
 				return c.resolveDefType(def)
 			}
-			return TypeInfo{}, false
+			return types.Unknown{}
 		}
-		typeInfo, ok := c.tryResolvePkgType(expr.X)
-		if ok {
+		typeInfo := c.tryResolvePkgType(expr.X)
+		if !types.IsUnknown(typeInfo) {
 			// (*ipc.Reader).Next or ipc.Reader.Next
-			return typeInfo, true
+			return typeInfo
 		}
 		// var.Field.Func
-		typeInfo, ok = c.tryResolveVarDotField(expr.X)
-		if ok {
-			if typeInfo.Name == "" {
-				return TypeInfo{
-					PkgPath: typeInfo.PkgPath,
-					TopName: typeInfo.TopName,
-					Name:    selName,
-				}, true
+		typeInfo = c.tryResolveVarDotField(expr.X)
+		if !types.IsUnknown(typeInfo) {
+			pkgObj, ok := typeInfo.(types.Variable)
+			if ok {
+				return types.VariableField{
+					Variable: pkgObj,
+					Field:    selName,
+				}
 			}
-			return typeInfo, true
+			panic(fmt.Sprintf("TODO unhandled type: %T", typeInfo))
 		}
 	case *ast.StarExpr:
 		return c.resolveType(expr.X)
+	case *ast.UnaryExpr:
+		// TODO
+		// &var
+		// could be a variable
+	case *ast.BasicLit:
+		return getBasicLitConstType(expr.Kind)
 	}
-	return TypeInfo{}, false
+	return types.Unknown{}
+}
+
+func getBasicLitConstType(kind token.Token) types.Type {
+	switch kind {
+	case token.INT:
+		return types.Basic("int")
+	case token.STRING:
+		return types.Basic("string")
+	case token.CHAR:
+		return types.Basic("byte")
+	case token.FLOAT:
+		return types.Basic("float64")
+	}
+	return types.Unknown{}
 }
 
 // pkg.Name
-func (c *Scope) tryResolvePkgRef(sel *ast.SelectorExpr) (typeInfo TypeInfo, ok bool) {
+func (c *Scope) tryResolvePkgRef(sel *ast.SelectorExpr) types.Type {
 	idt, ok := sel.X.(*ast.Ident)
 	if !ok {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 	imp, ok := c.Global.Imports[idt.Name]
 	if !ok {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
-	return TypeInfo{
+	return types.Variable{
 		PkgPath: imp,
-		TopName: sel.Sel.Name,
-	}, true
+		Name:    sel.Sel.Name,
+	}
 }
 
 // &flight.Writer{}
-func (c *Scope) tryResolveCompositeLit(expr ast.Expr) (typeInfo TypeInfo, ok bool) {
+func (c *Scope) tryResolveCompositeLit(expr ast.Expr) types.Type {
 	unary, ok := expr.(*ast.UnaryExpr)
 	if ok {
 		if unary.Op != token.AND {
-			return TypeInfo{}, false
+			return types.Unknown{}
 		}
 		expr = unary.X
 	}
 	lit, ok := expr.(*ast.CompositeLit)
 	if !ok {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 	sel, ok := lit.Type.(*ast.SelectorExpr)
 	if !ok {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 	return c.tryResolvePkgRef(sel)
 }
 
 // (*ipc.Reader).Next or ipc.Reader.Next
-func (c *Scope) tryResolvePkgType(expr ast.Expr) (typeInfo TypeInfo, ok bool) {
+func (c *Scope) tryResolvePkgType(expr ast.Expr) types.Type {
 	paren, ok := expr.(*ast.ParenExpr)
 	if ok {
 		starExpr, ok := paren.X.(*ast.StarExpr)
 		if !ok {
-			return TypeInfo{}, false
+			return types.Unknown{}
 		}
 		expr = starExpr.X
 	}
 	sel, ok := expr.(*ast.SelectorExpr)
 	if !ok {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 	return c.tryResolvePkgRef(sel)
 }
 
-func (c *Scope) tryResolveVarDotField(expr ast.Expr) (typeInfo TypeInfo, ok bool) {
+func (c *Scope) tryResolveVarDotField(expr ast.Expr) types.Type {
 	// var.Field
 	sel, ok := expr.(*ast.SelectorExpr)
 	if !ok {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 	idt, ok := sel.X.(*ast.Ident)
 	if !ok {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 	def := c.GetDef(idt.Name)
 	if def == nil {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 
-	typeInfo, ok = c.resolveDefType(def)
-	if !ok {
-		return TypeInfo{}, false
+	typeInfo := c.resolveDefType(def)
+	if types.IsUnknown(typeInfo) {
+		return types.Unknown{}
 	}
-	pkgPath := typeInfo.PkgPath
-	topName := typeInfo.TopName
-	// could be a struct
-	if typeInfo.Name == "" {
-		structFieldType, ok := c.tryGetStructFieldType(pkgPath, topName, sel.Sel.Name)
-		if ok {
-			return TypeInfo{
-				PkgPath: structFieldType.PkgPath,
-				TopName: structFieldType.TopName,
-			}, true
+	if typeInfo, ok := typeInfo.(types.Variable); ok {
+		// could be a struct
+		pkgPath := typeInfo.PkgPath
+		typeName := typeInfo.Name
+		structFieldType := c.tryGetStructFieldType(pkgPath, typeName, sel.Sel.Name)
+		if !types.IsUnknown(structFieldType) {
+			return structFieldType
 		}
 	}
 
-	return TypeInfo{}, false
+	return types.Unknown{}
 }
-func (c *Scope) tryGetStructFieldType(pkgPath string, declName string, refFieldName string) (typeInfo TypeInfo, ok bool) {
+func (c *Scope) tryGetStructFieldType(pkgPath string, declName string, refFieldName string) types.Type {
 	// check if pkgPath.name is a struct
-	pkg, err := c.Global.Packages.Load(pkgPath)
+	pkg, _, err := c.Global.Packages.Load(pkgPath)
 	if err != nil {
 		panic(fmt.Sprintf("resolveDefType: %s %s", pkgPath, err))
 	}
 	if pkg == nil {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 
 	Collect(&edit.Packages{
 		Packages: []*edit.Package{pkg},
-	}, Options{
-		RecordTypes: true,
 	})
+
 	decl := pkg.Decls[declName]
 	if decl == nil {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 	structType, ok := decl.Type.(*ast.StructType)
 	if !ok {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 	if structType.Fields == nil || len(structType.Fields.List) == 0 {
-		return TypeInfo{}, false
+		return types.Unknown{}
 	}
 	var foundField *ast.Field
 	for _, field := range structType.Fields.List {
@@ -280,14 +395,14 @@ func getEmbedFieldName(typ ast.Expr) string {
 	}
 	return ident.Name
 }
-func (c *Scope) resolveDefType(def *Define) (typeInfo TypeInfo, ok bool) {
+func (c *Scope) resolveDefType(def *Define) types.Type {
 	if def.Index == -1 {
 		// var := pkg.Name{}
-		typeInfo, ok = c.tryResolveCompositeLit(def.Expr)
-		if ok {
-			return typeInfo, true
+		typeInfo := c.tryResolveCompositeLit(def.Expr)
+		if !types.IsUnknown(typeInfo) {
+			return typeInfo
 		}
 	}
 	// not supported yet
-	return TypeInfo{}, false
+	return types.Unknown{}
 }

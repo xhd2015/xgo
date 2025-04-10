@@ -4,16 +4,16 @@ import (
 	"github.com/xhd2015/xgo/instrument/load"
 )
 
-func (c *Packages) Load(pkgPath string) (*Package, error) {
+func (c *Packages) Load(pkgPath string) (*Package, bool, error) {
 	pkg, ok := c.PackageByPath[pkgPath]
 	if ok {
-		return pkg, nil
+		return pkg, true, nil
 	}
 
 	pkgs, err := load.LoadPackages([]string{pkgPath}, c.LoadOptions)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	c.Add(pkgs)
-	return c.PackageByPath[pkgPath], nil
+	return c.PackageByPath[pkgPath], false, nil
 }

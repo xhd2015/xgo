@@ -11,6 +11,8 @@ import (
 
 var SomeVar int
 
+// xgo can trap var without type
+// if the var is defined as literal
 var SomeVarWithoutType = 0
 
 func SomeFunc(s string) {
@@ -49,6 +51,13 @@ func TestFuncTab(t *testing.T) {
 			WantName:         "SomeVar",
 			WantIdentityName: "SomeVar",
 			WantVar:          &SomeVar,
+		},
+		{
+			WantKind:         core.Kind_Var,
+			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.SomeVarWithoutType",
+			WantName:         "SomeVarWithoutType",
+			WantIdentityName: "SomeVarWithoutType",
+			WantVar:          &SomeVarWithoutType,
 		},
 		{
 			WantKind:         core.Kind_Func,

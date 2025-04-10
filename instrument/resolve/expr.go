@@ -21,8 +21,10 @@ func (c *Scope) traverseCallExpr(callExpr *ast.CallExpr) {
 	var isSelector bool
 	fn := callExpr.Fun
 	if sel, ok := fn.(*ast.SelectorExpr); ok {
+		// type check X.Y to get X's type
 		if isIdent(sel.X) || isSelectorExpr(sel.X) {
 			isSelector = true
+			c.traverseExpr(sel)
 		}
 		if c.needDetectMock() && len(callExpr.Args) > 0 {
 			// check if mock.Patch
@@ -30,7 +32,7 @@ func (c *Scope) traverseCallExpr(callExpr *ast.CallExpr) {
 				// resolve the first argument's type
 				// to see its type so that we
 				// need to insert trap points
-				c.resolveMockRef(callExpr.Args[0])
+				c.recordMockRef(callExpr.Args[0])
 			}
 		}
 	}
