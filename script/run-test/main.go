@@ -310,8 +310,12 @@ func main() {
 				fmt.Fprintf(os.Stdout, "./%s\n", logDir)
 				continue
 			}
+			prefix := "."
+			if logDir != "" {
+				prefix = "./" + logDir
+			}
 			for _, arg := range testArg.Args {
-				fmt.Fprintf(os.Stdout, "./%s/%s\n", logDir, strings.TrimPrefix(arg, "./"))
+				fmt.Fprintf(os.Stdout, "%s/%s\n", prefix, strings.TrimPrefix(arg, "./"))
 			}
 		}
 		return
@@ -480,9 +484,12 @@ func main() {
 			usePlainGo := testArg.UsePlainGo
 			// projectDir
 			runArgs := make([]string, 0, len(remainArgs)+1)
-			var opts Opts
+			opts := Opts{
+				Tags: tags,
+			}
 			if tags != "" {
 				runArgs = append(runArgs, "-tags", tags)
+				opts.Tags = tags
 			}
 			if !usePlainGo {
 				if logDebug {
@@ -563,11 +570,12 @@ func addGoFlags(args []string, cover bool, coverPkgs []string, coverprofile stri
 
 func getTestArgs(args []string) []*TestArg {
 	if len(args) == 0 {
-		return defaultTestArgs
+		return getDefaultTestArgs()
 	}
 	presentArgs := splitArgs(args)
 	for _, p := range presentArgs {
 		var found *TestArg
+		defaultTestArgs := getDefaultTestArgs()
 		for _, d := range defaultTestArgs {
 			if d.Dir == p.Dir {
 				found = d
@@ -581,6 +589,30 @@ func getTestArgs(args []string) []*TestArg {
 		}
 	}
 	return presentArgs
+}
+
+func getDefaultTestArgs() []*TestArg {
+	subTests, err := scanGoMods(filepath.Join("runtime", "test"), []string{"runtime", "test"})
+	if err != nil {
+		panic(fmt.Errorf("scanGoMods: %v", err))
+	}
+	tests := make([]*TestArg, 0, len(subTests))
+	tests = append(tests, defaultTestArgs...)
+	for _, subTest := range subTests {
+		subTestDir := strings.Join(subTest, "/")
+		var found bool
+		for _, test := range defaultTestArgs {
+			if test.Dir == subTestDir {
+				found = true
+				break
+			}
+		}
+		if found {
+			continue
+		}
+		tests = append(tests, &TestArg{Dir: subTestDir, Args: []string{"./..."}})
+	}
+	return tests
 }
 
 func splitArgs(args []string) []*TestArg {
@@ -647,6 +679,46 @@ func findMostInnerGoMod(prefixDir string, path []string) (dirPath []string, modP
 		}
 	}
 	return nil, path
+}
+
+// scan all dirs that contains go.mod
+func scanGoMods(dir string, prefix []string) ([][]string, error) {
+	names, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var results [][]string
+	for _, name := range names {
+		if name.Name() == "go.mod" && !name.IsDir() {
+			results = append(results, appendCopy(prefix, nil))
+			continue
+		}
+	}
+	for _, name := range names {
+		if !name.IsDir() {
+			continue
+		}
+		nameStr := name.Name()
+		if nameStr == "vendor" || nameStr == "testdata" || strings.HasPrefix(nameStr, ".") {
+			// .git, .xgo etc
+			continue
+		}
+		subPrefix := appendCopy(prefix, []string{nameStr})
+
+		subMods, err := scanGoMods(filepath.Join(dir, nameStr), subPrefix)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, subMods...)
+	}
+	return results, nil
+}
+
+func appendCopy(prefix []string, suffix []string) []string {
+	list := make([]string, len(prefix)+len(suffix))
+	copy(list, prefix)
+	copy(list[len(prefix):], suffix)
+	return list
 }
 
 func hasGoMod(dir string) bool {
@@ -833,20 +905,20 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 type testKind string
 
 type Opts struct {
-	Debug  bool
-	DevTag bool
+	Debug bool
+	Tags  string
 }
 
 func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests []string, env []string, opts ...Opts) error {
 	var debug bool
-	var devTag bool
+	var tags string
 	if len(opts) > 0 {
 		if len(opts) != 1 {
 			panic("only one opts is allowed")
 		}
 		opt := opts[0]
 		debug = opt.Debug
-		devTag = opt.DevTag
+		tags = opt.Tags
 	}
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
@@ -856,12 +928,16 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 	if !usePlainGo {
 		if !debug {
 			testArgs = []string{"run"}
-			if devTag {
-				testArgs = append(testArgs, "-tags", "dev")
+			if tags != "" {
+				testArgs = append(testArgs, "-tags", tags)
 			}
 			testArgs = append(testArgs, "./cmd/xgo", "test")
 		} else {
-			testArgs = []string{"run", "./cmd/xgo", "test"}
+			testArgs = []string{"run"}
+			if tags != "" {
+				testArgs = append(testArgs, "-tags", tags)
+			}
+			testArgs = append(testArgs, "./cmd/xgo", "test")
 		}
 	} else {
 		testArgs = []string{"test"}

@@ -3,3 +3,5 @@
 package resolve
 
 const IS_DEV = false
+
+const debug = false

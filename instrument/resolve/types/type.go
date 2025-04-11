@@ -28,11 +28,12 @@ type UnderlyingType interface {
 
 type Basic string
 type Unknown struct{}
+type Untyped struct{}
 
 type ImportPath string
 
 // package level variable
-type Variable struct {
+type PkgVariable struct {
 	PkgPath string
 	Name    string
 	Type_   Type
@@ -46,6 +47,9 @@ type Literal struct {
 	Type_ Type
 }
 
+type UntypedNil struct {
+}
+
 type NamedType struct {
 	PkgPath string
 	Name    string
@@ -54,6 +58,10 @@ type NamedType struct {
 
 type Ptr struct {
 	Elem Type
+}
+
+type RawPtr struct {
+	Elem UnderlyingType
 }
 
 type Func struct {
@@ -83,6 +91,27 @@ type StructField struct {
 	Type Type
 }
 
+type Interface struct {
+	// Methods []Method
+}
+
+type Map struct {
+	Key   Type
+	Value Type
+}
+
+type Slice struct {
+	Elem Type
+}
+
+type Array struct {
+	Elem Type
+}
+
+type Chan struct {
+	Elem Type
+}
+
 func (c Basic) infoMark()           {}
 func (c Basic) typeMark()           {}
 func (c Basic) underlyingTypeMark() {}
@@ -93,17 +122,29 @@ func (c Basic) String() string {
 	return string(c)
 }
 
-func (c Unknown) infoMark()   {}
-func (c Unknown) objectMark() {}
-func (c Unknown) typeMark()   {}
+func (c Unknown) infoMark()           {}
+func (c Unknown) objectMark()         {}
+func (c Unknown) typeMark()           {}
+func (c Unknown) underlyingTypeMark() {}
 func (c Unknown) Type() Type {
-	panic("should not call Type() on unknown")
+	return c
 }
 func (c Unknown) Underlying() UnderlyingType {
-	panic("should not call Type() on unknown")
+	return c
 }
 func (c Unknown) String() string {
 	return "unknown"
+}
+
+func (c Untyped) infoMark()           {}
+func (c Untyped) objectMark()         {}
+func (c Untyped) typeMark()           {}
+func (c Untyped) underlyingTypeMark() {}
+func (c Untyped) Underlying() UnderlyingType {
+	return c
+}
+func (c Untyped) String() string {
+	return "untyped"
 }
 
 func (c ImportPath) infoMark()           {}
@@ -116,22 +157,31 @@ func (c ImportPath) String() string {
 	return string(c)
 }
 
-func (c Ptr) infoMark()           {}
-func (c Ptr) typeMark()           {}
-func (c Ptr) underlyingTypeMark() {}
+func (c Ptr) infoMark() {}
+func (c Ptr) typeMark() {}
+func (c Ptr) Underlying() UnderlyingType {
+	return RawPtr{Elem: c.Elem.Underlying()}
+}
 func (c Ptr) String() string {
 	return fmt.Sprintf("*%s", c.Elem.String())
 }
-func (c Ptr) Underlying() UnderlyingType {
-	return c.Elem.Underlying()
+
+func (c RawPtr) infoMark()           {}
+func (c RawPtr) typeMark()           {}
+func (c RawPtr) underlyingTypeMark() {}
+func (c RawPtr) Underlying() UnderlyingType {
+	return c
+}
+func (c RawPtr) String() string {
+	return fmt.Sprintf("*%s", c.Elem.String())
 }
 
-func (c Variable) infoMark()   {}
-func (c Variable) objectMark() {}
-func (c Variable) Type() Type {
+func (c PkgVariable) infoMark()   {}
+func (c PkgVariable) objectMark() {}
+func (c PkgVariable) Type() Type {
 	return c.Type_
 }
-func (c Variable) String() string {
+func (c PkgVariable) String() string {
 	return fmt.Sprintf("%s.%s", c.PkgPath, c.Name)
 }
 
@@ -151,6 +201,15 @@ func (c Literal) Type() Type {
 }
 func (c Literal) String() string {
 	return fmt.Sprintf("%s{}", c.Type_.String())
+}
+
+func (c UntypedNil) infoMark()   {}
+func (c UntypedNil) objectMark() {}
+func (c UntypedNil) Type() Type {
+	return Untyped{}
+}
+func (c UntypedNil) String() string {
+	return "nil"
 }
 
 func (c NamedType) infoMark() {}
@@ -202,4 +261,60 @@ func (c Struct) Underlying() UnderlyingType {
 }
 func (c Struct) String() string {
 	return "struct{...}"
+}
+
+func (c Interface) infoMark()           {}
+func (c Interface) typeMark()           {}
+func (c Interface) underlyingTypeMark() {}
+func (c Interface) Underlying() UnderlyingType {
+	return c
+}
+func (c Interface) String() string {
+	return "interface{}"
+}
+
+func (c Map) infoMark()           {}
+func (c Map) typeMark()           {}
+func (c Map) underlyingTypeMark() {}
+func (c Map) Underlying() UnderlyingType {
+	return c
+}
+func (c Map) String() string {
+	return "map[...]"
+}
+
+func (c Slice) infoMark()           {}
+func (c Slice) typeMark()           {}
+func (c Slice) underlyingTypeMark() {}
+func (c Slice) Underlying() UnderlyingType {
+	return c
+}
+func (c Slice) String() string {
+	return "slice[...]"
+}
+
+func (c Array) infoMark()           {}
+func (c Array) typeMark()           {}
+func (c Array) underlyingTypeMark() {}
+func (c Array) Underlying() UnderlyingType {
+	return c
+}
+func (c Array) String() string {
+	return fmt.Sprintf("array[...]%s", c.Elem.String())
+}
+
+func (c Chan) infoMark()           {}
+func (c Chan) typeMark()           {}
+func (c Chan) underlyingTypeMark() {}
+func (c Chan) Underlying() UnderlyingType {
+	return c
+}
+func (c Chan) String() string {
+	return fmt.Sprintf("chan %s", c.Elem.String())
+}
+
+func IsPointer(typ Type) bool {
+	underlying := typ.Underlying()
+	_, ok := underlying.(RawPtr)
+	return ok
 }

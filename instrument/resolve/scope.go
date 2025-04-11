@@ -117,7 +117,10 @@ type Scope struct {
 }
 
 type Define struct {
-	Expr ast.Expr
+	// is this Def causes a split?
+	// if so, should look for parent scope
+	Splited bool
+	Expr    ast.Expr
 
 	// if index==-1, it means exact match
 	Index int
@@ -154,6 +157,15 @@ func (c *Scope) newScope() *Scope {
 		File:    c.File,
 		Parent:  c,
 	}
+}
+
+// tt:=tt --> creates a new scope in later phase
+func (c *Scope) splitScopeWithDef(defs map[string]*Define, names map[string]bool) {
+	clone := *c
+
+	c.Parent = &clone
+	c.Defs = defs
+	c.Names = names
 }
 
 func (c *Scope) Add(name string) {

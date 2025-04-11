@@ -22,7 +22,7 @@ const __xgo_trap_cfg2 = 1
 var cfg2 Config
 
 func TestConfigAllowIntercept(t *testing.T) {
-	t.Skip("stdlib is skipped since xgo v1.1.0")
+	trap.MarkIntercept((*bytes.Buffer).String)
 	var buf bytes.Buffer
 	_, bufFn, _, _ := internal_trap.Inspect((*bytes.Buffer).String)
 	trap.AddInterceptor(&trap.Interceptor{
@@ -30,18 +30,19 @@ func TestConfigAllowIntercept(t *testing.T) {
 			if f == bufFn {
 				return
 			}
-			buf.WriteString(fmt.Sprintf("%s\n", f.IdentityName))
+			buf.WriteString(fmt.Sprintf("call %s\n", f.IdentityName))
 			return
 		},
 	})
 	readConfig1()
 	readConfig2()
+	_ = cfg2
 
 	trapStr := buf.String()
 	// notice there is no lock
-	expectTrapStr := "readConfig1\nreadConfig2\ncfg2\n"
+	expectTrapStr := "call readConfig1\ncall cfg1\ncall readConfig2\ncall cfg2\ncall cfg2\n"
 	if trapStr != expectTrapStr {
-		t.Fatalf("expect tarp buf: %q, actual: %q", expectTrapStr, trapStr)
+		t.Fatalf("expect trap buf: %q, actual: %q", expectTrapStr, trapStr)
 	}
 }
 

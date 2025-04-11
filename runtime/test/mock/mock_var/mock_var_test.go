@@ -7,6 +7,7 @@ import (
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/mock"
 	"github.com/xhd2015/xgo/runtime/test/mock/mock_var/sub"
+	sub22222 "github.com/xhd2015/xgo/runtime/test/mock/mock_var/sub"
 )
 
 var a int = 123
@@ -30,7 +31,7 @@ func TestMockVarTest(t *testing.T) {
 	}
 }
 
-func TestMockVarInOtherPkg(t *testing.T) {
+func TestMockVarInOtherPkgSameOrigName(t *testing.T) {
 	mock.Mock(&sub.A, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
 		results.GetFieldIndex(0).Set("mockA")
 		return nil
@@ -41,15 +42,38 @@ func TestMockVarInOtherPkg(t *testing.T) {
 	}
 }
 
-func TestThirdPartyTypeMethodVarWithoutWrapShouldNotWork(t *testing.T) {
+func TestMockVarInOtherPkgSameRenamed(t *testing.T) {
+	mock.Mock(&sub22222.A, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		results.GetFieldIndex(0).Set("mockA")
+		return nil
+	})
+	b := sub22222.A
+	if b != "mockA" {
+		t.Fatalf("expect sub.A to be %s, actual: %s", "mockA", b)
+	}
+}
+
+func TestMockVarInOtherPkgWithDifferentName(t *testing.T) {
+	t.Skip("TODO: add new package for this")
+	mock.Mock(&sub.A, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		results.GetFieldIndex(0).Set("mockA")
+		return nil
+	})
+	b := sub22222.A
+	if b != "mockA" {
+		t.Fatalf("expect sub.A to be %s, actual: %s", "mockA", b)
+	}
+}
+
+func TestThirdPartyTypeMethodVarWithoutWrapShouldWork(t *testing.T) {
 	mock.Patch(&c, func() sub.Mapping {
 		return sub.Mapping{
 			1: "mock",
 		}
 	})
 	txt := c.Get(1)
-	if txt != "hello" {
-		t.Fatalf("expect c[1] to be %s, actual: %s", "hello", txt)
+	if txt != "mock" {
+		t.Fatalf("expect c[1] to be %s, actual: %s", "mock", txt)
 	}
 }
 

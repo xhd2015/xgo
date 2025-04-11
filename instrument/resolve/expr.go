@@ -68,14 +68,7 @@ func (c *Scope) traverseExpr(node ast.Expr) {
 		if c.trapSelector(nil, node) {
 			return
 		}
-		// var lock sync.Mutex
-		// lock.Lock --> lock should not be intercepted
-		// because its type cannot be determined
-		// see TestMockLockShouldNotCopy
-		_, ok := deparen(node.X).(*ast.Ident)
-		if !ok {
-			c.traverseExpr(node.X)
-		}
+		c.traverseExpr(node.X)
 	case *ast.UnaryExpr:
 		// take addr
 		if node.Op == token.AND {

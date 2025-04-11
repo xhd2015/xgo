@@ -173,6 +173,11 @@ func traverseFuncDecls(global *GlobalScope, pkg *edit.Package, file *edit.File) 
 		if fnDecl.Body == nil {
 			continue
 		}
+		if debug {
+			if fnDecl.Name != nil && fnDecl.Name.Name == "TestThirdPartyTypeMethodVarWithoutWrapShouldWork" {
+				debugpoint()
+			}
+		}
 		fileScope.traverseFunc(fnDecl.Recv, fnDecl.Type, fnDecl.Body)
 	}
 }

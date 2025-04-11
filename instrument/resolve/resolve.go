@@ -35,7 +35,7 @@ func (c *Scope) requireTrap(sel *ast.SelectorExpr) bool {
 	if types.IsUnknown(typInfo) {
 		return false
 	}
-	pkgObject, ok := typInfo.(types.Variable)
+	pkgObject, ok := typInfo.(types.PkgVariable)
 	if !ok {
 		return false
 	}
@@ -44,7 +44,7 @@ func (c *Scope) requireTrap(sel *ast.SelectorExpr) bool {
 	if name == "Patch" || name == "Mock" {
 		return pkgPath == constants.RUNTIME_MOCK_PKG
 	}
-	if name == "AddFuncInterceptor" {
+	if name == "AddFuncInterceptor" || name == "MarkIntercept" {
 		return pkgPath == constants.RUNTIME_TRAP_PKG
 	}
 	if name == "Record" || name == "RecordCall" || name == "RecordResult" {
@@ -70,7 +70,7 @@ func (c *Scope) tryResolvePkgRef(sel *ast.SelectorExpr) types.Info {
 	if !ok {
 		return types.Unknown{}
 	}
-	return types.Variable{
+	return types.PkgVariable{
 		PkgPath: imp,
 		Name:    sel.Sel.Name,
 	}
@@ -128,10 +128,7 @@ func (c *Scope) resolveInfo(expr ast.Expr) types.Info {
 		return info
 	}
 	info = c.doResolveInfo(expr)
-	if c.Global.ExprInfo == nil {
-		c.Global.ExprInfo = make(map[ast.Expr]types.Info, 1)
-	}
-	c.Global.ExprInfo[expr] = info
+	c.setTypeInfo(expr, info)
 	return info
 }
 
@@ -185,7 +182,7 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 					if types.IsUnknown(varType) {
 						return types.Unknown{}
 					}
-					return types.Variable{
+					return types.PkgVariable{
 						PkgPath: c.Package.PkgPath(),
 						Name:    name,
 						Type_:   varType,
@@ -204,46 +201,16 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 				// this only refers to a package
 				return types.ImportPath(pkgPath)
 			}
+			if expr.Name == "nil" {
+				return types.UntypedNil{}
+			}
+			return parseBasicName(expr.Name)
 		}
+		return types.Unknown{}
 	case *ast.SelectorExpr:
-		selName := expr.Sel.Name
-		xInfo := c.resolveInfo(expr.X)
-		if types.IsUnknown(xInfo) {
-			return types.Unknown{}
-		}
-
-		switch xInfo := xInfo.(type) {
-		case types.ImportPath:
-			// pkg.Name
-			pkgPath := string(xInfo)
-			pkg := c.loadPackage(pkgPath)
-			if pkg == nil {
-				return types.Unknown{}
-			}
-			if decl := pkg.Decls[selName]; decl != nil {
-				pkgScope := c.newFileScope(pkg, decl.File)
-				return pkgScope.resolveInfo(decl.Ident)
-			}
-			return types.Unknown{}
-		case types.Object:
-			// var.Field
-			// if xType resolves to a Decl,
-			// check if Name resolves to method of that Decl
-			valType := xInfo.Type()
-			if valType == nil || types.IsUnknown(valType) {
-				return types.Unknown{}
-			}
-			return c.resolveTypeField(valType, selName, func() {
-				c.Global.ExprInfo[expr.X] = takeAddr(xInfo)
-			})
-		case types.Type:
-			// (*ipc.Reader).Next or ipc.Reader.Next
-			// resolves to Value
-			// Type.Something resolves to Method or Value
-			return c.resolveTypeField(xInfo, selName, nil)
-		default:
-			return types.Unknown{}
-		}
+		subType := c.resolveSelectorSubType(expr)
+		c.setTypeInfo(expr.Sel, subType)
+		return subType
 	case *ast.StarExpr:
 		xInfo := c.resolveInfo(expr.X)
 		if types.IsUnknown(xInfo) {
@@ -268,9 +235,9 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 			return types.Unknown{}
 		}
 		switch vr := vr.(type) {
-		case types.Variable:
+		case types.PkgVariable:
 			if expr.Op == token.AND {
-				return types.Variable{
+				return types.PkgVariable{
 					PkgPath: vr.PkgPath,
 					Name:    vr.Name,
 					Type_:   types.Ptr{Elem: vr.Type_},
@@ -347,8 +314,58 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		// x := exec.Command("")
 		// args := (x).Args  --> x is a pointer
 		return c.resolveInfo(expr.X)
+	case *ast.MapType:
+		return types.Map{}
+	case *ast.ArrayType:
+		return types.Array{
+			Elem: c.resolveType(expr.Elt),
+		}
+	case *ast.InterfaceType:
+		return types.Interface{}
+	case *ast.ChanType:
+		return types.Chan{}
+	case *ast.FuncType:
+		return types.Signature{}
+		// TODO: CallExpr for type conversion
+	}
+	if debug {
+		fmt.Fprintf(os.Stderr, "unresolved expr: %T\n", expr)
 	}
 	return types.Unknown{}
+}
+
+func parseBasicName(name string) types.Type {
+	switch name {
+	case "string", "byte":
+		return types.Basic(name)
+	case "int", "int8", "int16", "int32", "int64":
+		return types.Basic(name)
+	case "uint", "uint8", "uint16", "uint32", "uint64":
+		return types.Basic(name)
+	case "float32", "float64":
+		return types.Basic(name)
+	case "bool":
+		return types.Basic(name)
+	case "complex64", "complex128":
+		return types.Basic(name)
+		// TODO: "error"
+	}
+	return types.Unknown{}
+}
+
+func forAllParenNestedExpr(expr ast.Expr, fn func(expr ast.Expr)) {
+	fn(expr)
+	switch expr := expr.(type) {
+	case *ast.ParenExpr:
+		forAllParenNestedExpr(expr.X, fn)
+	}
+}
+
+func (c *Scope) setTypeInfo(expr ast.Expr, info types.Info) {
+	if c.Global.ExprInfo == nil {
+		c.Global.ExprInfo = make(map[ast.Expr]types.Info, 1)
+	}
+	c.Global.ExprInfo[expr] = info
 }
 
 func (c *Scope) recordPkgNameDecl(pkgPath string, name string, decl *edit.Decl) {
@@ -362,10 +379,18 @@ func (c *Scope) recordPkgNameDecl(pkgPath string, name string, decl *edit.Decl) 
 }
 
 func (c *Scope) getPkgNameDecl(pkgPath string, name string) *edit.Decl {
-	return c.Global.NamedTypeToDecl[PkgName{
+	decl, ok := c.Global.NamedTypeToDecl[PkgName{
 		PkgPath: pkgPath,
 		Name:    name,
 	}]
+	if ok {
+		return decl
+	}
+	pkg := c.Global.Packages.GetPackage(pkgPath)
+	if pkg == nil {
+		return nil
+	}
+	return pkg.Decls[name]
 }
 
 func (c *Scope) loadPackage(pkgPath string) *edit.Package {
@@ -390,8 +415,8 @@ func deref(typ types.Info) types.Type {
 
 func takeAddr(info types.Info) types.Info {
 	switch info := info.(type) {
-	case types.Variable:
-		return types.Variable{
+	case types.PkgVariable:
+		return types.PkgVariable{
 			PkgPath: info.PkgPath,
 			Name:    info.Name,
 			Type_:   types.Ptr{Elem: info.Type_},
@@ -441,15 +466,62 @@ func getEmbedFieldName(typ ast.Expr) string {
 	}
 	return ident.Name
 }
+
 func (c *Scope) resolveDefType(def *Define) types.Info {
 	if def.Index == -1 {
 		// var := pkg.Name{}
-		typeInfo := c.resolveInfo(def.Expr)
+		scope := c
+		if def.Splited {
+			scope = c.Parent
+		}
+		typeInfo := scope.resolveInfo(def.Expr)
 		if !types.IsUnknown(typeInfo) {
 			return typeInfo
 		}
 	}
 	// not supported yet
+	return types.Unknown{}
+}
+
+func (c *Scope) resolveSelectorSubType(expr *ast.SelectorExpr) types.Info {
+	selName := expr.Sel.Name
+	xInfo := c.resolveInfo(expr.X)
+	if types.IsUnknown(xInfo) {
+		return types.Unknown{}
+	}
+	switch xInfo := xInfo.(type) {
+	case types.ImportPath:
+		// pkg.Name
+		pkgPath := string(xInfo)
+		pkg := c.loadPackage(pkgPath)
+		if pkg == nil {
+			return types.Unknown{}
+		}
+		if decl := pkg.Decls[selName]; decl != nil {
+			pkgScope := c.newFileScope(pkg, decl.File)
+			return pkgScope.resolveInfo(decl.Ident)
+		}
+	case types.Object:
+		// var.Field
+		// if xType resolves to a Decl,
+		// check if Name resolves to method of that Decl
+		valType := xInfo.Type()
+		if valType == nil || types.IsUnknown(valType) {
+			return types.Unknown{}
+		}
+		return c.resolveTypeField(valType, selName, func() {
+			// update the nested expr type to be pointer
+			forAllParenNestedExpr(expr.X, func(expr ast.Expr) {
+				info := c.resolveInfo(expr)
+				c.Global.ExprInfo[expr] = takeAddr(info)
+			})
+		})
+	case types.Type:
+		// (*ipc.Reader).Next or ipc.Reader.Next
+		// resolves to Value
+		// Type.Something resolves to Method or Value
+		return c.resolveTypeField(xInfo, selName, nil)
+	}
 	return types.Unknown{}
 }
 
