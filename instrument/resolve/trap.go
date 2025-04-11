@@ -70,11 +70,11 @@ func (c *Scope) trapSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr) bool {
 	name := sel.Sel.Name
 
 	// pkgPath like "fmt", other libs are ignored
-	pkgData := c.Global.Packages.PackageByPath[pkgPath]
-	if pkgData == nil {
+	pkg := c.Global.Packages.GetPackage(pkgPath)
+	if pkg == nil {
 		return false
 	}
-	decl := pkgData.Decls[name]
+	decl := pkg.Decls[name]
 	if decl == nil {
 		return false
 	}

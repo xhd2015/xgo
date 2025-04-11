@@ -16,11 +16,12 @@ func TestSimple(t *testing.T) {
 		t.Fatal(err)
 	}
 	packages := edit.New(loadPackages)
-	err = resolve.Traverse(packages, &resolve.Recorder{})
+	registry := resolve.NewPackagesRegistry(packages)
+	err = resolve.Traverse(registry, packages.Packages, &resolve.Recorder{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = instrument_var.TrapVariables(packages)
+	err = instrument_var.TrapVariables(packages.Fset, packages.Packages)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,11 +45,12 @@ func TestVarGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	packages := edit.New(loadPackages)
-	err = resolve.Traverse(packages, &resolve.Recorder{})
+	registry := resolve.NewPackagesRegistry(packages)
+	err = resolve.Traverse(registry, packages.Packages, &resolve.Recorder{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = instrument_var.TrapVariables(packages)
+	err = instrument_var.TrapVariables(packages.Fset, packages.Packages)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,11 +82,12 @@ func TestCustom(t *testing.T) {
 		t.Fatal(err)
 	}
 	packages := edit.New(loadPackages)
-	err = resolve.Traverse(packages, &resolve.Recorder{})
+	registry := resolve.NewPackagesRegistry(packages)
+	err = resolve.Traverse(registry, packages.Packages, &resolve.Recorder{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = instrument_var.TrapVariables(packages)
+	err = instrument_var.TrapVariables(packages.Fset, packages.Packages)
 	if err != nil {
 		t.Fatal(err)
 	}

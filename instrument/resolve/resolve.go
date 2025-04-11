@@ -53,6 +53,29 @@ func (c *Scope) requireTrap(sel *ast.SelectorExpr) bool {
 	return false
 }
 
+// try simply resolve as pkg.Name, to detect for mock.Patch calls
+func (c *Scope) tryResolvePkgRef(sel *ast.SelectorExpr) types.Info {
+	idt, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return types.Unknown{}
+	}
+	if c.Has(idt.Name) {
+		return types.Unknown{}
+	}
+	decl := c.Package.Decls[idt.Name]
+	if decl != nil {
+		return types.Unknown{}
+	}
+	imp, ok := c.File.Imports[idt.Name]
+	if !ok {
+		return types.Unknown{}
+	}
+	return types.Variable{
+		PkgPath: imp,
+		Name:    sel.Sel.Name,
+	}
+}
+
 // `mock.Patch(fn,...)`
 // fn examples:
 //
@@ -183,62 +206,10 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 			return types.Unknown{}
 		}
 
-		// if xType resolves to a Decl,
-		// check if Name resolves to method of that Decl
-		var valType types.Type
-		if obj, ok := xInfo.(types.Object); ok {
-			valType = obj.Type()
-		}
-		if valType != nil && !types.IsUnknown(valType) {
-			var isPtr bool
-			resolveType := valType
-			if ptrType, ok := valType.(types.Ptr); ok {
-				// *T
-				isPtr = true
-				resolveType = ptrType.Elem
-			}
-			if namedType, ok := resolveType.(types.NamedType); ok {
-				decl := c.getPkgNameDecl(namedType.PkgPath, namedType.Name)
-				var method *edit.FuncDecl
-				if decl != nil {
-					method = decl.Methods[selName]
-				}
-				if method != nil {
-					if !isPtr && method.RecvPtr {
-						// update expr.X's type to be ptr
-						c.Global.ExprInfo[expr.X] = takeAddr(xInfo)
-					}
-					return types.Method{
-						Name: selName,
-						Recv: namedType,
-						// TODO params
-					}
-				} else {
-					// check fields
-					ud, ok := valType.Underlying().(types.Struct)
-					if ok {
-						var fieldType types.Type
-						for _, field := range ud.Fields {
-							if field.Name == selName {
-								fieldType = field.Type
-								break
-							}
-						}
-						if fieldType != nil && !types.IsUnknown(fieldType) {
-							return types.Value{
-								Type_: fieldType,
-							}
-						}
-					}
-				}
-			}
-			return types.Unknown{}
-		}
-
-		impPath, ok := xInfo.(types.ImportPath)
-		if ok {
+		switch xInfo := xInfo.(type) {
+		case types.ImportPath:
 			// pkg.Name
-			pkgPath := string(impPath)
+			pkgPath := string(xInfo)
 			pkg := c.loadPackage(pkgPath)
 			if pkg == nil {
 				return types.Unknown{}
@@ -248,50 +219,24 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 				return pkgScope.resolveInfo(decl.Ident)
 			}
 			return types.Unknown{}
-		}
-
-		if xInfo := c.resolveInfo(expr.X); !types.IsUnknown(xInfo) {
-
-		}
-		// X.Y X has a type
-		if isBlankName(selName) {
-			return types.Unknown{}
-		}
-		if idt, idtOK := expr.X.(*ast.Ident); idtOK {
-			pkgPath, ok := c.File.Imports[idt.Name]
-			if ok {
-				// pkg.Name
-				return types.Variable{
-					PkgPath: pkgPath,
-					Name:    selName,
-				}
-			}
-			def := c.GetDef(idt.Name)
-			if def != nil {
-				// var.Name
-				return c.resolveDefType(def)
-			}
-			return types.Unknown{}
-		}
-		typeInfo := c.tryResolvePkgType(expr.X)
-		if !types.IsUnknown(typeInfo) {
-			// (*ipc.Reader).Next or ipc.Reader.Next
-			return typeInfo
-		}
-		// var.Field.Func
-		typeInfo = c.tryResolveVarDotField(expr.X)
-		if !types.IsUnknown(typeInfo) {
-			pkgObj, ok := typeInfo.(types.Variable)
-			if ok {
-				// TODO
-				_ = pkgObj
+		case types.Object:
+			// var.Field
+			// if xType resolves to a Decl,
+			// check if Name resolves to method of that Decl
+			valType := xInfo.Type()
+			if valType == nil || types.IsUnknown(valType) {
 				return types.Unknown{}
-				// return types.VariableField{
-				// 	Variable: pkgObj,
-				// 	Field:    selName,
-				// }
 			}
-			panic(fmt.Sprintf("TODO unhandled type: %T", typeInfo))
+			return c.resolveTypeField(valType, selName, func() {
+				c.Global.ExprInfo[expr.X] = takeAddr(xInfo)
+			})
+		case types.Type:
+			// (*ipc.Reader).Next or ipc.Reader.Next
+			// resolves to Value
+			// Type.Something resolves to Method or Value
+			return c.resolveTypeField(xInfo, selName, nil)
+		default:
+			return types.Unknown{}
 		}
 	case *ast.StarExpr:
 		xInfo := c.resolveInfo(expr.X)
@@ -386,6 +331,10 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		return types.Struct{
 			Fields: fields,
 		}
+	case *ast.ParenExpr:
+		// x := exec.Command("")
+		// args := (x).Args  --> x is a pointer
+		return c.resolveInfo(expr.X)
 	}
 	return types.Unknown{}
 }
@@ -408,7 +357,7 @@ func (c *Scope) getPkgNameDecl(pkgPath string, name string) *edit.Decl {
 }
 
 func (c *Scope) loadPackage(pkgPath string) *edit.Package {
-	pkg, _, err := c.Global.Packages.Load(pkgPath)
+	pkg, _, err := c.Global.Packages.LoadPackage(pkgPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load %s: %s\n", pkgPath, err)
 		return nil
@@ -416,9 +365,7 @@ func (c *Scope) loadPackage(pkgPath string) *edit.Package {
 	if pkg == nil {
 		return nil
 	}
-	Collect(&edit.Packages{
-		Packages: []*edit.Package{pkg},
-	})
+	CollectDecls(pkg)
 	return pkg
 }
 
@@ -463,116 +410,6 @@ func getBasicLitConstType(kind token.Token) types.Info {
 	return types.Unknown{}
 }
 
-// pkg.Name
-func (c *Scope) tryResolvePkgRef(sel *ast.SelectorExpr) types.Info {
-	idt, ok := sel.X.(*ast.Ident)
-	if !ok {
-		return types.Unknown{}
-	}
-	imp, ok := c.File.Imports[idt.Name]
-	if !ok {
-		return types.Unknown{}
-	}
-	return types.Variable{
-		PkgPath: imp,
-		Name:    sel.Sel.Name,
-	}
-}
-
-// (*ipc.Reader).Next or ipc.Reader.Next
-func (c *Scope) tryResolvePkgType(expr ast.Expr) types.Info {
-	paren, ok := expr.(*ast.ParenExpr)
-	if ok {
-		starExpr, ok := paren.X.(*ast.StarExpr)
-		if !ok {
-			return types.Unknown{}
-		}
-		expr = starExpr.X
-	}
-	sel, ok := expr.(*ast.SelectorExpr)
-	if !ok {
-		return types.Unknown{}
-	}
-	return c.tryResolvePkgRef(sel)
-}
-
-func (c *Scope) tryResolveVarDotField(expr ast.Expr) types.Info {
-	// var.Field
-	sel, ok := expr.(*ast.SelectorExpr)
-	if !ok {
-		return types.Unknown{}
-	}
-	idt, ok := sel.X.(*ast.Ident)
-	if !ok {
-		return types.Unknown{}
-	}
-	def := c.GetDef(idt.Name)
-	if def == nil {
-		return types.Unknown{}
-	}
-
-	typeInfo := c.resolveDefType(def)
-	if types.IsUnknown(typeInfo) {
-		return types.Unknown{}
-	}
-	if typeInfo, ok := typeInfo.(types.Variable); ok {
-		// could be a struct
-		pkgPath := typeInfo.PkgPath
-		typeName := typeInfo.Name
-		structFieldType := c.tryGetStructFieldType(pkgPath, typeName, sel.Sel.Name)
-		if !types.IsUnknown(structFieldType) {
-			return structFieldType
-		}
-	}
-
-	return types.Unknown{}
-}
-func (c *Scope) tryGetStructFieldType(pkgPath string, declName string, refFieldName string) types.Info {
-	// check if pkgPath.name is a struct
-	pkg, _, err := c.Global.Packages.Load(pkgPath)
-	if err != nil {
-		panic(fmt.Sprintf("resolveDefType: %s %s", pkgPath, err))
-	}
-	if pkg == nil {
-		return types.Unknown{}
-	}
-
-	Collect(&edit.Packages{
-		Packages: []*edit.Package{pkg},
-	})
-
-	decl := pkg.Decls[declName]
-	if decl == nil {
-		return types.Unknown{}
-	}
-	structType, ok := decl.Type.(*ast.StructType)
-	if !ok {
-		return types.Unknown{}
-	}
-	if structType.Fields == nil || len(structType.Fields.List) == 0 {
-		return types.Unknown{}
-	}
-	var foundField *ast.Field
-	for _, field := range structType.Fields.List {
-		if len(field.Names) > 0 {
-			for _, fieldName := range field.Names {
-				if fieldName.Name == refFieldName {
-					foundField = field
-					break
-				}
-			}
-		} else if field.Type != nil {
-			typName := getEmbedFieldName(field.Type)
-			if typName == refFieldName {
-				foundField = field
-				break
-			}
-		}
-	}
-	pkgScope := c.newFileScope(pkg, decl.File)
-	return pkgScope.resolveInfo(foundField.Type)
-}
-
 func (c *Scope) newFileScope(pkg *edit.Package, file *edit.File) *Scope {
 	return newFileScope(c.Global, pkg, file)
 }
@@ -601,5 +438,52 @@ func (c *Scope) resolveDefType(def *Define) types.Info {
 		}
 	}
 	// not supported yet
+	return types.Unknown{}
+}
+
+func (c *Scope) resolveTypeField(valType types.Type, fieldName string, onChangeAddr func()) types.Info {
+	var isPtr bool
+	resolveType := valType
+	if ptrType, ok := valType.(types.Ptr); ok {
+		// *T
+		isPtr = true
+		resolveType = ptrType.Elem
+	}
+	if namedType, ok := resolveType.(types.NamedType); ok {
+		decl := c.getPkgNameDecl(namedType.PkgPath, namedType.Name)
+		var method *edit.FuncDecl
+		if decl != nil {
+			method = decl.Methods[fieldName]
+		}
+		if method != nil {
+			if !isPtr && method.RecvPtr {
+				// update expr.X's type to be ptr
+				// TODO: if is paren, deparen all
+				if onChangeAddr != nil {
+					onChangeAddr()
+				}
+			}
+			return types.Method{
+				Name: fieldName,
+				Recv: namedType,
+				// TODO params
+			}
+		} else {
+			// check fields
+			ud, ok := valType.Underlying().(types.Struct)
+			if ok {
+				var fieldType types.Type
+				for _, field := range ud.Fields {
+					if field.Name == fieldName {
+						fieldType = field.Type
+						break
+					}
+				}
+				if fieldType != nil && !types.IsUnknown(fieldType) {
+					return fieldType
+				}
+			}
+		}
+	}
 	return types.Unknown{}
 }

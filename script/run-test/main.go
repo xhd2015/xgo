@@ -125,6 +125,15 @@ var defaultTestArgs = []*TestArg{
 			"./...",
 		},
 	},
+	{
+		Dir: "runtime/test/patch/patch_arbitrary_stdlib",
+		Flags: []string{
+			"--trap-stdlib=false",
+		},
+		Args: []string{
+			"./...",
+		},
+	},
 	// TODO: check extraSubTests for remaining tests
 	{
 		Dir: "runtime/test/trace/trace_without_dep_vendor",

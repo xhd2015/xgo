@@ -166,24 +166,22 @@ func IsUnknown(info Info) bool {
 	return info == Unknown{}
 }
 
-func (c Func) infoMark()           {}
-func (c Func) typeMark()           {}
-func (c Func) underlyingTypeMark() {}
-func (c Func) Underlying() UnderlyingType {
-	return c.Signature.Underlying()
+func (c Func) infoMark()   {}
+func (c Func) objectMark() {}
+func (c Func) Type() Type {
+	return c.Signature
 }
 func (c Func) String() string {
-	return fmt.Sprintf("func(...)")
+	return "func(...)"
 }
 
-func (c Method) infoMark()           {}
-func (c Method) typeMark()           {}
-func (c Method) underlyingTypeMark() {}
-func (c Method) Underlying() UnderlyingType {
-	return c.Signature.Underlying()
+func (c Method) infoMark()   {}
+func (c Method) objectMark() {}
+func (c Method) Type() Type {
+	return c.Signature
 }
 func (c Method) String() string {
-	return fmt.Sprintf("func(...)")
+	return "func (some)(...)"
 }
 
 func (c Signature) infoMark()           {}

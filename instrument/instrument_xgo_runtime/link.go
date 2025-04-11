@@ -142,6 +142,15 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 						return nil, fmt.Errorf("%w: %s", ErrRuntimeVersionDeprecatedV1_0_0, coreVersion)
 					}
 					versionContent := ReplaceActualXgoVersion(content, xgoVersion, xgoRevision, xgoNumber)
+					if coreVersion == "1.1.0" && xgoVersion == "1.1.1" {
+						// xgo v1.1.1 can work with runtime v1.1.0 with no trouble
+						// NOTE: how to decide bypass or not?
+						// you'd check the xgo/runtime code diff across these versions
+						// and find a way to migrate from old version to new version
+						// by instrumenting the code, which is basically enhancing
+						// the code here
+						versionContent = BypassVersionCheck(versionContent)
+					}
 					overrideContent(absFile, versionContent)
 				}
 			case constants.FLAG_FILE:

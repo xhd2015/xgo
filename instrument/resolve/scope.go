@@ -64,8 +64,13 @@ func (c *NameRecorder) AddMockName(name string) {
 	c.NamesHavingMock[name] = true
 }
 
+type PackageRegistry interface {
+	LoadPackage(pkgPath string) (*edit.Package, bool, error)
+	GetPackage(pkgPath string) *edit.Package
+}
+
 type GlobalScope struct {
-	Packages *edit.Packages
+	Packages PackageRegistry
 	Recorder *Recorder
 
 	detectVarTrap bool

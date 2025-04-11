@@ -2,25 +2,18 @@ package instrument_func
 
 import (
 	"github.com/xhd2015/xgo/instrument/constants"
-	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
-type stdPkgConfig struct {
-	neverInstrument     bool
-	whitelistFunc       map[string]bool
-	whitelistFuncPrefix []string
+type PkgConfig struct {
+	WhitelistFunc       map[string]bool
+	WhitelistFuncPrefix []string
 }
 
-func IsPkgAllowed(pkg *edit.Package) bool {
-	pkgPath := pkg.LoadPackage.GoPackage.ImportPath
-	cfg, ok := stdPkgConfigMapping[pkgPath]
-	if ok && cfg.neverInstrument {
+func IsPkgAllowed(pkgPath string) bool {
+	_, ok := goinfo.PkgWithinModule(pkgPath, "runtime")
+	if ok {
 		return false
-	}
-	if pkg.LoadPackage.GoPackage.Standard {
-		// stdlib whitelist mode
-		return ok
 	}
 	// avoid instrument runtime package
 	suffix, isXgoRuntime := goinfo.PkgWithinModule(pkgPath, constants.RUNTIME_MODULE)
@@ -33,41 +26,60 @@ func IsPkgAllowed(pkg *edit.Package) bool {
 		// a regular runtime package
 		return false
 	}
+	if neverInstrumentPkgs[pkgPath] {
+		return false
+	}
 	return true
 }
 
-func IsPkgNeverInstrument(pkgPath string) bool {
-	cfg, ok := stdPkgConfigMapping[pkgPath]
-	if ok && cfg.neverInstrument {
-		return true
+func CheckPkgConfig(pkgPath string) (cfg *PkgConfig, allow bool) {
+	if !IsPkgAllowed(pkgPath) {
+		return nil, false
 	}
-	return false
+	cfgValue, ok := defaultStdPkgConfig[pkgPath]
+	if !ok {
+		return nil, true
+	}
+	return &cfgValue, true
 }
 
-var stdPkgConfigMapping = map[string]stdPkgConfig{
+var neverInstrumentPkgs = map[string]bool{
+	"unsafe":      true,
+	"runtime":     true,
+	"syscall":     true,
+	"reflect":     true,
+	"sync":        true,
+	"sync/atomic": true,
+	// testing is not harmful
+	// but may cause infinite loop?
+	// we may dig later or just add some whitelist
+	"testing": true,
+}
+
+var defaultStdPkgConfig = map[string]PkgConfig{
 	"os": {
-		whitelistFunc: map[string]bool{
+		WhitelistFunc: map[string]bool{
 			// starts with Get
 			"OpenFile":  true,
 			"ReadFile":  true,
 			"WriteFile": true,
 		},
-		whitelistFuncPrefix: []string{"Get"},
+		WhitelistFuncPrefix: []string{"Get"},
 	},
 	"io": {
-		whitelistFunc: map[string]bool{
+		WhitelistFunc: map[string]bool{
 			"ReadAll": true,
 		},
 	},
 	"io/ioutil": {
-		whitelistFunc: map[string]bool{
+		WhitelistFunc: map[string]bool{
 			"ReadAll":  true,
 			"ReadFile": true,
 			"ReadDir":  true,
 		},
 	},
 	"time": {
-		whitelistFunc: map[string]bool{
+		WhitelistFunc: map[string]bool{
 			"Now": true,
 			// time.Sleep is special:
 			//  if trapped like normal functions
@@ -79,7 +91,7 @@ var stdPkgConfigMapping = map[string]stdPkgConfig{
 		},
 	},
 	"os/exec": {
-		whitelistFunc: map[string]bool{
+		WhitelistFunc: map[string]bool{
 			"Command":       true,
 			"(*Cmd).Run":    true,
 			"(*Cmd).Output": true,
@@ -87,7 +99,7 @@ var stdPkgConfigMapping = map[string]stdPkgConfig{
 		},
 	},
 	"net/http": {
-		whitelistFunc: map[string]bool{
+		WhitelistFunc: map[string]bool{
 			"Get":  true,
 			"Head": true,
 			"Post": true,
@@ -99,31 +111,6 @@ var stdPkgConfigMapping = map[string]stdPkgConfig{
 		},
 	},
 	"net": {
-		whitelistFuncPrefix: []string{"(*Dialer).Dial", "Dial"},
-	},
-	"syscall": {
-		neverInstrument: true,
-	},
-	"reflect": {
-		neverInstrument: true,
-	},
-	"sync": {
-		neverInstrument: true,
-	},
-	"sync/atomic": {
-		neverInstrument: true,
-	},
-
-	// testing is not harmful
-	// but may cause infinite loop?
-	// we may dig later or just add some whitelist
-	"testing": {
-		neverInstrument: true,
-	},
-	"unsafe": {
-		neverInstrument: true,
-	},
-	"runtime": {
-		neverInstrument: true,
+		WhitelistFuncPrefix: []string{"(*Dialer).Dial", "Dial"},
 	},
 }

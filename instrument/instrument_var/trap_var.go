@@ -2,6 +2,7 @@ package instrument_var
 
 import (
 	"fmt"
+	"go/token"
 
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
@@ -9,10 +10,9 @@ import (
 
 // TrapVariables inserts trap points for variables
 // found by resolve.Traverse
-func TrapVariables(packages *edit.Packages) error {
-	fset := packages.Fset
+func TrapVariables(fset *token.FileSet, packages []*edit.Package) error {
 	// declare getters
-	for _, pkg := range packages.Packages {
+	for _, pkg := range packages {
 		for _, file := range pkg.Files {
 			var hasVar bool
 			for _, decl := range file.Decls {

@@ -21,8 +21,9 @@ const (
 )
 
 type Options struct {
-	NoFilterStdlib bool
 	PkgRecorder    *resolve.PkgRecorder
+	PkgConfig      *PkgConfig
+	DefaultDisable bool
 }
 
 // TrapFuncs parses the given file as golang AST,
@@ -44,12 +45,8 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 	fset := editor.Fset()
 
 	recorder := opts.PkgRecorder
-
-	var cfg stdPkgConfig
-	var cfgOk bool
-	if !opts.NoFilterStdlib {
-		cfg, cfgOk = stdPkgConfigMapping[pkgPath]
-	}
+	cfg := opts.PkgConfig
+	defaultDisable := opts.DefaultDisable
 
 	var funcInfos []*edit.FuncInfo
 	// Visit all decls in the AST
@@ -75,11 +72,7 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 			continue
 		}
 		identityName, recvPtr, recvGeneric, recvType := ParseReceiverInfo(funcName, receiver)
-		if cfgOk && !cfg.whitelistFunc[identityName] && !matchAnyPrefix(cfg.whitelistFuncPrefix, identityName) {
-			// TODO: may enforce only exporeted function on standard lib?
-			continue
-		}
-
+		var hitRecorder bool
 		if recorder != nil {
 			var hasFnRecord bool
 			var hasTypeMethodRecord bool
@@ -93,7 +86,20 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 					hasTypeMethodRecord = true
 				}
 			}
-			if !hasFnRecord && !hasTypeMethodRecord {
+			if hasFnRecord || hasTypeMethodRecord {
+				hitRecorder = true
+			}
+		}
+		if !hitRecorder {
+			// if not hit recorder, we fallback to cfg-based filter
+			// which is whitelist mode for stdlib
+			if cfg != nil {
+				if !cfg.WhitelistFunc[identityName] && !matchAnyPrefix(cfg.WhitelistFuncPrefix, identityName) {
+					// TODO: may enforce only exporeted function on standard lib?
+					continue
+				}
+			} else if defaultDisable {
+				// by default, we don't instrument stdlib
 				continue
 			}
 		}

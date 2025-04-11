@@ -59,6 +59,11 @@ type Package struct {
 	Decls map[string]*Decl
 
 	Collected bool
+
+	// Initial indicates whether
+	// the packages are loaded via
+	// package args specified by user
+	Initial bool
 }
 
 type File struct {
@@ -157,20 +162,26 @@ func (c *Packages) Add(packages *load.Packages) {
 	}
 }
 
-func (p *Packages) Filter(f func(pkg *Package) bool) *Packages {
-	filtered := &Packages{
-		Fset:          p.Fset,
-		Packages:      make([]*Package, 0, len(p.Packages)),
-		PackageByPath: make(map[string]*Package, len(p.PackageByPath)),
-		LoadOptions:   p.LoadOptions,
-	}
+func (p *Packages) Filter(f func(pkg *Package) bool) []*Package {
+	filtered := make([]*Package, 0, len(p.Packages))
 	for _, pkg := range p.Packages {
 		if !f(pkg) {
 			continue
 		}
-
-		filtered.Packages = append(filtered.Packages, pkg)
-		filtered.PackageByPath[pkg.LoadPackage.GoPackage.ImportPath] = pkg
+		filtered = append(filtered, pkg)
 	}
 	return filtered
+}
+
+func (p *Packages) CloneWithPackages(packages []*Package) *Packages {
+	pkgMap := make(map[string]*Package, len(packages))
+	for _, pkg := range packages {
+		pkgMap[pkg.LoadPackage.GoPackage.ImportPath] = pkg
+	}
+	return &Packages{
+		Fset:          p.Fset,
+		Packages:      packages,
+		PackageByPath: pkgMap,
+		LoadOptions:   p.LoadOptions,
+	}
 }

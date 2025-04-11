@@ -149,24 +149,33 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		return err
 	}
 	nonXgoPkgs.Add(loadPackages)
+	for _, pkg := range nonXgoPkgs.Packages {
+		pkg.Initial = true
+	}
 
 	// insert func trap
 	// disable instrumenting xgo/runtime, except xgo/runtime/test
-	nonXgoPkgs = nonXgoPkgs.Filter(instrument_func.IsPkgAllowed)
+	nonXgoPkgs = nonXgoPkgs.CloneWithPackages(nonXgoPkgs.Filter(func(pkg *edit.Package) bool {
+		return instrument_func.IsPkgAllowed(pkg.LoadPackage.GoPackage.ImportPath)
+	}))
+	reg := resolve.NewPackagesRegistry(nonXgoPkgs)
 	// trap var for packages in main module
 	mainPkgs := nonXgoPkgs.Filter(func(pkg *edit.Package) bool {
 		_, ok := goinfo.PkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
 		return ok
 	})
 	var recorder resolve.Recorder
-	resolve.Collect(mainPkgs)
-	err = resolve.Traverse(mainPkgs, &recorder)
+	for _, pkg := range mainPkgs {
+		resolve.CollectDecls(pkg)
+	}
+
+	err = resolve.Traverse(reg, mainPkgs, &recorder)
 	if err != nil {
 		return err
 	}
 
-	logDebug("start instrumentVarTrap: len(mainPkgs)=%d", len(mainPkgs.Packages))
-	err = instrument_var.TrapVariables(mainPkgs)
+	logDebug("start instrumentVarTrap: len(mainPkgs)=%d", len(mainPkgs))
+	err = instrument_var.TrapVariables(fset, mainPkgs)
 	if err != nil {
 		return err
 	}
@@ -179,25 +188,36 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		if _, ok := xgoPkgs.PackageByPath[pkgPath]; ok {
 			continue
 		}
-		if instrument_func.IsPkgNeverInstrument(pkgPath) {
+		if !instrument_func.IsPkgAllowed(pkgPath) {
 			continue
 		}
 		thirdPkgPaths = append(thirdPkgPaths, pkgPath)
 	}
 	logDebug("instrument third pkgs: len(thirdPkgs)=%d", len(thirdPkgPaths))
 	if len(thirdPkgPaths) > 0 {
-		thirdLoadPkgs, err := load.LoadPackages(thirdPkgPaths, nonXgoPkgs.LoadOptions)
+		err := nonXgoPkgs.LoadPackages(thirdPkgPaths)
 		if err != nil {
 			return err
 		}
-		nonXgoPkgs.Add(thirdLoadPkgs)
 	}
 
 	logDebug("start instrumentFuncTrap: len(packages)=%d", len(nonXgoPkgs.Packages))
 	for _, pkg := range nonXgoPkgs.Packages {
 		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
+		cfg, allow := instrument_func.CheckPkgConfig(pkgPath)
+		if !allow {
+			continue
+		}
+		var defaultAllow bool
+		if !pkg.LoadPackage.GoPackage.Standard && pkg.Initial {
+			defaultAllow = true
+		}
 		for _, file := range pkg.Files {
-			funcs := instrument_func.TrapFuncs(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{})
+			funcs := instrument_func.TrapFuncs(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{
+				PkgRecorder:    recorder.Pkgs[pkgPath],
+				PkgConfig:      cfg,
+				DefaultDisable: !defaultAllow,
+			})
 			file.TrapFuncs = append(file.TrapFuncs, funcs...)
 
 			// interface types
