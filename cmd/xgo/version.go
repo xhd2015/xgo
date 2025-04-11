@@ -7,8 +7,8 @@ import "fmt"
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
 const VERSION = "1.1.1"
-const REVISION = "b48bc9f28e1ecad8f91be9cb7c536a49c6fce786+1"
-const NUMBER = 390
+const REVISION = "608ff47cfddcf3c12f9dacc2685f001648efbdc6+1"
+const NUMBER = 391
 
 // TODO: decouple CORE_VERSION here and that in runtime/core/version.go
 // because this now only indicates lowest working version required by xgo.

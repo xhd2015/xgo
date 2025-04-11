@@ -1,4 +1,4 @@
-package instrument_func
+package config
 
 import (
 	"github.com/xhd2015/xgo/instrument/constants"

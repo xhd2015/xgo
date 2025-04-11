@@ -1,25 +1,4 @@
-# Support Of Mocking Stdlib Functions
-There are two modes for mocking stdlib functions,
-1. Default-Allow Mode
-2. Default-Disallow Mode
-
-These two modes can be switched between `--trap-stdlib` and `--trap-stdlib=false`.
-
-When running `xgo test`, `--trap-stdlib` is assumed, you can turn it off with `--trap-stdlib=false`.
-
-When running `xgo run` and `xgo build`, `--trap-stdlib=false` is assumed, you can turn it on with `--trap-stdlib`.
-
-# `--trap-stdlib`: Default-Allow Mode
-In this mode, most stdlib packages can be mocked, except `runtime`, `syscall`, `reflect`, `sync`, `sync/atomic`, `testing`, `unsafe`.
-
-# `--trap-stdlib=false`: Default-Disallow Mode
-In this mode, only a small list of stdlib functions can be mocked due to performance and security impact.
-
-Rational: stdlib functions like `os.ReadFile`, `io.Read` are widely used by go code, installing a trap on these functions may have big impact on performance and security.
-
-So in this mode only a limited list of stdlib functions can be mocked. However, if there lacks some functions you may want to use, you can leave a comment in [Issue#6](https://github.com/xhd2015/xgo/issues/6) or fire an issue to let us know and add it.
-
-# Supported List When `--trap-stdlib=false`
+# Automatically instrumented functions that are included in trace
 ## `os`
 - `Getenv`
 - `Getwd`

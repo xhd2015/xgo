@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/instrument_func"
@@ -156,7 +157,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	// insert func trap
 	// disable instrumenting xgo/runtime, except xgo/runtime/test
 	nonXgoPkgs = nonXgoPkgs.CloneWithPackages(nonXgoPkgs.Filter(func(pkg *edit.Package) bool {
-		return instrument_func.IsPkgAllowed(pkg.LoadPackage.GoPackage.ImportPath)
+		return config.IsPkgAllowed(pkg.LoadPackage.GoPackage.ImportPath)
 	}))
 	reg := resolve.NewPackagesRegistry(nonXgoPkgs)
 	// trap var for packages in main module
@@ -175,7 +176,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	}
 
 	logDebug("start instrumentVarTrap: len(mainPkgs)=%d", len(mainPkgs))
-	err = instrument_var.TrapVariables(fset, mainPkgs)
+	err = instrument_var.TrapVariables(nonXgoPkgs, &recorder)
 	if err != nil {
 		return err
 	}
@@ -188,7 +189,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		if _, ok := xgoPkgs.PackageByPath[pkgPath]; ok {
 			continue
 		}
-		if !instrument_func.IsPkgAllowed(pkgPath) {
+		if !config.IsPkgAllowed(pkgPath) {
 			continue
 		}
 		thirdPkgPaths = append(thirdPkgPaths, pkgPath)
@@ -204,7 +205,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	logDebug("start instrumentFuncTrap: len(packages)=%d", len(nonXgoPkgs.Packages))
 	for _, pkg := range nonXgoPkgs.Packages {
 		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
-		cfg, allow := instrument_func.CheckPkgConfig(pkgPath)
+		cfg, allow := config.CheckPkgConfig(pkgPath)
 		if !allow {
 			continue
 		}

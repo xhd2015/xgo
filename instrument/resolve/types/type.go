@@ -14,6 +14,11 @@ type Object interface {
 	Type() Type
 }
 
+type Operation interface {
+	Info
+	operationMark()
+}
+
 type Type interface {
 	Info
 	String() string
@@ -26,6 +31,8 @@ type UnderlyingType interface {
 	Type
 }
 
+type OperationName string
+
 type Basic string
 type Unknown struct{}
 type Untyped struct{}
@@ -37,6 +44,14 @@ type PkgVariable struct {
 	PkgPath string
 	Name    string
 	Type_   Type
+}
+
+type TupleValue []Object
+
+type Tuple []Type
+
+type Pointer struct {
+	Value Object
 }
 
 type Value struct {
@@ -56,9 +71,11 @@ type NamedType struct {
 	Type    Type
 }
 
-type Ptr struct {
+type PtrType struct {
 	Elem Type
 }
+
+type Lazy func() Info
 
 type RawPtr struct {
 	Elem UnderlyingType
@@ -78,7 +95,7 @@ type Method struct {
 }
 
 type Signature struct {
-	Params  []Type
+	// Params  []Type // don't need it for now
 	Results []Type
 }
 
@@ -110,6 +127,12 @@ type Array struct {
 
 type Chan struct {
 	Elem Type
+}
+
+func (c OperationName) infoMark()      {}
+func (c OperationName) operationMark() {}
+func (c OperationName) String() string {
+	return string(c)
 }
 
 func (c Basic) infoMark()           {}
@@ -157,13 +180,18 @@ func (c ImportPath) String() string {
 	return string(c)
 }
 
-func (c Ptr) infoMark() {}
-func (c Ptr) typeMark() {}
-func (c Ptr) Underlying() UnderlyingType {
+func (c PtrType) infoMark() {}
+func (c PtrType) typeMark() {}
+func (c PtrType) Underlying() UnderlyingType {
 	return RawPtr{Elem: c.Elem.Underlying()}
 }
-func (c Ptr) String() string {
+func (c PtrType) String() string {
 	return fmt.Sprintf("*%s", c.Elem.String())
+}
+
+func (c Lazy) infoMark() {}
+func (c Lazy) String() string {
+	return "ref"
 }
 
 func (c RawPtr) infoMark()           {}
@@ -183,6 +211,28 @@ func (c PkgVariable) Type() Type {
 }
 func (c PkgVariable) String() string {
 	return fmt.Sprintf("%s.%s", c.PkgPath, c.Name)
+}
+
+func (c TupleValue) infoMark()   {}
+func (c TupleValue) objectMark() {}
+func (c TupleValue) Type() Type {
+	t := make(Tuple, len(c))
+	for i, v := range c {
+		t[i] = v.Type()
+	}
+	return t
+}
+func (c TupleValue) String() string {
+	return "tuple"
+}
+
+func (c Pointer) infoMark()   {}
+func (c Pointer) objectMark() {}
+func (c Pointer) Type() Type {
+	return PtrType{Elem: c.Value.Type()}
+}
+func (c Pointer) String() string {
+	return fmt.Sprintf("*%s", c.Value.String())
 }
 
 func (c Value) infoMark()   {}
@@ -250,7 +300,20 @@ func (c Signature) Underlying() UnderlyingType {
 	return c
 }
 func (c Signature) String() string {
-	return fmt.Sprintf("func(...)")
+	return "func(...)"
+}
+
+func (c Tuple) infoMark()           {}
+func (c Tuple) typeMark()           {}
+func (c Tuple) underlyingTypeMark() {}
+func (c Tuple) Underlying() UnderlyingType {
+	return c
+}
+func (c Tuple) Type() Type {
+	return c
+}
+func (c Tuple) String() string {
+	return "tuple"
 }
 
 func (c Struct) infoMark()           {}

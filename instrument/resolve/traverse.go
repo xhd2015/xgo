@@ -174,7 +174,7 @@ func traverseFuncDecls(global *GlobalScope, pkg *edit.Package, file *edit.File) 
 			continue
 		}
 		if debug {
-			if fnDecl.Name != nil && fnDecl.Name.Name == "TestThirdPartyTypeMethodVarWithoutWrapShouldWork" {
+			if fnDecl.Name != nil && fnDecl.Name.Name == "TestPatchAnotherPkgVarByFunc" {
 				debugpoint()
 			}
 		}

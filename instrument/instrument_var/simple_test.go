@@ -1,6 +1,7 @@
 package instrument_var_test
 
 import (
+	"go/token"
 	"os"
 	"testing"
 
@@ -11,11 +12,18 @@ import (
 )
 
 func TestSimple(t *testing.T) {
-	loadPackages, err := load.LoadPackages([]string{"./testdata/simple/..."}, load.LoadOptions{})
+	fset := token.NewFileSet()
+	opts := load.LoadOptions{
+		Fset: fset,
+	}
+	packages := &edit.Packages{
+		Fset:        fset,
+		LoadOptions: opts,
+	}
+	err := packages.LoadPackages([]string{"./testdata/simple/..."})
 	if err != nil {
 		t.Fatal(err)
 	}
-	packages := edit.New(loadPackages)
 	registry := resolve.NewPackagesRegistry(packages)
 	err = resolve.Traverse(registry, packages.Packages, &resolve.Recorder{})
 	if err != nil {
@@ -40,11 +48,18 @@ func TestSimple(t *testing.T) {
 }
 
 func TestVarGroup(t *testing.T) {
-	loadPackages, err := load.LoadPackages([]string{"./testdata/var_group/..."}, load.LoadOptions{})
+	fset := token.NewFileSet()
+	opts := load.LoadOptions{
+		Fset: fset,
+	}
+	packages := &edit.Packages{
+		Fset:        fset,
+		LoadOptions: opts,
+	}
+	err := packages.LoadPackages([]string{"./testdata/var_group/..."})
 	if err != nil {
 		t.Fatal(err)
 	}
-	packages := edit.New(loadPackages)
 	registry := resolve.NewPackagesRegistry(packages)
 	err = resolve.Traverse(registry, packages.Packages, &resolve.Recorder{})
 	if err != nil {
@@ -68,20 +83,24 @@ func TestVarGroup(t *testing.T) {
 }
 
 func TestCustom(t *testing.T) {
+	fset := token.NewFileSet()
+	opts := load.LoadOptions{
+		Fset: fset,
+		Mod:  "vendor",
+	}
+	packages := &edit.Packages{
+		Fset:        fset,
+		LoadOptions: opts,
+	}
 	dir := os.Getenv("CUSTOM_TEST_DIR")
 	if dir == "" {
 		t.Skip("CUSTOM_TEST_DIR is not set")
 	}
 	args := []string{"./..."}
-	mod := "vendor"
-	loadPackages, err := load.LoadPackages(args, load.LoadOptions{
-		Dir: dir,
-		Mod: mod,
-	})
+	err := packages.LoadPackages(args)
 	if err != nil {
 		t.Fatal(err)
 	}
-	packages := edit.New(loadPackages)
 	registry := resolve.NewPackagesRegistry(packages)
 	err = resolve.Traverse(registry, packages.Packages, &resolve.Recorder{})
 	if err != nil {

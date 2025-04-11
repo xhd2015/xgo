@@ -55,6 +55,7 @@ func (c *PkgRecorder) Get(name string) *NameRecorder {
 
 type NameRecorder struct {
 	HasMockRef      bool
+	HasVarTrap      bool
 	NamesHavingMock map[string]bool
 }
 
