@@ -20,11 +20,16 @@ func not instrumented by xgo,...
 It means there is not trap point inserted by xgo, either because the package is not in main module, or there is some inherent limitation.
 
 # When will this error happen?
-`xgo` scans the main module to find all `fn` such that they are provided to `mock.Patch(fn,...)` and `mock.Mock(fn,...)`, then insert trap points on these functions.
+`xgo` scans the main module to find all `fn` such that they are provided to the following calls:
+- `mock.Patch(fn,...)`, `mock.Mock(fn,...)`
+- `trace.Record(fn,...)`, `trace.RecordCall(fn,...)`
+- `trap.AddFuncInterceptor(fn,...)`, `trap.MarkIntercept(fn)`
 
-However, due to performance issue, such scan only looks files in the main module. If the `mock.Patch` call happens in third party package, `xgo` ignores them. 
+Then `xgo` will insert trap points on these functions.
 
-Moreover, if `fn` is referenced via `interface`, then `xgo` cannot figure out the function statically, so will not insert trap point for it:
+However, due to performance issue, such scan only looks packages within the main module. If the `mock.Patch` call happens in third party package, `xgo` ignores them. 
+
+Moreover, `fn` referenced via `interface`, cannot be figured out statically, so will not be trapped:
 ```go
 // some/pkg
 type Reader interface {
@@ -71,24 +76,18 @@ This causes `xgo` to call `go list` with `-deps` flag, and then insert trap poin
 This can slow down the compilation process a little bit for large projects with hundreds dependency.
 
 # Limitations on stdlib
-Due to performance and security reason, xgo by default only trap a very small portions [runtime/mock/STDLIB.md](../runtime/mock/STDLIB.md).
+Except packages like `runtime`, `unsafe`, all stdlib functions can be mocked.
 
-Like:
+These stdlib packages are prohibited because they are fundamental to the go runtime, which, if trapped, may cause undefined behavior:
 ```
-# time
-Now()
-Sleep()
-
-# os/exec
-(*Cmd).Run()
-(*Cmd).Output()
-
-# net/http
-Get()
-...
+runtime
+unsafe
+syscall
+reflect
+sync
+sync/atomic
+testing
 ```
-
-If there is some stdlib function not instrumented by xgo, and you really need it,you can leave a comment in [Issue#6](https://github.com/xhd2015/xgo/issues/6).
 
 # Limitations on generic functions and methods in Go 1.18 and Go 1.19
 If you need to mock generic functions and methods, please upgrade to `go1.20` and later.

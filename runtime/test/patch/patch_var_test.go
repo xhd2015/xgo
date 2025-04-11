@@ -277,3 +277,51 @@ func TestPatchVarNothingInTheEndUnaffected(t *testing.T) {
 		t.Fatalf("expect isolated variable a to be %d, actual: %d", 123, *ptr)
 	}
 }
+
+func TestPatchAnotherPkgVarByLiteral(t *testing.T) {
+	before := sub.PtrVar.Greet("world")
+	if before != "ptr world" {
+		t.Fatalf("expect patched variable a to be %s, actual: %s", "ptr world", before)
+	}
+	mock.Patch(&sub.PtrVar, func() *sub.Service {
+		return &sub.Service{
+			Hello: "mock",
+		}
+	})
+	res := sub.PtrVar.Greet("world")
+	if res != "mock world" {
+		t.Fatalf("expect patched variable a to be %s, actual: %s", "mock world", res)
+	}
+}
+
+func TestPatchAnotherPkgVarByNew(t *testing.T) {
+	before := sub.NewVar.Greet("world")
+	if before != " world" {
+		t.Fatalf("expect patched variable a to be %s, actual: %s", " world", before)
+	}
+	mock.Patch(&sub.NewVar, func() *sub.Service {
+		return &sub.Service{
+			Hello: "mock",
+		}
+	})
+	res := sub.NewVar.Greet("world")
+	if res != "mock world" {
+		t.Fatalf("expect patched variable a to be %s, actual: %s", "mock world", res)
+	}
+}
+
+func TestPatchAnotherPkgVarByFunc(t *testing.T) {
+	before := sub.FnService.Greet("world")
+	if before != "fn world" {
+		t.Fatalf("expect patched variable a to be %s, actual: %s", "fn world", before)
+	}
+	mock.Patch(&sub.FnService, func() *sub.Service {
+		return &sub.Service{
+			Hello: "mock",
+		}
+	})
+	res := sub.FnService.Greet("world")
+	if res != "mock world" {
+		t.Fatalf("expect patched variable a to be %s, actual: %s", "mock world", res)
+	}
+}

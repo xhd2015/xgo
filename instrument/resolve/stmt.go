@@ -98,7 +98,7 @@ func (c *Scope) traverseStmt(node ast.Stmt) {
 				}
 			} else {
 				for _, def := range defs {
-					def.Splited = true
+					def.Split = true
 				}
 				c.splitScopeWithDef(defs, nil)
 			}

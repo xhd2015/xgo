@@ -69,14 +69,14 @@ type Package struct {
 }
 
 type File struct {
-	File  *load.File
+	File *load.File
+	// the file index
 	Index int
 
 	Edit *goedit.Edit
 
-	Decls []*Decl
-
-	// the file index
+	Decls          []*Decl
+	RecordedImport map[string]bool
 
 	TrapFuncs      []*FuncInfo
 	TrapVars       []*VarInfo
@@ -186,4 +186,11 @@ func (p *Packages) CloneWithPackages(packages []*Package) *Packages {
 		PackageByPath: pkgMap,
 		LoadOptions:   p.LoadOptions,
 	}
+}
+
+func (c *File) RecordImport(ref string) {
+	if c.RecordedImport == nil {
+		c.RecordedImport = make(map[string]bool, 1)
+	}
+	c.RecordedImport[ref] = true
 }

@@ -92,7 +92,7 @@ func TestFuncTab(t *testing.T) {
 	allFuncInfos := functab.GetFuncs()
 	funcInfos := make([]*core.FuncInfo, 0, len(allFuncInfos))
 	for _, fnInfo := range allFuncInfos {
-		// because we added --trap=time,..., so filter them out
+		// because we added --trap-stdlib=true,..., so filter them out
 		if fnInfo.Stdlib {
 			continue
 		}
@@ -123,7 +123,7 @@ func TestFuncTab(t *testing.T) {
 			t.Errorf("funcInfo[%d] kind mismatch, want %s, got %s", i, expectKind, funcInfo.Kind)
 		}
 		if funcInfo.FullName != expectFullName {
-			t.Errorf("funcInfo[%d] mismatch, want %s, got %s", i, expectFullName, funcInfo.FullName)
+			t.Errorf("funcInfo[%d] fullName mismatch, want %s, got %s", i, expectFullName, funcInfo.FullName)
 		}
 		if funcInfo.Name != expectName {
 			t.Errorf("funcInfo[%d] name mismatch, want %s, got %s", i, expectName, funcInfo.Name)

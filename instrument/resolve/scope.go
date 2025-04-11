@@ -55,6 +55,7 @@ func (c *PkgRecorder) Get(name string) *NameRecorder {
 
 type NameRecorder struct {
 	HasMockRef      bool
+	HasVarTrap      bool
 	NamesHavingMock map[string]bool
 }
 
@@ -119,8 +120,8 @@ type Scope struct {
 type Define struct {
 	// is this Def causes a split?
 	// if so, should look for parent scope
-	Splited bool
-	Expr    ast.Expr
+	Split bool
+	Expr  ast.Expr
 
 	// if index==-1, it means exact match
 	Index int

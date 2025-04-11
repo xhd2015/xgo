@@ -41,14 +41,26 @@ func TestMockTimeNow(t *testing.T) {
 	}
 }
 
-// go run ./cmd/xgo test --project-dir runtime -run TestMockHTTP -v ./test/mock_stdlib
-func TestMockHTTP(t *testing.T) {
+func TestMockHTTPDefaultClient(t *testing.T) {
 	var haveMocked bool
 	mock.Mock(http.DefaultClient.Do, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
 		haveMocked = true
 		return nil
 	})
 	http.DefaultClient.Do(nil)
+	if !haveMocked {
+		t.Fatalf("expect http.DefaultClient.Do to have been mocked, actually not mocked")
+	}
+}
+
+func TestMockHTTPCustomClient(t *testing.T) {
+	var haveMocked bool
+	mock.Mock((*http.Client).Do, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		haveMocked = true
+		return nil
+	})
+	client := &http.Client{}
+	client.Do(nil)
 	if !haveMocked {
 		t.Fatalf("expect http.DefaultClient.Do to have been mocked, actually not mocked")
 	}

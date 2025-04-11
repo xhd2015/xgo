@@ -5,7 +5,9 @@ import (
 	"go/ast"
 	"go/token"
 	"os"
+	"strings"
 
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/instrument/resolve/types"
@@ -18,8 +20,6 @@ func (c *Scope) trapIdent(addr *ast.UnaryExpr, idt *ast.Ident) bool {
 	}
 	return c.trapExpr(addr, idt)
 }
-
-func debugpoint() {}
 
 // if is &pkg.VarName, return &pkg.VarName_xgo_get_addr()
 func (c *Scope) trapSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr) bool {
@@ -47,36 +47,49 @@ func (c *Scope) trapExpr(addr *ast.UnaryExpr, expr ast.Expr) bool {
 	exprInfo := c.resolveInfo(expr)
 	obj, ok := exprInfo.(types.Object)
 	if !ok {
-		// xInfo could be ImportPath
-		impPath, ok := exprInfo.(types.ImportPath)
-		if !ok {
-			return false
-		}
-		_ = impPath
 		return false
 	}
 
+	var isExprPtr bool
+	ptrObj, ok := obj.(types.Pointer)
+	if ok {
+		isExprPtr = true
+		obj = ptrObj.Value
+	}
+
+	// could expr be ptr to types.PackageVariable?
 	pkgVar, ok := obj.(types.PkgVariable)
 	if !ok {
 		return false
 	}
+	pkgPath := pkgVar.PkgPath
+	varName := pkgVar.Name
+	if !config.IsPkgAllowed(pkgPath) {
+		return false
+	}
 
-	decl := c.getPkgNameDecl(pkgVar.PkgPath, pkgVar.Name)
+	decl := c.getPkgNameDecl(pkgPath, varName)
 	if decl == nil {
 		return false
 	}
 
-	if !c.canDeclareType(decl) {
+	if !c.tryDeclareType(pkgPath, decl) {
 		return false
 	}
 
-	var isPtr bool
+	var useAddr bool
 	if addr != nil {
-		isPtr = true
+		// force use addr
+		useAddr = true
 	} else {
-		isPtr = types.IsPointer(pkgVar.Type())
+		// if original type is not pointer, check
+		// if the ref is a pointer
+		if !types.IsPointer(pkgVar.Type()) && isExprPtr {
+			useAddr = true
+		}
 	}
-	c.applyVarRewrite(decl, addr, getSuffix(isPtr), expr.End())
+	c.Global.Recorder.GetOrInit(pkgPath).GetOrInit(varName).HasVarTrap = true
+	c.applyVarRewrite(decl, addr, getSuffix(useAddr), expr.End())
 	return true
 }
 
@@ -92,7 +105,7 @@ func (ctx *Scope) applyVarRewrite(decl *edit.Decl, addr *ast.UnaryExpr, suffix s
 	fileEdit.Insert(nameEndPos, suffix)
 }
 
-func (c *Scope) canDeclareType(decl *edit.Decl) bool {
+func (c *Scope) tryDeclareType(pkgPath string, decl *edit.Decl) bool {
 	if decl.Type != nil {
 		return true
 	}
@@ -117,7 +130,7 @@ func (c *Scope) canDeclareType(decl *edit.Decl) bool {
 	}
 	useContext := &UseContext{
 		fset:    c.Global.Packages.Fset(),
-		pkgPath: c.Package.PkgPath(),
+		pkgPath: pkgPath,
 		file:    c.File.File,
 		pos:     decl.Ident.Pos(),
 	}
@@ -136,23 +149,25 @@ func getSuffix(isPtr bool) string {
 }
 
 type UseContext struct {
-	fset         *token.FileSet
-	pkgPath      string
-	file         *edit.File
-	pos          token.Pos
-	deferedEdits []func()
+	fset          *token.FileSet
+	pkgPath       string
+	file          *edit.File
+	pos           token.Pos
+	deferredEdits []func()
 }
 
 func (c *UseContext) useTypeInFile(typ types.Type) (res string) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "useTypeInFile: %v\n", r)
+			if debug {
+				fmt.Fprintf(os.Stderr, "useTypeInFile: %v\n", r)
+			}
 			res = ""
 		}
 	}()
 	typeCode := c.doUseTypeInFile(typ)
 	// apply edit if no panic
-	for _, edit := range c.deferedEdits {
+	for _, edit := range c.deferredEdits {
 		edit()
 	}
 	return typeCode
@@ -169,14 +184,31 @@ func (c *UseContext) doUseTypeInFile(typ types.Type) (res string) {
 		}
 		pos := c.fset.Position(c.pos)
 		pkgRef := fmt.Sprintf("__xgo_var_ref_%d_%d", pos.Line, pos.Column)
-		c.deferedEdits = append(c.deferedEdits, func() {
-			patch.AddImport(c.file.Edit, c.file.File.Syntax, pkgRef, typ.PkgPath)
-		})
+
+		// avoid duplicate imports
+		if !c.file.RecordedImport[pkgRef] {
+			c.deferredEdits = append(c.deferredEdits, func() {
+				patch.AddImport(c.file.Edit, c.file.File.Syntax, pkgRef, typ.PkgPath)
+				c.file.RecordImport(pkgRef)
+			})
+		}
 		return fmt.Sprintf("%s.%s", pkgRef, typ.Name)
-	case types.Ptr:
+	case types.PtrType:
 		return "*" + c.useTypeInFile(typ.Elem)
 	case types.Signature:
 		panic("TODO signature")
+	case types.Tuple:
+		if len(typ) == 0 {
+			return ""
+		}
+		if len(typ) == 1 {
+			return c.useTypeInFile(typ[0])
+		}
+		list := make([]string, len(typ))
+		for i, t := range typ {
+			list[i] = c.useTypeInFile(t)
+		}
+		return "(" + strings.Join(list, ", ") + ")"
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", typ))
 	}

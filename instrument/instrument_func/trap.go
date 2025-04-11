@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	astutil "github.com/xhd2015/xgo/instrument/ast"
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/resolve"
@@ -22,7 +23,7 @@ const (
 
 type Options struct {
 	PkgRecorder    *resolve.PkgRecorder
-	PkgConfig      *PkgConfig
+	PkgConfig      *config.PkgConfig
 	DefaultDisable bool
 }
 

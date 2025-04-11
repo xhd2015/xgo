@@ -26,7 +26,7 @@ func AddFuncInterceptor(f interface{}, interceptor *Interceptor) func() {
 // it serves as a compiler hint to xgo. it does not have
 // any runtime behavior.
 //
-// NOTE: you don't have to explictly call this function if you
+// NOTE: you don't have to explicitly call this function if you
 // called these functions in other places within the main module:
 // - `mock.Patch(fn,...)`, `mock.Mock(fn,...)`
 // - `trace.Record(fn,...)`, `trace.RecordCall(fn,...)`

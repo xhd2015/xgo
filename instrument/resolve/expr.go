@@ -28,7 +28,7 @@ func (c *Scope) traverseCallExpr(callExpr *ast.CallExpr) {
 		}
 		if c.needDetectMock() && len(callExpr.Args) > 0 {
 			// check if mock.Patch
-			if c.requireTrap(sel) {
+			if c.recordTrap(sel) {
 				// resolve the first argument's type
 				// to see its type so that we
 				// need to insert trap points
