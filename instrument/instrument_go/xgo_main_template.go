@@ -12,7 +12,7 @@ import (
 )
 
 // pass to xgo unless we cannot find xgo
-func xgoPrecheck(cmd string, osArgs []string) bool {
+func xgoPrecheck(cmd string, cmdArgs []string) bool {
 	if cmd != "build" && cmd != "test" && cmd != "run" {
 		return false
 	}
@@ -20,9 +20,12 @@ func xgoPrecheck(cmd string, osArgs []string) bool {
 		return false
 	}
 	// pass to xgo unless we cannot find xgo
-	args := make([]string, 0, len(osArgs))
+	// when run with `go -C dir test ...`, the osArgs will be shifted,
+	// leaving us two holes at end. so don't use osArgs directly
+	// fmt.Fprintf(os.Stderr, "osArgs: xlen %d, %v\n", len(cmdArgs), cmdArgs)
+	args := make([]string, 0, len(cmdArgs)+2)
 	args = append(args, cmd, "--go")
-	args = append(args, osArgs[2:]...)
+	args = append(args, cmdArgs...)
 	xgoCmd := exec.Command("xgo", args...)
 	xgoCmd.Stdout = os.Stdout
 	xgoCmd.Stderr = os.Stderr

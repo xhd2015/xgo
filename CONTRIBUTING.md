@@ -97,6 +97,18 @@ If a go version is not found in `go-release`, it can be downloaded via:
 go run ./script/download-go go1.22.1
 ```
 
+# Debug `xgo`
+```sh
+# build, can add -tags dev
+go build -o xgo -gcflags="all=-N -l" ./cmd/xgo
+
+# debug
+dlv exec --listen=:2345 --api-version=2 --check-go-version=false --headless -- ./xgo test --project-dir runtime/test -v ./patch
+```
+
+# Debug target
+Add `--no-line-directive` if necessary
+
 # Install xgo from source
 Just clone the repository, and run:
 ```sh

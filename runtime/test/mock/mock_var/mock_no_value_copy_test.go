@@ -30,9 +30,9 @@ func TestMockLockShouldNotCopy(t *testing.T) {
 	trapStr := buf.String()
 
 	// notice there is no lock
-	expectTrapStr := "incrLocked\ncount\n"
+	expectTrapStr := "incrLocked\nlock\ncount\nlock\n"
 	if trapStr != expectTrapStr {
-		t.Fatalf("expect tarp buf: %q, actual: %q", expectTrapStr, trapStr)
+		t.Fatalf("expect trap buf: %q, actual: %q", expectTrapStr, trapStr)
 	}
 }
 
@@ -44,7 +44,7 @@ func incrLocked() {
 
 // NOTE: this test case demonstrates a buggy case:
 //
-//	f := lock.Lock, so lock should not be intercepted
+//	f := lock.Lock, so lock should be intercepted as pointer
 func TestMockLockFuncShouldNotBeMistakenlyCopied(t *testing.T) {
 	var buf bytes.Buffer
 	cancel := trap.AddInterceptor(&trap.Interceptor{
@@ -61,9 +61,9 @@ func TestMockLockFuncShouldNotBeMistakenlyCopied(t *testing.T) {
 	trapStr := buf.String()
 
 	// notice there is no lock
-	expectTrapStr := "incrLocked_Fn\ncountFn\n"
+	expectTrapStr := "incrLocked_Fn\nlock\ncountFn\nlock\n"
 	if trapStr != expectTrapStr {
-		t.Fatalf("expect tarp buf: %q, actual: %q", expectTrapStr, trapStr)
+		t.Fatalf("expect trap buf: %q, actual: %q", expectTrapStr, trapStr)
 	}
 }
 
@@ -94,9 +94,31 @@ func TestMockLockFuncParenShouldNotBeMistakenlyCopied(t *testing.T) {
 	trapStr := buf.String()
 
 	// notice there is no lock
-	expectTrapStr := "incrLocked_Paren\ncountParen\n"
+	expectTrapStr := "incrLocked_Paren\nlock\ncountParen\nlock\n"
 	if trapStr != expectTrapStr {
-		t.Fatalf("expect tarp buf: %q, actual: %q", expectTrapStr, trapStr)
+		t.Fatalf("expect trap buf: %q, actual: %q", expectTrapStr, trapStr)
+	}
+}
+
+func TestMockLockFuncParenNestedShouldNotBeMistakenlyCopied(t *testing.T) {
+	var buf bytes.Buffer
+	cancel := trap.AddInterceptor(&trap.Interceptor{
+		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			buf.WriteString(fmt.Sprintf("%s\n", f.IdentityName))
+			return
+		},
+	})
+	incrLocked_ParenNested()
+	cancel()
+	if countParenNested != 1 {
+		t.Fatalf("expect countParenNested to be 1,actual: %d", countParenNested)
+	}
+	trapStr := buf.String()
+
+	// notice there is no lock
+	expectTrapStr := "incrLocked_ParenNested\nlock\ncountParenNested\nlock\n"
+	if trapStr != expectTrapStr {
+		t.Fatalf("expect trap buf: %q, actual: %q", expectTrapStr, trapStr)
 	}
 }
 

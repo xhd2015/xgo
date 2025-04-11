@@ -5,21 +5,24 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/xhd2015/xgo/instrument"
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/instrument_func"
 	"github.com/xhd2015/xgo/instrument/instrument_go"
 	"github.com/xhd2015/xgo/instrument/instrument_intf"
 	"github.com/xhd2015/xgo/instrument/instrument_reg"
+	"github.com/xhd2015/xgo/instrument/instrument_var"
 	"github.com/xhd2015/xgo/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/instrument/load"
 	"github.com/xhd2015/xgo/instrument/overlay"
+	"github.com/xhd2015/xgo/instrument/resolve"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/git"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -46,7 +49,7 @@ var PREDEFINED_STD_PKGS = []string{
 }
 
 // goroot is critical for stdlib
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -71,7 +74,19 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, mo
 			panic(err)
 		}
 	}
-	xgoPkgs, err := instrument.LinkXgoRuntime(projectDir, xgoRuntimeModuleDir, overlayFS, mod, modfile, VERSION, REVISION, NUMBER, collectTestTrace, collectTestTraceDir, overrideXgoContent)
+
+	xgoPkgs, err := instrument_xgo_runtime.LinkXgoRuntime(goroot, projectDir, xgoRuntimeModuleDir, goVersion, overlayFS, overrideXgoContent, instrument_xgo_runtime.LinkOptions{
+		Mod:                 mod,
+		Modfile:             modfile,
+		XgoVersion:          VERSION,
+		XgoRevision:         REVISION,
+		XgoNumber:           NUMBER,
+		CollectTestTrace:    collectTestTrace,
+		CollectTestTraceDir: collectTestTraceDir,
+		ReadRuntimeGenFile: func(path []string) ([]byte, error) {
+			return readRuntimeGenFile(xgoSrc, path)
+		},
+	})
 	if err != nil {
 		if err == instrument_xgo_runtime.ErrLinkFileNotRequired {
 			return nil
@@ -96,6 +111,11 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, mo
 		}
 		return err
 	}
+	funcTabPkg := xgoPkgs.PackageByPath[constants.RUNTIME_FUNCTAB_PKG]
+	if funcTabPkg == nil || !hasFunc(funcTabPkg, constants.RUNTIME_FUNCTAB_REGISTER) {
+		logDebug("skip functab registering")
+		return nil
+	}
 
 	includeMain, loadPkgs, err := getLoadPackages(rules)
 	if err != nil {
@@ -109,30 +129,96 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, mo
 	loadArgs = append(loadArgs, loadPkgs...)
 	loadArgs = append(loadArgs, trapPkgs...)
 
+	fset := token.NewFileSet()
+	nonXgoPkgs := &edit.Packages{
+		Fset: fset,
+		LoadOptions: load.LoadOptions{
+			Dir:             projectDir,
+			Mod:             mod,
+			Overlay:         overlayFS,
+			IncludeTest:     includeTest,
+			ModFile:         modfile,
+			MaxFileSize:     MAX_FILE_SIZE,
+			FilterErrorFile: true,
+			Goroot:          goroot,
+			Fset:            fset,
+		},
+	}
 	logDebug("start load: %v", loadArgs)
-	loadPackages, err := load.LoadPackages(loadArgs, load.LoadOptions{
-		Dir:             projectDir,
-		Mod:             mod,
-		Overlay:         overlayFS,
-		IncludeTest:     includeTest,
-		ModFile:         modfile,
-		MaxFileSize:     MAX_FILE_SIZE,
-		FilterErrorFile: true,
-		Goroot:          goroot,
+	loadPackages, err := load.LoadPackages(loadArgs, nonXgoPkgs.LoadOptions)
+	if err != nil {
+		return err
+	}
+	nonXgoPkgs.Add(loadPackages)
+	for _, pkg := range nonXgoPkgs.Packages {
+		pkg.Initial = true
+	}
+
+	// insert func trap
+	// disable instrumenting xgo/runtime, except xgo/runtime/test
+	nonXgoPkgs = nonXgoPkgs.CloneWithPackages(nonXgoPkgs.Filter(func(pkg *edit.Package) bool {
+		return config.IsPkgAllowed(pkg.LoadPackage.GoPackage.ImportPath)
+	}))
+	reg := resolve.NewPackagesRegistry(nonXgoPkgs)
+	// trap var for packages in main module
+	mainPkgs := nonXgoPkgs.Filter(func(pkg *edit.Package) bool {
+		_, ok := goinfo.PkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
+		return ok
 	})
+	var recorder resolve.Recorder
+	for _, pkg := range mainPkgs {
+		resolve.CollectDecls(pkg)
+	}
+
+	err = resolve.Traverse(reg, mainPkgs, &recorder)
 	if err != nil {
 		return err
 	}
 
-	// insert func trap
-	packages := edit.Edit(loadPackages)
-	// disable instrumenting xgo/runtime, except xgo/runtime/test
-	packages = packages.Filter(instrument_func.IsPkgAllowed)
-	logDebug("start instrumentFuncTrap: len(packages)=%d", len(packages.Packages))
-	for _, pkg := range packages.Packages {
+	logDebug("start instrumentVarTrap: len(mainPkgs)=%d", len(mainPkgs))
+	err = instrument_var.TrapVariables(nonXgoPkgs, &recorder)
+	if err != nil {
+		return err
+	}
+	// collect extra packages for mock patching
+	var thirdPkgPaths []string
+	for pkgPath := range recorder.Pkgs {
+		if _, ok := nonXgoPkgs.PackageByPath[pkgPath]; ok {
+			continue
+		}
+		if _, ok := xgoPkgs.PackageByPath[pkgPath]; ok {
+			continue
+		}
+		if !config.IsPkgAllowed(pkgPath) {
+			continue
+		}
+		thirdPkgPaths = append(thirdPkgPaths, pkgPath)
+	}
+	logDebug("instrument third pkgs: len(thirdPkgs)=%d", len(thirdPkgPaths))
+	if len(thirdPkgPaths) > 0 {
+		err := nonXgoPkgs.LoadPackages(thirdPkgPaths)
+		if err != nil {
+			return err
+		}
+	}
+
+	logDebug("start instrumentFuncTrap: len(packages)=%d", len(nonXgoPkgs.Packages))
+	for _, pkg := range nonXgoPkgs.Packages {
 		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
+		cfg, allow := config.CheckPkgConfig(pkgPath)
+		if !allow {
+			continue
+		}
+		var defaultAllow bool
+		if !pkg.LoadPackage.GoPackage.Standard && pkg.Initial {
+			defaultAllow = true
+		}
 		for _, file := range pkg.Files {
-			funcs := instrument_func.InjectRuntimeTrap(file.Edit, pkgPath, file.File.Syntax, file.Index)
+			funcs := instrument_func.TrapFuncs(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{
+				PkgRecorder:    recorder.Pkgs[pkgPath],
+				PkgConfig:      cfg,
+				DefaultDisable: !defaultAllow,
+			})
 			file.TrapFuncs = append(file.TrapFuncs, funcs...)
 
 			// interface types
@@ -141,31 +227,16 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, mo
 		}
 	}
 
-	// trap var for packages in main module
-	varPkgs := packages.Filter(func(pkg *edit.Package) bool {
-		_, ok := goinfo.PkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
-		return ok
-	})
-	logDebug("start instrumentVarTrap: len(varPkgs)=%d", len(varPkgs.Packages))
-	err = instrument.InstrumentVarTrap(varPkgs)
-	if err != nil {
-		return err
-	}
-	funcTabPkg := xgoPkgs.PackageByPath[constants.RUNTIME_FUNC_INFO_PKG]
-	if funcTabPkg == nil || !hasFunc(funcTabPkg, constants.RUNTIME_REGISTER_FUNC) {
-		logDebug("skip functab registering")
-	} else {
-		logDebug("generate functab register")
-		registerFuncTab(xgoPkgs)
-		registerFuncTab(packages)
-	}
+	logDebug("generate functab register")
+	registerFuncTab(xgoPkgs)
+	registerFuncTab(nonXgoPkgs)
 
 	logDebug("collect edits")
-	updatedFiles, err := addEditNotes(overlayFS, packages, mayHaveCover, nil)
+	updatedFiles, err := applyInstrumentWithEditNotes(overlayFS, nonXgoPkgs, mayHaveCover, nil)
 	if err != nil {
 		return err
 	}
-	_, err = addEditNotes(overlayFS, xgoPkgs, mayHaveCover, overrideXgoContent)
+	_, err = applyInstrumentWithEditNotes(overlayFS, xgoPkgs, mayHaveCover, overrideXgoContent)
 	if err != nil {
 		return err
 	}
@@ -184,7 +255,7 @@ func registerFuncTab(packages *edit.Packages) {
 	}
 }
 
-func addEditNotes(overlayFS overlay.Overlay, packages *edit.Packages, mayHaveCover bool, overrideContent func(absFile overlay.AbsFile, content string)) (int, error) {
+func applyInstrumentWithEditNotes(overlayFS overlay.Overlay, packages *edit.Packages, mayHaveCover bool, overrideContent func(absFile overlay.AbsFile, content string)) (int, error) {
 	updatedFiles := 0
 
 	for _, pkg := range packages.Packages {

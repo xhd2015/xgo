@@ -36,3 +36,6 @@ const XGO_COMPILER_OPTIONS_FILE = "XGO_COMPILER_OPTIONS_FILE"
 
 // xgo's original working dir
 const XGO_SRC_WD = "XGO_SRC_WD"
+
+// flags automatically applied when `xgo` runs
+const XGO_FLAGS = "XGO_FLAGS"

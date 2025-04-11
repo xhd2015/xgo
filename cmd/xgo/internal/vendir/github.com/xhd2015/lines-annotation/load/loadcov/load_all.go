@@ -31,7 +31,7 @@ type LoadAllOptions struct {
 
 func LoadAll(opts LoadAllOptions) (*model.ProjectAnnotation, error) {
 	if opts.Ref == "" {
-		return nil, fmt.Errorf("requries ref")
+		return nil, fmt.Errorf("requires ref")
 	}
 	if opts.DiffBase == "" {
 		return nil, fmt.Errorf("requires diffBase")

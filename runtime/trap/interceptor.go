@@ -21,3 +21,19 @@ func AddInterceptor(interceptor *Interceptor) func() {
 func AddFuncInterceptor(f interface{}, interceptor *Interceptor) func() {
 	return trap.PushRecorderInterceptor(f, interceptor.Pre, interceptor.Post)
 }
+
+// MarkIntercept marks given function or variable to be intercepted,
+// it serves as a compiler hint to xgo. it does not have
+// any runtime behavior.
+//
+// NOTE: you don't have to explictly call this function if you
+// called these functions in other places within the main module:
+// - `mock.Patch(fn,...)`, `mock.Mock(fn,...)`
+// - `trace.Record(fn,...)`, `trace.RecordCall(fn,...)`
+// - `trap.AddFuncInterceptor(fn,...)`
+//
+// Example:
+//
+//	trap.MarkIntercept((*bytes.Buffer).String)
+func MarkIntercept(f interface{}) {
+}

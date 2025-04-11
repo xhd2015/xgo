@@ -1,21 +1,38 @@
 package instrument_var_test
 
 import (
+	"go/token"
 	"os"
 	"testing"
 
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/instrument_var"
 	"github.com/xhd2015/xgo/instrument/load"
+	"github.com/xhd2015/xgo/instrument/resolve"
 )
 
 func TestSimple(t *testing.T) {
-	loadPackages, err := load.LoadPackages([]string{"./testdata/simple/..."}, load.LoadOptions{})
+	fset := token.NewFileSet()
+	opts := load.LoadOptions{
+		Fset: fset,
+	}
+	packages := &edit.Packages{
+		Fset:        fset,
+		LoadOptions: opts,
+	}
+	err := packages.LoadPackages([]string{"./testdata/simple/..."})
 	if err != nil {
 		t.Fatal(err)
 	}
-	packages := edit.Edit(loadPackages)
-	instrument_var.Instrument(packages)
+	registry := resolve.NewPackagesRegistry(packages)
+	err = resolve.Traverse(registry, packages.Packages, &resolve.Recorder{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = instrument_var.TrapVariables(packages.Fset, packages.Packages)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, pkg := range packages.Packages {
 		for _, file := range pkg.Files {
@@ -31,12 +48,27 @@ func TestSimple(t *testing.T) {
 }
 
 func TestVarGroup(t *testing.T) {
-	loadPackages, err := load.LoadPackages([]string{"./testdata/var_group/..."}, load.LoadOptions{})
+	fset := token.NewFileSet()
+	opts := load.LoadOptions{
+		Fset: fset,
+	}
+	packages := &edit.Packages{
+		Fset:        fset,
+		LoadOptions: opts,
+	}
+	err := packages.LoadPackages([]string{"./testdata/var_group/..."})
 	if err != nil {
 		t.Fatal(err)
 	}
-	packages := edit.Edit(loadPackages)
-	instrument_var.Instrument(packages)
+	registry := resolve.NewPackagesRegistry(packages)
+	err = resolve.Traverse(registry, packages.Packages, &resolve.Recorder{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = instrument_var.TrapVariables(packages.Fset, packages.Packages)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, pkg := range packages.Packages {
 		for _, file := range pkg.Files {
 			if !file.HasEdit() {
@@ -51,21 +83,33 @@ func TestVarGroup(t *testing.T) {
 }
 
 func TestCustom(t *testing.T) {
+	fset := token.NewFileSet()
+	opts := load.LoadOptions{
+		Fset: fset,
+		Mod:  "vendor",
+	}
+	packages := &edit.Packages{
+		Fset:        fset,
+		LoadOptions: opts,
+	}
 	dir := os.Getenv("CUSTOM_TEST_DIR")
 	if dir == "" {
 		t.Skip("CUSTOM_TEST_DIR is not set")
 	}
 	args := []string{"./..."}
-	mod := "vendor"
-	loadPackages, err := load.LoadPackages(args, load.LoadOptions{
-		Dir: dir,
-		Mod: mod,
-	})
+	err := packages.LoadPackages(args)
 	if err != nil {
 		t.Fatal(err)
 	}
-	packages := edit.Edit(loadPackages)
-	instrument_var.Instrument(packages)
+	registry := resolve.NewPackagesRegistry(packages)
+	err = resolve.Traverse(registry, packages.Packages, &resolve.Recorder{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = instrument_var.TrapVariables(packages.Fset, packages.Packages)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, pkg := range packages.Packages {
 		for _, file := range pkg.Files {
 			if !file.HasEdit() {

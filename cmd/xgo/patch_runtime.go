@@ -8,6 +8,7 @@ import (
 
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
 	"github.com/xhd2015/xgo/instrument/instrument_runtime"
+	"github.com/xhd2015/xgo/instrument/instrument_runtime/template"
 	instrument_patch "github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/fileutil"
@@ -116,7 +117,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		content = strings.ReplaceAll(content, entryPatch, "fn.entry")
 	}
 
-	content = instrument_runtime.AppendGetFuncNameImpl(goVersion, content)
+	content = template.AppendGetFuncNameImpl(goVersion, content)
 
 	return true, os.WriteFile(dstFile, []byte(content), 0755)
 }

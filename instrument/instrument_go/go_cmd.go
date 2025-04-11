@@ -43,21 +43,11 @@ func InstrumentGo(goroot string, goVersion *goinfo.GoVersion) error {
 
 func instrumentGoMain(goroot string, goVersion *goinfo.GoVersion) error {
 	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 24) {
-		// src/cmd/go/internal/work/exec.go
+		// src/cmd/go/main.go
 		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", execFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
 	}
 	mainFile := mainFilePath.JoinPrefix(goroot)
 	return patch.EditFile(mainFile, func(content string) (string, error) {
-		content = patch.UpdateContent(content,
-			"/*<begin save_xgo_os_args>*/",
-			"/*<end save_xgo_os_args>*/",
-			[]string{
-				"\nfunc main() {",
-			},
-			0,
-			patch.UpdatePosition_After,
-			"__xgo_os_args := os.Args;",
-		)
 		content = patch.UpdateContent(content,
 			"/*<begin call_xgo_precheck>*/",
 			"/*<end call_xgo_precheck>*/",
@@ -68,7 +58,7 @@ func instrumentGoMain(goroot string, goVersion *goinfo.GoVersion) error {
 			},
 			1,
 			patch.UpdatePosition_Before,
-			"if xgoPrecheck(args[0], __xgo_os_args) { return; };",
+			"if xgoPrecheck(args[0], args[1:]) { return; };",
 		)
 		return content, nil
 	})

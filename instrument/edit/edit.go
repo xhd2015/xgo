@@ -5,6 +5,7 @@ import (
 	"go/token"
 
 	"github.com/xhd2015/xgo/instrument/load"
+	"github.com/xhd2015/xgo/instrument/resolve/types"
 	"github.com/xhd2015/xgo/support/edit/goedit"
 )
 
@@ -15,14 +16,33 @@ const (
 	DeclKindVar
 	DeclKindConst
 	DeclKindType
+	DeclKindFunc // not including methods
 )
 
 type Decl struct {
-	Kind           DeclKind
-	Ident          *ast.Ident
-	Type           ast.Expr // might be nil
+	Kind  DeclKind
+	Ident *ast.Ident
+	Type  ast.Expr // might be nil
+
+	Value                 ast.Expr     // only for var, might be nil
+	ResolvedValue         types.Object // only for var
+	ResolvedValueTypeCode string
+
 	Decl           *ast.GenDecl
-	HasCallRewrite bool
+	HasCallRewrite bool // for var
+
+	// for Func
+	FuncDecl *FuncDecl
+
+	// for Type
+	Methods map[string]*FuncDecl
+	File    *File
+}
+
+type FuncDecl struct {
+	Name    string
+	RecvPtr bool
+	Syntax  *ast.FuncDecl
 }
 
 type Packages struct {
@@ -30,6 +50,8 @@ type Packages struct {
 	Packages []*Package
 
 	PackageByPath map[string]*Package
+
+	LoadOptions load.LoadOptions
 }
 
 type Package struct {
@@ -37,17 +59,24 @@ type Package struct {
 	Files       []*File
 
 	Decls map[string]*Decl
+
+	Collected bool
+
+	// Initial indicates whether
+	// the packages are loaded via
+	// package args specified by user
+	Initial bool
 }
 
 type File struct {
-	File  *load.File
+	File *load.File
+	// the file index
 	Index int
 
 	Edit *goedit.Edit
 
-	Decls []*Decl
-
-	// the file index
+	Decls          []*Decl
+	RecordedImport map[string]bool
 
 	TrapFuncs      []*FuncInfo
 	TrapVars       []*VarInfo
@@ -101,13 +130,23 @@ func (c *File) HasEdit() bool {
 	return c.Edit != nil && c.Edit.Buffer().HasEdits()
 }
 
-func Edit(packages *load.Packages) *Packages {
+func New(packages *load.Packages) *Packages {
 	pkgs := &Packages{
-		Fset:          packages.Fset,
-		Packages:      make([]*Package, len(packages.Packages)),
-		PackageByPath: make(map[string]*Package, len(packages.Packages)),
+		Fset:     packages.Fset,
+		Packages: make([]*Package, 0, len(packages.Packages)),
 	}
-	for i, pkg := range packages.Packages {
+	pkgs.Add(packages)
+	return pkgs
+}
+
+func (c *Packages) Add(packages *load.Packages) {
+	if c.Fset != packages.Fset {
+		panic("token.FileSet mismatch")
+	}
+	if c.PackageByPath == nil {
+		c.PackageByPath = make(map[string]*Package, len(packages.Packages))
+	}
+	for _, pkg := range packages.Packages {
 		files := make([]*File, len(pkg.Files))
 		for j, file := range pkg.Files {
 			files[j] = &File{
@@ -120,25 +159,38 @@ func Edit(packages *load.Packages) *Packages {
 			LoadPackage: pkg,
 			Files:       files,
 		}
-		pkgs.Packages[i] = p
-		pkgs.PackageByPath[pkg.GoPackage.ImportPath] = p
+		c.Packages = append(c.Packages, p)
+		c.PackageByPath[pkg.GoPackage.ImportPath] = p
 	}
-
-	return pkgs
 }
 
-func (p *Packages) Filter(f func(pkg *Package) bool) *Packages {
-	filtered := &Packages{
-		Fset:          p.Fset,
-		PackageByPath: make(map[string]*Package),
-	}
+func (p *Packages) Filter(f func(pkg *Package) bool) []*Package {
+	filtered := make([]*Package, 0, len(p.Packages))
 	for _, pkg := range p.Packages {
 		if !f(pkg) {
 			continue
 		}
-
-		filtered.Packages = append(filtered.Packages, pkg)
-		filtered.PackageByPath[pkg.LoadPackage.GoPackage.ImportPath] = pkg
+		filtered = append(filtered, pkg)
 	}
 	return filtered
+}
+
+func (p *Packages) CloneWithPackages(packages []*Package) *Packages {
+	pkgMap := make(map[string]*Package, len(packages))
+	for _, pkg := range packages {
+		pkgMap[pkg.LoadPackage.GoPackage.ImportPath] = pkg
+	}
+	return &Packages{
+		Fset:          p.Fset,
+		Packages:      packages,
+		PackageByPath: pkgMap,
+		LoadOptions:   p.LoadOptions,
+	}
+}
+
+func (c *File) RecordImport(ref string) {
+	if c.RecordedImport == nil {
+		c.RecordedImport = make(map[string]bool, 1)
+	}
+	c.RecordedImport[ref] = true
 }

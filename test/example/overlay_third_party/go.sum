@@ -1,0 +1,4 @@
+github.com/xhd2015/xgo v1.1.0 h1:oV+X0/6u/IWdsFWkmRnKFjU9b0lez8jA+j+ul0tqV7k=
+github.com/xhd2015/xgo v1.1.0/go.mod h1:LJxlcYSaXo/9YpsnB3yHh9NHe7BRettYCytaNGWY2BE=
+golang.org/x/example/hello v0.0.0-20250407153444-dd59d6852dfb h1:C/CAAD3ZL6XG8B3b2BY9iDioB4bSf4wSzMZqI5x9HkY=
+golang.org/x/example/hello v0.0.0-20250407153444-dd59d6852dfb/go.mod h1:UhUKOXx5fMcLZxwL20DUrWWBBoRYG9Jvc8FiwZhRHCI=

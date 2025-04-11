@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/core"
-	"github.com/xhd2015/xgo/runtime/core/info"
 	"github.com/xhd2015/xgo/runtime/functab"
 )
 
 var SomeVar int
 
+// xgo can trap var without type
+// if the var is defined as literal
 var SomeVarWithoutType = 0
 
 func SomeFunc(s string) {
@@ -52,6 +53,13 @@ func TestFuncTab(t *testing.T) {
 			WantVar:          &SomeVar,
 		},
 		{
+			WantKind:         core.Kind_Var,
+			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.SomeVarWithoutType",
+			WantName:         "SomeVarWithoutType",
+			WantIdentityName: "SomeVarWithoutType",
+			WantVar:          &SomeVarWithoutType,
+		},
+		{
 			WantKind:         core.Kind_Func,
 			WantFullName:     "github.com/xhd2015/xgo/runtime/test/functab.SomeFunc",
 			WantName:         "SomeFunc",
@@ -82,7 +90,7 @@ func TestFuncTab(t *testing.T) {
 		},
 	}
 	allFuncInfos := functab.GetFuncs()
-	funcInfos := make([]*info.Func, 0, len(allFuncInfos))
+	funcInfos := make([]*core.FuncInfo, 0, len(allFuncInfos))
 	for _, fnInfo := range allFuncInfos {
 		// because we added --trap=time,..., so filter them out
 		if fnInfo.Stdlib {

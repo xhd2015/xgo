@@ -1,6 +1,7 @@
 package instrument_runtime
 
 import (
+	"github.com/xhd2015/xgo/instrument/instrument_runtime/template"
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
@@ -157,7 +158,7 @@ func InstrumentGoroutineCreation(goVersion *goinfo.GoVersion, procContent string
 		},
 		5,
 		patch.UpdatePosition_Before,
-		RuntimeProcGoroutineCreatedPatch,
+		template.RuntimeProcGoroutineCreatedPatch,
 	)
 	return procContent, nil
 }

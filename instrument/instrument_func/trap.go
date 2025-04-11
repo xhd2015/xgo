@@ -8,8 +8,10 @@ import (
 	"strings"
 
 	astutil "github.com/xhd2015/xgo/instrument/ast"
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
+	"github.com/xhd2015/xgo/instrument/resolve"
 	"github.com/xhd2015/xgo/support/edit/goedit"
 )
 
@@ -19,7 +21,13 @@ const (
 	resultNamePrefix = "__xgo_auto_res_"
 )
 
-// InjectRuntimeTrap parses the given file as golang AST,
+type Options struct {
+	PkgRecorder    *resolve.PkgRecorder
+	PkgConfig      *config.PkgConfig
+	DefaultDisable bool
+}
+
+// TrapFuncs parses the given file as golang AST,
 // and then for each package level function decl that has a body,
 // it inserts a `defer runtime.XgoTrap()();` at the beginning of the body.
 // Returns the modified content.
@@ -34,39 +42,67 @@ const (
 //		func add(a, b int) int {defer runtime.XgoTrap()();
 //			return a+b
 //		}
-func InjectRuntimeTrap(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int) []*edit.FuncInfo {
+func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex int, opts Options) []*edit.FuncInfo {
 	fset := editor.Fset()
 
-	cfg, cfgOk := stdPkgConfigMapping[pkgPath]
+	recorder := opts.PkgRecorder
+	cfg := opts.PkgConfig
+	defaultDisable := opts.DefaultDisable
 
 	var funcInfos []*edit.FuncInfo
-	// Visit all nodes in the AST
-	ast.Inspect(file, func(n ast.Node) bool {
-		// Check if this is a function declaration
-		funcDecl, ok := n.(*ast.FuncDecl)
+	// Visit all decls in the AST
+	for _, decl := range file.Decls {
+		funcDecl, ok := decl.(*ast.FuncDecl)
 		if !ok {
-			return true
+			continue
 		}
 		if funcDecl.Body == nil {
-			return true
+			continue
 		}
 		if funcDecl.Name == nil || funcDecl.Name.Name == "" || funcDecl.Name.Name == "_" {
-			return true
+			continue
 		}
 		// Check if it's a method (has a receiver) with empty or "_" receiver name
 		_, receiver := processReceiverNames(funcDecl, fset, editor)
 		funcName := funcDecl.Name.Name
 		if receiver == nil && funcName == "init" {
-			return true
+			continue
 		}
 		if pkgPath == "time" && (funcName == constants.XGO_REAL_NOW || funcName == constants.XGO_REAL_SLEEP) {
 			// certain function is specifically left for xgo to call
-			return true
+			continue
 		}
 		identityName, recvPtr, recvGeneric, recvType := ParseReceiverInfo(funcName, receiver)
-		if cfgOk && !cfg.whitelistFunc[identityName] && !matchAnyPrefix(cfg.whitelistFuncPrefix, identityName) {
-			// TODO: may enforce only exporeted function on standard lib?
-			return true
+		var hitRecorder bool
+		if recorder != nil {
+			var hasFnRecord bool
+			var hasTypeMethodRecord bool
+			fnRecorder := recorder.Get(funcName)
+			if fnRecorder != nil && fnRecorder.HasMockRef {
+				hasFnRecord = true
+			}
+			if !hasFnRecord && recvType != nil {
+				typeRecorder := recorder.Get(recvType.Name)
+				if typeRecorder != nil && typeRecorder.NamesHavingMock[funcName] {
+					hasTypeMethodRecord = true
+				}
+			}
+			if hasFnRecord || hasTypeMethodRecord {
+				hitRecorder = true
+			}
+		}
+		if !hitRecorder {
+			// if not hit recorder, we fallback to cfg-based filter
+			// which is whitelist mode for stdlib
+			if cfg != nil {
+				if !cfg.WhitelistFunc[identityName] && !matchAnyPrefix(cfg.WhitelistFuncPrefix, identityName) {
+					// TODO: may enforce only exporeted function on standard lib?
+					continue
+				}
+			} else if defaultDisable {
+				// by default, we don't instrument stdlib
+				continue
+			}
 		}
 
 		_, receiverAddr := toNameAddr(receiver)
@@ -113,8 +149,7 @@ func InjectRuntimeTrap(editor *goedit.Edit, pkgPath string, file *ast.File, file
 			Params:       paramFields,
 			Results:      resultFields,
 		})
-		return true
-	})
+	}
 
 	if len(funcInfos) == 0 {
 		return nil

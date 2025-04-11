@@ -1,8 +1,20 @@
 package revision
 
-import "path/filepath"
+import (
+	"path/filepath"
+
+	"github.com/xhd2015/xgo/support/git"
+)
 
 func IncrementXgoVersion(rootDir string, amend bool, autoIncrementNumber bool) error {
+	// first list all changed files, if nothing changes at all, do nothing.
+	changedFiles, err := git.ListFileUpdates(rootDir, git.COMMIT_WORKING, "HEAD", nil)
+	if err != nil {
+		return err
+	}
+	if len(changedFiles) == 0 {
+		return nil
+	}
 	refLast := "HEAD"
 	if amend {
 		refLast = "HEAD~1"

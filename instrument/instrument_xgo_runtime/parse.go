@@ -1,8 +1,9 @@
 package instrument_xgo_runtime
 
 import (
-	_ "embed"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -11,9 +12,6 @@ import (
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/instrument/patch"
 )
-
-//go:embed runtime_link_template.go
-var runtimeLinkTemplate string
 
 func CheckRuntimeLegacyVersion(projectDir string, overlayFS overlay.Overlay, mod string, modfile string) (bool, string, error) {
 	opts := load.LoadOptions{
@@ -63,7 +61,7 @@ func isDeprecatedCoreVersion(coreVersion string) bool {
 	return strings.HasPrefix(coreVersion, "1.0.")
 }
 
-func GetLinkRuntimeCode() string {
+func GetLinkRuntimeCode(runtimeLinkTemplate string) string {
 	code, err := patch.RemoveBuildIgnore(runtimeLinkTemplate)
 	if err != nil {
 		panic(err)
@@ -76,6 +74,14 @@ func ReplaceActualXgoVersion(versionCode string, xgoVersion string, xgoRevision 
 	versionCode = replaceByLine(versionCode, `const XGO_REVISION = `, `const XGO_REVISION = "`+xgoRevision+`"`)
 	versionCode = replaceByLine(versionCode, `const XGO_NUMBER = `, `const XGO_NUMBER = `+strconv.Itoa(xgoNumber))
 	return versionCode
+}
+
+func BypassVersionCheck(versionCode string) string {
+	return strings.Replace(versionCode,
+		"func checkVersion() error {",
+		"func checkVersion() error { if true { return nil; }",
+		1,
+	)
 }
 
 func ParseCoreVersion(versionCode string) (string, error) {
@@ -119,5 +125,15 @@ func replaceByLine(code string, linePattern string, replacement string) string {
 		return code
 	}
 	endIdx += base
-	return code[:idx] + replacement + "\n" + code[endIdx:]
+	// this will include the \n
+	return code[:idx] + replacement + code[endIdx:]
+}
+
+func hasFile(dir string, fileName string) string {
+	filePath := filepath.Join(dir, fileName)
+	fi, err := os.Stat(filePath)
+	if err == nil && !fi.IsDir() {
+		return filePath
+	}
+	return ""
 }

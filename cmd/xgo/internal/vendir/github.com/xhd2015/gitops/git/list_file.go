@@ -37,10 +37,10 @@ func ListFilePatterns(dir string, ref string, patterns []string) ([]string, erro
 // extraFlags: --diff-filter=A
 func diffFiles(dir string, ref string, compareRef string, extraFlags []string, patterns []string) (string, error) {
 	if ref == "" {
-		return "", fmt.Errorf("requries ref")
+		return "", fmt.Errorf("requires ref")
 	}
 	if compareRef == "" {
-		return "", fmt.Errorf("requries compareRef")
+		return "", fmt.Errorf("requires compareRef")
 	}
 
 	// git diff --diff-filter=A --name-only --ignore-submodules "$compareRef" "$ref" -- ${patterns} || true

@@ -7,15 +7,14 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/core/info"
+	"github.com/xhd2015/xgo/runtime/core"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/internal/stack"
 )
 
 func trapVar(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
-	funcInfo := (*info.Func)(infoPtr)
+	funcInfo := (*core.FuncInfo)(infoPtr)
 
-	begin := xgo_runtime.XgoRealTimeNow()
 	stk := stack.Get()
 	if stk == nil {
 		return
@@ -25,6 +24,7 @@ func trapVar(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 		return
 	}
 
+	begin := xgo_runtime.XgoRealTimeNow()
 	ptr := reflect.ValueOf(varAddr).Pointer()
 	recorders := stkData.getVarRecordHandlers(ptr)
 
@@ -33,9 +33,8 @@ func trapVar(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 }
 
 func trapVarPtr(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
-	funcInfo := (*info.Func)(infoPtr)
+	funcInfo := (*core.FuncInfo)(infoPtr)
 
-	begin := xgo_runtime.XgoRealTimeNow()
 	stk := stack.Get()
 	if stk == nil {
 		return
@@ -45,25 +44,44 @@ func trapVarPtr(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 	if stkData == nil {
 		return
 	}
+	begin := xgo_runtime.XgoRealTimeNow()
 
 	ptr := reflect.ValueOf(varAddr).Pointer()
 	recorders := stkData.getVarPtrRecordHandlers(ptr)
 
+	// var_ptr fallback to var is buggy, can affect program correctness
+	// because variable will be overridden
+	// and the original variable value will be lost.
+	// so we disable it.
+	const DISABLE_PTR_FALLBACK = true
+
 	mockRes := res
 	mock := stkData.getLastVarPtrMock(ptr)
-	if mock == nil {
+	if mock == nil && !DISABLE_PTR_FALLBACK {
 		mock = stkData.getLastVarMock(ptr)
 		if mock != nil {
-			// res: **T
-			// mockRes: *T
-			mockRes = reflect.ValueOf(res).Elem().Interface()
+			// input  res: **T
+
+			// create a temporary variable to hold the value
+			rvRes := reflect.ValueOf(res)
+			rvVarValue := rvRes.Elem().Elem()
+
+			// new(T)
+			tmpRes := reflect.New(rvVarValue.Type())
+			tmpRes.Elem().Set(rvVarValue)
+
+			// change res to point to the new variable
+			rvRes.Elem().Set(tmpRes)
+
+			// output mockRes: *T
+			mockRes = tmpRes.Interface()
 		}
 	}
 
 	doTrapVar(funcInfo, stk, stkData, begin, res, recorders, mock, mockRes)
 }
 
-func doTrapVar(funcInfo *info.Func, stk *stack.Stack, stkData *StackData, begin time.Time, res interface{}, recorders []*varRecordHolder, mock func(fnInfo *info.Func, res interface{}), mockRes interface{}) {
+func doTrapVar(funcInfo *core.FuncInfo, stk *stack.Stack, stkData *StackData, begin time.Time, res interface{}, recorders []*varRecordHolder, mock func(fnInfo *core.FuncInfo, res interface{}), mockRes interface{}) {
 	var postRecorders []func()
 	for _, recorder := range recorders {
 		var data interface{}
@@ -113,4 +131,5 @@ func doTrapVar(funcInfo *info.Func, stk *stack.Stack, stkData *StackData, begin 
 	cur.Results = json.RawMessage(xgo_runtime.MarshalNoError(res))
 	stk.Top = stk.Push(cur)
 	cur.EndNs = xgo_runtime.XgoRealTimeNow().UnixNano() - stk.Begin.UnixNano()
+	cur.Finished = true
 }
