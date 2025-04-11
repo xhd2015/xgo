@@ -80,12 +80,12 @@ func (c *Scope) traverseExpr(node ast.Expr) {
 		// take addr
 		if node.Op == token.AND {
 			switch x := node.X.(type) {
-			case *ast.SelectorExpr:
-				if c.trapSelector(node, x) {
-					return
-				}
 			case *ast.Ident:
 				if c.trapIdent(node, x) {
+					return
+				}
+			case *ast.SelectorExpr:
+				if c.trapSelector(node, x) {
 					return
 				}
 			}

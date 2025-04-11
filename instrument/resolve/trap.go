@@ -1,10 +1,13 @@
 package resolve
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
+	"os"
 
 	"github.com/xhd2015/xgo/instrument/edit"
+	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/instrument/resolve/types"
 )
 
@@ -46,13 +49,16 @@ func (c *Scope) trapSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr) bool {
 		// X.Y where X is a variable
 		decl := c.Package.Decls[xName]
 		if decl != nil {
+			if !c.canDeclareType(decl) {
+				return false
+			}
 			selType := c.resolveInfo(sel)
 			if !types.IsUnknown(selType) {
 				// if addr is nil, we cannot explicitly get sel.X's type
 				// unless sel.X is a pointer
 				xInfo := c.Global.ExprInfo[sel.X]
 				if variable, ok := xInfo.(types.Variable); ok {
-					_, isPtr := variable.Type_.(types.Ptr)
+					_, isPtr := variable.Type().(types.Ptr)
 					c.applyVarRewrite(decl, nil, getSuffix(isPtr), sel.X.End(), sel.X.End())
 					return true
 				}
@@ -99,7 +105,7 @@ func (c *Scope) canDeclareType(decl *edit.Decl) bool {
 	}
 	resolvedValue := decl.ResolvedValue
 	if resolvedValue != nil {
-		return true
+		return decl.ResolvedValueTypeCode != ""
 	}
 	info := c.resolveInfo(decl.Value)
 	if types.IsUnknown(info) {
@@ -113,20 +119,23 @@ func (c *Scope) canDeclareType(decl *edit.Decl) bool {
 	if types.IsUnknown(objType) {
 		return false
 	}
-	// must be basic type
-	_, ok = objType.(types.Basic)
-	if !ok {
-		return false
+	useContext := &UseContext{
+		fset:    c.Global.Packages.Fset(),
+		pkgPath: c.Package.PkgPath(),
+		file:    c.File.File,
+		pos:     decl.Ident.Pos(),
 	}
+	typeCode := useContext.useTypeInFile(objType)
+	// must be basic type
 	decl.ResolvedValue = obj
-	return true
+	decl.ResolvedValueTypeCode = typeCode
+	return typeCode != ""
 }
 
 func (ctx *Scope) applyVarRewrite(decl *edit.Decl, addr *ast.UnaryExpr, suffix string, startPos token.Pos, endPos token.Pos) {
 	// change pkg.VarName to pkg.VarName_xgo_get()
 	decl.HasCallRewrite = true
 
-	// TODO: support address
 	fileEdit := ctx.File.File.Edit
 	if addr != nil {
 		// delete &
@@ -140,4 +149,39 @@ func getSuffix(isPtr bool) string {
 		return "_xgo_get_addr()"
 	}
 	return "_xgo_get()"
+}
+
+type UseContext struct {
+	fset    *token.FileSet
+	pkgPath string
+	file    *edit.File
+	pos     token.Pos
+}
+
+func (c *UseContext) useTypeInFile(typ types.Type) (res string) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "useTypeInFile: %v\n", r)
+			res = ""
+		}
+	}()
+	switch typ := typ.(type) {
+	case types.Basic:
+		return string(typ)
+	case types.NamedType:
+		// check if pkg path is local
+		if typ.PkgPath == c.pkgPath {
+			return typ.Name
+		}
+		pos := c.fset.Position(c.pos)
+		pkgRef := fmt.Sprintf("__xgo_var_ref_%d_%d", pos.Line, pos.Column)
+		patch.AddImport(c.file.Edit, c.file.File.Syntax, pkgRef, typ.PkgPath)
+		return fmt.Sprintf("%s.%s", pkgRef, typ.Name)
+	case types.Ptr:
+		return "*" + c.useTypeInFile(typ.Elem)
+	case types.Signature:
+		panic("TODO signature")
+	default:
+		panic(fmt.Sprintf("unsupported type: %T", typ))
+	}
 }

@@ -20,11 +20,13 @@ const (
 )
 
 type Decl struct {
-	Kind          DeclKind
-	Ident         *ast.Ident
-	Type          ast.Expr // might be nil
-	Value         ast.Expr // only for var, might be nil
-	ResolvedValue types.Object
+	Kind  DeclKind
+	Ident *ast.Ident
+	Type  ast.Expr // might be nil
+
+	Value                 ast.Expr     // only for var, might be nil
+	ResolvedValue         types.Object // only for var
+	ResolvedValueTypeCode string
 
 	Decl           *ast.GenDecl
 	HasCallRewrite bool // for var

@@ -3,6 +3,7 @@ package resolve
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -65,6 +66,7 @@ func (c *NameRecorder) AddMockName(name string) {
 }
 
 type PackageRegistry interface {
+	Fset() *token.FileSet
 	LoadPackage(pkgPath string) (*edit.Package, bool, error)
 	GetPackage(pkgPath string) *edit.Package
 }

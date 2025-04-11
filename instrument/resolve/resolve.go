@@ -123,16 +123,16 @@ func (c *Scope) resolveInfo(expr ast.Expr) types.Info {
 	if expr == nil {
 		return types.Unknown{}
 	}
-	typeInfo, ok := c.Global.ExprInfo[expr]
+	info, ok := c.Global.ExprInfo[expr]
 	if ok {
-		return typeInfo
+		return info
 	}
-	typeInfo = c.doResolveInfo(expr)
+	info = c.doResolveInfo(expr)
 	if c.Global.ExprInfo == nil {
 		c.Global.ExprInfo = make(map[ast.Expr]types.Info, 1)
 	}
-	c.Global.ExprInfo[expr] = typeInfo
-	return typeInfo
+	c.Global.ExprInfo[expr] = info
+	return info
 }
 
 func (c *Scope) resolveType(expr ast.Expr) types.Type {
@@ -177,7 +177,13 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 					if decl.Type != nil {
 						varType = c.resolveType(decl.Type)
 					} else if decl.Value != nil {
-						varType = c.resolveType(decl.Value)
+						valInfo := c.resolveInfo(decl.Value)
+						if obj, ok := valInfo.(types.Object); ok {
+							varType = obj.Type()
+						}
+					}
+					if types.IsUnknown(varType) {
+						return types.Unknown{}
 					}
 					return types.Variable{
 						PkgPath: c.Package.PkgPath(),
@@ -280,12 +286,12 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		return types.Unknown{}
 	case *ast.CompositeLit:
 		// generic
-		basicType := expr.Type
+		litType := expr.Type
 		if idxExpr, ok := expr.Type.(*ast.IndexExpr); ok {
-			basicType = idxExpr.X
+			litType = idxExpr.X
 		}
 
-		typ := c.resolveType(basicType)
+		typ := c.resolveType(litType)
 		if types.IsUnknown(typ) {
 			return types.Unknown{}
 		}
@@ -304,7 +310,13 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		// TODO: support array
 		return types.Unknown{}
 	case *ast.BasicLit:
-		return getBasicLitConstType(expr.Kind)
+		typ := getBasicLitConstType(expr.Kind)
+		if types.IsUnknown(typ) {
+			return types.Unknown{}
+		}
+		return types.Literal{
+			Type_: typ,
+		}
 	case *ast.StructType:
 		fields := make([]types.StructField, len(expr.Fields.List))
 		for i, field := range expr.Fields.List {
@@ -396,7 +408,7 @@ func takeAddr(info types.Info) types.Info {
 	return types.Unknown{}
 }
 
-func getBasicLitConstType(kind token.Token) types.Info {
+func getBasicLitConstType(kind token.Token) types.Type {
 	switch kind {
 	case token.INT:
 		return types.Basic("int")

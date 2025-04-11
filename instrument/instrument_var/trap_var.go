@@ -31,8 +31,11 @@ func TrapVariables(fset *token.FileSet, packages []*edit.Package) error {
 						typeStart := fset.Position(declType.Pos()).Offset
 						typeEnd := fset.Position(declType.End()).Offset
 						typeCode = file.File.Content[typeStart:typeEnd]
-					} else if decl.ResolvedValue != nil {
-						typeCode = decl.ResolvedValue.String()
+					} else if decl.ResolvedValueTypeCode != "" {
+						typeCode = decl.ResolvedValueTypeCode
+					}
+					if typeCode == "" {
+						continue
 					}
 
 					varName := decl.Ident.Name

@@ -129,7 +129,7 @@ func Traverse(registry PackageRegistry, packages []*edit.Package, recorder *Reco
 	}
 	for _, pkg := range packages {
 		for _, file := range pkg.Files {
-			traverseFuncDecls(global, pkg, file, recorder)
+			traverseFuncDecls(global, pkg, file)
 		}
 	}
 
@@ -138,6 +138,10 @@ func Traverse(registry PackageRegistry, packages []*edit.Package, recorder *Reco
 
 type packagesRegistry struct {
 	packages *edit.Packages
+}
+
+func (c *packagesRegistry) Fset() *token.FileSet {
+	return c.packages.Fset
 }
 
 func (c *packagesRegistry) LoadPackage(pkgPath string) (*edit.Package, bool, error) {
@@ -154,7 +158,7 @@ func NewPackagesRegistry(packages *edit.Packages) PackageRegistry {
 	}
 }
 
-func traverseFuncDecls(global *GlobalScope, pkg *edit.Package, file *edit.File, recorder *Recorder) {
+func traverseFuncDecls(global *GlobalScope, pkg *edit.Package, file *edit.File) {
 	fileScope := newFileScope(global, pkg, file)
 	// NOTE: statements like this will be ignored:
 	//  var _ = func() bool {
