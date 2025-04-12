@@ -109,7 +109,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		// problem because they explicitly have
 		// targeted function
 		if !stackIsTrapping {
-			interceptors := stackData.interceptors
+			interceptors := stackData.getGeneralInterceptors()
 			for _, h := range interceptors {
 				var data interface{}
 				if h.pre != nil {
@@ -170,10 +170,6 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 			return callPosRecorder, false
 		}
 	} else {
-		if stk != nil {
-			// this should never happen
-			panic("stack is nil while stackData is not nil!")
-		}
 		if pkg != constants.TRACE_PKG || name != constants.TRACE_FUNC {
 			// try detect testing
 			if !flags.COLLECT_TEST_TRACE {
@@ -197,6 +193,12 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 			}
 			isTesting = true
 			testName = (*t).Name()
+		}
+		// tracing cannot happen on empty stack
+		// stk might be InitGStack
+		if stk != nil {
+			// this should never happen
+			panic("stackData is nil while stk is not nil!")
 		}
 		begin = xgo_runtime.XgoRealTimeNow()
 		isStartTracing = true

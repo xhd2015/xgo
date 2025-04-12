@@ -10,7 +10,7 @@ import (
 	"github.com/xhd2015/xgo/runtime/trace"
 )
 
-func TestPatchMapWithFuncShouldFail(t *testing.T) {
+func TestPatchMapWithFuncShouldError(t *testing.T) {
 	var panicErr interface{}
 	func() {
 		defer func() {

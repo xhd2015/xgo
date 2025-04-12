@@ -17,10 +17,6 @@ func init() {
 	cancel := trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
 			trapBuf.WriteString(fmt.Sprintf("call %s\n", f.IdentityName))
-			if f.IdentityName == "B" {
-				result.GetFieldIndex(0).Set("mock B")
-				return nil, trap.ErrAbort
-			}
 			return
 		},
 	})
@@ -34,16 +30,21 @@ func TestTrapInsideInit(t *testing.T) {
 	if str != expectTrapBuf {
 		t.Fatalf("expect trap buf: %q, actual: %q", expectTrapBuf, str)
 	}
-	expectInitA := "A:mock B"
+	expectInitA := "A:B"
 	if initA != expectInitA {
 		t.Fatalf("expect initA: %q, actual: %q", expectInitA, initA)
 	}
 
 	// check if the interceptor is cancelled
+	trapBuf.Reset()
 	a := A()
 	expectA := "A:B"
 	if a != expectA {
 		t.Fatalf("expect a: %q, actual: %q", expectA, a)
+	}
+	str = trapBuf.String()
+	if str != "" {
+		t.Fatalf("expect trap buf: %q, actual: %q", "", str)
 	}
 }
 

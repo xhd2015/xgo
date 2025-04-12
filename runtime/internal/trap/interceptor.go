@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
 
 // concept:
@@ -31,24 +32,33 @@ func PushRecorderInterceptor(fn interface{}, preInterceptor PreInterceptor, post
 }
 
 func pushInterceptor(pre PreInterceptor, post PostInterceptor) func() {
+	holder := &globalInterceptorHolder
+	if runtime.XgoInitFinished() {
+		stack := getOrAttachStackData()
+		holder = &stack.interceptors
+	}
+
 	preHandler, postHandler := buildRecorderFromInterceptor(nil, pre, post)
-	stack := getOrAttachStackData()
-	if stack.interceptors == nil {
-		stack.interceptors = []*recorderHolder{}
+	if holder.interceptors == nil {
+		holder.interceptors = []*recorderHolder{}
 	}
 	h := &recorderHolder{pre: preHandler, post: postHandler}
-	stack.interceptors = append(stack.interceptors, h)
+	holder.interceptors = append(holder.interceptors, h)
 	return func() {
-		list := stack.interceptors
+		if holder == &globalInterceptorHolder && runtime.XgoInitFinished() {
+			panic("global interceptor cannot be cancelled after init finished")
+		}
+
+		list := holder.interceptors
 		n := len(list)
 		if list[n-1] == h {
-			stack.interceptors = list[:n-1]
+			holder.interceptors = list[:n-1]
 			return
 		}
 		// remove at some index
 		for i, m := range list {
 			if m == h {
-				stack.interceptors = append(list[:i], list[i+1:]...)
+				holder.interceptors = append(list[:i], list[i+1:]...)
 				return
 			}
 		}

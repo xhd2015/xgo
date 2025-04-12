@@ -6,6 +6,7 @@ import (
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
 
 func PushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
@@ -116,23 +117,30 @@ func pushRecorderInterceptor(fn interface{}, preInterceptor PreInterceptor, post
 }
 
 func PushRecordHandler(pc uintptr, recvPtr interface{}, pre func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool), post func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})) func() {
-	stack := getOrAttachStackData()
-	if stack.recorder == nil {
-		stack.recorder = map[uintptr][]*recorderHolder{}
+	holder := &globalInterceptorHolder
+	if runtime.XgoInitFinished() {
+		stack := getOrAttachStackData()
+		holder = &stack.interceptors
+	}
+	if holder.recorder == nil {
+		holder.recorder = map[uintptr][]*recorderHolder{}
 	}
 	h := &recorderHolder{wantRecvPtr: recvPtr, pre: pre, post: post}
-	stack.recorder[pc] = append(stack.recorder[pc], h)
+	holder.recorder[pc] = append(holder.recorder[pc], h)
 	return func() {
-		list := stack.recorder[pc]
+		if holder == &globalInterceptorHolder && runtime.XgoInitFinished() {
+			panic("global recorder cannot be cancelled after init finished")
+		}
+		list := holder.recorder[pc]
 		n := len(list)
 		if list[n-1] == h {
-			stack.recorder[pc] = list[:n-1]
+			holder.recorder[pc] = list[:n-1]
 			return
 		}
 		// remove at some index
 		for i, m := range list {
 			if m == h {
-				stack.recorder[pc] = append(list[:i], list[i+1:]...)
+				holder.recorder[pc] = append(list[:i], list[i+1:]...)
 				return
 			}
 		}
@@ -141,23 +149,30 @@ func PushRecordHandler(pc uintptr, recvPtr interface{}, pre func(fnInfo *core.Fu
 }
 
 func PushVarRecordHandler(varAddr uintptr, pre func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool), post func(fnInfo *core.FuncInfo, res interface{}, data interface{})) func() {
-	stack := getOrAttachStackData()
-	if stack.varRecorder == nil {
-		stack.varRecorder = map[uintptr][]*varRecordHolder{}
+	holder := &globalInterceptorHolder
+	if runtime.XgoInitFinished() {
+		stack := getOrAttachStackData()
+		holder = &stack.interceptors
+	}
+	if holder.varRecorder == nil {
+		holder.varRecorder = map[uintptr][]*varRecordHolder{}
 	}
 	h := &varRecordHolder{pre: pre, post: post}
-	stack.varRecorder[varAddr] = append(stack.varRecorder[varAddr], h)
+	holder.varRecorder[varAddr] = append(holder.varRecorder[varAddr], h)
 	return func() {
-		list := stack.varRecorder[varAddr]
+		if holder == &globalInterceptorHolder && runtime.XgoInitFinished() {
+			panic("global recorder cannot be cancelled after init finished")
+		}
+		list := holder.varRecorder[varAddr]
 		n := len(list)
 		if list[n-1] == h {
-			stack.varRecorder[varAddr] = list[:n-1]
+			holder.varRecorder[varAddr] = list[:n-1]
 			return
 		}
 		// remove at some index
 		for i, m := range list {
 			if m == h {
-				stack.varRecorder[varAddr] = append(list[:i], list[i+1:]...)
+				holder.varRecorder[varAddr] = append(list[:i], list[i+1:]...)
 				return
 			}
 		}
@@ -166,23 +181,30 @@ func PushVarRecordHandler(varAddr uintptr, pre func(fnInfo *core.FuncInfo, res i
 }
 
 func PushVarPtrRecordHandler(varAddr uintptr, pre func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool), post func(fnInfo *core.FuncInfo, res interface{}, data interface{})) func() {
-	stack := getOrAttachStackData()
-	if stack.varPtrRecorder == nil {
-		stack.varPtrRecorder = map[uintptr][]*varRecordHolder{}
+	holder := &globalInterceptorHolder
+	if runtime.XgoInitFinished() {
+		stack := getOrAttachStackData()
+		holder = &stack.interceptors
+	}
+	if holder.varPtrRecorder == nil {
+		holder.varPtrRecorder = map[uintptr][]*varRecordHolder{}
 	}
 	h := &varRecordHolder{pre: pre, post: post}
-	stack.varPtrRecorder[varAddr] = append(stack.varPtrRecorder[varAddr], h)
+	holder.varPtrRecorder[varAddr] = append(holder.varPtrRecorder[varAddr], h)
 	return func() {
-		list := stack.varPtrRecorder[varAddr]
+		if holder == &globalInterceptorHolder && runtime.XgoInitFinished() {
+			panic("global recorder cannot be cancelled after init finished")
+		}
+		list := holder.varPtrRecorder[varAddr]
 		n := len(list)
 		if list[n-1] == h {
-			stack.varPtrRecorder[varAddr] = list[:n-1]
+			holder.varPtrRecorder[varAddr] = list[:n-1]
 			return
 		}
 		// remove at some index
 		for i, m := range list {
 			if m == h {
-				stack.varPtrRecorder[varAddr] = append(list[:i], list[i+1:]...)
+				holder.varPtrRecorder[varAddr] = append(list[:i], list[i+1:]...)
 				return
 			}
 		}

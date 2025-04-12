@@ -28,7 +28,7 @@ func TestGenericFuncFailWithGo118_19(t *testing.T) {
 	}
 }
 
-func TestInspectPCGenericGo118_19ShouldFail(t *testing.T) {
+func TestInspectPCGenericGo118_19ShouldError(t *testing.T) {
 	var panicErr interface{}
 	func() {
 		defer func() {
@@ -40,7 +40,7 @@ func TestInspectPCGenericGo118_19ShouldFail(t *testing.T) {
 		t.Fatalf("expect panic, actual nil")
 	}
 	msg := fmt.Sprint(panicErr)
-	expectMsg := "func not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md: github.com/xhd2015/xgo/runtime/test/trap/inspect.TestInspectPCGenericGo118_19ShouldFail.func1.2"
+	expectMsg := "func not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md: github.com/xhd2015/xgo/runtime/test/trap/inspect.TestInspectPCGenericGo118_19ShouldError.func1.2"
 	if msg != expectMsg {
 		t.Fatalf("expect panic message %q, actual %q", expectMsg, msg)
 	}

@@ -28,6 +28,9 @@ func (c *Scope) recordTrap(sel *ast.SelectorExpr) bool {
 	if name == "Record" || name == "RecordCall" || name == "RecordResult" {
 		return pkgPath == constants.RUNTIME_TRACE_PKG
 	}
+	if name == "InfoFunc" || name == "InfoVar" {
+		return pkgPath == constants.RUNTIME_FUNCTAB_PKG
+	}
 	return false
 }
 

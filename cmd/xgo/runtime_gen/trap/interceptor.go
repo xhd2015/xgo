@@ -31,6 +31,7 @@ func AddFuncInterceptor(f interface{}, interceptor *Interceptor) func() {
 // - `mock.Patch(fn,...)`, `mock.Mock(fn,...)`
 // - `trace.Record(fn,...)`, `trace.RecordCall(fn,...)`
 // - `trap.AddFuncInterceptor(fn,...)`
+// - `functab.InfoFunc(fn)`, `functab.InfoVar(addr)`
 //
 // Example:
 //

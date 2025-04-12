@@ -18,7 +18,7 @@ func init() {
 	})
 }
 
-func TestCancelGlobalTrapShouldFail(t *testing.T) {
+func TestCancelGlobalTrapShouldError(t *testing.T) {
 	var panicked bool
 	func() {
 		defer func() {

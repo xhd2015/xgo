@@ -53,7 +53,7 @@ func TestSubErrShouldNotSetErrRes(t *testing.T) {
 			if f.LastResultErr {
 				t.Fatalf("expect f.LastResultErr to be false, actual: true")
 			}
-			// even not pl should fail
+			// even not pl should error
 			return mockErr
 		})
 	}()

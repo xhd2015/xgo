@@ -95,8 +95,18 @@ func doTrapVar(funcInfo *core.FuncInfo, stk *stack.Stack, stkData *StackData, be
 		}
 	}
 
+	var interceptors []*recorderHolder
+
+	stackIsTrapping := stkData.handlingTrapping
+	if !stackIsTrapping {
+		stkData.handlingTrapping = true
+		defer func() {
+			stkData.handlingTrapping = false
+		}()
+		interceptors = stkData.getGeneralInterceptors()
+	}
+
 	var postInterceptors []func()
-	interceptors := stkData.interceptors
 	for _, interceptor := range interceptors {
 		var data interface{}
 		if interceptor.pre != nil {

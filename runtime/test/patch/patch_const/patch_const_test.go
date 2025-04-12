@@ -46,7 +46,7 @@ func TestPatchConstByNamePtrTest(t *testing.T) {
 	}
 }
 
-func TestPatchConstByNameWrongTypeShouldFail(t *testing.T) {
+func TestPatchConstByNameWrongTypeShouldError(t *testing.T) {
 	t.Skip("constant patching has been prohibited since xgo v1.1.0")
 	var pe interface{}
 	func() {
@@ -191,7 +191,7 @@ func TestCaseConstShouldSkip(t *testing.T) {
 	switch n {
 	case N:
 	case N + 1:
-		t.Fatalf("should not fail to N+1")
+		t.Fatalf("should not error to N+1")
 	default:
 		t.Fatalf("should not fall to default")
 	}

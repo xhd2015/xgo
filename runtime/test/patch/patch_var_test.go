@@ -164,7 +164,7 @@ func TestPatchVarPtrShouldNotFallbackTest(t *testing.T) {
 	}
 }
 
-func TestPatchVarWrongTypeShouldFailTest(t *testing.T) {
+func TestPatchVarWrongTypeShouldErrorTest(t *testing.T) {
 	var pe interface{}
 	func() {
 		defer func() {

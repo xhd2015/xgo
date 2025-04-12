@@ -38,18 +38,21 @@ func inerhitStack(curG stack.G, newG stack.G) {
 
 	stackData := getStackDataOf(curStack)
 
+	newInterceptors := &newStackData.interceptors
+	existingInterceptors := &stackData.interceptors
+
 	// inherit mock
-	newStackData.mock = cloneFuncMocks(stackData.mock)
-	newStackData.varMock = cloneVarMocks(stackData.varMock)
-	newStackData.varPtrMock = cloneVarMocks(stackData.varPtrMock)
+	newInterceptors.mock = cloneFuncMocks(existingInterceptors.mock)
+	newInterceptors.varMock = cloneVarMocks(existingInterceptors.varMock)
+	newInterceptors.varPtrMock = cloneVarMocks(existingInterceptors.varPtrMock)
 
 	// recorder
-	newStackData.recorder = cloneFuncRecordMapping(stackData.recorder)
-	newStackData.varRecorder = cloneVarRecordMapping(stackData.varRecorder)
-	newStackData.varPtrRecorder = cloneVarRecordMapping(stackData.varPtrRecorder)
+	newInterceptors.recorder = cloneFuncRecordMapping(existingInterceptors.recorder)
+	newInterceptors.varRecorder = cloneVarRecordMapping(existingInterceptors.varRecorder)
+	newInterceptors.varPtrRecorder = cloneVarRecordMapping(existingInterceptors.varPtrRecorder)
 
 	// interceptors
-	newStackData.interceptors = cloneRecorderList(stackData.interceptors)
+	newInterceptors.interceptors = cloneRecorderList(existingInterceptors.interceptors)
 
 	// associate trace
 	if stackData.hasStartedTracing {

@@ -10,6 +10,9 @@ import (
 // because m is just starting on g0
 var NilGStack = &Stack{}
 
+// InitGStack special stack during init
+var InitGStack = &Stack{}
+
 const NilG = G(uintptr(0)) // nil
 
 // G points to runtime.G
@@ -39,6 +42,9 @@ func (g G) GetStack() *Stack {
 	if g == NilG {
 		return NilGStack
 	}
+	if !runtime.XgoInitFinished() {
+		return InitGStack
+	}
 	stack := runtime.AsG(unsafe.Pointer(g)).Get(gStackKey)
 	if stack == nil {
 		return nil
@@ -49,6 +55,9 @@ func (g G) GetStack() *Stack {
 func (g G) GetOrAttachStack() *Stack {
 	if g == NilG {
 		panic("cannot attach stack on nil g(m might just be starting)")
+	}
+	if !runtime.XgoInitFinished() {
+		return InitGStack
 	}
 	prevStack := runtime.AsG(unsafe.Pointer(g)).Get(gStackKey)
 	if prevStack != nil {

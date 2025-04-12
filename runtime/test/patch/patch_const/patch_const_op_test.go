@@ -11,7 +11,7 @@ import (
 const A = 20 * time.Second
 
 func TestPatchConstOp(t *testing.T) {
-	// patch should fail because registering were filtered
+	// patch should error because registering were filtered
 	var errMsg string
 	func() {
 		defer func() {

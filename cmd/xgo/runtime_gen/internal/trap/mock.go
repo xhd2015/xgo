@@ -9,6 +9,7 @@ import (
 
 	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
 
 // ErrNotInstrumented is the error returned when a function or variable
@@ -161,23 +162,30 @@ func pushMockReplacer(fn interface{}, replacer interface{}) func() {
 // the caller returned.
 // `mock` returns `false` if the original function should be called.
 func pushMockHandler(pc uintptr, recvPtr interface{}, handler func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool) func() {
-	stackData := getOrAttachStackData()
-	if stackData.mock == nil {
-		stackData.mock = map[uintptr][]*mockHolder{}
+	holder := &globalInterceptorHolder
+	if runtime.XgoInitFinished() {
+		stackData := getOrAttachStackData()
+		holder = &stackData.interceptors
+	}
+	if holder.mock == nil {
+		holder.mock = map[uintptr][]*mockHolder{}
 	}
 	h := &mockHolder{wantRecvPtr: recvPtr, mock: handler}
-	stackData.mock[pc] = append(stackData.mock[pc], h)
+	holder.mock[pc] = append(holder.mock[pc], h)
 	return func() {
-		list := stackData.mock[pc]
+		if holder == &globalInterceptorHolder && runtime.XgoInitFinished() {
+			panic("global mock cannot be cancelled after init finished")
+		}
+		list := holder.mock[pc]
 		n := len(list)
 		if list[n-1] == h {
-			stackData.mock[pc] = list[:n-1]
+			holder.mock[pc] = list[:n-1]
 			return
 		}
 		// remove at some index
 		for i, m := range list {
 			if m == h {
-				stackData.mock[pc] = append(list[:i], list[i+1:]...)
+				holder.mock[pc] = append(list[:i], list[i+1:]...)
 				return
 			}
 		}
@@ -186,23 +194,30 @@ func pushMockHandler(pc uintptr, recvPtr interface{}, handler func(fnInfo *core.
 }
 
 func pushVarMockHandler(varAddr uintptr, mock func(fnInfo *core.FuncInfo, res interface{})) func() {
-	stack := getOrAttachStackData()
-	if stack.varMock == nil {
-		stack.varMock = map[uintptr][]*varMockHolder{}
+	holder := &globalInterceptorHolder
+	if runtime.XgoInitFinished() {
+		stackData := getOrAttachStackData()
+		holder = &stackData.interceptors
+	}
+	if holder.varMock == nil {
+		holder.varMock = map[uintptr][]*varMockHolder{}
 	}
 	h := &varMockHolder{mock: mock}
-	stack.varMock[varAddr] = append(stack.varMock[varAddr], h)
+	holder.varMock[varAddr] = append(holder.varMock[varAddr], h)
 	return func() {
-		list := stack.varMock[varAddr]
+		if holder == &globalInterceptorHolder && runtime.XgoInitFinished() {
+			panic("global var mock cannot be cancelled after init finished")
+		}
+		list := holder.varMock[varAddr]
 		n := len(list)
 		if list[n-1] == h {
-			stack.varMock[varAddr] = list[:n-1]
+			holder.varMock[varAddr] = list[:n-1]
 			return
 		}
 		// remove at some index
 		for i, m := range list {
 			if m == h {
-				stack.varMock[varAddr] = append(list[:i], list[i+1:]...)
+				holder.varMock[varAddr] = append(list[:i], list[i+1:]...)
 				return
 			}
 		}
@@ -211,23 +226,30 @@ func pushVarMockHandler(varAddr uintptr, mock func(fnInfo *core.FuncInfo, res in
 }
 
 func pushVarPtrMockHandler(varAddr uintptr, mock func(fnInfo *core.FuncInfo, res interface{})) func() {
-	stack := getOrAttachStackData()
-	if stack.varPtrMock == nil {
-		stack.varPtrMock = map[uintptr][]*varMockHolder{}
+	holder := &globalInterceptorHolder
+	if runtime.XgoInitFinished() {
+		stackData := getOrAttachStackData()
+		holder = &stackData.interceptors
+	}
+	if holder.varPtrMock == nil {
+		holder.varPtrMock = map[uintptr][]*varMockHolder{}
 	}
 	h := &varMockHolder{mock: mock}
-	stack.varPtrMock[varAddr] = append(stack.varPtrMock[varAddr], h)
+	holder.varPtrMock[varAddr] = append(holder.varPtrMock[varAddr], h)
 	return func() {
-		list := stack.varPtrMock[varAddr]
+		if holder == &globalInterceptorHolder && runtime.XgoInitFinished() {
+			panic("global var ptr mock cannot be cancelled after init finished")
+		}
+		list := holder.varPtrMock[varAddr]
 		n := len(list)
 		if list[n-1] == h {
-			stack.varPtrMock[varAddr] = list[:n-1]
+			holder.varPtrMock[varAddr] = list[:n-1]
 			return
 		}
 		// remove at some index
 		for i, m := range list {
 			if m == h {
-				stack.varPtrMock[varAddr] = append(list[:i], list[i+1:]...)
+				holder.varPtrMock[varAddr] = append(list[:i], list[i+1:]...)
 				return
 			}
 		}
