@@ -206,5 +206,5 @@ func checkVarRecorderType(varPtrType reflect.Type, recorderType reflect.Type, su
 			return recordArgTypes, true
 		}
 	}
-	panic(fmt.Errorf("recorder should have type: %v, actual: %T", printWantType, recorderType))
+	panic(fmt.Errorf("recorder should have type: %v, actual: %v", printWantType, recorderType))
 }

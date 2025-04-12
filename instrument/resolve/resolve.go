@@ -251,7 +251,14 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		// args := (x).Args  --> x is a pointer
 		return c.resolveInfo(expr.X)
 	case *ast.MapType:
-		return types.Map{}
+		return types.Map{
+			Key: types.LazyType(func() types.Type {
+				return c.resolveType(expr.Key)
+			}),
+			Value: types.LazyType(func() types.Type {
+				return c.resolveType(expr.Value)
+			}),
+		}
 	case *ast.ArrayType:
 		return types.Array{
 			Elem: c.resolveType(expr.Elt),

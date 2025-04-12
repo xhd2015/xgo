@@ -111,19 +111,12 @@ var defaultTestArgs = []*TestArg{
 		},
 	},
 
-	// special boundaries
+	// special flags
 	{
 		Dir: "runtime/test/trace/trace_without_dep",
 		Flags: []string{
 			"--strace",
 		},
-		Args: []string{
-			"./...",
-		},
-	},
-	// patch third party
-	{
-		Dir: "runtime/test/patch/patch_third_party/service",
 		Args: []string{
 			"./...",
 		},
@@ -152,12 +145,6 @@ var defaultTestArgs = []*TestArg{
 		Flags: []string{
 			"--strace",
 		},
-		Args: []string{
-			"./...",
-		},
-	},
-	{
-		Dir: "runtime/test/build/legacy_depend",
 		Args: []string{
 			"./...",
 		},

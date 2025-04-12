@@ -202,6 +202,10 @@ func (c *UseContext) doUseTypeInFile(typ types.Type) (res string) {
 			list[i] = c.doUseTypeInFile(t)
 		}
 		return "(" + strings.Join(list, ", ") + ")"
+	case types.Map:
+		return fmt.Sprintf("map[%s]%s", c.doUseTypeInFile(typ.Key), c.doUseTypeInFile(typ.Value))
+	case types.LazyType:
+		return c.doUseTypeInFile(typ())
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", typ))
 	}

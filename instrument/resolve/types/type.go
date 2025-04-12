@@ -95,6 +95,8 @@ type PtrType struct {
 
 type Lazy func() Info
 
+type LazyType func() Type
+
 type RawPtr struct {
 	Elem UnderlyingType
 }
@@ -196,7 +198,16 @@ func (c PtrType) String() string {
 
 func (c Lazy) infoMark() {}
 func (c Lazy) String() string {
-	return "ref"
+	return "lazy"
+}
+
+func (c LazyType) infoMark() {}
+func (c LazyType) typeMark() {}
+func (c LazyType) Underlying() UnderlyingType {
+	return c().Underlying()
+}
+func (c LazyType) String() string {
+	return "lazy_type"
 }
 
 func (c RawPtr) infoMark()           {}
