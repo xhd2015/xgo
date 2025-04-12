@@ -9,6 +9,7 @@ import (
 
 	astutil "github.com/xhd2015/xgo/instrument/ast"
 	"github.com/xhd2015/xgo/instrument/config"
+	"github.com/xhd2015/xgo/instrument/config/config_debug"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/resolve"
@@ -62,17 +63,20 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 		if funcDecl.Name == nil || funcDecl.Name.Name == "" || funcDecl.Name.Name == "_" {
 			continue
 		}
-		// Check if it's a method (has a receiver) with empty or "_" receiver name
-		_, receiver := processReceiverNames(funcDecl, fset, editor)
 		funcName := funcDecl.Name.Name
-		if receiver == nil && funcName == "init" {
+		if funcDecl.Recv == nil && funcName == "init" {
 			continue
 		}
 		if pkgPath == "time" && (funcName == constants.XGO_REAL_NOW || funcName == constants.XGO_REAL_SLEEP) {
 			// certain function is specifically left for xgo to call
 			continue
 		}
-		identityName, recvPtr, recvGeneric, recvType := ParseReceiverInfo(funcName, receiver)
+		astReceiver := getReceiver(funcDecl, fset)
+		identityName, recvPtr, recvGeneric, recvType := ParseReceiverInfo(funcName, astReceiver)
+		if config.DEBUG {
+			config_debug.OnTrapFunc(pkgPath, funcDecl, identityName)
+		}
+
 		var hitRecorder bool
 		if recorder != nil {
 			var hasFnRecord bool
@@ -105,6 +109,7 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 			}
 		}
 
+		_, receiver := processReceiverNames(funcDecl, fset, editor)
 		_, receiverAddr := toNameAddr(receiver)
 		// Process parameter names
 		_, paramFields := processParamNames(funcDecl, fset, editor)
@@ -162,7 +167,7 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 	return funcInfos
 }
 
-func ParseReceiverInfo(fnName string, receiver *edit.Field) (identityName string, recvPtr bool, recvGeneric bool, recvType *ast.Ident) {
+func ParseReceiverInfo(fnName string, receiver *ast.Field) (identityName string, recvPtr bool, recvGeneric bool, recvType *ast.Ident) {
 	if receiver == nil {
 		identityName = fnName
 		return
@@ -194,6 +199,17 @@ func toNameAddrs(names []*edit.Field) ([]string, []string) {
 		addrs[i] = "&" + name.Name
 	}
 	return varNames, addrs
+}
+
+func getReceiver(funcDecl *ast.FuncDecl, fset *token.FileSet) *ast.Field {
+	if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+		return nil
+	}
+	if len(funcDecl.Recv.List) > 1 {
+		pos := fset.Position(funcDecl.Pos())
+		panic(fmt.Sprintf("multiple receivers: %s:%d", pos.Filename, pos.Line))
+	}
+	return funcDecl.Recv.List[0]
 }
 
 // processReceiverNames processes a function declaration's receiver list,

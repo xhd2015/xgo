@@ -8,7 +8,6 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/xhd2015/xgo/instrument/config"
@@ -151,7 +150,9 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	}
 	nonXgoPkgs.Add(loadPackages)
 	for _, pkg := range nonXgoPkgs.Packages {
+		_, isMain := goinfo.PkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
 		pkg.Initial = true
+		pkg.Main = isMain
 	}
 
 	// insert func trap
@@ -162,8 +163,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	reg := resolve.NewPackagesRegistry(nonXgoPkgs)
 	// trap var for packages in main module
 	mainPkgs := nonXgoPkgs.Filter(func(pkg *edit.Package) bool {
-		_, ok := goinfo.PkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
-		return ok
+		return pkg.Main
 	})
 	var recorder resolve.Recorder
 	for _, pkg := range mainPkgs {
@@ -214,6 +214,10 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 			defaultAllow = true
 		}
 		for _, file := range pkg.Files {
+			if !pkg.Main && strings.HasSuffix(file.File.Name, "_test.go") {
+				// skip test files outside main package
+				continue
+			}
 			funcs := instrument_func.TrapFuncs(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{
 				PkgRecorder:    recorder.Pkgs[pkgPath],
 				PkgConfig:      cfg,
@@ -281,14 +285,6 @@ func applyInstrumentWithEditNotes(overlayFS overlay.Overlay, packages *edit.Pack
 		}
 	}
 	return updatedFiles, nil
-}
-
-func quoteNames(names []string) []string {
-	quotedNames := make([]string, len(names))
-	for i, name := range names {
-		quotedNames[i] = strconv.Quote(name)
-	}
-	return quotedNames
 }
 
 func hasFunc(pkg *edit.Package, fn string) bool {

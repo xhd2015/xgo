@@ -3,8 +3,11 @@ package resolve
 import (
 	"go/ast"
 	"go/token"
+	"strings"
 
 	astutil "github.com/xhd2015/xgo/instrument/ast"
+	"github.com/xhd2015/xgo/instrument/config"
+	"github.com/xhd2015/xgo/instrument/config/config_debug"
 	"github.com/xhd2015/xgo/instrument/edit"
 )
 
@@ -129,6 +132,13 @@ func Traverse(registry PackageRegistry, packages []*edit.Package, recorder *Reco
 	}
 	for _, pkg := range packages {
 		for _, file := range pkg.Files {
+			if config.DEBUG {
+				config_debug.OnTraverseFile(pkg, file)
+			}
+			if !pkg.Main && strings.HasSuffix(file.File.Name, "_test.go") {
+				// skip test files outside main package
+				continue
+			}
 			traverseFuncDecls(global, pkg, file)
 		}
 	}
@@ -173,8 +183,8 @@ func traverseFuncDecls(global *GlobalScope, pkg *edit.Package, file *edit.File) 
 		if fnDecl.Body == nil {
 			continue
 		}
-		if debug {
-			onTraverseFuncDecl(fnDecl)
+		if config.DEBUG {
+			config_debug.OnTraverseFuncDecl(pkg, file, fnDecl)
 		}
 		fileScope.traverseFunc(fnDecl.Recv, fnDecl.Type, fnDecl.Body)
 	}

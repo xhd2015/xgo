@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"os"
 
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/resolve/types"
 )
@@ -167,23 +168,15 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		// TODO
 		// &var
 		// could be a variable
-		vr := c.resolveInfo(expr.X)
-		if types.IsUnknown(vr) {
+		info := c.resolveInfo(expr.X)
+		if types.IsUnknown(info) {
 			return types.Unknown{}
 		}
-		switch vr := vr.(type) {
-		case types.PkgVariable:
+		switch info := info.(type) {
+		case types.Object:
 			if expr.Op == token.AND {
-				return types.PkgVariable{
-					PkgPath: vr.PkgPath,
-					Name:    vr.Name,
-					Type_:   types.PtrType{Elem: vr.Type_},
-				}
-			}
-		case types.Literal:
-			if expr.Op == token.AND {
-				return types.Literal{
-					Type_: types.PtrType{Elem: vr.Type_},
+				return types.Pointer{
+					Value: info,
 				}
 			}
 		}
@@ -344,8 +337,13 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 	case *ast.TypeAssertExpr:
 		// TODO
 		return types.Unknown{}
+	default:
+		info, ok := c.resolveIndexListExpr(expr)
+		if ok {
+			return info
+		}
 	}
-	if debug {
+	if config.DEBUG {
 		fmt.Fprintf(os.Stderr, "unresolved expr: %T\n", expr)
 	}
 	return types.Unknown{}

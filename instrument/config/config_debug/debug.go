@@ -1,0 +1,46 @@
+package config_debug
+
+import (
+	"go/ast"
+
+	"github.com/xhd2015/xgo/instrument/edit"
+)
+
+func Debugpoint() {}
+
+// to debug, add `--debug-xgo` and `-tags dev`:
+//
+//	go run ./script/run-test --include go1.24.1 -tags dev -run TestFuncTab -v --debug-xgo ./runtime/test/functab
+
+func OnTraverseFile(pkg *edit.Package, file *edit.File) {
+	if file.File.Name == "x509.go" {
+		Debugpoint()
+	}
+}
+
+func OnTraverseFuncDecl(pkg *edit.Package, file *edit.File, fnDecl *ast.FuncDecl) {
+	var funcName string
+	if fnDecl.Name != nil {
+		funcName = fnDecl.Name.Name
+	}
+	if pkg.LoadPackage.GoPackage.ImportPath == "crypto/x509" {
+		if file.File.Name == "x509.go" {
+			if recvNoName(fnDecl.Recv) && fnDecl.Name != nil && fnDecl.Name.Name == "Error" {
+				Debugpoint()
+			}
+		}
+	}
+	if funcName == "TestFuncMethod" {
+		Debugpoint()
+	}
+}
+
+func OnTrapFunc(pkgPath string, fnDecl *ast.FuncDecl, identityName string) {
+	if identityName == "(*ConstraintViolationError).Error" {
+		Debugpoint()
+	}
+}
+
+func recvNoName(recv *ast.FieldList) bool {
+	return recv != nil && len(recv.List) == 1 && len(recv.List[0].Names) == 0
+}

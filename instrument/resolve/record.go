@@ -46,16 +46,24 @@ func (c *Scope) recordMockRef(fn ast.Expr) {
 	var pkgPath string
 	var name string
 	var field string
-	switch typeInfo := fnInfo.(type) {
+	var isVar bool
+	switch fnInfo := fnInfo.(type) {
 	case types.PkgTypeMethod:
-		if namedType, ok := typeInfo.Recv.(types.NamedType); ok {
+		if namedType, ok := fnInfo.Recv.(types.NamedType); ok {
 			pkgPath = namedType.PkgPath
 			name = namedType.Name
-			field = typeInfo.Name
+			field = fnInfo.Name
 		}
 	case types.PkgFunc:
-		pkgPath = typeInfo.PkgPath
-		name = typeInfo.Name
+		pkgPath = fnInfo.PkgPath
+		name = fnInfo.Name
+	case types.Pointer:
+		// pointer to types.PackageVariable
+		if pkgVar, ok := fnInfo.Value.(types.PkgVariable); ok {
+			pkgPath = pkgVar.PkgPath
+			name = pkgVar.Name
+			isVar = true
+		}
 	default:
 		return
 	}
@@ -67,10 +75,14 @@ func (c *Scope) recordMockRef(fn ast.Expr) {
 	}
 
 	topRecord := recorder.GetOrInit(pkgPath).GetOrInit(name)
-	if field == "" {
-		topRecord.HasMockRef = true
+	if isVar {
+		topRecord.HasVarTrap = true
 	} else {
-		topRecord.AddMockName(field)
+		if field == "" {
+			topRecord.HasMockRef = true
+		} else {
+			topRecord.AddMockName(field)
+		}
 	}
 }
 

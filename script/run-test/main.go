@@ -33,6 +33,9 @@ import (
 // specific test:
 //   go run ./script/run-test --include go1.18.10 --log-debug ./runtime/test/patch
 
+// run all tests under runtime/test, but not nested go mod
+//   go run ./script/run-test --include go1.20.14 --include ./runtime/test/all
+
 // debug:
 //   go run ./script/run-test --include go1.20.14 --debug ./runtime/test/patch      # will debug runtime
 //   go run ./script/run-test --include go1.20.14 --debug-xgo ./runtime/test/patch  # will debug instrumentation
@@ -572,6 +575,9 @@ func getTestArgs(args []string) []*TestArg {
 	if len(args) == 0 {
 		return getDefaultTestArgs()
 	}
+	// if len(args) == 1 && strings.HasSuffix(args[0], "/all") {
+
+	// }
 	presentArgs := splitArgs(args)
 	for _, p := range presentArgs {
 		var found *TestArg
@@ -586,6 +592,9 @@ func getTestArgs(args []string) []*TestArg {
 			p.Flags = found.Flags
 			p.UsePlainGo = found.UsePlainGo
 			p.VendorIfMissing = found.VendorIfMissing
+			if len(p.Args) == 1 && strings.HasSuffix(p.Args[0], "all") {
+				p.Args = found.Args
+			}
 		}
 	}
 	return presentArgs

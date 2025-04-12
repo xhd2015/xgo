@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/resolve/types"
 )
@@ -226,7 +227,7 @@ func errorUnknown(expectType string, node ast.Node) {
 	if os.Getenv("XGO_DEBUG_VAR_TRAP_STRICT") == "true" {
 		panic(fmt.Errorf("unrecognized %s: %T", expectType, node))
 	}
-	if IS_DEV {
+	if config.IS_DEV {
 		_, file, line, _ := runtime.Caller(1)
 		fmt.Fprintf(os.Stderr, "%s:%d TODO: unknown %s: %T\n", filepath.Base(file), line, expectType, node)
 	}

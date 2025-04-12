@@ -21,13 +21,13 @@ func TestLiteralVarMethod(t *testing.T) {
 	}
 }
 
-// func TestFuncMethod(t *testing.T) {
-// 	mock.Patch(svcFunc.Greet, func(name string) string {
-// 		return "mock " + name
-// 	})
-// 	result := svcFunc.Greet("world")
-// 	expected := "mock world"
-// 	if result != expected {
-// 		t.Errorf("expect svc.Greet() = %v, but got %v", expected, result)
-// 	}
-// }
+func TestFuncMethod(t *testing.T) {
+	mock.Patch(svcFunc.Greet, func(name string) string {
+		return "mock " + name
+	})
+	result := svcFunc.Greet("world")
+	expected := "mock world"
+	if result != expected {
+		t.Errorf("expect svc.Greet() = %v, but got %v", expected, result)
+	}
+}

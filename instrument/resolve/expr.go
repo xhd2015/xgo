@@ -61,11 +61,11 @@ func (c *Scope) traverseExpr(node ast.Expr) {
 
 	switch node := node.(type) {
 	case *ast.Ident:
-		if c.trapIdent(nil, node) {
+		if c.collectIdent(nil, node) {
 			return
 		}
 	case *ast.SelectorExpr:
-		if c.trapSelector(nil, node) {
+		if c.collectSelector(nil, node) {
 			return
 		}
 		c.traverseExpr(node.X)
@@ -74,11 +74,11 @@ func (c *Scope) traverseExpr(node ast.Expr) {
 		if node.Op == token.AND {
 			switch x := node.X.(type) {
 			case *ast.Ident:
-				if c.trapIdent(node, x) {
+				if c.collectIdent(node, x) {
 					return
 				}
 			case *ast.SelectorExpr:
-				if c.trapSelector(node, x) {
+				if c.collectSelector(node, x) {
 					return
 				}
 			}
@@ -119,7 +119,6 @@ func (c *Scope) traverseExpr(node ast.Expr) {
 		// chan something
 	case *ast.MapType:
 		// map[key]value
-
 	case *ast.StructType:
 		// struct{...}
 	case *ast.ArrayType:
@@ -145,6 +144,9 @@ func (c *Scope) traverseExpr(node ast.Expr) {
 		}
 		c.traverseExpr(node.Value)
 	default:
+		if c.traverseIndexListExpr(node) {
+			return
+		}
 		errorUnknown("expr", node)
 	}
 }

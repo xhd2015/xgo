@@ -1,7 +1,7 @@
 //go:build dev
 
-package resolve
+package config
 
 const IS_DEV = true
 
-const debug = true
+const DEBUG = true

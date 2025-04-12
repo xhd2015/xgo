@@ -125,3 +125,16 @@ func TestNetHttpClientDo(t *testing.T) {
 		t.Fatalf("expect patched result to be %q, actual: %q", expect, body)
 	}
 }
+
+func TestVarHTTPDefaultClient(t *testing.T) {
+	var haveMocked bool
+	mock.Patch(&http.DefaultClient, func() *http.Client {
+		haveMocked = true
+		return &http.Client{}
+	})
+	c := http.DefaultClient
+	_ = c
+	if !haveMocked {
+		t.Fatalf("expect variable http.DefaultClient to have been mocked, actually not mocked")
+	}
+}

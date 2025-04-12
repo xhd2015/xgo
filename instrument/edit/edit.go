@@ -24,12 +24,14 @@ type Decl struct {
 	Ident *ast.Ident
 	Type  ast.Expr // might be nil
 
-	Value                 ast.Expr     // only for var, might be nil
-	ResolvedValue         types.Object // only for var
-	ResolvedValueTypeCode string
+	Value             ast.Expr // only for var, might be nil
+	ResolvedValueType types.Type
 
-	Decl           *ast.GenDecl
-	HasCallRewrite bool // for var
+	Decl *ast.GenDecl
+
+	// Pending var refs for rewrite
+	// for var only
+	VarRefs []*VarRef
 
 	// for Func
 	FuncDecl *FuncDecl
@@ -37,6 +39,16 @@ type Decl struct {
 	// for Type
 	Methods map[string]*FuncDecl
 	File    *File
+}
+
+type VarRef struct {
+	File *File
+	// the prefiex & token, if any
+	Addr *ast.UnaryExpr
+	// call get() or get_addr()
+	NeedPtr bool
+	// the end position of the name
+	NameEnd token.Pos
 }
 
 type FuncDecl struct {
@@ -62,6 +74,13 @@ type Package struct {
 
 	Collected bool
 
+	// Main indicates whether
+	// the package is within main module
+	// NOTE: this does not consider go.mod
+	// boundaries, it only consider the
+	// prefix of the package path.
+	Main bool
+
 	// Initial indicates whether
 	// the packages are loaded via
 	// package args specified by user
@@ -75,8 +94,7 @@ type File struct {
 
 	Edit *goedit.Edit
 
-	Decls          []*Decl
-	RecordedImport map[string]bool
+	Decls []*Decl
 
 	TrapFuncs      []*FuncInfo
 	TrapVars       []*VarInfo
@@ -186,11 +204,4 @@ func (p *Packages) CloneWithPackages(packages []*Package) *Packages {
 		PackageByPath: pkgMap,
 		LoadOptions:   p.LoadOptions,
 	}
-}
-
-func (c *File) RecordImport(ref string) {
-	if c.RecordedImport == nil {
-		c.RecordedImport = make(map[string]bool, 1)
-	}
-	c.RecordedImport[ref] = true
 }
