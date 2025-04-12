@@ -2,6 +2,7 @@ package instrument_var
 
 import (
 	"fmt"
+	"go/ast"
 	"go/token"
 	"os"
 	"strings"
@@ -83,6 +84,11 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 			impRecorder: impRecorder,
 		}
 		typeCode = useContext.useTypeInFile(decl.ResolvedValueType)
+	} else if lit, ok := decl.Value.(*ast.FuncLit); ok {
+		litType := lit.Type
+		typeStart := fset.Position(litType.Pos()).Offset
+		typeEnd := fset.Position(litType.End()).Offset
+		typeCode = file.File.Content[typeStart:typeEnd]
 	}
 	if typeCode == "" {
 		return false
@@ -94,7 +100,6 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 	file.TrapVars = append(file.TrapVars, &edit.VarInfo{
 		InfoVar: infoVar,
 		Name:    varName,
-		Type:    declType,
 		Decl:    decl,
 	})
 

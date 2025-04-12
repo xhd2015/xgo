@@ -98,6 +98,11 @@ func (c *Scope) tryResolveDeclType(decl *edit.Decl) bool {
 	if decl.Value == nil {
 		return false
 	}
+	// func literal is perfectly fine without extra
+	// effort
+	if _, ok := decl.Value.(*ast.FuncLit); ok {
+		return true
+	}
 	if decl.ResolvedValueType != nil {
 		return !types.IsUnknown(decl.ResolvedValueType)
 	}

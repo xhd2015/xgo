@@ -135,7 +135,6 @@ type VarInfo struct {
 	InfoVar string
 	Name    string
 	Decl    *Decl
-	Type    ast.Expr
 }
 
 type Field struct {

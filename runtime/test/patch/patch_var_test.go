@@ -354,3 +354,35 @@ func TestPatchVarSelfReferenceShouldOverflow(t *testing.T) {
 		t.Fatalf("expect panic %q, actual: %v", "overflow", panicErr)
 	}
 }
+
+func TestPatchFuncVar(t *testing.T) {
+	before := funcVar()
+	if before != 123 {
+		t.Fatalf("expect patched variable funcVar to be %d, actual: %d", 123, before)
+	}
+	mock.Patch(&funcVar, func() func() int {
+		return func() int {
+			return 456
+		}
+	})
+	after := funcVar()
+	if after != 456 {
+		t.Fatalf("expect patched variable funcVar to be %d, actual: %d", 456, after)
+	}
+}
+
+func TestPatchFuncLitVar(t *testing.T) {
+	before := funcLitVar()
+	if before != 123 {
+		t.Fatalf("expect patched variable funcVar to be %d, actual: %d", 123, before)
+	}
+	mock.Patch(&funcLitVar, func() func() int {
+		return func() int {
+			return 456
+		}
+	})
+	after := funcLitVar()
+	if after != 456 {
+		t.Fatalf("expect patched variable funcVar to be %d, actual: %d", 456, after)
+	}
+}
