@@ -73,7 +73,7 @@ You can also specify `--trap third.part/...` to trap for all packages under `thi
 ## Option 2: `--trap-all`
 This causes `xgo` to call `go list` with `-deps` flag, and then insert trap points on all packages.
 
-This can slow down the compilation process a little bit for large projects with hundreds dependency.
+This can slow down the compilation process a little bit for large projects with hundreds of dependencies.
 
 # Limitations on stdlib
 Except packages like `runtime`, `unsafe`, all stdlib functions can be mocked.

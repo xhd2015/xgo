@@ -18,6 +18,7 @@ type LoadOptions struct {
 	Mod         string
 	IncludeTest bool
 	ModFile     string // -modfile flag
+	Deps        bool   // -deps flag
 
 	// max file size to parse
 	// if file size is larger than this
@@ -53,6 +54,7 @@ type Packages struct {
 func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 	dir := opts.Dir
 	overlayFS := opts.Overlay
+	deps := opts.Deps
 	mod := opts.Mod
 	modFile := opts.ModFile
 	maxFileSize := opts.MaxFileSize
@@ -65,6 +67,7 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 		Mod:     mod,
 		ModFile: modFile,
 		Goroot:  goroot,
+		Deps:    deps,
 	})
 	if err != nil {
 		return nil, err

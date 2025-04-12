@@ -158,6 +158,24 @@ var defaultTestArgs = []*TestArg{
 			"./...",
 		},
 	},
+	{
+		Dir: "runtime/test/build/modules_with_trap_all/service",
+		Flags: []string{
+			"--trap-all",
+		},
+		Args: []string{
+			"./...",
+		},
+	},
+	{
+		Dir: "runtime/test/build/modules_without_trap_all/service",
+		Flags: []string{
+			"--trap-all=false",
+		},
+		Args: []string{
+			"./...",
+		},
+	},
 }
 
 func main() {

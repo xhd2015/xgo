@@ -5,6 +5,16 @@ import (
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
+var PREDEFINED_STD_PKGS = []string{
+	"time",
+	"os",
+	"os/exec",
+	"net",
+	"net/http",
+	"io",
+	"io/ioutil",
+}
+
 type PkgConfig struct {
 	WhitelistFunc       map[string]bool
 	WhitelistFuncPrefix []string

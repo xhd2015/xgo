@@ -63,6 +63,8 @@ type options struct {
 	tags    string
 	// --trap-stdlib
 	trapStdlib bool
+	// --trap-all
+	trapAll bool
 
 	// --trap pkg
 	// where pkg cannot be runtime
@@ -147,6 +149,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var stackTraceDir string
 	var straceSnapshotMainModuleDefault string
 	var trapStdlib bool
+	var trapAll bool
 	var trap []string
 
 	var remainArgs []string
@@ -432,6 +435,16 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			}
 			continue
 		}
+		// supported flag: --trap-all, --trap-all=false, --trap-all=true
+		trapAllFlag, trapAllVal := flag.TrySingleFlag([]string{"--trap-all"}, arg)
+		if trapAllFlag != "" {
+			if trapAllVal == "" || trapAllVal == "true" {
+				trapAll = true
+			} else {
+				trapAll = false
+			}
+			continue
+		}
 
 		if isDevelopment && arg == "--debug-with-dlv" {
 			debugWithDlv = true
@@ -530,6 +543,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		stackTraceDir:                   stackTraceDir,
 		straceSnapshotMainModuleDefault: straceSnapshotMainModuleDefault,
 		trapStdlib:                      trapStdlib,
+		trapAll:                         trapAll,
 		trap:                            trap,
 
 		remainArgs:      remainArgs,

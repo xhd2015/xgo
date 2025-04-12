@@ -37,18 +37,8 @@ import (
 // known for: go1.19
 const MAX_FILE_SIZE = 1 * 1024 * 1024
 
-var PREDEFINED_STD_PKGS = []string{
-	"time",
-	"os",
-	"os/exec",
-	"net",
-	"net/http",
-	"io",
-	"io/ioutil",
-}
-
 // goroot is critical for stdlib
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, trapAll bool, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -141,6 +131,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 			FilterErrorFile: true,
 			Goroot:          goroot,
 			Fset:            fset,
+			Deps:            trapAll,
 		},
 	}
 	logDebug("start load: %v", loadArgs)
@@ -149,6 +140,10 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		return err
 	}
 	nonXgoPkgs.Add(loadPackages)
+	if trapAll {
+		// remove deps flag
+		nonXgoPkgs.LoadOptions.Deps = false
+	}
 	for _, pkg := range nonXgoPkgs.Packages {
 		_, isMain := goinfo.PkgWithinModule(pkg.LoadPackage.GoPackage.ImportPath, mainModule)
 		pkg.Initial = true

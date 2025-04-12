@@ -17,6 +17,7 @@ import (
 	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 	test_explorer "github.com/xhd2015/xgo/cmd/xgo/test-explorer"
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/instrument/overlay"
@@ -207,6 +208,7 @@ func handleBuild(cmd string, args []string) error {
 	stackTraceDir := opts.stackTraceDir
 	straceSnapshotMainModuleDefault := opts.straceSnapshotMainModuleDefault
 	trapStdlib := opts.trapStdlib
+	trapAll := opts.trapAll
 	trapPkgs := opts.trap
 	noLineDirective := opts.noLineDirective
 	deleteFlag := opts.deleteFlag
@@ -577,7 +579,7 @@ func handleBuild(cmd string, args []string) error {
 		return nil
 	}
 	if trapStdlib {
-		trapPkgs = append(trapPkgs, PREDEFINED_STD_PKGS...)
+		trapPkgs = append(trapPkgs, config.PREDEFINED_STD_PKGS...)
 	}
 	logDebug("trap stdlib: %v", trapStdlib)
 
@@ -743,7 +745,7 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, collectTestTrace, collectTestTraceDir, goFlag, needUpgrade)
+		err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, goFlag, needUpgrade)
 		if err != nil {
 			return err
 		}

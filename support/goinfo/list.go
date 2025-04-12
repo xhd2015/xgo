@@ -41,6 +41,7 @@ type LoadPackageOptions struct {
 	Mod     string
 	ModFile string // -modfile flag
 	Goroot  string // GOROOT env
+	Deps    bool   // -deps flag
 }
 
 // go list -e -json ./pkg
@@ -51,6 +52,9 @@ func ListPackages(args []string, opts LoadPackageOptions) ([]*Package, error) {
 	}
 	if opts.ModFile != "" {
 		flags = append(flags, "-modfile="+opts.ModFile)
+	}
+	if opts.Deps {
+		flags = append(flags, "-deps")
 	}
 	flags = append(flags, args...)
 	var env []string

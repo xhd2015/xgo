@@ -215,9 +215,31 @@ func TestPatchFunc(t *testing.T) {
 }
 ```
 
-注意: `Mock`和`Patch`也支持对包级别的变量和常量进行mock, 见[runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
-**关于标准库Mock的注意事项**: 针对标准库有两种不同的模式，参考[runtime/mock/stdlib.md](./runtime/mock/stdlib.md).
+`Patch`(以及`Mock`)也支持对包级别的变量进行mock:
+
+```go
+package patch
+
+import (
+    "testing"
+
+    "github.com/xhd2015/xgo/runtime/mock"
+)
+
+var a int = 123
+
+func TestPatchVarTest(t *testing.T) {
+	mock.Patch(&a, func() int {
+		return 456
+	})
+	b := a
+	if b != 456 {
+		t.Fatalf("expect patched variable a to be %d, actual: %d", 456, b)
+	}
+}
+```
+参见: [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
 ## Mock
 `runtime/mock` 还提供了名为`Mock`的API, 它与`Patch`十分类似，唯一的区别是第二个参数接受一个拦截器。

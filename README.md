@@ -199,9 +199,30 @@ func TestPatchFunc(t *testing.T) {
 }
 ```
 
-NOTE: `Patch` and `Mock`(below) supports top-level variables and consts, see [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
+`Patch`(and `Mock` below) also works for package-level variables:
 
-**Notice for mocking stdlib**: There are different modes for mocking stdlib functions,see [runtime/mock/stdlib.md](./runtime/mock/stdlib.md).
+```go
+package patch
+
+import (
+    "testing"
+
+    "github.com/xhd2015/xgo/runtime/mock"
+)
+
+var a int = 123
+
+func TestPatchVarTest(t *testing.T) {
+	mock.Patch(&a, func() int {
+		return 456
+	})
+	b := a
+	if b != 456 {
+		t.Fatalf("expect patched variable a to be %d, actual: %d", 456, b)
+	}
+}
+```
+See [runtime/mock/MOCK_VAR_CONST.md](runtime/mock/MOCK_VAR_CONST.md).
 
 ## Mock
 `runtime/mock` also provides another API called `Mock`, which is similar to `Patch`.
