@@ -77,7 +77,7 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		name := expr.Name
 		def := c.GetDef(name)
 		if def != nil {
-			return c.resolveDefType(def)
+			return c.resolveDef(def)
 		}
 		if !c.Has(expr.Name) {
 			// check decl before imports
@@ -462,16 +462,23 @@ func getEmbedFieldName(typ ast.Expr) string {
 	return ident.Name
 }
 
-func (c *Scope) resolveDefType(def *Define) types.Info {
+func (c *Scope) resolveDef(def *Define) types.Info {
 	if def.Index == -1 {
 		// var := pkg.Name{}
 		scope := c
 		if def.Split {
 			scope = c.Parent
 		}
-		typeInfo := scope.resolveInfo(def.Expr)
-		if !types.IsUnknown(typeInfo) {
-			return typeInfo
+		info := scope.resolveInfo(def.Expr)
+		if types.IsUnknown(info) {
+			return types.Unknown{}
+		}
+		obj, ok := info.(types.Object)
+		if !ok {
+			return types.Unknown{}
+		}
+		return types.ScopeVariable{
+			Value: obj,
 		}
 	}
 	// not supported yet

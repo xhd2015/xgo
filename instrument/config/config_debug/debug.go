@@ -30,7 +30,7 @@ func OnTraverseFuncDecl(pkg *edit.Package, file *edit.File, fnDecl *ast.FuncDecl
 			}
 		}
 	}
-	if funcName == "TestFuncMethod" {
+	if funcName == "TestPatchStructVar" {
 		Debugpoint()
 	}
 }
