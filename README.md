@@ -571,11 +571,11 @@ Why? when you run a test, you setup some mock, these mocks will only affect the 
 Want to know why? Stay tuned, we are working on internal documentation.
 
 # Implementation Details
-> Working in progress...
+This blog has a basic explanation: https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec
+
+And you can also check the generated `.xgo/gen` directory, which contains all instrumented overlay files.
 
 See [Issue#7](https://github.com/xhd2015/xgo/issues/7) for more details.
-
-This blog has a basic explanation: https://blog.xhd2015.xyz/posts/xgo-monkey-patching-in-go-using-toolexec
 
 # Why `xgo`?
 The reason is simple: **NO** interface.

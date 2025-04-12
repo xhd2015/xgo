@@ -29,11 +29,15 @@ func CleanSpecial(path string) string {
 // when doing filepath.Join(a,b),
 // on windows, if b has :, everything fails
 // TODO: test on windows
-func RebaseAbs(root string, path string) string {
+func RebasePath(root string, path string) string {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return ""
+		panic(err)
 	}
+	return RebaseAbsPath(root, absPath)
+}
+
+func RebaseAbsPath(root string, absPath string) string {
 	if runtime.GOOS != "windows" {
 		return filepath.Join(root, absPath)
 	}

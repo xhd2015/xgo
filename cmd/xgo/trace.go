@@ -275,7 +275,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 	if modfileOption == "" {
 		goMod = filepath.Join(projectRoot, "go.mod")
 	}
-	tmpGoMod := fileutil.RebaseAbs(tmpOverlayDir, goMod)
+	tmpGoMod := fileutil.RebasePath(tmpOverlayDir, goMod)
 	err := filecopy.CopyFileAll(goMod, tmpGoMod)
 	if err != nil {
 		return nil, err
@@ -305,7 +305,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			}
 			vendorModPath := filepath.Join(vendorDir, modPath)
 			vendorModFile := filepath.Join(vendorModPath, "go.mod")
-			replaceModFile := fileutil.RebaseAbs(tmpOverlayDir, vendorModFile)
+			replaceModFile := fileutil.RebasePath(tmpOverlayDir, vendorModFile)
 			// replace goMod => vendor=>
 
 			// NOTE: if replace without require, go will automatically add
@@ -342,7 +342,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			if false {
 				// go.sum needs to be synced?
 				goSum := filepath.Join(projectRoot, "go.sum")
-				tmpGoSum := fileutil.RebaseAbs(tmpOverlayDir, goSum)
+				tmpGoSum := fileutil.RebasePath(tmpOverlayDir, goSum)
 				err := os.MkdirAll(filepath.Dir(tmpGoSum), 0755)
 				if err != nil {
 					return nil, err
@@ -599,7 +599,7 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 	mapping := make(map[string]string, len(files))
 	for _, file := range files {
 		srcFile := filepath.Join(srcDir, file)
-		dstFile := fileutil.RebaseAbs(dstDir, srcFile)
+		dstFile := fileutil.RebasePath(dstDir, srcFile)
 		err := filecopy.CopyFileAll(srcFile, dstFile)
 		if err != nil {
 			return nil, err

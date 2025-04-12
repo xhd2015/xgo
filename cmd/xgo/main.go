@@ -762,7 +762,10 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		}
 
 		if len(overlayFS) > 0 {
-			goOverlay, err := overlayFS.MakeGoOverlay(filepath.Join(localXgoGenDir, "overlay"), !noLineDirective)
+			goOverlay, err := overlayFS.MakeGoOverlay(filepath.Join(localXgoGenDir, "overlay"), overlay.Options{
+				NoLineDirective: noLineDirective,
+				PathMappings:    getPathMappings(instrumentGoroot, projectRoot),
+			})
 			if err != nil {
 				return err
 			}
@@ -1048,6 +1051,43 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		}
 	}
 	return nil
+}
+
+func getPathMappings(instrumentGoroot string, projectRoot string) []overlay.PathMapping {
+	absProjectRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		panic(err)
+	}
+	pathMappings := []overlay.PathMapping{
+		{
+			From: instrumentGoroot,
+			To:   "GOROOT",
+		},
+		{
+			From: absProjectRoot,
+			To:   "PROJECT",
+		},
+	}
+	gopaths := strings.Split(os.Getenv("GOPATH"), string(filepath.ListSeparator))
+	var i int
+	for _, gopath := range gopaths {
+		if gopath != "" {
+			absGopath, absErr := filepath.Abs(gopath)
+			if absErr != nil {
+				continue
+			}
+			i++
+			name := "GOPATH"
+			if i > 0 {
+				name = fmt.Sprintf("GOPATH_%d", i)
+			}
+			pathMappings = append(pathMappings, overlay.PathMapping{
+				From: absGopath,
+				To:   name,
+			})
+		}
+	}
+	return pathMappings
 }
 
 func checkedCopyToStdout(file string, msg string) error {

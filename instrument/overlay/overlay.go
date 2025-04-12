@@ -3,6 +3,7 @@ package overlay
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/fileutil"
@@ -79,7 +80,39 @@ func (o Overlay) Read(absFile AbsFile) (hitContent bool, content string, err err
 	return false, string(data), nil
 }
 
-func (o Overlay) MakeGoOverlay(overlayDir string, addLineDirective bool) (*GoOverlay, error) {
+type Options struct {
+	NoLineDirective bool
+	PathMappings    []PathMapping
+}
+
+// PROJECT
+// GOROOT
+// GOPATH
+type PathMapping struct {
+	From string
+	To   string
+}
+
+func getPathMapping(path string, mappings []PathMapping) string {
+	for _, mapping := range mappings {
+		if !strings.HasPrefix(path, mapping.From) {
+			continue
+		}
+		if len(path) == len(mapping.From) {
+			return mapping.To
+		}
+		if path[len(mapping.From)] != filepath.Separator {
+			continue
+		}
+		return mapping.To + path[len(mapping.From):]
+	}
+	return path
+}
+
+func (o Overlay) MakeGoOverlay(overlayDir string, opts Options) (*GoOverlay, error) {
+	noLineDirective := opts.NoLineDirective
+	pathMappings := opts.PathMappings
+
 	absOverlayDir, err := filepath.Abs(overlayDir)
 	if err != nil {
 		return nil, err
@@ -87,13 +120,14 @@ func (o Overlay) MakeGoOverlay(overlayDir string, addLineDirective bool) (*GoOve
 	replace := make(Replace, len(o))
 	for absFile, fileOverlay := range o {
 		if fileOverlay.hasOverriddenContent {
-			writeFile := fileutil.RebaseAbs(absOverlayDir, string(absFile))
+			absFilePath := getPathMapping(string(absFile), pathMappings)
+			writeFile := fileutil.RebaseAbsPath(absOverlayDir, absFilePath)
 			err := os.MkdirAll(filepath.Dir(writeFile), 0755)
 			if err != nil {
 				return nil, err
 			}
 			content := fileOverlay.Content
-			if addLineDirective {
+			if !noLineDirective {
 				content = patch.FmtLineDirective(string(absFile), 1) + "\n" + content
 			}
 			err = os.WriteFile(writeFile, []byte(content), 0644)

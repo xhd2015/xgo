@@ -578,12 +578,11 @@ xgo exec go test -v ./
 ```
 
 # 实现原理
+这个博客作了一些简单的解释: https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec
 
-> 仍在整理中...
+你也可以查看生成的`.xgo/gen`目录，其中包含了所有经过插桩的覆盖文件。
 
 参见[Issue#7](https://github.com/xhd2015/xgo/issues/7)
-
-这个博客作了一些简单的解释: https://blog.xhd2015.xyz/zh/posts/xgo-monkey-patching-in-go-using-toolexec
 
 # 为何使用`xgo`?
 原因很简单: **避免**interface.
