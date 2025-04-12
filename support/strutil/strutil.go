@@ -28,9 +28,10 @@ func IndexSequence(s string, sequence []string) int {
 
 // [a,b,c]
 // before ->
+// any returns -1 means not found
 func indexSequence(s string, sequence []string, anchorIdx int, begin bool) (offset int, anchorLen int, endOffset int) {
 	if len(sequence) == 0 {
-		return 0, 0, 0
+		return -1, -1, -1
 	}
 	if anchorIdx == -1 {
 		anchorIdx = len(sequence) - 1

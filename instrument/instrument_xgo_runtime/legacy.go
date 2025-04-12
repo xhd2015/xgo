@@ -1,12 +1,17 @@
 package instrument_xgo_runtime
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/instrument/patch"
+	"github.com/xhd2015/xgo/support/strutil"
 )
 
 // Deprecated: we can remove once xgo/runtime v1.1.0 no longer used
@@ -73,4 +78,33 @@ func addLegacyFunctabInit(funcTabPkg *edit.Package, overrideContent func(absFile
 		edit.Insert(pos, ";"+strings.Join(lines, ""))
 		overrideContent(overlay.AbsFile(functabFile.File.AbsPath), edit.Buffer().String())
 	}
+}
+
+func removeLegacyVarPtrTrap(runtimeLinkDir string, overrideContent func(absFile overlay.AbsFile, content string)) error {
+	trapDir := filepath.Join(filepath.Dir(runtimeLinkDir), "trap")
+	varFile := filepath.Join(trapDir, "var.go")
+	contentBytes, readErr := os.ReadFile(varFile)
+	if readErr != nil {
+		if config.DEBUG {
+			fmt.Fprintf(os.Stderr, "failed to read legacy %s: %s\n", varFile, readErr)
+		}
+		return nil
+	}
+	content := string(contentBytes)
+	idx, anchorLen, _ := strutil.SequenceOffset(content, []string{
+		"func trapVarPtr(",
+		"mock := stkData.getLastVarPtrMock(ptr)",
+		"if mock == nil {",
+		"mock = stkData.getLastVarMock(ptr)",
+	}, 2, true)
+	if idx < 0 {
+		if config.DEBUG {
+			fmt.Fprintf(os.Stderr, "cannot find legacy code to patch in %s\n", varFile)
+		}
+		return nil
+	}
+	// replace the anchor
+	content = content[:idx] + "if mock == nil && false {" + content[idx+anchorLen:]
+	overrideContent(overlay.AbsFile(varFile), content)
+	return nil
 }

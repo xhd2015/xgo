@@ -70,6 +70,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	}
 	editPackages := edit.New(packages)
 	var foundLink bool
+	var runtimeLinkPkg *edit.Package
 	var foundMock bool
 	var foundTrace bool
 	var foundTrap bool
@@ -77,6 +78,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	var foundLegacyCoreInfoPkg bool
 	var traceFile *edit.File
 	var funcTabPkg *edit.Package
+	var coreVersion string
 	for _, pkg := range editPackages.Packages {
 		goPkg := pkg.LoadPackage.GoPackage
 		if goPkg.Incomplete {
@@ -109,6 +111,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			continue
 		}
 		if suffixPkg == constants.RUNTIME_INTERNAL_RUNTIME_PKG[n:] {
+			runtimeLinkPkg = pkg
 			var runtimeLinkFile *edit.File
 			for _, file := range pkg.Files {
 				switch file.File.Name {
@@ -134,7 +137,8 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			switch loadFile.Name {
 			case constants.VERSION_FILE:
 				if suffixPkg == constants.RUNTIME_CORE_PKG[n:] {
-					coreVersion, err := ParseCoreVersion(content)
+					var err error
+					coreVersion, err = ParseCoreVersion(content)
 					if err != nil {
 						return nil, err
 					}
@@ -173,6 +177,14 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			return editPackages, ErrLinkFileNotFound
 		}
 		return editPackages, ErrLinkFileNotRequired
+	}
+	if runtimeLinkPkg != nil && coreVersion == "1.1.0" {
+		// remove the buggy var ptr trap behavior in runtime v1.1.0
+		dir := runtimeLinkPkg.LoadPackage.GoPackage.Dir
+		err := removeLegacyVarPtrTrap(dir, overrideContent)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if foundFunctabPkg && traceFile != nil {
 		// trap trace.go

@@ -325,3 +325,32 @@ func TestPatchAnotherPkgVarByFunc(t *testing.T) {
 		t.Fatalf("expect patched variable a to be %s, actual: %s", "mock world", res)
 	}
 }
+
+// edge cases
+func TestPatchVarSelfReferenceShouldOverflow(t *testing.T) {
+	before := a
+	if before != 123 {
+		t.Fatalf("expect a to be 123, actual: %d", before)
+	}
+	var level int
+	mock.Patch(&a, func() int {
+		level++
+		if level > 1000 {
+			panic("overflow")
+		}
+		return a + 1
+	})
+	var panicErr interface{}
+	func() {
+		defer func() {
+			panicErr = recover()
+		}()
+		_ = a
+	}()
+	if panicErr == nil {
+		t.Fatalf("expect panic, actual nil")
+	}
+	if panicErr != "overflow" {
+		t.Fatalf("expect panic %q, actual: %v", "overflow", panicErr)
+	}
+}
