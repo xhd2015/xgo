@@ -74,6 +74,7 @@ func XgoSetVarPtrTrap(trap func(info unsafe.Pointer, varAddr interface{}, res in
 type __xgo_g struct {
 	gls                 map[interface{}]interface{}
 	looseJsonMarshaling bool
+	trappingDepth       int
 }
 
 func XgoGetCurG() unsafe.Pointer {

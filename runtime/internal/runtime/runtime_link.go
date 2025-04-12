@@ -4,10 +4,13 @@
 package runtime
 
 import (
-	// "runtime"
+	"runtime"
 	"time"
 	"unsafe"
 )
+
+// this ensures runtime to be always imported
+var _ = runtime.NumCPU
 
 type XgoFuncInfo struct{}
 

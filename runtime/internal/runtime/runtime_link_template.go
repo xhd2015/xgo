@@ -11,6 +11,9 @@ import (
 	"unsafe"
 )
 
+// this ensures runtime to be always imported
+var _ = runtime.NumCPU
+
 type XgoFuncInfo = runtime.XgoFuncInfo
 
 func XgoSetTrap(trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)) {
@@ -52,8 +55,8 @@ func XgoOnExitG(callback func()) {
 	runtime.XgoOnExitG(callback)
 }
 
-// .
-// .
+// XgoRealTimeNow returns the true time.Now()
+// this will be rewritten to time.XgoRealNow() if time.Now was rewritten
 func XgoRealTimeNow() time.Time {
 	return time.XgoRealNow()
 }

@@ -10,8 +10,12 @@ import (
 // to call trap automatically
 
 type Config struct {
-	OnFinish   func(stack stack_model.IStack) `json:"-"`
-	OutputFile string                         `json:"OutputFile,omitempty"`
+	// OnFinish is called when the trace is finished
+	OnFinish func(stack stack_model.IStack) `json:"-"`
+	// OutputFile specifies the file to save the trace
+	// in json format, which can be open by:
+	//      xgo tool trace <OutputFile>
+	OutputFile string `json:"OutputFile,omitempty"`
 }
 
 // the `request` and `response` are only for recording purpose

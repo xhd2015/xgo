@@ -114,6 +114,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	var loadArgs []string
 	if includeMain {
 		loadArgs = append(loadArgs, mainModule+"/...")
+		loadArgs = append(loadArgs, "main")
 	}
 	loadArgs = append(loadArgs, loadPkgs...)
 	loadArgs = append(loadArgs, trapPkgs...)

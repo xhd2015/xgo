@@ -994,6 +994,43 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 	if logCmdExec != nil {
 		logCmdExec()
 	}
+	const TMP_DEBUG = true
+	if TMP_DEBUG {
+		file := "/home/runner/go/pkg/mod/github.com/xhd2015/xgo/runtime@v1.1.0/internal/runtime/runtime_link.go"
+		content, readErr := os.ReadFile(file)
+		if readErr != nil {
+			fmt.Fprintf(os.Stderr, "DEBUG read file error: %s\n", readErr)
+		} else {
+			fmt.Fprintf(os.Stderr, "DEBUG file %s, content:\n%s\n", file, string(content))
+		}
+
+		goroot := instrumentGoroot
+		fmt.Fprintf(os.Stderr, "DEBUG GOROOT: %s\n", goroot)
+		runtimeDir := filepath.Join(goroot, "src", "runtime")
+		runtimeNames, readErr := os.ReadDir(runtimeDir)
+		if readErr != nil {
+			fmt.Fprintf(os.Stderr, "DEBUG GOROOT read error: %s\n", readErr)
+		} else {
+			for _, name := range runtimeNames {
+				fmt.Fprintf(os.Stderr, "DEBUG runtime file: %s\n", name.Name())
+			}
+		}
+		if overlayFile != "" {
+			overlayFs, err := overlay.ReadGoOverlay(overlayFile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "DEBUG read overlay file error: %s\n", err)
+			} else {
+				replacedFile := string(overlayFs.Replace[overlay.AbsFile(file)])
+				fmt.Fprintf(os.Stderr, "DEBUG replaced file: %s\n", replacedFile)
+				content, readErr := os.ReadFile(replacedFile)
+				if readErr != nil {
+					fmt.Fprintf(os.Stderr, "DEBUG read replaced file error: %s\n", readErr)
+				} else {
+					fmt.Fprintf(os.Stderr, "DEBUG replaced file content:\n%s\n", string(content))
+				}
+			}
+		}
+	}
 	err = execCmd.Run()
 	if err != nil {
 		return err

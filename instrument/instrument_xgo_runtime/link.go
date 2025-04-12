@@ -212,6 +212,17 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 //
 //	'//go:build ignore'
 func linkRuntimeTemplates(goroot string, overlayFS overlay.Overlay, internalRuntimeDir string, goVersion *goinfo.GoVersion, runtimeLinkFile *edit.File, readRuntimeGenFile func(path []string) ([]byte, error), overrideContent func(absFile overlay.AbsFile, content string)) error {
+	// fmt.Fprintf(os.Stderr, "DEBUG linkRuntimeTemplates GOROOT: %s\n", goroot)
+	// runtimeDir := filepath.Join(goroot, "src", "runtime")
+	// runtimeNames, readErr := os.ReadDir(runtimeDir)
+	// if readErr != nil {
+	// 	fmt.Fprintf(os.Stderr, "DEBUG linkRuntimeTemplates GOROOT read error: %s\n", readErr)
+	// } else {
+	// 	for _, name := range runtimeNames {
+	// 		fmt.Fprintf(os.Stderr, "DEBUG linkRuntimeTemplates runtime file: %s\n", name.Name())
+	// 	}
+	// }
+
 	if runtimeLinkFile != nil {
 		runtimeLinkTemplateContent, err := readRuntimeFileFromDirOrGen(internalRuntimeDir, constants.RUNTIME_LINK_TEMPLATE_PATH, overlayFS, readRuntimeGenFile)
 		if err != nil {
@@ -221,6 +232,7 @@ func linkRuntimeTemplates(goroot string, overlayFS overlay.Overlay, internalRunt
 		if err != nil {
 			return err
 		}
+		// fmt.Fprintf(os.Stderr, "DEBUG linkRuntimeTemplates override: %s\ncontent: %s\n", runtimeLinkFile.File.AbsPath, runtimeLinkTemplateContent)
 		// override: runtime_link_template.go -> runtime_link.go
 		overrideContent(overlay.AbsFile(runtimeLinkFile.File.AbsPath), runtimeLinkTemplateContent)
 	}
@@ -248,6 +260,7 @@ func readRuntimeFileFromDirOrGen(internalRuntimeDir string, path []string, overl
 	templateFile := hasFile(internalRuntimeDir, path[len(path)-1])
 	_, templateContent, readErr := overlayFS.Read(overlay.AbsFile(templateFile))
 	if readErr == nil {
+		// fmt.Fprintf(os.Stderr, "DEBUG readRuntimeFileFromDirOrGen read from fs: %s\n", templateFile)
 		return templateContent, nil
 	}
 	if !os.IsNotExist(readErr) {
@@ -259,5 +272,6 @@ func readRuntimeFileFromDirOrGen(internalRuntimeDir string, path []string, overl
 	if err != nil {
 		return "", err
 	}
+	// fmt.Fprintf(os.Stderr, "DEBUG readRuntimeFileFromDirOrGen read from embedded: %s\n", path)
 	return string(templateContentBytes), nil
 }

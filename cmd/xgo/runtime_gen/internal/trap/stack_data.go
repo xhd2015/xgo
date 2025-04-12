@@ -13,10 +13,6 @@ var dataKey = dataKeyType{}
 var globalInterceptorHolder interceptorHolders
 
 type StackData struct {
-	// when handling trapping, prohibit
-	// another trapping from the handler
-	handlingTrapping bool
-
 	hasStartedTracing bool
 
 	onFinish        func(stack stack_model.IStack)
@@ -82,7 +78,10 @@ type varRecordHolder struct {
 }
 
 func (c *StackData) getLastMock(pc uintptr) (recvPtr interface{}, mock func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool) {
-	mockList := c.interceptors.mock[pc]
+	var mockList []*mockHolder
+	if c != nil {
+		mockList = c.interceptors.mock[pc]
+	}
 	if len(mockList) == 0 {
 		mockList = globalInterceptorHolder.mock[pc]
 		if len(mockList) == 0 {
@@ -94,7 +93,10 @@ func (c *StackData) getLastMock(pc uintptr) (recvPtr interface{}, mock func(fnIn
 }
 
 func (c *StackData) getLastVarMock(varAddr uintptr) (mock func(fnInfo *core.FuncInfo, res interface{})) {
-	mockList := c.interceptors.varMock[varAddr]
+	var mockList []*varMockHolder
+	if c != nil {
+		mockList = c.interceptors.varMock[varAddr]
+	}
 	if len(mockList) == 0 {
 		mockList = globalInterceptorHolder.varMock[varAddr]
 		if len(mockList) == 0 {
@@ -106,7 +108,10 @@ func (c *StackData) getLastVarMock(varAddr uintptr) (mock func(fnInfo *core.Func
 }
 
 func (c *StackData) getLastVarPtrMock(varAddr uintptr) (mock func(fnInfo *core.FuncInfo, res interface{})) {
-	mockList := c.interceptors.varPtrMock[varAddr]
+	var mockList []*varMockHolder
+	if c != nil {
+		mockList = c.interceptors.varPtrMock[varAddr]
+	}
 	if len(mockList) == 0 {
 		mockList = globalInterceptorHolder.varPtrMock[varAddr]
 		if len(mockList) == 0 {
@@ -119,7 +124,10 @@ func (c *StackData) getLastVarPtrMock(varAddr uintptr) (mock func(fnInfo *core.F
 
 func (c *StackData) getRecordHandlers(pc uintptr) []*recorderHolder {
 	globalRecorders := globalInterceptorHolder.recorder[pc]
-	localRecorders := c.interceptors.recorder[pc]
+	var localRecorders []*recorderHolder
+	if c != nil {
+		localRecorders = c.interceptors.recorder[pc]
+	}
 	if len(globalRecorders) > 0 && len(localRecorders) > 0 {
 		list := make([]*recorderHolder, len(localRecorders)+len(globalRecorders))
 		copy(list, localRecorders)
@@ -134,7 +142,10 @@ func (c *StackData) getRecordHandlers(pc uintptr) []*recorderHolder {
 
 func (c *StackData) getVarRecordHandlers(varAddr uintptr) []*varRecordHolder {
 	globalVarRecorders := globalInterceptorHolder.varRecorder[varAddr]
-	localVarRecorders := c.interceptors.varRecorder[varAddr]
+	var localVarRecorders []*varRecordHolder
+	if c != nil {
+		localVarRecorders = c.interceptors.varRecorder[varAddr]
+	}
 	if len(globalVarRecorders) > 0 && len(localVarRecorders) > 0 {
 		list := make([]*varRecordHolder, len(localVarRecorders)+len(globalVarRecorders))
 		copy(list, localVarRecorders)
@@ -149,7 +160,10 @@ func (c *StackData) getVarRecordHandlers(varAddr uintptr) []*varRecordHolder {
 
 func (c *StackData) getVarPtrRecordHandlers(varAddr uintptr) []*varRecordHolder {
 	globalVarPtrRecorders := globalInterceptorHolder.varPtrRecorder[varAddr]
-	localVarPtrRecorders := c.interceptors.varPtrRecorder[varAddr]
+	var localVarPtrRecorders []*varRecordHolder
+	if c != nil {
+		localVarPtrRecorders = c.interceptors.varPtrRecorder[varAddr]
+	}
 	if len(globalVarPtrRecorders) > 0 && len(localVarPtrRecorders) > 0 {
 		list := make([]*varRecordHolder, len(localVarPtrRecorders)+len(globalVarPtrRecorders))
 		copy(list, localVarPtrRecorders)
@@ -164,7 +178,10 @@ func (c *StackData) getVarPtrRecordHandlers(varAddr uintptr) []*varRecordHolder 
 
 func (c *StackData) getGeneralInterceptors() []*recorderHolder {
 	globalInterceptors := globalInterceptorHolder.interceptors
-	localInterceptors := c.interceptors.interceptors
+	var localInterceptors []*recorderHolder
+	if c != nil {
+		localInterceptors = c.interceptors.interceptors
+	}
 	if len(globalInterceptors) > 0 && len(localInterceptors) > 0 {
 		list := make([]*recorderHolder, len(localInterceptors)+len(globalInterceptors))
 		copy(list, localInterceptors)

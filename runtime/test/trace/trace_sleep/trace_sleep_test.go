@@ -1,6 +1,7 @@
 package trace_sleep
 
 import (
+	"os"
 	"runtime"
 	"testing"
 	"time"
@@ -31,6 +32,12 @@ func TestTraceSleep(t *testing.T) {
 		return nil, nil
 	})
 	cost1 := util.GetCostNs(record1.Data(), "Trace", "doSleep")
+
+	if false {
+		// for debug
+		record1JSON, _ := record1.JSON()
+		os.WriteFile("record1.json", record1JSON, 0644)
+	}
 
 	cost2 := util.GetCostNs(record2.Data(), "Trace", "doSleep")
 

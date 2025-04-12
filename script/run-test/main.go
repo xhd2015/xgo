@@ -195,6 +195,7 @@ func main() {
 	var cover bool
 	var coverpkgs []string
 	var coverprofile string
+	var withGoroot string
 
 	var projectDir string
 
@@ -274,6 +275,14 @@ func main() {
 		}
 		if arg == "-coverprofile" {
 			coverprofile = args[i+1]
+			i++
+			continue
+		}
+		if arg == "--with-goroot" {
+			if i+1 >= n {
+				panic(fmt.Errorf("%v requires arg", arg))
+			}
+			withGoroot = args[i+1]
 			i++
 			continue
 		}
@@ -369,57 +378,61 @@ func main() {
 	}
 	goRelease := "go-release"
 	var goroots []string
-	_, statErr := os.Stat(goRelease)
-	if statErr != nil {
-		if !os.IsNotExist(statErr) {
-			fmt.Fprintf(os.Stderr, "stat: %v\n", statErr)
-			os.Exit(1)
-			return
-		}
-		// use default GOROOT
-		goroot := runtime.GOROOT()
-		if goroot == "" {
-			var err error
-			goroot, err = cmd.Output("go", "env", "GOROOT")
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "cannot get GOROOT: %v\n", err)
+	if withGoroot == "" {
+		_, statErr := os.Stat(goRelease)
+		if statErr != nil {
+			if !os.IsNotExist(statErr) {
+				fmt.Fprintf(os.Stderr, "stat: %v\n", statErr)
 				os.Exit(1)
 				return
 			}
+			// use default GOROOT
+			goroot := runtime.GOROOT()
+			if goroot == "" {
+				var err error
+				goroot, err = cmd.Output("go", "env", "GOROOT")
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "cannot get GOROOT: %v\n", err)
+					os.Exit(1)
+					return
+				}
+			}
+			goroots = append(goroots, goroot)
+		} else {
+			goRootNames, err := listGoroots(goRelease)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				os.Exit(1)
+			}
+			if len(includes) > 0 && len(excludes) > 0 {
+				fmt.Fprintf(os.Stderr, "--exclude and --include cannot be used together\n")
+				os.Exit(1)
+			}
+			if len(includes) > 0 {
+				i := 0
+				for _, goroot := range goRootNames {
+					if listContains(includes, goroot) {
+						goRootNames[i] = goroot
+						i++
+					}
+				}
+				goRootNames = goRootNames[:i]
+			} else if len(excludes) > 0 {
+				i := 0
+				for _, goroot := range goRootNames {
+					if !listContains(excludes, goroot) {
+						goRootNames[i] = goroot
+						i++
+					}
+				}
+				goRootNames = goRootNames[:i]
+			}
+			for _, goRootName := range goRootNames {
+				goroots = append(goroots, filepath.Join(goRelease, goRootName))
+			}
 		}
-		goroots = append(goroots, goroot)
 	} else {
-		goRootNames, err := listGoroots(goRelease)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-		if len(includes) > 0 && len(excludes) > 0 {
-			fmt.Fprintf(os.Stderr, "--exclude and --include cannot be used together\n")
-			os.Exit(1)
-		}
-		if len(includes) > 0 {
-			i := 0
-			for _, goroot := range goRootNames {
-				if listContains(includes, goroot) {
-					goRootNames[i] = goroot
-					i++
-				}
-			}
-			goRootNames = goRootNames[:i]
-		} else if len(excludes) > 0 {
-			i := 0
-			for _, goroot := range goRootNames {
-				if !listContains(excludes, goroot) {
-					goRootNames[i] = goroot
-					i++
-				}
-			}
-			goRootNames = goRootNames[:i]
-		}
-		for _, goRootName := range goRootNames {
-			goroots = append(goroots, filepath.Join(goRelease, goRootName))
-		}
+		goroots = []string{withGoroot}
 	}
 
 	if len(goroots) == 0 {

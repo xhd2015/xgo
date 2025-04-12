@@ -16,39 +16,45 @@ func trapVar(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 	funcInfo := (*core.FuncInfo)(infoPtr)
 
 	stk := stack.Get()
-	if stk == nil {
+	if stk == stack.NilGStack {
 		return
 	}
 	stkData := getStackDataOf(stk)
-	if stkData == nil {
-		return
+	ptr := reflect.ValueOf(varAddr).Pointer()
+
+	recorders := stkData.getVarRecordHandlers(ptr)
+	mock := stkData.getLastVarMock(ptr)
+
+	depth := xgo_runtime.GetG().IncTrappingDepth()
+	defer xgo_runtime.GetG().DecTrappingDepth()
+
+	var tracing bool
+	var interceptors []*recorderHolder
+	if depth <= 1 {
+		if stkData != nil && stkData.hasStartedTracing {
+			tracing = true
+		}
+		interceptors = stkData.getGeneralInterceptors()
 	}
 
+	if mock == nil && len(recorders) == 0 && len(interceptors) == 0 && !tracing {
+		return
+	}
 	begin := xgo_runtime.XgoRealTimeNow()
-	ptr := reflect.ValueOf(varAddr).Pointer()
-	recorders := stkData.getVarRecordHandlers(ptr)
-
-	mock := stkData.getLastVarMock(ptr)
-	doTrapVar(funcInfo, stk, stkData, begin, res, recorders, mock, res)
+	doTrapVar(funcInfo, stk, begin, tracing, res, recorders, interceptors, mock, res)
 }
 
 func trapVarPtr(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 	funcInfo := (*core.FuncInfo)(infoPtr)
 
 	stk := stack.Get()
-	if stk == nil {
+	if stk == stack.NilGStack {
 		return
 	}
-
 	stkData := getStackDataOf(stk)
-	if stkData == nil {
-		return
-	}
-	begin := xgo_runtime.XgoRealTimeNow()
-
 	ptr := reflect.ValueOf(varAddr).Pointer()
-	recorders := stkData.getVarPtrRecordHandlers(ptr)
 
+	recorders := stkData.getVarPtrRecordHandlers(ptr)
 	// var_ptr fallback to var is buggy, can affect program correctness
 	// because variable will be overridden
 	// and the original variable value will be lost.
@@ -78,10 +84,25 @@ func trapVarPtr(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 		}
 	}
 
-	doTrapVar(funcInfo, stk, stkData, begin, res, recorders, mock, mockRes)
+	depth := xgo_runtime.GetG().IncTrappingDepth()
+	defer xgo_runtime.GetG().DecTrappingDepth()
+
+	var tracing bool
+	var interceptors []*recorderHolder
+	if depth <= 1 {
+		if stkData != nil && stkData.hasStartedTracing {
+			tracing = true
+		}
+		interceptors = stkData.getGeneralInterceptors()
+	}
+	if mock == nil && len(recorders) == 0 && len(interceptors) == 0 && !tracing {
+		return
+	}
+	begin := xgo_runtime.XgoRealTimeNow()
+	doTrapVar(funcInfo, stk, begin, tracing, res, recorders, interceptors, mock, mockRes)
 }
 
-func doTrapVar(funcInfo *core.FuncInfo, stk *stack.Stack, stkData *StackData, begin time.Time, res interface{}, recorders []*varRecordHolder, mock func(fnInfo *core.FuncInfo, res interface{}), mockRes interface{}) {
+func doTrapVar(funcInfo *core.FuncInfo, stk *stack.Stack, begin time.Time, tracing bool, res interface{}, recorders []*varRecordHolder, interceptors []*recorderHolder, mock func(fnInfo *core.FuncInfo, res interface{}), mockRes interface{}) {
 	var postRecorders []func()
 	for _, recorder := range recorders {
 		var data interface{}
@@ -93,17 +114,6 @@ func doTrapVar(funcInfo *core.FuncInfo, stk *stack.Stack, stkData *StackData, be
 				recorder.post(funcInfo, res, data)
 			})
 		}
-	}
-
-	var interceptors []*recorderHolder
-
-	stackIsTrapping := stkData.handlingTrapping
-	if !stackIsTrapping {
-		stkData.handlingTrapping = true
-		defer func() {
-			stkData.handlingTrapping = false
-		}()
-		interceptors = stkData.getGeneralInterceptors()
 	}
 
 	var postInterceptors []func()
@@ -130,7 +140,7 @@ func doTrapVar(funcInfo *core.FuncInfo, stk *stack.Stack, stkData *StackData, be
 		interceptor()
 	}
 
-	if !stkData.hasStartedTracing {
+	if !tracing {
 		return
 	}
 	_, file, line, _ := runtime.Caller(SKIP + 2)

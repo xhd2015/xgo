@@ -6,6 +6,10 @@ import "unsafe"
 type G struct {
 	gls                 map[interface{}]interface{}
 	looseJsonMarshaling bool
+
+	// when handling trapping, prohibit
+	// another trapping from the handler
+	trappingDepth int
 }
 
 func GetG() *G {
@@ -34,4 +38,13 @@ func (g *G) GetOK(key interface{}) (interface{}, bool) {
 
 func (g *G) Delete(key interface{}) {
 	delete(g.gls, key)
+}
+
+func (g *G) IncTrappingDepth() int {
+	g.trappingDepth++
+	return g.trappingDepth
+}
+
+func (g *G) DecTrappingDepth() {
+	g.trappingDepth--
 }

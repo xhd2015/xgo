@@ -10,7 +10,7 @@ import (
 	"github.com/xhd2015/xgo/runtime/internal/trap"
 )
 
-func TestGenericFuncFailWithGo118_19(t *testing.T) {
+func TestGenericFuncErrorWithGo118_19(t *testing.T) {
 	var panicErr interface{}
 	func() {
 		defer func() {
@@ -22,7 +22,7 @@ func TestGenericFuncFailWithGo118_19(t *testing.T) {
 		t.Fatalf("expect panic, actual nil")
 	}
 	msg := fmt.Sprint(panicErr)
-	expectMsg := "func not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md: github.com/xhd2015/xgo/runtime/test/trap/inspect.TestGenericFuncFailWithGo118_19.func1.2"
+	expectMsg := "func not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md: github.com/xhd2015/xgo/runtime/test/trap/inspect.TestGenericFuncErrorWithGo118_19.func1.2"
 	if msg != expectMsg {
 		t.Fatalf("expect panic message %q, actual %q", expectMsg, msg)
 	}
