@@ -326,10 +326,6 @@ func handleBuild(cmd string, args []string) error {
 
 	goVersionName := fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch)
 	logDebug("go version: %s", goVersionName)
-	mappedGorootName, err := pathsum.PathSum(goVersionName+"_", goroot)
-	if err != nil {
-		return err
-	}
 
 	// abs xgo dir of ~/.xgo
 	xgoDir, err := getOrMakeAbsXgoHome(xgoHome)
@@ -344,7 +340,9 @@ func handleBuild(cmd string, args []string) error {
 	}
 
 	const INSTRUMENT_XGO_REVISION_FILE = "xgo-revision.txt"
+
 	var instrumentDir string
+	var instrumentCacheDir string
 
 	// detect if the GOROOT is already instrumented
 	var instrumented bool
@@ -363,16 +361,29 @@ func handleBuild(cmd string, args []string) error {
 		}
 	}
 
+	if !instrumented {
+		// cache map by orig goroot
+		mappedGorootName, err := pathsum.PathSum(goVersionName+"_", goroot)
+		if err != nil {
+			return err
+		}
+		// ~/.xgo/go-instrument/go1.21.0
+		instrumentDir = filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
+	}
+
+	// cache maps to instrument dir
+	// previously we use GOROOT as key,
+	// but it's buggy, see https://github.com/xhd2015/xgo/issues/311#issuecomment-2798875611
+	mappedInstrumentName, err := pathsum.PathSum(goVersionName+"_", instrumentDir)
+	if err != nil {
+		return err
+	}
 	// only put cache in tmp dir, which is perdiocally cleaned
 	// if put GOROOT into tmp dir, it can be partially cleaned
 	// which causes incomplete directory and thus break build
 	//
 	// for cache: /tmp/xgo/go-instrument/go1.21.0
-	instrumentCacheDir := filepath.Join(globalXgoTmpDir, "go-instrument"+instrumentSuffix, mappedGorootName)
-	if !instrumented {
-		// ~/.xgo/go-instrument/go1.21.0
-		instrumentDir = filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
-	}
+	instrumentCacheDir = filepath.Join(globalXgoTmpDir, "go-instrument"+instrumentSuffix, mappedInstrumentName)
 
 	logDebug("instrument dir: %s", instrumentDir)
 	if cmdSetup && deleteFlag {
@@ -993,43 +1004,6 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 	logDebug("command executable path: %v", execCmd.Path)
 	if logCmdExec != nil {
 		logCmdExec()
-	}
-	const TMP_DEBUG = true
-	if TMP_DEBUG {
-		file := "/home/runner/go/pkg/mod/github.com/xhd2015/xgo/runtime@v1.1.0/internal/runtime/runtime_link.go"
-		content, readErr := os.ReadFile(file)
-		if readErr != nil {
-			fmt.Fprintf(os.Stderr, "DEBUG read file error: %s\n", readErr)
-		} else {
-			fmt.Fprintf(os.Stderr, "DEBUG file %s, content:\n%s\n", file, string(content))
-		}
-
-		goroot := instrumentGoroot
-		fmt.Fprintf(os.Stderr, "DEBUG GOROOT: %s\n", goroot)
-		runtimeDir := filepath.Join(goroot, "src", "runtime")
-		runtimeNames, readErr := os.ReadDir(runtimeDir)
-		if readErr != nil {
-			fmt.Fprintf(os.Stderr, "DEBUG GOROOT read error: %s\n", readErr)
-		} else {
-			for _, name := range runtimeNames {
-				fmt.Fprintf(os.Stderr, "DEBUG runtime file: %s\n", name.Name())
-			}
-		}
-		if overlayFile != "" {
-			overlayFs, err := overlay.ReadGoOverlay(overlayFile)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "DEBUG read overlay file error: %s\n", err)
-			} else {
-				replacedFile := string(overlayFs.Replace[overlay.AbsFile(file)])
-				fmt.Fprintf(os.Stderr, "DEBUG replaced file: %s\n", replacedFile)
-				content, readErr := os.ReadFile(replacedFile)
-				if readErr != nil {
-					fmt.Fprintf(os.Stderr, "DEBUG read replaced file error: %s\n", readErr)
-				} else {
-					fmt.Fprintf(os.Stderr, "DEBUG replaced file content:\n%s\n", string(content))
-				}
-			}
-		}
 	}
 	err = execCmd.Run()
 	if err != nil {

@@ -201,6 +201,7 @@ func main() {
 
 	var logDebug bool
 	var withSetup bool
+	var withSetupOnly bool
 	var tags string
 
 	var list bool
@@ -262,6 +263,10 @@ func main() {
 		}
 		if arg == "--with-setup" {
 			withSetup = true
+			continue
+		}
+		if arg == "--with-setup-only" {
+			withSetupOnly = true
 			continue
 		}
 		if arg == "-cover" {
@@ -448,16 +453,20 @@ func main() {
 		}
 	}
 	var setupGoroots []string
-	if withSetup {
+	if withSetup || withSetupOnly {
 		setupGoroots = make([]string, len(goroots))
 		for i, goroot := range goroots {
-			setupGoroots[i], err = setupGoroot(goroot, logDebug)
+			setupGoroots[i], err = setupGoroot(goroot, false)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "setup goroot: %s %v\n", goroot, err)
 				os.Exit(1)
 			}
 		}
-		goroots = append(goroots, setupGoroots...)
+		if withSetupOnly {
+			goroots = setupGoroots
+		} else {
+			goroots = append(goroots, setupGoroots...)
+		}
 	}
 	for _, goroot := range goroots {
 		begin := time.Now()
@@ -565,6 +574,7 @@ func setupGoroot(goroot string, logDebug bool) (string, error) {
 	if logDebug {
 		args = append(args, "--log-debug")
 	}
+	fmt.Printf("go %s\n", strings.Join(args, " "))
 	return cmd.Output("go", args...)
 }
 
