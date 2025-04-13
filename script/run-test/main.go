@@ -64,6 +64,7 @@ var defaultTestArgs = []*TestArg{
 			// "./test",
 			"./support/...",
 			"./instrument/...",
+			"./cmd/xgo",
 		},
 	},
 	{

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,8 +23,8 @@ import (
 	"github.com/xhd2015/xgo/instrument/load"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/instrument/resolve"
+	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
-	"github.com/xhd2015/xgo/support/git"
 	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/strutil"
 )
@@ -427,7 +428,7 @@ func getLocalXgoDir(projectDir string) (string, error) {
 		}
 	} else {
 		if !stat.IsDir() {
-			return "", fmt.Errorf("%s is not a directory", humanReadablePath(xgoDir))
+			return "", fmt.Errorf("%s is not a directory, check or delete it so xgo can generate it as directory", humanReadablePath(xgoDir))
 		}
 		return xgoDir, nil
 	}
@@ -435,18 +436,17 @@ func getLocalXgoDir(projectDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	topLevel, _ := git.ShowTopLevel(projectDir)
+
+	// show toplevel dir without warning .git is not found
+	topLevel, _ := cmd.Dir(projectDir).Stderr(io.Discard).Output("git", "rev-parse", "--show-toplevel")
 	if topLevel != "" {
 		// add .xgo/gen to .gitignore
 		err := fileutil.UpdateFile(filepath.Join(topLevel, ".gitignore"), func(content []byte) (bool, []byte, error) {
-			if bytes.Contains(content, []byte("**/.xgo/gen\n")) {
+			newContent, updated := gitignoreAdd(content, XGO_GEN_IGNORE_PATTERN)
+			if !updated {
 				return false, content, nil
 			}
-			var prefix string
-			if len(content) > 0 && !bytes.HasSuffix(content, []byte("\n")) {
-				prefix = "\n"
-			}
-			return true, append(content, []byte(prefix+"**/.xgo/gen\n")...), nil
+			return true, newContent, nil
 		})
 		if err != nil {
 			return "", err
@@ -454,6 +454,43 @@ func getLocalXgoDir(projectDir string) (string, error) {
 	}
 
 	return xgoDir, nil
+}
+
+const XGO_GEN_IGNORE_PATTERN = "**/.xgo/gen"
+
+func gitignoreAdd(content []byte, pattern string) ([]byte, bool) {
+	idx := bytes.Index(content, []byte(pattern))
+	if idx >= 0 && isDirectiveEnd(content, idx+len(pattern)) {
+		return content, false
+	}
+	var prefix string
+	if len(content) > 0 && !bytes.HasSuffix(content, []byte("\n")) {
+		prefix = "\n"
+	}
+	return append(content, []byte(prefix+pattern+"\n")...), true
+}
+
+func isDirectiveEnd(content []byte, i int) bool {
+	n := len(content)
+	for ; i < n; i++ {
+		if content[i] == ' ' || content[i] == '\t' {
+			continue
+		}
+		break
+	}
+	if i >= n {
+		return true
+	}
+	if bytes.HasSuffix(content[i:], []byte("#")) {
+		return true
+	}
+	if bytes.HasSuffix(content[i:], []byte("\n")) {
+		return true
+	}
+	if bytes.HasSuffix(content[i:], []byte("\r\n")) {
+		return true
+	}
+	return false
 }
 
 func humanReadablePath(path string) string {
