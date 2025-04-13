@@ -30,7 +30,7 @@ func OnTraverseFuncDecl(pkg *edit.Package, file *edit.File, fnDecl *ast.FuncDecl
 			}
 		}
 	}
-	if funcName == "TestTrapNoCancel" {
+	if funcName == "TestFlightStreamToDataProxyContentBinary_ErrorFormat" {
 		Debugpoint()
 	}
 }
@@ -43,4 +43,22 @@ func OnTrapFunc(pkgPath string, fnDecl *ast.FuncDecl, identityName string) {
 
 func recvNoName(recv *ast.FieldList) bool {
 	return recv != nil && len(recv.List) == 1 && len(recv.List[0].Names) == 0
+}
+
+func DebugExprStr(expr ast.Expr) string {
+	switch expr := expr.(type) {
+	case *ast.Ident:
+		return expr.Name
+	case *ast.SelectorExpr:
+		return DebugExprStr(expr.X) + "." + expr.Sel.Name
+	case *ast.ParenExpr:
+		return "(" + DebugExprStr(expr.X) + ")"
+	}
+	return ""
+}
+
+func AfterSelectorResolve(expr ast.Expr) {
+	if DebugExprStr(expr) == "reader2222.Reader" {
+		Debugpoint()
+	}
 }

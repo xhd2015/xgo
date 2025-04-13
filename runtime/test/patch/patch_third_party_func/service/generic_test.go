@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party/third/generic"
-	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party/third/generic_fn"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party_func/third/generic"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party_func/third/generic_fn"
 )
 
 func TestPatchGenericFuncSingle(t *testing.T) {

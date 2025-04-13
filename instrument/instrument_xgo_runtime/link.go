@@ -3,6 +3,7 @@ package instrument_xgo_runtime
 import (
 	"errors"
 	"fmt"
+	"go/token"
 	"os"
 
 	"github.com/xhd2015/xgo/instrument/constants"
@@ -20,6 +21,7 @@ var ErrLinkFileNotRequired = errors.New("xgo: link file not required")
 var ErrRuntimeVersionDeprecatedV1_0_0 = errors.New("runtime version deprecated")
 
 type LinkOptions struct {
+	Fset                *token.FileSet
 	Mod                 string
 	Modfile             string
 	XgoVersion          string
@@ -32,6 +34,7 @@ type LinkOptions struct {
 }
 
 func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string, goVersion *goinfo.GoVersion, overlayFS overlay.Overlay, overrideContent func(absFile overlay.AbsFile, content string), linkOpts LinkOptions) (*edit.Packages, error) {
+	fset := linkOpts.Fset
 	mod := linkOpts.Mod
 	modfile := linkOpts.Modfile
 	xgoVersion := linkOpts.XgoVersion
@@ -41,17 +44,22 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	collectTestTraceDir := linkOpts.CollectTestTraceDir
 	readRuntimeGenFile := linkOpts.ReadRuntimeGenFile
 
-	opts := load.LoadOptions{
-		Dir:     projectDir,
-		Overlay: overlayFS,
-		Mod:     mod,
-		ModFile: modfile,
-	}
+	var opts load.LoadOptions
+
 	if xgoRuntimeModuleDir != "" {
 		// xgo runtime is replaced in a separate module
 		// so we need to load packages from the separate module
 		opts = load.LoadOptions{
-			Dir: xgoRuntimeModuleDir,
+			Dir:  xgoRuntimeModuleDir,
+			Fset: fset,
+		}
+	} else {
+		opts = load.LoadOptions{
+			Dir:     projectDir,
+			Overlay: overlayFS,
+			Mod:     mod,
+			ModFile: modfile,
+			Fset:    fset,
 		}
 	}
 	packages, err := load.LoadPackages([]string{

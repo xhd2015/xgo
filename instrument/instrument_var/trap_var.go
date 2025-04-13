@@ -20,6 +20,9 @@ import (
 func TrapVariables(packages *edit.Packages, recorder *resolve.Recorder) error {
 	fset := packages.Fset
 	for _, pkg := range packages.Packages {
+		if !pkg.AllowInstrument {
+			continue
+		}
 		var trapAll bool
 		var pkgRecorder *resolve.PkgRecorder
 		if pkg.Main {

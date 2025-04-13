@@ -1,0 +1,3 @@
+# this directory's vendor is excluded, so need to
+# vendor when it is missing
+vendor-if-missing: true

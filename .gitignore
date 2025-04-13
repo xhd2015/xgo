@@ -44,3 +44,4 @@ debug-compile.json
 __debug_bin*
 
 cover.out
+**/.xgo/gen

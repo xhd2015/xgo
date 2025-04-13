@@ -406,3 +406,11 @@ func IsPointer(typ Type) bool {
 	_, ok := underlying.(RawPtr)
 	return ok
 }
+
+func ResolveLazy(typ Type) Type {
+	lzy, ok := typ.(LazyType)
+	if !ok {
+		return typ
+	}
+	return lzy()
+}

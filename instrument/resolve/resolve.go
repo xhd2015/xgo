@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/xhd2015/xgo/instrument/config"
+	"github.com/xhd2015/xgo/instrument/config/config_debug"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/resolve/types"
 )
@@ -69,6 +70,12 @@ func (c *Scope) resolveType(expr ast.Expr) types.Type {
 		return typ
 	}
 	return types.Unknown{}
+}
+
+func (c *Scope) lazyResolveType(expr ast.Expr) types.Type {
+	return types.LazyType(func() types.Type {
+		return c.resolveType(expr)
+	})
 }
 
 func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
@@ -146,9 +153,9 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		}
 		return types.Unknown{}
 	case *ast.SelectorExpr:
-		subType := c.resolveSelectorSubType(expr)
-		c.setInfo(expr.Sel, subType)
-		return subType
+		subInfo := c.resolveSelectorSubInfo(expr)
+		c.setInfo(expr.Sel, subInfo)
+		return subInfo
 	case *ast.StarExpr:
 		xInfo := c.resolveInfo(expr.X)
 		if types.IsUnknown(xInfo) {
@@ -223,23 +230,18 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 	case *ast.StructType:
 		fields := make([]types.StructField, len(expr.Fields.List))
 		for i, field := range expr.Fields.List {
+			typ := c.lazyResolveType(field.Type)
 			if len(field.Names) > 0 {
 				for _, name := range field.Names {
-					typ := c.resolveInfo(field.Type)
-					if typ, ok := typ.(types.Type); ok {
-						fields[i] = types.StructField{
-							Name: name.Name,
-							Type: typ,
-						}
+					fields[i] = types.StructField{
+						Name: name.Name,
+						Type: typ,
 					}
 				}
 			} else {
-				typ := c.resolveInfo(field.Type)
-				if typ, ok := typ.(types.Type); ok {
-					fields[i] = types.StructField{
-						Name: getEmbedFieldName(field.Type),
-						Type: typ,
-					}
+				fields[i] = types.StructField{
+					Name: getEmbedFieldName(field.Type),
+					Type: typ,
 				}
 			}
 		}
@@ -252,12 +254,8 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		return c.resolveInfo(expr.X)
 	case *ast.MapType:
 		return types.Map{
-			Key: types.LazyType(func() types.Type {
-				return c.resolveType(expr.Key)
-			}),
-			Value: types.LazyType(func() types.Type {
-				return c.resolveType(expr.Value)
-			}),
+			Key:   c.lazyResolveType(expr.Key),
+			Value: c.lazyResolveType(expr.Value),
 		}
 	case *ast.ArrayType:
 		return types.Array{
@@ -277,7 +275,7 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		if expr.Results != nil {
 			results = make([]types.Type, len(expr.Results.List))
 			for i, result := range expr.Results.List {
-				results[i] = c.resolveType(result.Type)
+				results[i] = c.lazyResolveType(result.Type)
 			}
 		}
 		return types.Signature{
@@ -375,14 +373,6 @@ func parseBasicName(name string) types.Type {
 	return types.Unknown{}
 }
 
-func forAllParenNestedExpr(expr ast.Expr, fn func(expr ast.Expr)) {
-	fn(expr)
-	switch expr := expr.(type) {
-	case *ast.ParenExpr:
-		forAllParenNestedExpr(expr.X, fn)
-	}
-}
-
 func (c *Scope) setInfo(expr ast.Expr, info types.Info) {
 	if c.Global.ExprInfo == nil {
 		c.Global.ExprInfo = make(map[ast.Expr]types.Info, 1)
@@ -450,7 +440,8 @@ func getBasicLitConstType(kind token.Token) types.Type {
 }
 
 func (c *Scope) newFileScope(pkg *edit.Package, file *edit.File) *Scope {
-	return newFileScope(c.Global, pkg, file)
+	// config.LogDebug("newFileScope: next pkgDepth=%d", c.PkgDepth+1)
+	return newFileScope(c.Global, pkg, file, c.PkgDepth+1)
 }
 
 func getEmbedFieldName(typ ast.Expr) string {
@@ -492,7 +483,7 @@ func (c *Scope) resolveDef(def *Define) types.Info {
 	return types.Unknown{}
 }
 
-func (c *Scope) resolveSelectorSubType(expr *ast.SelectorExpr) types.Info {
+func (c *Scope) resolveSelectorSubInfo(expr *ast.SelectorExpr) types.Info {
 	selName := expr.Sel.Name
 	xInfo := c.resolveInfo(expr.X)
 	if types.IsUnknown(xInfo) {
@@ -515,37 +506,56 @@ func (c *Scope) resolveSelectorSubType(expr *ast.SelectorExpr) types.Info {
 		// if xType resolves to a Decl,
 		// check if Name resolves to method of that Decl
 		valType := xInfo.Type()
+		if config.DEBUG {
+			config_debug.AfterSelectorResolve(expr)
+		}
 		if valType == nil || types.IsUnknown(valType) {
 			return types.Unknown{}
 		}
-		return c.resolveTypeField(valType, selName, func() {
+		return c.resolveFieldToObject(valType, selName, func() {
 			// update the nested expr type to be pointer
-			forAllParenNestedExpr(expr.X, func(expr ast.Expr) {
+			// A.B -> A to pointer
+			// A.B.C -> A, A.B all to be pointer
+			forAllNestedExpr(expr.X, func(expr ast.Expr) {
 				info := c.resolveInfo(expr)
 				if obj, ok := info.(types.Object); ok {
 					c.Global.ExprInfo[expr] = types.Pointer{
 						Value: obj,
 					}
 				}
-
 			})
 		})
 	case types.Type:
 		// (*ipc.Reader).Next or ipc.Reader.Next
 		// resolves to Value
 		// Type.Something resolves to Method or Value
-		return c.resolveTypeField(xInfo, selName, nil)
+		return c.resolveFieldToObject(xInfo, selName, nil)
 	}
 	return types.Unknown{}
 }
 
-func (c *Scope) resolveTypeField(valType types.Type, fieldName string, onDetectedPointer func()) types.Info {
+func forAllNestedExpr(expr ast.Expr, fn func(expr ast.Expr)) {
+	fn(expr)
+	switch expr := expr.(type) {
+	case *ast.SelectorExpr:
+		forAllNestedExpr(expr.X, fn)
+		fn(expr.Sel)
+	case *ast.ParenExpr:
+		forAllNestedExpr(expr.X, fn)
+	}
+}
+
+// valType can be: LazyType, ptr to LazyType
+// LazyType usually comes from struct field
+// deferred resolving
+func (c *Scope) resolveFieldToObject(valType types.Type, fieldName string, onDetectedPointer func()) types.Object {
+	valType = types.ResolveLazy(valType)
 	var isPtr bool
 	resolveType := valType
 	if ptrType, ok := valType.(types.PtrType); ok {
 		// *T
 		isPtr = true
-		resolveType = ptrType.Elem
+		resolveType = types.ResolveLazy(ptrType.Elem)
 	}
 	// in go, a named type cannot be pointer
 	if namedType, ok := resolveType.(types.NamedType); ok {
@@ -569,7 +579,13 @@ func (c *Scope) resolveTypeField(valType types.Type, fieldName string, onDetecte
 			}
 		} else {
 			// check fields
-			ud, ok := valType.Underlying().(types.Struct)
+			var isPtr bool
+			valType := valType.Underlying()
+			if rawPtr, ok := valType.(types.RawPtr); ok {
+				isPtr = true
+				valType = rawPtr.Elem
+			}
+			ud, ok := valType.(types.Struct)
 			if ok {
 				var fieldType types.Type
 				for _, field := range ud.Fields {
@@ -578,8 +594,19 @@ func (c *Scope) resolveTypeField(valType types.Type, fieldName string, onDetecte
 						break
 					}
 				}
+				// struct X{ *Reader }
+				// x:=&X{}
+				// x.Reader -> *Reader
 				if fieldType != nil && !types.IsUnknown(fieldType) {
-					return fieldType
+					v := types.Value{
+						Type_: fieldType,
+					}
+					if isPtr && !types.IsPointer(fieldType) {
+						return types.Pointer{
+							Value: v,
+						}
+					}
+					return v
 				}
 			}
 		}

@@ -44,7 +44,8 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 			suffix = suffix + ",Stdlib:true"
 		}
 		lineNum := fset.Position(pos).Line
-		return fmt.Sprintf("&%s.%s{Kind:%s.%s,Pkg:%s,Name:%q,IdentityName:%q,File:%s,Line:%d%s}", PKG_FUNC_INFO, FUNC_INFO, PKG_FUNC_INFO, kind,
+		return fmt.Sprintf("&%s.%s{Kind:%s.%s,Pkg:%s,Name:%q,IdentityName:%q,File:%s,Line:%d%s}", PKG_FUNC_INFO, FUNC_INFO,
+			PKG_FUNC_INFO, kind,
 			pkgVar,
 			name,
 			identityName,

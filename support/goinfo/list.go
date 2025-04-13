@@ -25,6 +25,7 @@ type Package struct {
 
 	Goroot   bool // is this package in the Go root?
 	Standard bool // is this package part of the standard Go library?
+	DepOnly  bool // package is only a dependency, not explicitly listed
 
 	Incomplete bool          // this package or a dependency has an error
 	Error      *PackageError // error loading package
@@ -42,6 +43,7 @@ type LoadPackageOptions struct {
 	ModFile string // -modfile flag
 	Goroot  string // GOROOT env
 	Deps    bool   // -deps flag
+	Test    bool   // -test flag, if true, will have packages like "github.com/xhd2015/xgo/runtime/test/trap/inspect [github.com/xhd2015/xgo/runtime/test/trap/inspect.test]", so don't set it
 }
 
 // go list -e -json ./pkg
@@ -55,6 +57,9 @@ func ListPackages(args []string, opts LoadPackageOptions) ([]*Package, error) {
 	}
 	if opts.Deps {
 		flags = append(flags, "-deps")
+	}
+	if opts.Test {
+		flags = append(flags, "-test")
 	}
 	flags = append(flags, args...)
 	var env []string

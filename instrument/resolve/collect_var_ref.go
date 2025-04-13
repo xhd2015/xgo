@@ -59,7 +59,7 @@ func (c *Scope) collectVarRef(addr *ast.UnaryExpr, expr ast.Expr) bool {
 	}
 	pkgPath := pkgVar.PkgPath
 	varName := pkgVar.Name
-	if !config.IsPkgAllowed(pkgPath) {
+	if _, allow := config.CheckInstrument(pkgPath); !allow {
 		return false
 	}
 

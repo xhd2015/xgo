@@ -7,7 +7,9 @@ import (
 	"go/token"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
@@ -68,6 +70,7 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 		ModFile: modFile,
 		Goroot:  goroot,
 		Deps:    deps,
+		Test:    false, // NOTE: don't set it
 	})
 	if err != nil {
 		return nil, err
@@ -83,11 +86,14 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 		}
 	}
 
+	begin := time.Now()
+	var numFiles int
 	// TODO: parallelize
 	for _, pkg := range loadPkgs {
 		addFile := func(file string) {
 			absFilePath := filepath.Join(pkg.GoPackage.Dir, file)
 			pkgFile, err := doParseFile(fset, overlayFS, absFilePath, maxFileSize)
+			numFiles++
 			if err != nil {
 				if filterErrorFile {
 					return
@@ -121,6 +127,10 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 			}
 		}
 	}
+
+	// LoadPackages: loaded 173 packages, parsed 1636 files, cost 1.054140333s
+	// LoadPackages: loaded 2250 packages, parsed 14565 files, cost 4.262132333s
+	config.LogDebug("LoadPackages: loaded %d packages, parsed %d files, cost %v", len(loadPkgs), numFiles, time.Since(begin))
 
 	return &Packages{
 		Fset:     fset,

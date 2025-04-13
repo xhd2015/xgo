@@ -73,7 +73,7 @@ func (c *Scope) recordMockRef(fn ast.Expr) {
 	if pkgPath == "" || name == "" {
 		return
 	}
-	if !config.IsPkgAllowed(pkgPath) {
+	if _, allow := config.CheckInstrument(pkgPath); !allow {
 		return
 	}
 

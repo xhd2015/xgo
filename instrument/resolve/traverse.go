@@ -169,7 +169,7 @@ func NewPackagesRegistry(packages *edit.Packages) PackageRegistry {
 }
 
 func traverseFuncDecls(global *GlobalScope, pkg *edit.Package, file *edit.File) {
-	fileScope := newFileScope(global, pkg, file)
+	fileScope := newFileScope(global, pkg, file, 0)
 	// NOTE: statements like this will be ignored:
 	//  var _ = func() bool {
 	//     x = true()

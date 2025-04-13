@@ -116,6 +116,8 @@ type Scope struct {
 	Parent *Scope
 	Defs   map[string]*Define
 	Names  map[string]bool
+
+	PkgDepth int
 }
 
 type Define struct {
@@ -128,7 +130,7 @@ type Define struct {
 	Index int
 }
 
-func newFileScope(global *GlobalScope, pkg *edit.Package, file *edit.File) *Scope {
+func newFileScope(global *GlobalScope, pkg *edit.Package, file *edit.File, pkgDepth int) *Scope {
 	scope := global.cachedFileScopes[file]
 	if scope != nil {
 		return scope
@@ -144,6 +146,7 @@ func newFileScope(global *GlobalScope, pkg *edit.Package, file *edit.File) *Scop
 			File:    file,
 			Imports: imports,
 		},
+		PkgDepth: pkgDepth,
 	}
 	if global.cachedFileScopes == nil {
 		global.cachedFileScopes = make(map[*edit.File]*Scope, 1)

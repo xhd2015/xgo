@@ -106,6 +106,18 @@ go build -o xgo -gcflags="all=-N -l" ./cmd/xgo
 dlv exec --listen=:2345 --api-version=2 --check-go-version=false --headless -- ./xgo test --project-dir runtime/test -v ./patch
 ```
 
+# Debug `go`
+```sh
+go install ./script/xgo.helper
+xgo.helper debug-go GOROOT ... build
+
+# example
+xgo.helper debug-go GOROOT -C $X/xgo/runtime/test/patch/real_world/kusia_ipc test -v ./
+
+# setup vscode
+xgo.help create-vscode GOROOT
+```
+
 # Debug target
 Add `--no-line-directive` if necessary
 

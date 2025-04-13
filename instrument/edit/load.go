@@ -1,6 +1,7 @@
 package edit
 
 import (
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/load"
 )
 
@@ -10,6 +11,8 @@ func (c *Packages) LoadPackage(pkgPath string) (*Package, bool, error) {
 		return pkg, true, nil
 	}
 
+	// usually triggered by test-only imports
+	config.LogDebug("trigger load package: %s", pkgPath)
 	pkgs, err := load.LoadPackages([]string{pkgPath}, c.LoadOptions)
 	if err != nil {
 		return nil, false, err
@@ -35,4 +38,14 @@ func (c *Packages) LoadPackages(pkgPaths []string) error {
 	}
 	c.Add(missingPkgs)
 	return nil
+}
+
+func InitPkgFlag(pkg *Package) {
+	isXgo, allow := config.CheckInstrument(pkg.LoadPackage.GoPackage.ImportPath)
+	if isXgo {
+		pkg.Xgo = true
+	}
+	if allow {
+		pkg.AllowInstrument = true
+	}
 }

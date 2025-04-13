@@ -1,6 +1,7 @@
 package edit
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 
@@ -85,6 +86,14 @@ type Package struct {
 	// the packages are loaded via
 	// package args specified by user
 	Initial bool
+
+	// Xgo indicates whether
+	// the package is xgo/runtime
+	Xgo bool
+
+	// AllowInstrument indicates whether
+	// the package is allowed to be instrumented
+	AllowInstrument bool
 }
 
 type File struct {
@@ -176,6 +185,8 @@ func (c *Packages) Add(packages *load.Packages) {
 			LoadPackage: pkg,
 			Files:       files,
 		}
+		// add flag
+		InitPkgFlag(p)
 		c.Packages = append(c.Packages, p)
 		c.PackageByPath[pkg.GoPackage.ImportPath] = p
 	}
@@ -202,5 +213,37 @@ func (p *Packages) CloneWithPackages(packages []*Package) *Packages {
 		Packages:      packages,
 		PackageByPath: pkgMap,
 		LoadOptions:   p.LoadOptions,
+	}
+}
+
+func (c *Packages) Merge(pkgs *Packages, override bool) {
+	if c.Fset != pkgs.Fset {
+		panic("token.FileSet mismatch")
+	}
+	if len(pkgs.Packages) == 0 {
+		return
+	}
+	if c.PackageByPath == nil {
+		c.PackageByPath = make(map[string]*Package, len(pkgs.Packages))
+	}
+	for _, pkg := range pkgs.Packages {
+		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
+		_, ok := c.PackageByPath[pkgPath]
+		if ok {
+			if !override {
+				panic(fmt.Errorf("package %s already exists", pkgPath))
+			}
+			// replace
+			n := len(c.Packages)
+			for i := 0; i < n; i++ {
+				if c.Packages[i].LoadPackage.GoPackage.ImportPath == pkgPath {
+					c.Packages[i] = pkg
+					break
+				}
+			}
+		} else {
+			c.Packages = append(c.Packages, pkg)
+		}
+		c.PackageByPath[pkgPath] = pkg
 	}
 }

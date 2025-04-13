@@ -227,7 +227,7 @@ func handleBuild(cmd string, args []string) error {
 	}
 	logDebug("XGO_FLAGS: %s", __DEBUG_CMD_ARGS(xgoFlags))
 
-	if logDebugFile != nil {
+	if config.EnabledLogDebug() {
 		wd, _ := os.Getwd()
 		logDebug("current working dir: %s", wd)
 	}
@@ -444,11 +444,25 @@ func handleBuild(cmd string, args []string) error {
 		}
 		buildCacheSuffix += "-strace_" + v
 	}
+	// see https://github.com/xhd2015/xgo/issues/311
+	if trapAll {
+		buildCacheSuffix += "-trap-all"
+	}
 	if stackTraceDir != "" && stackTraceDir != "." && stackTraceDir != "./" {
 		// this affects the trap/flags package
 		h := md5.New()
 		h.Write([]byte(stackTraceDir))
 		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
+	}
+	if len(trapPkgs) > 0 {
+		h := md5.New()
+		for _, pkg := range trapPkgs {
+			h.Write([]byte(pkg))
+		}
+		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
+	}
+	if cmdTest {
+		buildCacheSuffix += "-test"
 	}
 
 	buildCacheDir := filepath.Join(instrumentCacheDir, "build-cache"+buildCacheSuffix)
@@ -500,17 +514,24 @@ func handleBuild(cmd string, args []string) error {
 			return err
 		}
 
-		if resetInstrument && !instrumented {
-			logDebug("reset instrument %s", instrumentDir)
-			err := os.RemoveAll(instrumentDir)
-			if err != nil {
-				return err
+		if resetInstrument {
+			if !instrumented {
+				logDebug("reset instrument %s", instrumentDir)
+				err := os.RemoveAll(instrumentDir)
+				if err != nil {
+					return err
+				}
 			}
+		}
+
+		// clear cache for new xgo
+		if resetInstrument || coreRevisionChanged {
 			err = os.RemoveAll(instrumentCacheDir)
 			if err != nil {
 				return err
 			}
 		}
+
 		if !cmdSetup && (resetInstrument || flagA) {
 			logDebug("reset overlay %s", localXgoGenDir)
 			err := os.RemoveAll(localXgoGenDir)
@@ -518,6 +539,7 @@ func handleBuild(cmd string, args []string) error {
 				return err
 			}
 		}
+
 		resetOrRevisionChanged := resetInstrument || buildCompiler || coreRevisionChanged || instrumentedGorootNeedRecreate
 		if isDevelopment || resetOrRevisionChanged {
 			if instrumentedGorootNeedRecreate || !instrumented {
@@ -980,7 +1002,7 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		execCmdEnv = append(execCmdEnv, exec_tool.XGO_SRC_WD+"="+wd)
 	}
 
-	if logDebugFile != nil {
+	if config.EnabledLogDebug() {
 		// filter env
 		var logEnv []string
 		for _, env := range execCmdEnv {
@@ -1076,11 +1098,11 @@ func getPathMappings(instrumentGoroot string, projectRoot string) []overlay.Path
 			if absErr != nil {
 				continue
 			}
-			i++
 			name := "GOPATH"
 			if i > 0 {
 				name = fmt.Sprintf("GOPATH_%d", i)
 			}
+			i++
 			pathMappings = append(pathMappings, overlay.PathMapping{
 				From: absGopath,
 				To:   name,

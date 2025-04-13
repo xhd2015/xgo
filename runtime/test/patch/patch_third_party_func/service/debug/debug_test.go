@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party/third/struct_field"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party_func/third/struct_field"
 )
 
 func TestStructField(t *testing.T) {

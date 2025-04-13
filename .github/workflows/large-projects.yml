@@ -1,0 +1,101 @@
+# Test on Large Projects
+name: Test on Large Projects
+
+# delete "master" if not needed
+on:
+  pull_request:
+      branches: [ "master" ]
+  workflow_dispatch:
+    inputs:
+      dummy:
+        default: nothing
+
+    # 'gin-gonic/gin' ok
+    # 'fatedier/frp' cannot pass even with go? need to verify
+    #
+    # NOTE: use serial job to avoid 'Job Cancelled' which could
+    # possibly be due to memory exhaust
+jobs:
+
+  test-with-xgo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: xgo
+      
+      - name: Switch To Master If From Nightly-Test
+        run: |
+           cd xgo
+           cur_branch=$(git branch --show-current)
+           if [[ $cur_branch = trigger-nightly-test ]];then 
+               git fetch --depth=1 origin master
+               git checkout master
+           fi
+
+      - name: Prepare Utility Scripts
+        run: |
+          cat > util.sh <<'EOF'
+          function record_exit_code {
+              local exit_code=$?
+              echo "exit code: $exit_code"
+              echo "$exit_code" > test-exit-code.txt
+          }
+          trap 'record_exit_code' EXIT
+          EOF
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      
+      - name: Install Xgo Locally
+        run: |
+          cd xgo
+          go install ./cmd/xgo
+          xgo exec --reset-instrument --log-debug go version
+          xgo revision
+      
+      - uses: actions/checkout@v4
+        with:
+          repository: gin-gonic/gin
+          path:  gin-gonic/gin
+
+      - name: Test gin-gonic/gin
+        continue-on-error: true
+        run: |
+          source util.sh
+          cd gin-gonic/gin
+          xgo test -v --trap-all ./...
+
+      - uses: actions/checkout@v4
+        with:
+          repository: pocketbase/pocketbase
+          path:  pocketbase/pocketbase
+
+      - name: Test pocketbase/pocketbase
+        continue-on-error: true
+        run: |
+          source util.sh
+          cd pocketbase/pocketbase
+          xgo test -v --trap-all ./...
+        
+      - uses: actions/checkout@v4
+        with:
+          repository: kubernetes/kubernetes
+          path: kubernetes/kubernetes
+
+      - name: Test kubernetes/kubernetes
+        continue-on-error: true
+        run: |
+          source util.sh
+          cd kubernetes/kubernetes 
+          xgo test -v --trap-all ./...
+        
+      - name: Summary
+        run: |
+         echo "exit code:"
+         echo "  gin-gonic/gin:         $(cat gin-gonic/gin/test-exit-code.txt)"
+         echo "  pocketbase/pocketbase: $(cat pocketbase/pocketbase/test-exit-code.txt)"
+         echo "  kubernetes/kubernetes: $(cat kubernetes/kubernetes/test-exit-code.txt)"

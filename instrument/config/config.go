@@ -20,37 +20,37 @@ type PkgConfig struct {
 	WhitelistFuncPrefix []string
 }
 
-func IsPkgAllowed(pkgPath string) bool {
+func CheckInstrument(pkgPath string) (isXgo bool, allow bool) {
 	_, ok := goinfo.PkgWithinModule(pkgPath, "runtime")
 	if ok {
-		return false
+		return false, false
 	}
-	// avoid instrument runtime package
-	suffix, isXgoRuntime := goinfo.PkgWithinModule(pkgPath, constants.RUNTIME_MODULE)
-	if isXgoRuntime {
-		// check if is runtime/test
-		_, ok := goinfo.PkgWithinModule(suffix, "test")
-		if ok {
-			return true
-		}
-		// a regular runtime package
-		return false
+	if isXgoRuntimePkg(pkgPath) {
+		return true, false
 	}
 	if neverInstrumentPkgs[pkgPath] {
-		return false
+		return false, false
 	}
-	return true
+	return false, true
 }
 
-func CheckPkgConfig(pkgPath string) (cfg *PkgConfig, allow bool) {
-	if !IsPkgAllowed(pkgPath) {
-		return nil, false
+func isXgoRuntimePkg(pkgPath string) bool {
+	// avoid instrument runtime package
+	suffix, ok := goinfo.PkgWithinModule(pkgPath, constants.RUNTIME_MODULE)
+	if !ok {
+		return false
 	}
+	// check if is runtime/test
+	_, isTest := goinfo.PkgWithinModule(suffix, "test")
+	return !isTest
+}
+
+func GetPkgConfig(pkgPath string) *PkgConfig {
 	cfgValue, ok := defaultStdPkgConfig[pkgPath]
 	if !ok {
-		return nil, true
+		return nil
 	}
-	return &cfgValue, true
+	return &cfgValue
 }
 
 var neverInstrumentPkgs = map[string]bool{
