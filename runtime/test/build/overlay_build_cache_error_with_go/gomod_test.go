@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/test/build/util"
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/goinfo"
 )
 
 func TestGoModNonOverlayFirstShouldError(t *testing.T) {
@@ -33,16 +35,53 @@ func TestGoModNonOverlayFirstShouldError(t *testing.T) {
 	// this should error
 	var errOut bytes.Buffer
 	afterErr := cmd.Debug().Stdout(&errOut).Stderr(&errOut).Env([]string{"GOCACHE=" + gocache, "GO_BYPASS_XGO=true"}).Run("go", "test", "-v", "-overlay", overlayFile, "./overlay_test_with_gomod")
-	if afterErr == nil {
-		t.Errorf("expect cache+overlay combination error, actual nil")
+
+	// 17, 18 passes, only after go1.19 this issue happens
+	goMinor, err := getGo1MinorVersion()
+	if err != nil {
+		t.Fatalf("failed to get go minor version: %v", err)
 	}
-	expectContains := "could not import runtime (open : no such file or directory)"
-	errOutStr := errOut.String()
-	if !strings.Contains(errOutStr, expectContains) {
-		t.Errorf("expect containing %q, actual none", expectContains)
-		t.Logf("DEBUG: %s", errOutStr)
-		return
+	t.Logf("go minor: %d", goMinor)
+	expectFail := true
+	if os.Getenv("XGO_IS_SETUP_GOROOT") == "true" {
+		expectFail = false
+	} else if goMinor < 19 {
+		expectFail = false
 	}
+	if expectFail {
+		if afterErr == nil {
+			t.Errorf("expect cache+overlay combination error, actual nil")
+		}
+		expectContains := "could not import runtime (open : no such file or directory)"
+		if runtime.GOOS == "windows" {
+			expectContains = "could not import runtime (open : The system cannot find the file specified.)"
+		}
+		errOutStr := errOut.String()
+		if !strings.Contains(errOutStr, expectContains) {
+			t.Errorf("expect containing %q, actual none", expectContains)
+			t.Logf("DEBUG: %s", errOutStr)
+			return
+		}
+	} else {
+		if afterErr != nil {
+			t.Errorf("expect cache+overlay success, actual error: %v", afterErr)
+		}
+	}
+}
+
+func getGo1MinorVersion() (int, error) {
+	rv, err := goinfo.GetGoVersionOutput("go")
+	if err != nil {
+		return 0, err
+	}
+	goV, err := goinfo.ParseGoVersion(rv)
+	if err != nil {
+		return 0, err
+	}
+	if goV.Major != 1 {
+		return 0, fmt.Errorf("unrecognized go major: %s", rv)
+	}
+	return goV.Minor, nil
 }
 
 func TestGoModNonOverlayLaterShouldSucceed(t *testing.T) {

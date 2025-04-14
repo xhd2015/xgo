@@ -362,6 +362,13 @@ func main() {
 		}
 	}
 	for _, goroot := range goroots {
+		var isSetupGoroot bool
+		for _, setupGoroot := range setupGoroots {
+			if setupGoroot == goroot {
+				isSetupGoroot = true
+				break
+			}
+		}
 		begin := time.Now()
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
 		if resetInstrument {
@@ -408,7 +415,8 @@ func main() {
 			// projectDir
 			runArgs := make([]string, 0, len(remainArgs)+1)
 			opts := Opts{
-				Tags: tags,
+				Tags:          tags,
+				IsSetupGoroot: isSetupGoroot,
 			}
 			if tags != "" {
 				runArgs = append(runArgs, "-tags", tags)
@@ -659,13 +667,15 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 type testKind string
 
 type Opts struct {
-	Debug bool
-	Tags  string
+	Debug         bool
+	Tags          string
+	IsSetupGoroot bool
 }
 
 func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests []string, env []string, opts ...Opts) error {
 	var debug bool
 	var tags string
+	var isSetupGoroot bool
 	if len(opts) > 0 {
 		if len(opts) != 1 {
 			panic("only one opts is allowed")
@@ -673,6 +683,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		opt := opts[0]
 		debug = opt.Debug
 		tags = opt.Tags
+		isSetupGoroot = opt.IsSetupGoroot
 	}
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
@@ -714,8 +725,8 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		}
 		testArgs = testArgs[:i]
 	}
-	// debug
 
+	// debug
 	var binary string
 	if debug {
 		fmt.Printf("testArgs: %v\n", testArgs)
@@ -741,6 +752,9 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 
 	execCmd.Env = os.Environ()
 	execCmd.Env = append(execCmd.Env, "GOROOT="+goroot)
+	if isSetupGoroot {
+		execCmd.Env = append(execCmd.Env, "XGO_IS_SETUP_GOROOT=true")
+	}
 	execCmd.Env = append(execCmd.Env, "PATH="+filepath.Join(goroot, "bin")+string(filepath.ListSeparator)+os.Getenv("PATH"))
 	execCmd.Env = append(execCmd.Env, env...)
 

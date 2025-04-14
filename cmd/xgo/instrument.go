@@ -40,7 +40,7 @@ import (
 const MAX_FILE_SIZE = 1 * 1024 * 1024
 
 // goroot is critical for stdlib
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, trapAll bool, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, trapAll string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -189,13 +189,14 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	mainPkgs := pkgs.Filter(func(pkg *edit.Package) bool {
 		return pkg.Main && pkg.AllowInstrument
 	})
-	var recorder resolve.Recorder
 	for _, pkg := range mainPkgs {
 		resolve.CollectDecls(pkg)
 	}
 
 	traverseBegin := time.Now()
 	logDebug("traverse: len(mainPkgs)=%d", len(mainPkgs))
+
+	var recorder resolve.Recorder
 	err = resolve.Traverse(reg, mainPkgs, &recorder)
 	if err != nil {
 		return err
@@ -208,7 +209,10 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		return err
 	}
 
-	logDebug("start instrumentFuncTrap: len(packages)=%d", len(pkgs.Packages))
+	// ""->default
+	needTrapAll := trapAll == "true" || (trapAll == "" && recorder.HasTrapInterceptorRef)
+
+	logDebug("start instrumentFuncTrap: len(packages)=%d, needTrapAll=%v", len(pkgs.Packages), needTrapAll)
 	for _, pkg := range pkgs.Packages {
 		if !pkg.AllowInstrument {
 			continue
@@ -217,7 +221,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		cfg := config.GetPkgConfig(pkgPath)
 		var defaultAllow bool
 		if !pkg.LoadPackage.GoPackage.Standard {
-			if trapAll || pkg.Initial {
+			if needTrapAll || pkg.Initial {
 				defaultAllow = true
 			}
 		}

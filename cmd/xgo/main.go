@@ -445,7 +445,7 @@ func handleBuild(cmd string, args []string) error {
 		buildCacheSuffix += "-strace_" + v
 	}
 	// see https://github.com/xhd2015/xgo/issues/311
-	if trapAll {
+	if trapAll != "false" {
 		buildCacheSuffix += "-trap-all"
 	}
 	if stackTraceDir != "" && stackTraceDir != "." && stackTraceDir != "./" {

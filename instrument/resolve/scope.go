@@ -17,7 +17,11 @@ import (
 type PkgScopeNames map[string]*edit.Decl
 
 type Recorder struct {
-	Pkgs map[string]*PkgRecorder
+	// has called `trap.AddInterceptor`?
+	// if so, we need to enable trapAll mode
+	// as mentioned in https://github.com/xhd2015/xgo/issues/308#issuecomment-2800327536
+	HasTrapInterceptorRef bool
+	Pkgs                  map[string]*PkgRecorder
 }
 
 func (c *Recorder) GetOrInit(pkgPath string) *PkgRecorder {
