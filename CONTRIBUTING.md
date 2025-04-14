@@ -109,13 +109,25 @@ dlv exec --listen=:2345 --api-version=2 --check-go-version=false --headless -- .
 # Debug `go`
 ```sh
 go install ./script/xgo.helper
-xgo.helper debug-go GOROOT ... build
-
-# example
-xgo.helper debug-go GOROOT -C $X/xgo/runtime/test/patch/real_world/kusia_ipc test -v ./
+cp -r $GOROOT ~/GOROOT_DEBUG
 
 # setup vscode
-xgo.help create-vscode GOROOT
+xgo.helper setup-vscode ~/GOROOT_DEBUG
+
+# go test
+xgo.helper debug-go ~/GOROOT_DEBUG -C $X/xgo/runtime/test/patch/real_world/kusia_ipc test -v ./
+```
+
+# Debug `go tool compile`
+```sh
+go install ./script/xgo.helper
+cp -r $GOROOT ~/GOROOT_DEBUG
+
+# setup vscode
+xgo.helper setup-vscode ~/GOROOT_DEBUG
+
+# debug compile a specific package
+xgo.helper debug-compile ~/GOROOT_DEBUG golang.org/x/example/hello/reverse -C $PWD test -v -a ./
 ```
 
 # Debug target

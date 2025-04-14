@@ -8,22 +8,24 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/support/cmd"
-	"github.com/xhd2015/xgo/support/osinfo"
 )
 
 const help = `
 xgo.helper
 
 Commands:
-  debug-go GOROOT build       debug go build,go run, go test
-  create-vscode GOROOT        create vscode settings.json and launch.json
+  setup-vscode GOROOT                setup vscode settings.json and launch.json
+  debug-go GOROOT <cmd>              debug go build,go run, go test
+  run-go GOROOT <cmd>                run go build,go run, go test
+  debug-compile GOROOT <pkg> <cmd>   debug compile <pkg> <cmd>
 
 Options:
   -C dir     passed to go
 
 Examples:
-  $ xgo.helper create-vscode GOROOT
+  $ xgo.helper setup-vscode GOROOT
   $ xgo.helper debug-go GOROOT -C $X/xgo/runtime/test/patch/real_world/kusia_ipc test -v ./
+  $ xgo.helper debug-compile GOROOT some.pkg -C $X/xgo/runtime/test/patch/real_world/kusia_ipc test -v ./
 `
 
 func main() {
@@ -44,11 +46,27 @@ func run(args []string) error {
 	}
 	args = args[1:]
 	switch cmd {
-	case "debug-go":
+	case "debug-go", "run-go":
 		if len(args) == 0 || args[0] == "" {
 			return fmt.Errorf("requires GOROOT")
 		}
-		return debugGo(args[0], args[1:])
+		return debugGo(cmd == "run-go", args[0], nil, args[1:])
+	case "debug-compile":
+		if len(args) < 1 || args[0] == "" {
+			return fmt.Errorf("requires GOROOT")
+		}
+		goroot := args[0]
+		if len(args) < 2 || args[1] == "" {
+			return fmt.Errorf("requires pkg")
+		}
+		if strings.HasPrefix(args[1], "-") {
+			return fmt.Errorf("invalid pkg: %s", args[1])
+		}
+		err := instrumentGc(goroot)
+		if err != nil {
+			return err
+		}
+		return debugGo(true, goroot, []string{"XGO_HELPER_DEBUG_PKG=" + args[1]}, args[2:])
 	case "create-vscode":
 		if len(args) == 0 || args[0] == "" {
 			return fmt.Errorf("requires GOROOT")
@@ -58,7 +76,7 @@ func run(args []string) error {
 	return fmt.Errorf("unknown cmd: %s", cmd)
 }
 
-func debugGo(goroot string, args []string) error {
+func debugGo(runOnly bool, goroot string, env []string, args []string) error {
 	if goroot == "" {
 		return fmt.Errorf("requires GOROOT")
 	}
@@ -103,7 +121,11 @@ func debugGo(goroot string, args []string) error {
 	if err != nil {
 		return err
 	}
-	return dlvExecGo(goroot, goExe, runCmd, flagC, cmdArgs)
+	_, err = buildCompiler(goroot)
+	if err != nil {
+		return err
+	}
+	return runOrDlvExec(goroot, goExe, runOnly, runCmd, flagC, env, cmdArgs)
 }
 
 func createVscode(goroot string, args []string) error {
@@ -145,12 +167,22 @@ func createVscode(goroot string, args []string) error {
 	err = writeNonExistingFile(filepath.Join(vscodeDir, "launch.json"), []byte(`{
     "configurations": [
         {
-            "name": "Debug dlv localhost:2345",
+            "name": "Debug dlv localhost:2345(go)",
             "type": "go",
             "debugAdapter": "dlv-dap",
             "request": "attach",
             "mode": "remote",
             "port": 2345,
+            "host": "127.0.0.1",
+            "cwd": "./"
+        },
+		{
+            "name": "Debug dlv localhost:2346(compile)",
+            "type": "go",
+            "debugAdapter": "dlv-dap",
+            "request": "attach",
+            "mode": "remote",
+            "port": 2346,
             "host": "127.0.0.1",
             "cwd": "./"
         }
@@ -170,31 +202,28 @@ func writeNonExistingFile(path string, content []byte) error {
 	fmt.Fprintf(os.Stderr, "file %s already exists, skip\n", path)
 	return nil
 }
-
-func buildGo(goroot string) (string, error) {
-	absGoroot, err := filepath.Abs(goroot)
-	if err != nil {
-		return "", err
-	}
-	src := filepath.Join(absGoroot, "src")
-	bin := filepath.Join(absGoroot, "bin")
-	output := filepath.Join(bin, "go.debug"+osinfo.EXE_SUFFIX)
-	err = cmd.Debug().Dir(src).Env([]string{"GOROOT=" + absGoroot, "GO_BYPASS_XGO=true"}).Run(filepath.Join(bin, "go"+osinfo.EXE_SUFFIX), "build", "-gcflags=all=-N -l", "-o", output, "./cmd/go")
-	if err != nil {
-		return "", fmt.Errorf("build go: %w", err)
-	}
-	return output, nil
-}
-
-func dlvExecGo(goroot string, goExe string, runCmd string, flagC string, args []string) error {
+func runOrDlvExec(goroot string, goExe string, runOnly bool, runCmd string, flagC string, env []string, args []string) error {
 	// dlv exec --listen=:2345 --api-version=2 --check-go-version=false --headless -- go.debug test --project-dir runtime/test -v ./patch
-	dlvArgs := []string{"exec", "--listen=:2345", "--api-version=2", "--check-go-version=false", "--headless", "--", goExe}
-	if flagC != "" {
-		dlvArgs = append(dlvArgs, "-C", flagC)
+	var cmdExe string
+	var cmdArgs []string
+	if !runOnly {
+		cmdExe = "dlv"
+		cmdArgs = []string{"exec", "--listen=:2345", "--api-version=2", "--check-go-version=false", "--headless", "--", goExe}
+	} else {
+		cmdExe = goExe
 	}
-	dlvArgs = append(dlvArgs, runCmd)
-	dlvArgs = append(dlvArgs, args...)
-	return cmd.Debug().Dir(goroot).Env([]string{"GOROOT=" + goroot, "GO_BYPASS_XGO=true"}).Run("dlv", dlvArgs...)
+	if flagC != "" {
+		cmdArgs = append(cmdArgs, "-C", flagC)
+	}
+	cmdArgs = append(cmdArgs, runCmd)
+	cmdArgs = append(cmdArgs, args...)
+	runEnv := make([]string, 0, len(env)+2)
+	runEnv = append(runEnv,
+		"GOROOT="+goroot,
+		"GO_BYPASS_XGO=true",
+	)
+	runEnv = append(runEnv, env...)
+	return cmd.Debug().Env(runEnv).Run(cmdExe, cmdArgs...)
 }
 
 func checkedAbsGoroot(goroot string) (string, error) {

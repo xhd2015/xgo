@@ -37,6 +37,10 @@ func InstrumentGo(goroot string, goVersion *goinfo.GoVersion) error {
 	if err != nil {
 		return err
 	}
+	err = instrumentPkgLoad(goroot, goVersion)
+	if err != nil {
+		return err
+	}
 	// build go command
 	return buildBinary(goroot, filepath.Join(goroot, "src"), filepath.Join(goroot, "bin"), "go", "./cmd/go")
 }

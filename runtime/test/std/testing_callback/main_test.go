@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/xhd2015/xgo/runtime/legacy"
+	"github.com/xhd2015/xgo/runtime/internal/legacy"
 )
 
 func __xgo_link_on_test_start(fn func(t *testing.T, fn func(t *testing.T))) {

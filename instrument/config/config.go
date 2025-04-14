@@ -15,6 +15,39 @@ var PREDEFINED_STD_PKGS = []string{
 	"io/ioutil",
 }
 
+// `go list -deps runtime` to check all dependencies
+//
+//	internal/goarch
+//	unsafe
+//	internal/abi
+//	internal/cpu
+//	internal/bytealg
+//	internal/byteorder
+//	internal/chacha8rand
+//	internal/coverage/rtcov
+//	internal/godebugs
+//	internal/goexperiment
+//	internal/goos
+//	internal/profilerecord
+//	internal/runtime/atomic
+//	internal/runtime/exithook
+//	internal/stringslite
+//	runtime/internal/math
+//	runtime/internal/sys
+//	runtime
+var neverInstrumentPkgs = map[string]bool{
+	"unsafe":      true,
+	"runtime":     true,
+	"syscall":     true,
+	"reflect":     true,
+	"sync":        true,
+	"sync/atomic": true,
+	// testing is not harmful
+	// but may cause infinite loop?
+	// we may dig later or just add some whitelist
+	"testing": true,
+}
+
 type PkgConfig struct {
 	WhitelistFunc       map[string]bool
 	WhitelistFuncPrefix []string
@@ -22,6 +55,10 @@ type PkgConfig struct {
 
 func CheckInstrument(pkgPath string) (isXgo bool, allow bool) {
 	_, ok := goinfo.PkgWithinModule(pkgPath, "runtime")
+	if ok {
+		return false, false
+	}
+	_, ok = goinfo.PkgWithinModule(pkgPath, "internal")
 	if ok {
 		return false, false
 	}
@@ -51,19 +88,6 @@ func GetPkgConfig(pkgPath string) *PkgConfig {
 		return nil
 	}
 	return &cfgValue
-}
-
-var neverInstrumentPkgs = map[string]bool{
-	"unsafe":      true,
-	"runtime":     true,
-	"syscall":     true,
-	"reflect":     true,
-	"sync":        true,
-	"sync/atomic": true,
-	// testing is not harmful
-	// but may cause infinite loop?
-	// we may dig later or just add some whitelist
-	"testing": true,
 }
 
 var defaultStdPkgConfig = map[string]PkgConfig{
