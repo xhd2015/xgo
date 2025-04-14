@@ -2,6 +2,7 @@ package trap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/xhd2015/xgo/runtime/core"
@@ -16,6 +17,9 @@ import (
 // chain behavior:
 //    - mock cannot be chained, only the last one will take effect
 //    - interceptors and recorders can be chained
+
+// ErrMocked indicates the target function is mocked
+var ErrMocked = errors.New("func mocked by xgo")
 
 type Interceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error
 

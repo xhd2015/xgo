@@ -301,6 +301,9 @@ func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterce
 			}
 			data, err := preInterceptor(ctx, funcInfo, argObj, resObject)
 			if err != nil {
+				if err == ErrMocked {
+					return nil, true
+				}
 				if funcInfo.LastResultErr {
 					lastErr := results[len(results)-1].(*error)
 					*lastErr = err

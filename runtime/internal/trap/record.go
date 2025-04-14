@@ -91,7 +91,14 @@ func pushRecorderInterceptor(fn interface{}, preInterceptor PreInterceptor, post
 					valPtr: res,
 				},
 			}
-			data, _ := preInterceptor(nil, funcInfo, argObj, resObject)
+			data, err := preInterceptor(nil, funcInfo, argObj, resObject)
+			if err != nil {
+				if err == ErrMocked {
+					return nil, true
+				}
+				panic(err)
+			}
+
 			return data, false
 		}
 		postHandler := func(fnInfo *core.FuncInfo, res interface{}, data interface{}) {
@@ -102,7 +109,10 @@ func pushRecorderInterceptor(fn interface{}, preInterceptor PreInterceptor, post
 					valPtr: res,
 				},
 			}
-			postInterceptor(nil, funcInfo, argObj, resObject, data)
+			err := postInterceptor(nil, funcInfo, argObj, resObject, data)
+			if err != nil {
+				panic(err)
+			}
 		}
 		return PushVarRecordHandler(varPtr, preHandler, postHandler)
 	} else if fnv.Kind() == reflect.Func {

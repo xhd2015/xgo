@@ -67,11 +67,11 @@ func run(args []string) error {
 			return err
 		}
 		return debugGo(true, goroot, []string{"XGO_HELPER_DEBUG_PKG=" + args[1]}, args[2:])
-	case "create-vscode":
+	case "setup-vscode":
 		if len(args) == 0 || args[0] == "" {
 			return fmt.Errorf("requires GOROOT")
 		}
-		return createVscode(args[0], args[1:])
+		return setupVscode(args[0], args[1:])
 	}
 	return fmt.Errorf("unknown cmd: %s", cmd)
 }
@@ -128,7 +128,7 @@ func debugGo(runOnly bool, goroot string, env []string, args []string) error {
 	return runOrDlvExec(goroot, goExe, runOnly, runCmd, flagC, env, cmdArgs)
 }
 
-func createVscode(goroot string, args []string) error {
+func setupVscode(goroot string, args []string) error {
 	if goroot == "" {
 		return fmt.Errorf("requires GOROOT")
 	}

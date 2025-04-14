@@ -148,13 +148,19 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 	}
 
 	var postRecordersAndInterceptors []func()
+	var mocked bool
 	for _, h := range recordHandlers {
 		if h.wantRecvPtr != nil && (recvPtr == nil || !sameReceiver(recvPtr, h.wantRecvPtr)) {
 			continue
 		}
 		var data interface{}
+		var stop bool
 		if h.pre != nil {
-			data, _ = h.pre(funcInfo, recvPtr, args, results)
+			data, stop = h.pre(funcInfo, recvPtr, args, results)
+			if stop {
+				mocked = true
+				break
+			}
 		}
 		if h.post != nil {
 			postRecordersAndInterceptors = append(postRecordersAndInterceptors, func() {
@@ -163,17 +169,24 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		}
 	}
 
-	for _, h := range interceptors {
-		var data interface{}
-		if h.pre != nil {
-			// TODO: handle abort
-			data, _ = h.pre(funcInfo, recvPtr, args, results)
-		}
+	if !mocked {
+		for _, h := range interceptors {
+			var data interface{}
+			var stop bool
+			if h.pre != nil {
+				// TODO: handle abort
+				data, stop = h.pre(funcInfo, recvPtr, args, results)
+				if stop {
+					mocked = true
+					break
+				}
+			}
 
-		if h.post != nil {
-			postRecordersAndInterceptors = append(postRecordersAndInterceptors, func() {
-				h.post(funcInfo, recvPtr, args, results, data)
-			})
+			if h.post != nil {
+				postRecordersAndInterceptors = append(postRecordersAndInterceptors, func() {
+					h.post(funcInfo, recvPtr, args, results, data)
+				})
+			}
 		}
 	}
 	if len(postRecordersAndInterceptors) > 0 {
@@ -190,35 +203,41 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		}
 	}
 
-	var depthCallRecorder func()
+	var callRecorderWithDepth func()
 	if postRecorder != nil {
-		depthCallRecorder = func() {
+		callRecorderWithDepth = func() {
 			xgo_runtime.GetG().IncTrappingDepth()
 			defer xgo_runtime.GetG().DecTrappingDepth()
 			postRecorder()
 		}
 	}
 	// === end check mock and interceptors ===
-	if depth > 1 {
-		// when stack is trapping, only allow pc-related
-		// mock and recorders to run
-		// no tracing and general interceptors can run
-		if mock != nil {
-			ok := mock(funcInfo, recvPtr, args, results)
-			// ok=true indicates not call old function
-			return depthCallRecorder, ok
+	if !mocked {
+		if depth > 1 {
+			// when stack is trapping, only allow pc-related
+			// mock and recorders to run
+			// no tracing and general interceptors can run
+			if mock != nil {
+				ok := mock(funcInfo, recvPtr, args, results)
+				// ok=true indicates not call old function
+				return callRecorderWithDepth, ok
+			}
+			return callRecorderWithDepth, false
 		}
-		return depthCallRecorder, false
-	}
 
-	if !isTracing {
-		// without tracing, mock becomes simpler
-		if mock != nil {
-			ok := mock(funcInfo, recvPtr, args, results)
-			// ok=true indicates not call old function
-			return depthCallRecorder, ok
+		if !isTracing {
+			// without tracing, mock becomes simpler
+			if mock != nil {
+				ok := mock(funcInfo, recvPtr, args, results)
+				// ok=true indicates not call old function
+				return callRecorderWithDepth, ok
+			}
+			return callRecorderWithDepth, false
 		}
-		return depthCallRecorder, false
+	} else {
+		if !isTracing {
+			return callRecorderWithDepth, true
+		}
 	}
 
 	// === init tracing stacks ===
@@ -392,7 +411,10 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 			stack.Detach()
 		}
 	}
-	if mock != nil {
+	if mocked {
+		hitMock = true
+		return post, true
+	} else if mock != nil {
 		hitMock = mock(funcInfo, recvPtr, args, results)
 		return post, hitMock
 	}

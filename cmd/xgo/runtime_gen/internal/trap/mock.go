@@ -101,7 +101,13 @@ func pushMockInterceptor(fn interface{}, interceptor Interceptor) func() {
 					valPtr: res,
 				},
 			}
-			interceptor(context.Background(), fnInfo, argObj, resObject)
+			err := interceptor(context.Background(), fnInfo, argObj, resObject)
+			if err != nil {
+				if err == ErrMocked {
+					return
+				}
+				panic(err)
+			}
 		}
 		return pushVarMockHandler(varPtr, handler)
 	} else if fnv.Kind() == reflect.Func {

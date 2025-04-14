@@ -7,6 +7,27 @@ import (
 	"github.com/xhd2015/xgo/runtime/internal/trap"
 )
 
+// ErrMocked indicates the target function is mocked
+// and not called, instead result is set by the interceptor
+// it is usually used to setup general mock interceptors
+// example usage:
+//
+//		trap.AddInterceptor(&trap.Interceptor{
+//			Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+//				if f.IdentityName == "Read" {
+//	                result.GetFieldIndex(0).SetInt(100)
+//					return nil, trap.ErrMocked
+//				}
+//				return nil, nil
+//			},
+//		})
+//
+// NOTE: this error should only be returned
+// by interceptor in pre-phase. If it is
+// returned in post-phase, it will cause
+// xgo to panic.
+var ErrMocked = trap.ErrMocked
+
 type Interceptor struct {
 	Pre  func(ctx context.Context, f *core.FuncInfo, args core.Object, result core.Object) (data interface{}, err error)
 	Post func(ctx context.Context, f *core.FuncInfo, args core.Object, result core.Object, data interface{}) error
@@ -36,5 +57,4 @@ func AddFuncInterceptor(f interface{}, interceptor *Interceptor) func() {
 // Example:
 //
 //	trap.MarkIntercept((*bytes.Buffer).String)
-func MarkIntercept(f interface{}) {
-}
+func MarkIntercept(f interface{}) {}
