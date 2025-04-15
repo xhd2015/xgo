@@ -98,7 +98,13 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 	}
 
 	varName := decl.Ident.Name
-	code := genCode(varName, infoVar, typeCode)
+
+	// see issue https://github.com/xhd2015/xgo/issues/313
+	var varPrefix string
+	if strings.HasPrefix(varName, "Test") {
+		varPrefix = "T_"
+	}
+	code := genCode(varPrefix, varName, infoVar, typeCode)
 
 	file.TrapVars = append(file.TrapVars, &edit.VarInfo{
 		InfoVar: infoVar,
@@ -112,16 +118,19 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 	// apply edits for all refs
 	// from main module
 	for _, varRef := range decl.VarRefs {
-		applyRewrite(varRef)
+		applyRewrite(varPrefix, varRef)
 	}
 	return true
 }
 
-func applyRewrite(varRef *edit.VarRef) {
+func applyRewrite(prefix string, varRef *edit.VarRef) {
 	fileEdit := varRef.File.Edit
 	if varRef.Addr != nil {
 		// delete &
 		fileEdit.Delete(varRef.Addr.Pos(), varRef.Addr.X.Pos())
+	}
+	if prefix != "" {
+		fileEdit.Insert(varRef.NameStart, prefix)
 	}
 	fileEdit.Insert(varRef.NameEnd, getSuffix(varRef.NeedPtr))
 }

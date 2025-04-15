@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"go/ast"
+	"go/token"
 
 	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/edit"
@@ -82,11 +83,18 @@ func (c *Scope) collectVarRef(addr *ast.UnaryExpr, expr ast.Expr) bool {
 			needPtr = true
 		}
 	}
+	var nameStart token.Pos
+	if sel, ok := expr.(*ast.SelectorExpr); ok {
+		nameStart = sel.Sel.Pos()
+	} else {
+		nameStart = expr.Pos()
+	}
 	decl.VarRefs = append(decl.VarRefs, &edit.VarRef{
-		File:    c.File.File,
-		Addr:    addr,
-		NeedPtr: needPtr,
-		NameEnd: expr.End(),
+		File:      c.File.File,
+		Addr:      addr,
+		NeedPtr:   needPtr,
+		NameStart: nameStart,
+		NameEnd:   expr.End(),
 	})
 	return true
 }

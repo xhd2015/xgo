@@ -47,7 +47,8 @@ type VarRef struct {
 	// the prefiex & token, if any
 	Addr *ast.UnaryExpr
 	// call get() or get_addr()
-	NeedPtr bool
+	NeedPtr   bool
+	NameStart token.Pos
 	// the end position of the name
 	NameEnd token.Pos
 }
