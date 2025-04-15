@@ -40,10 +40,19 @@ func getFieldNames(fields *ast.FieldList) []string {
 	}
 	names := make([]string, 0, len(fields.List))
 	for _, field := range fields.List {
-		names = append(names, getFieldName(field))
+		if field.Names == nil {
+			continue
+		}
+		for _, name := range field.Names {
+			if isBlankName(name.Name) {
+				continue
+			}
+			names = append(names, name.Name)
+		}
 	}
 	return names
 }
+
 func getFieldName(f *ast.Field) string {
 	if f == nil || f.Names == nil {
 		return ""

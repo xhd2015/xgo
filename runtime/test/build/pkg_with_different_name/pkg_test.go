@@ -13,6 +13,7 @@ func TestPkg(t *testing.T) {
 	var called bool
 	trace.RecordCall(gtm.Start, func(client *mongo.Client, o *gtm.Options, res *gtm.OpCtx) {
 		called = true
+		panic("test")
 	})
 	func() {
 		defer func() {
