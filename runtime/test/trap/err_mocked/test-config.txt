@@ -1,3 +1,3 @@
 # somehow vet fails with overlay
 # see https://github.com/xhd2015/xgo/issues/311#issuecomment-2801726687
-flags: -vet=off
+# flags: -vet=off

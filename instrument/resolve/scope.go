@@ -139,7 +139,7 @@ func newFileScope(global *GlobalScope, pkg *edit.Package, file *edit.File, pkgDe
 	if scope != nil {
 		return scope
 	}
-	imports := getFileImports(file.File.Syntax)
+	imports := getFileImports(global.Packages, file.File.Syntax)
 	scope = &Scope{
 		Global: global,
 		Package: &PackageScope{

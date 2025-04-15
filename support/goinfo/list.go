@@ -12,7 +12,7 @@ import (
 type Package struct {
 	// the abs dir
 	Dir        string
-	Name       string
+	Name       string // the package name, e.g. "github.com/x/y/v2" -> y
 	ImportPath string
 	// the file names
 	// e.g.: main.go, option.go
