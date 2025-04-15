@@ -60,17 +60,22 @@ func instrumentPkgLoad(goroot string, goVersion *goinfo.GoVersion) error {
 			// return cleaned content
 			return content, nil
 		}
-		content = patch.UpdateContent(content,
-			"/*<begin add_runtime_import>*/",
-			"/*<end add_runtime_import>*/",
-			[]string{
-				"\nfunc (p *Package) load(ctx context.Context,",
-				"if !opts.IgnoreImports {",
-			},
-			1,
-			patch.UpdatePosition_After,
-			strings.Join(runtimeImportCode, ""),
-		)
+		if false {
+			// if we have modified loadPackageData,
+			// we don't need to add runtime import here
+			content = patch.UpdateContent(content,
+				"/*<begin add_runtime_import>*/",
+				"/*<end add_runtime_import>*/",
+				[]string{
+					"\nfunc (p *Package) load(ctx context.Context,",
+					"if !opts.IgnoreImports {",
+				},
+				1,
+				patch.UpdatePosition_After,
+				strings.Join(runtimeImportCode, ""),
+			)
+		}
+
 		returnAnchor := "return p, loaded, err"
 		code := strings.Join(loadPackageDataAddRuntimeImport, "")
 		if goVersion.Major == 1 && goVersion.Minor <= 20 {

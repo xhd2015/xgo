@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -417,55 +415,23 @@ func handleBuild(cmd string, args []string) error {
 		instrumentedGorootNeedRecreate = false
 	}
 
-	// gcflags can cause the build cache to invalidate
-	// so separate them with normal one
-	var buildCacheSuffix string
-	if len(gcflags) > 0 || debug != nil {
-		buildCacheSuffix += "-gcflags"
-	}
-
 	optionsFromFile, optionsFromFileContent, err := mergeOptionFiles(sessionTmpDir, opts.optionsFromFile, opts.mockRules)
 	if err != nil {
 		return err
 	}
-	if optionsFromFile != "" && len(optionsFromFileContent) > 0 {
-		h := md5.New()
-		h.Write(optionsFromFileContent)
-		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
-	}
+
 	var enableStackTrace bool
 	if stackTrace == "on" || stackTrace == "true" {
 		enableStackTrace = true
-		v := stackTrace
-		if v == "true" {
-			v = "on"
-		} else if v == "false" {
-			v = "off"
-		}
-		buildCacheSuffix += "-strace_" + v
-	}
-	// see https://github.com/xhd2015/xgo/issues/311
-	if trapAll != "false" {
-		buildCacheSuffix += "-trap-all"
-	}
-	if stackTraceDir != "" && stackTraceDir != "." && stackTraceDir != "./" {
-		// this affects the trap/flags package
-		h := md5.New()
-		h.Write([]byte(stackTraceDir))
-		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
-	}
-	if len(trapPkgs) > 0 {
-		h := md5.New()
-		for _, pkg := range trapPkgs {
-			h.Write([]byte(pkg))
-		}
-		buildCacheSuffix += "-" + hex.EncodeToString(h.Sum(nil))
-	}
-	if cmdTest {
-		buildCacheSuffix += "-test"
 	}
 
-	buildCacheDir := filepath.Join(instrumentCacheDir, "build-cache"+buildCacheSuffix)
+	// NOTE: since xgo v1.1.1, after switched to -overlay
+	// and fixed related go bugs in
+	//  - https://github.com/xhd2015/xgo/issues/318
+	//  - https://github.com/xhd2015/xgo/issues/311
+	// we no longer need separate build cache
+	// but we need to separate it from normal GOCACHE
+	buildCacheDir := filepath.Join(instrumentCacheDir, "build-cache")
 	revisionFile := filepath.Join(instrumentDir, INSTRUMENT_XGO_REVISION_FILE)
 	fullSyncRecord := filepath.Join(instrumentDir, "full-sync-record.txt")
 

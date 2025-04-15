@@ -112,7 +112,7 @@ func instrument_loadPackageData_AddRuntimeImports(content string) string {
 		1,
 		patch.UpdatePosition_Before,
 		strings.Join([]string{
-			`if os.Getenv("XGO_ALLOW_ADD_RUNTIME_IMPORTS") != "true" {`,
+			`if os.Getenv("XGO_ALLOW_ADD_RUNTIME_IMPORTS") == "true" {`,
 			`    if p.ImportPath != "runtime" && p.ImportPath != "internal" && p.ImportPath != "unsafe" && !strings.HasPrefix(p.ImportPath, "runtime/") && !strings.HasPrefix(p.ImportPath, "internal/") {`,
 			`       var foundRuntime bool;`,
 			"       for _ ,imp := range p.Imports {",
