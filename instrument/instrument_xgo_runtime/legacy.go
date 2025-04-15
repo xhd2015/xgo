@@ -1,6 +1,7 @@
 package instrument_xgo_runtime
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -80,8 +81,19 @@ func addLegacyFunctabInit(funcTabPkg *edit.Package, overrideContent func(absFile
 	}
 }
 
-func removeLegacyVarPtrTrap(runtimeLinkDir string, overrideContent func(absFile overlay.AbsFile, content string)) error {
+func patchLegacy(runtimeLinkDir string, overrideContent func(absFile overlay.AbsFile, content string)) error {
 	trapDir := filepath.Join(filepath.Dir(runtimeLinkDir), "trap")
+	err := removeLegacyVarPtrTrap(trapDir, overrideContent)
+	if err != nil {
+		return err
+	}
+	err = fixLegacyCtxRetrieval(trapDir, overrideContent)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func removeLegacyVarPtrTrap(trapDir string, overrideContent func(absFile overlay.AbsFile, content string)) error {
 	varFile := filepath.Join(trapDir, "var.go")
 	contentBytes, readErr := os.ReadFile(varFile)
 	if readErr != nil {
@@ -107,4 +119,59 @@ func removeLegacyVarPtrTrap(runtimeLinkDir string, overrideContent func(absFile 
 	content = content[:idx] + "if mock == nil && false {" + content[idx+anchorLen:]
 	overrideContent(overlay.AbsFile(varFile), content)
 	return nil
+}
+
+const (
+	legacyCtxCast = "argObj[0].valPtr.(context.Context)"
+	fixedCtxCast  = "(*args[0].(*context.Context))"
+)
+
+func fixLegacyCtxRetrieval(trapDir string, overrideContent func(absFile overlay.AbsFile, content string)) error {
+	buildFile := filepath.Join(trapDir, "build.go")
+	contentBytes, readErr := os.ReadFile(buildFile)
+	if readErr != nil {
+		if config.DEBUG {
+			fmt.Fprintf(os.Stderr, "failed to read legacy %s: %s\n", buildFile, readErr)
+		}
+		return nil
+	}
+	contentBytes = bytes.ReplaceAll(contentBytes, []byte(legacyCtxCast), []byte(fixedCtxCast))
+	for {
+		var ok bool
+		contentBytes, ok = replaceContentAfter(contentBytes, []byte(recvAnchor), []byte(oldBuggyCheck), []byte(fixedCheck))
+		if !ok {
+			break
+		}
+	}
+	overrideContent(overlay.AbsFile(buildFile), string(contentBytes))
+	return nil
+}
+
+const (
+	// 	var resObject object
+	// if actRecvPtr != nil {
+	recvAnchor    = "var resObject object"
+	oldBuggyCheck = "if actRecvPtr != nil {"
+	fixedCheck    = "if recvPtr == nil && actRecvPtr != nil {"
+)
+
+func replaceContentAfter(content []byte, anchor []byte, old []byte, new []byte) ([]byte, bool) {
+	idx := bytes.Index(content, anchor)
+	if idx < 0 {
+		return content, false
+	}
+	anchorEnd := idx + len(anchor)
+	oldIdx := bytes.Index(content[anchorEnd:], old)
+	if oldIdx < 0 {
+		return content, false
+	}
+	oldStart := anchorEnd + oldIdx
+	newContent := make([]byte, len(content)+len(new)-len(old))
+	i := 0
+	copy(newContent, content[:oldStart])
+	i += oldStart
+	copy(newContent[i:], new)
+	i += len(new)
+	copy(newContent[i:], content[oldStart+len(old):])
+	return newContent, true
 }

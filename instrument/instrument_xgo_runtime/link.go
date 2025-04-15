@@ -186,10 +186,10 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		}
 		return editPackages, ErrLinkFileNotRequired
 	}
-	if runtimeLinkPkg != nil && coreVersion == "1.1.0" {
+	if coreVersion == "1.1.0" && runtimeLinkPkg != nil {
 		// remove the buggy var ptr trap behavior in runtime v1.1.0
 		dir := runtimeLinkPkg.LoadPackage.GoPackage.Dir
-		err := removeLegacyVarPtrTrap(dir, overrideContent)
+		err := patchLegacy(dir, overrideContent)
 		if err != nil {
 			return nil, err
 		}

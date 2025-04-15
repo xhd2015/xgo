@@ -221,7 +221,8 @@ func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func
 
 		var argObj object
 		var resObject object
-		if actRecvPtr != nil {
+		if recvPtr == nil && actRecvPtr != nil {
+			// see https://github.com/xhd2015/xgo/issues/316
 			argObj = append(argObj, field{
 				name:   recvName,
 				valPtr: actRecvPtr,
@@ -242,7 +243,9 @@ func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func
 
 		var ctx context.Context = context.TODO()
 		if funcInfo.FirstArgCtx {
-			ctx = argObj[0].valPtr.(context.Context)
+			// see https://github.com/xhd2015/xgo/issues/316
+			ptr := args[0].(*context.Context)
+			ctx = *ptr
 		}
 
 		err := interceptor(ctx, funcInfo, argObj, resObject)
@@ -277,7 +280,7 @@ func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterce
 
 			var argObj object
 			var resObject object
-			if actRecvPtr != nil {
+			if recvPtr == nil && actRecvPtr != nil {
 				argObj = append(argObj, field{
 					name:   funcInfo.RecvName,
 					valPtr: actRecvPtr,
@@ -297,7 +300,8 @@ func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterce
 			}
 			var ctx context.Context = context.TODO()
 			if funcInfo.FirstArgCtx {
-				ctx = argObj[0].valPtr.(context.Context)
+				ptr := args[0].(*context.Context)
+				ctx = *ptr
 			}
 			data, err := preInterceptor(ctx, funcInfo, argObj, resObject)
 			if err != nil {
@@ -324,7 +328,7 @@ func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterce
 
 			var argObj object
 			var resObject object
-			if actRecvPtr != nil {
+			if recvPtr == nil && actRecvPtr != nil {
 				argObj = append(argObj, field{
 					name:   funcInfo.RecvName,
 					valPtr: actRecvPtr,
@@ -344,7 +348,8 @@ func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterce
 			}
 			var ctx context.Context = context.TODO()
 			if funcInfo.FirstArgCtx {
-				ctx = argObj[0].valPtr.(context.Context)
+				ptr := args[0].(*context.Context)
+				ctx = *ptr
 			}
 			err := postInterceptor(ctx, funcInfo, argObj, resObject, data)
 			if err != nil {
