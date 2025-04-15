@@ -10,10 +10,36 @@ import (
 
 var srcCmdGoLoadPkgPath = patch.FilePath{"src", "cmd", "go", "internal", "load", "pkg.go"}
 
+var checkCanAddRuntimeDep = `p.ImportPath != "runtime" && p.ImportPath != "internal" && p.ImportPath != "unsafe" && !strings.HasPrefix(p.ImportPath, "runtime/") && !strings.HasPrefix(p.ImportPath, "internal/")`
+
 // run `go list -deps runtime` to check all dependencies
 var runtimeImportCode = []string{
-	`if p.ImportPath != "runtime" && p.ImportPath != "internal" && p.ImportPath != "unsafe" && !strings.HasPrefix(p.ImportPath, "runtime/") && !strings.HasPrefix(p.ImportPath, "internal/") {`,
+	`if ` + checkCanAddRuntimeDep + ` {`,
 	`addImport("runtime", true);`,
+	`addImport("unsafe", true);`,
+	`};`,
+}
+
+var loadPackageDataAddRuntimeImport = []string{
+	`if ` + checkCanAddRuntimeDep + ` {`,
+	`   var foundUnsafe bool;`,
+	`   var foundRuntime bool;`,
+	"   for _ ,imp := range p.Imports {",
+	`       if imp == "runtime" {`,
+	`           foundRuntime = true;`,
+	`       }else if imp == "unsafe" {`,
+	`           foundUnsafe = true;`,
+	`       };`,
+	`       if foundRuntime && foundUnsafe {`,
+	`           break;`,
+	`       };`,
+	`   };`,
+	`   if !foundRuntime {`,
+	`       p.Imports = append(p.Imports, "runtime");`,
+	`   };`,
+	`   if !foundUnsafe {`,
+	`       p.Imports = append(p.Imports, "unsafe");`,
+	`   };`,
 	`};`,
 }
 
@@ -29,6 +55,11 @@ func instrumentPkgLoad(goroot string, goVersion *goinfo.GoVersion) error {
 	}
 	pkgFile := srcCmdGoLoadPkgPath.JoinPrefix(goroot)
 	return patch.EditFile(pkgFile, func(content string) (string, error) {
+		if goVersion.Minor < 19 {
+			// this issue only happens in go1.19 and later
+			// return cleaned content
+			return content, nil
+		}
 		content = patch.UpdateContent(content,
 			"/*<begin add_runtime_import>*/",
 			"/*<end add_runtime_import>*/",
@@ -39,6 +70,24 @@ func instrumentPkgLoad(goroot string, goVersion *goinfo.GoVersion) error {
 			1,
 			patch.UpdatePosition_After,
 			strings.Join(runtimeImportCode, ""),
+		)
+		returnAnchor := "return p, loaded, err"
+		code := strings.Join(loadPackageDataAddRuntimeImport, "")
+		if goVersion.Major == 1 && goVersion.Minor <= 20 {
+			returnAnchor = "return data.p, loaded, data.err"
+			code = "p:=data.p;" + code
+		}
+		content = patch.UpdateContent(content,
+			"/*<begin add_runtime_imports_for_loadPackageData>*/",
+			"/*<end add_runtime_imports_for_loadPackageData>*/",
+			[]string{
+				"\nfunc loadPackageData(ctx context.Context,",
+				returnAnchor,
+				"\n}",
+			},
+			1,
+			patch.UpdatePosition_Before,
+			code,
 		)
 		return content, nil
 	})

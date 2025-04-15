@@ -50,7 +50,13 @@ func run(args []string) error {
 		if len(args) == 0 || args[0] == "" {
 			return fmt.Errorf("requires GOROOT")
 		}
-		return debugGo(cmd == "run-go", args[0], nil, args[1:])
+
+		goroot := args[0]
+		err := instrumentPkgLoad(goroot)
+		if err != nil {
+			return err
+		}
+		return debugGo(cmd == "run-go", goroot, nil, args[1:])
 	case "debug-compile":
 		if len(args) < 1 || args[0] == "" {
 			return fmt.Errorf("requires GOROOT")
