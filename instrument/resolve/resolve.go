@@ -559,7 +559,9 @@ func (c *Scope) resolveFieldToObject(valType types.Type, fieldName string, onDet
 	}
 	// in go, a named type cannot be pointer
 	if namedType, ok := resolveType.(types.NamedType); ok {
-		decl := c.getPkgNameDecl(namedType.PkgPath, namedType.Name)
+		// see issue https://github.com/xhd2015/xgo/issues/314
+		resolvedNamedType := types.ResolveAlias(namedType)
+		decl := c.getPkgNameDecl(resolvedNamedType.PkgPath, resolvedNamedType.Name)
 		var method *edit.FuncDecl
 		if decl != nil {
 			method = decl.Methods[fieldName]
@@ -574,7 +576,7 @@ func (c *Scope) resolveFieldToObject(valType types.Type, fieldName string, onDet
 			}
 			return types.PkgTypeMethod{
 				Name: fieldName,
-				Recv: namedType,
+				Recv: resolvedNamedType,
 				// TODO params
 			}
 		} else {

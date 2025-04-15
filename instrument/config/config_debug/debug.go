@@ -18,6 +18,12 @@ func OnTraverseFile(pkg *edit.Package, file *edit.File) {
 	}
 }
 
+func OnCollectFileDecl(pkg *edit.Package, file *edit.File) {
+	if file.File.Name == "type_alias_go_1.20_test.go" {
+		Debugpoint()
+	}
+}
+
 func OnTraverseFuncDecl(pkg *edit.Package, file *edit.File, fnDecl *ast.FuncDecl) {
 	var funcName string
 	if fnDecl.Name != nil {
@@ -30,7 +36,7 @@ func OnTraverseFuncDecl(pkg *edit.Package, file *edit.File, fnDecl *ast.FuncDecl
 			}
 		}
 	}
-	if funcName == "TestFlightStreamToDataProxyContentBinary_ErrorFormat" {
+	if funcName == "TestTypeAliasGenericNonPtrDebug" {
 		Debugpoint()
 	}
 }

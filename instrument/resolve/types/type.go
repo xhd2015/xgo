@@ -414,3 +414,13 @@ func ResolveLazy(typ Type) Type {
 	}
 	return lzy()
 }
+
+func ResolveAlias(typ NamedType) NamedType {
+	for {
+		t, ok := typ.Type.(NamedType)
+		if !ok {
+			return typ
+		}
+		typ = t
+	}
+}

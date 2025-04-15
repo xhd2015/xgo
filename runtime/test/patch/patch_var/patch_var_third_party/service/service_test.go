@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/xhd2015/xgo/runtime/mock"
-	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party_var/third"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_var/patch_var_third_party/third"
 )
 
 var svcLiteral = third.GreetService{}

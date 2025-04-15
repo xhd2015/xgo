@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party_var/third/mix"
-	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party_var/third/sub"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_var/patch_var_third_party/third/mix"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_var/patch_var_third_party/third/sub"
 	"github.com/xhd2015/xgo/runtime/trace"
 )
 

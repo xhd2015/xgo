@@ -1,7 +1,7 @@
 package mix
 
 import (
-	"github.com/xhd2015/xgo/runtime/test/patch/patch_third_party_var/third/sub"
+	"github.com/xhd2015/xgo/runtime/test/patch/patch_var/patch_var_third_party/third/sub"
 )
 
 var MapFunc = map[sub.ID]func(){}

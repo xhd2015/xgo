@@ -22,6 +22,9 @@ func CollectDecls(pkg *edit.Package) {
 	}
 	typesMethods := make(map[string]map[string]*edit.FuncDecl)
 	for _, file := range pkg.Files {
+		if config.DEBUG {
+			config_debug.OnCollectFileDecl(pkg, file)
+		}
 		fileDecls := file.Decls
 		for _, decl := range file.File.Syntax.Decls {
 			switch decl := decl.(type) {
@@ -62,6 +65,8 @@ func CollectDecls(pkg *edit.Package) {
 						if isBlankName(spec.Name.Name) {
 							continue
 						}
+						// TODO: check spec.Assign to handle
+						// alias if necessary
 						fileDecls = append(fileDecls, &edit.Decl{
 							Kind:  edit.DeclKindType,
 							Ident: spec.Name,
