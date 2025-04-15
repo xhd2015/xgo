@@ -95,6 +95,8 @@ type PtrType struct {
 
 type Lazy func() Info
 
+// LazyType will be resolved when UseContext.doUseTypeInFile is called
+// that will recursively resolve the lazy type
 type LazyType func() Type
 
 type RawPtr struct {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/instrument/config"
+	"github.com/xhd2015/xgo/instrument/config/config_debug"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/patch"
@@ -64,6 +65,9 @@ func TrapVariables(packages *edit.Packages, recorder *resolve.Recorder) error {
 }
 
 func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, decl *edit.Decl, impRecorder *importRecorder) bool {
+	if config.DEBUG {
+		config_debug.OnRewriteVarDefAndRefs(pkgPath, file, decl)
+	}
 	fileEdit := file.Edit
 	end := decl.Decl.End()
 	// TODO: check if the end is a semicolon
@@ -101,7 +105,7 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 
 	// see issue https://github.com/xhd2015/xgo/issues/313
 	var varPrefix string
-	if strings.HasPrefix(varName, "Test") {
+	if strings.HasSuffix(file.File.Name, "_test.go") && strings.HasPrefix(varName, "Test") {
 		varPrefix = "T_"
 	}
 	code := genCode(varPrefix, varName, infoVar, typeCode)
@@ -237,7 +241,7 @@ func (c *importRecorder) RecordImport(pkgPath string, ref string) (actualRef str
 	if pkgPath == "" || ref == "" {
 		panic("pkgPath or ref is empty")
 	}
-	prev, ok := c.pkgPathToPkgRef[ref]
+	prev, ok := c.pkgPathToPkgRef[pkgPath]
 	if ok {
 		return prev, true
 	}

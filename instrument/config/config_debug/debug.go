@@ -68,3 +68,15 @@ func AfterSelectorResolve(expr ast.Expr) {
 		Debugpoint()
 	}
 }
+
+func OnRewriteVarDefAndRefs(pkgPath string, file *edit.File, decl *edit.Decl) {
+	var declName string
+	if decl.Ident != nil {
+		declName = decl.Ident.Name
+	}
+	if file.File.Name == "type_ref_multiple_times_test.go" {
+		if declName == "testMap" {
+			Debugpoint()
+		}
+	}
+}
