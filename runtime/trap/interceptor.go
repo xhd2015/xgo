@@ -58,3 +58,8 @@ func AddFuncInterceptor(f interface{}, interceptor *Interceptor) func() {
 //
 //	trap.MarkIntercept((*bytes.Buffer).String)
 func MarkIntercept(f interface{}) {}
+
+// MarkInterceptAll marks all functions to be intercepted
+// this effectively enables the --trap-all flag unless
+// explicitly disabled by --trap-all=false flag
+func MarkInterceptAll() {}

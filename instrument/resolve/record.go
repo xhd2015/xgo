@@ -31,7 +31,7 @@ func (c *Scope) recordTrap(sel *ast.SelectorExpr) bool {
 	if name == "InfoFunc" || name == "InfoVar" {
 		return pkgPath == constants.RUNTIME_FUNCTAB_PKG
 	}
-	if name == "AddInterceptor" {
+	if name == "AddInterceptor" || name == "MarkInterceptAll" {
 		if pkgPath == constants.RUNTIME_TRAP_PKG {
 			c.Global.Recorder.HasTrapInterceptorRef = true
 		}
