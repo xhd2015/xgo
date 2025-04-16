@@ -178,7 +178,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			Value: &projectDir,
 		},
 		{
-			Flags: []string{"-o"},
+			Flags: []string{"-o", "--o"},
 			Value: &output,
 		},
 		{
@@ -216,37 +216,37 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			Value: &dumpAST,
 		},
 		{
-			Flags: []string{"-run"},
+			Flags: []string{"-run", "--run"},
 			Set: func(v string) {
 				flagRun = v
 			},
 		},
 		{
-			Flags: []string{"-mod"},
+			Flags: []string{"-mod", "--mod"},
 			Set: func(v string) {
 				mod = v
 			},
 		},
 		{
-			Flags: []string{"-gcflags"},
+			Flags: []string{"-gcflags", "--gcflags"},
 			Set: func(v string) {
 				gcflags = append(gcflags, v)
 			},
 		},
 		{
-			Flags: []string{"-overlay"},
+			Flags: []string{"-overlay", "--overlay"},
 			Set: func(v string) {
 				overlay = v
 			},
 		},
 		{
-			Flags: []string{"-modfile"},
+			Flags: []string{"-modfile", "--modfile"},
 			Set: func(v string) {
 				modfile = v
 			},
 		},
 		{
-			Flags: []string{"-tags"},
+			Flags: []string{"-tags", "--tags"},
 			Set: func(v string) {
 				tags = v
 			},
@@ -316,7 +316,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			remainArgs = append(remainArgs, arg)
 			continue
 		}
-		if cmd == "test" && arg == "-args" {
+		if cmd == "test" && (arg == "-args" || arg == "--args") {
 			// pass everything after -args to test binary
 			testArgs = append(testArgs, args[i+1:]...)
 			break
@@ -328,19 +328,19 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		if arg == "-" {
 			return nil, fmt.Errorf("unrecognized flag: %s", arg)
 		}
-		if arg == "-a" {
+		if arg == "-a" || arg == "--a" {
 			flagA = true
 			continue
 		}
-		if arg == "-x" {
+		if arg == "-x" || arg == "--x" {
 			flagX = true
 			continue
 		}
-		if arg == "-c" {
+		if arg == "-c" || arg == "--c" {
 			flagC = true
 			continue
 		}
-		if arg == "-v" {
+		if arg == "-v" || arg == "--v" {
 			flagV = true
 			continue
 		}
@@ -476,7 +476,9 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		}
 
 		// check if single dash flags, this is usually go flags, such as -ldflags...
-		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") {
+		// NOTE: according to https://github.com/xhd2015/xgo/issues/321
+		// go supports both --flag and -flag syntax
+		if strings.HasPrefix(arg, "-") {
 			eqIdx := strings.Index(arg, "=")
 			if eqIdx >= 0 {
 				// things like -count=0
