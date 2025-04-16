@@ -15,6 +15,7 @@ import (
 	"github.com/xhd2015/xgo/cmd/xgo/exec_tool"
 	"github.com/xhd2015/xgo/cmd/xgo/pathsum"
 	test_explorer "github.com/xhd2015/xgo/cmd/xgo/test-explorer"
+	"github.com/xhd2015/xgo/instrument/build"
 	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/instrument_xgo_runtime"
@@ -96,8 +97,7 @@ func main() {
 		return
 	}
 	if cmd == "shadow" {
-		err := handleShawdow()
-		consumeErrAndExit(err)
+		consumeErrAndExit(fmt.Errorf("shadow is deprecated, use `xgo setup` instead"))
 		return
 	}
 	if cmd != "build" && cmd != "run" && cmd != "test" && cmd != "exec" && cmd != "setup" {
@@ -613,10 +613,8 @@ func handleBuild(cmd string, args []string) error {
 	debugMode := runDebug || testDebug || buildDebug
 	var finalBuildOutput string
 
-	execCmdEnv, err := patchEnvWithGoroot(os.Environ(), instrumentGoroot)
-	if err != nil {
-		return err
-	}
+	execCmdEnv := build.MakeGorootEnv(os.Environ(), instrumentGoroot)
+
 	var execCmd *exec.Cmd
 	var logCmdExec func()
 	if !cmdExec {
@@ -1244,42 +1242,6 @@ func ensureDirs(binDir string, logDir string, instrumentDir string, packageDataD
 		}
 	}
 	return nil
-}
-
-func patchEnvWithGoroot(env []string, goroot string) ([]string, error) {
-	goroot, err := filepath.Abs(goroot)
-	if err != nil {
-		return nil, err
-	}
-
-	newEnv := makeGorootEnv(env, goroot)
-	return newEnv, nil
-}
-
-// makeGorootEnv makes a new env with GOROOT and PATH set
-func makeGorootEnv(env []string, goroot string) []string {
-	newEnv := make([]string, 0, len(env))
-	var lastPath string
-	for _, e := range env {
-		if strings.HasPrefix(e, "GOROOT=") {
-			continue
-		}
-		if strings.HasPrefix(e, "PATH=") {
-			lastPath = e
-			continue
-		}
-		newEnv = append(newEnv, e)
-	}
-	gorootBin := filepath.Join(goroot, "bin")
-	pathEnv := gorootBin
-	if lastPath != "" {
-		pathEnv = pathEnv + string(filepath.ListSeparator) + strings.TrimPrefix(lastPath, "PATH=")
-	}
-	newEnv = append(newEnv,
-		"GOROOT="+goroot,
-		"PATH="+pathEnv,
-	)
-	return newEnv
 }
 
 func assertDir(dir string) error {

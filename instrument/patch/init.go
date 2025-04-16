@@ -40,6 +40,10 @@ func GetFuncInsertPosition(file *ast.File) token.Pos {
 	return fileEnd
 }
 
+func Append(edit *goedit.Edit, file *ast.File, s string) {
+	edit.Insert(file.End(), s)
+}
+
 func AddImport(edit *goedit.Edit, file *ast.File, name string, pkgPath string) {
 	edit.Insert(file.Name.End(), fmt.Sprintf(";import %s %q", name, pkgPath))
 }

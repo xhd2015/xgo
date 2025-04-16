@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/xgo/instrument/constants"
+	"github.com/xhd2015/xgo/instrument/instrument_compiler"
 	"github.com/xhd2015/xgo/instrument/instrument_go"
 	"github.com/xhd2015/xgo/instrument/instrument_runtime"
 	"github.com/xhd2015/xgo/instrument/patch"
@@ -44,7 +45,7 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 	}
 
 	// instrument go
-	err := instrument_go.InstrumentGo(goroot, goVersion)
+	err := instrument_go.BuildInstrument(goroot, goVersion)
 	if err != nil {
 		return err
 	}
@@ -68,6 +69,11 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 		return err
 	}
 
+	err = instrument_compiler.BuildInstrument(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
+	if err != nil {
+		return err
+	}
+
 	if V1_0_0 {
 		// runtime
 		err := patchRuntimeAndTesting(origGoroot, goroot, goVersion)
@@ -76,7 +82,7 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 		}
 
 		// patch compiler
-		err = patchCompiler(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
+		err = patchCompilerLegacy(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
 		if err != nil {
 			return err
 		}

@@ -12,8 +12,12 @@ const (
 	// copy from runtime to cmd/xgo/trace/render/stack_model/stack_model.go
 	GenernateType_RuntimeTraceModel GenernateType = "runtime/trace/stack_model/stack_model.go"
 
-	// copy from runtime to cmd/xgo/runtime_gen
-	GenernateType_XgoRuntimeGen GenernateType = "cmd/xgo/runtime_gen"
+	// copy from runtime to cmd/xgo/asset/runtime_gen
+	GenernateType_XgoRuntimeGen GenernateType = "cmd/xgo/asset/runtime_gen"
+
+	// copy from patch to cmd/xgo/asset/compiler_patch_gen
+	GenernateType_XgoCompilerPatchGen GenernateType = "cmd/xgo/asset/compiler_patch_gen"
+
 	// copy from cmd/xgo/upgrade
 	GenernateType_ScriptInstallUpgrade GenernateType = "script/install/upgrade"
 

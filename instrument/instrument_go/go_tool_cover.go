@@ -3,14 +3,13 @@ package instrument_go
 import (
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
+	"github.com/xhd2015/xgo/instrument/build"
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/edit/goedit"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -34,33 +33,13 @@ func InstrumentGoToolCover(goroot string, goVersion *goinfo.GoVersion) error {
 		return err
 	}
 
-	toolPath, err := getToolPath(goroot)
+	toolPath, err := build.GetToolPath(goroot)
 	if err != nil {
 		return err
 	}
 
 	// build cover command
-	return buildBinary(goroot, filepath.Join(goroot, "src"), toolPath, "cover", "./cmd/cover")
-}
-
-func getToolPath(goroot string) (string, error) {
-	runtimeOS := runtime.GOOS
-	arch := runtime.GOARCH
-	if runtimeOS == "" {
-		return "", errors.New("cannot get runtime.GOOS")
-	}
-	if arch == "" {
-		return "", errors.New("cannot get runtime.GOARCH")
-	}
-	dir := filepath.Join(goroot, "pkg", "tool", runtimeOS+"_"+arch)
-	stat, err := os.Stat(dir)
-	if err != nil {
-		return "", err
-	}
-	if !stat.IsDir() {
-		return "", fmt.Errorf("cover tool path is not a directory: %s", dir)
-	}
-	return dir, nil
+	return build.BuildBinary(goroot, filepath.Join(goroot, "src"), toolPath, "cover", "./cmd/cover")
 }
 
 func copyXgoCover(goroot string) error {

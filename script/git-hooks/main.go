@@ -124,12 +124,22 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 		affectedFiles = append(affectedFiles, revision.GetXgoVersionFile(rootDir), revision.GetRuntimeVersionFile(rootDir))
 	}
 
+	genDirs := [][]string{
+		{"cmd", "xgo", "asset", "runtime_gen"},
+		{"cmd", "xgo", "asset", "compiler_patch_gen"},
+	}
+	args := []string{"run", "./script/generate"}
+	for _, genDir := range genDirs {
+		args = append(args, strings.Join(genDir, "/"))
+	}
 	// run generate
-	err = cmd.Dir(rootDir).Run("go", "run", "./script/generate", string(gen_defs.GenernateType_XgoRuntimeGen))
+	err = cmd.Dir(rootDir).Run("go", args...)
 	if err != nil {
 		return err
 	}
-	affectedFiles = append(affectedFiles, filepath.Join("cmd", "xgo", "runtime_gen"))
+	for _, genDir := range genDirs {
+		affectedFiles = append(affectedFiles, filepath.Join(genDir...))
+	}
 	if !noCommit {
 		err = cmd.Run("git", append([]string{"add"}, affectedFiles...)...)
 		if err != nil {

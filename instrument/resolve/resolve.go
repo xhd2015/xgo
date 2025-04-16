@@ -560,6 +560,9 @@ func (c *Scope) resolveFieldToObject(valType types.Type, fieldName string, onDet
 		isPtr = true
 		resolveType = types.ResolveLazy(ptrType.Elem)
 	}
+	if genInstanceType, ok := resolveType.(types.GenericInstanceType); ok {
+		resolveType = genInstanceType.Type
+	}
 	// in go, a named type cannot be pointer
 	if namedType, ok := resolveType.(types.NamedType); ok {
 		// see issue https://github.com/xhd2015/xgo/issues/314

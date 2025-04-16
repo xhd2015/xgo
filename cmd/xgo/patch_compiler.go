@@ -1,40 +1,36 @@
 package main
 
 import (
-	"embed"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/xhd2015/xgo"
+	"github.com/xhd2015/xgo/instrument/instrument_compiler"
+
+	"github.com/xhd2015/xgo/cmd/xgo/asset"
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
 	instrument_patch "github.com/xhd2015/xgo/instrument/patch"
-	"github.com/xhd2015/xgo/support/filecopy"
 	"github.com/xhd2015/xgo/support/goinfo"
-	"github.com/xhd2015/xgo/support/osinfo"
 )
 
-var xgoRewriteInternal = _FilePath{"src", "cmd", "compile", "internal", "xgo_rewrite_internal"}
-var xgoRewriteInternalPatch = append(xgoRewriteInternal, "patch")
+var XgoRewriteInternal = instrument_compiler.XgoRewriteInternal
+var XgoRewriteInternalPatch = instrument_compiler.XgoRewriteInternalPatch
 
 var xgoNodes = _FilePath{"src", "cmd", "compile", "internal", "syntax", "xgo_nodes.go"}
-var gcMain = _FilePath{"src", "cmd", "compile", "internal", "gc", "main.go"}
+var CompilerGCMain = instrument_compiler.CompilerGCMain
 var noderFile = _FilePath{"src", "cmd", "compile", "internal", "noder", "noder.go"}
 var noderFile16 = _FilePath{"src", "cmd", "compile", "internal", "gc", "noder.go"}
 var irgenFile = _FilePath{"src", "cmd", "compile", "internal", "noder", "irgen.go"}
 
-var compilerRuntimeDefFile = _FilePath{"src", "cmd", "compile", "internal", "typecheck", "_builtin", "runtime.go"}
-var compilerRuntimeDefFile18 = _FilePath{"src", "cmd", "compile", "internal", "typecheck", "builtin", "runtime.go"}
-var compilerRuntimeDefFile16 = _FilePath{"src", "cmd", "compile", "internal", "gc", "builtin", "runtime.go"}
+var compilerRuntimeDefFile = instrument_compiler.CompilerRuntimeDefFile
+var compilerRuntimeDefFile18 = instrument_compiler.CompilerRuntimeDefFile18
+var compilerRuntimeDefFile16 = instrument_compiler.CompilerRuntimeDefFile16
 
 var compilerFiles = []_FilePath{
 	xgoNodes,
-	gcMain,
+	CompilerGCMain,
 	noderFile,
 	noderFile16,
 	irgenFile,
@@ -52,9 +48,9 @@ var compilerFiles = []_FilePath{
 	syntaxExtra,
 }
 
-func patchCompiler(origGoroot string, goroot string, goVersion *goinfo.GoVersion, xgoSrc string, forceReset bool, syncWithLink bool) error {
+func patchCompilerLegacy(origGoroot string, goroot string, goVersion *goinfo.GoVersion, xgoSrc string, forceReset bool, syncWithLink bool) error {
 	// copy compiler internal dependencies
-	err := importCompileInternalPatch(goroot, xgoSrc, forceReset, syncWithLink)
+	err := instrument_compiler.ImportCompileInternalPatch(goroot, xgoSrc, forceReset, syncWithLink)
 	if err != nil {
 		return err
 	}
@@ -64,7 +60,7 @@ func patchCompiler(origGoroot string, goroot string, goVersion *goinfo.GoVersion
 	}
 
 	if runtimeDefUpdated {
-		err = patchRuntimeDef(origGoroot, goroot, goVersion)
+		err = instrument_compiler.MkBuiltin(origGoroot, goroot, goVersion, patch.RuntimeExtraDef)
 		if err != nil {
 			return err
 		}
@@ -78,14 +74,15 @@ func patchCompiler(origGoroot string, goroot string, goVersion *goinfo.GoVersion
 		}
 	}
 
-	err = patchCompilerInternal(goroot, goVersion)
+	err = patchCompilerInternalLegacy(goroot, goVersion)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
+// Deprecated
+func patchCompilerInternalLegacy(goroot string, goVersion *goinfo.GoVersion) error {
 	// src/cmd/compile/internal/noder/noder.go
 	err := patchCompilerNoder(goroot, goVersion)
 	if err != nil {
@@ -101,7 +98,7 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 	if err != nil {
 		return fmt.Errorf("patching syntax node:%w", err)
 	}
-	err = patchGcMain(goroot, goVersion)
+	err = patchGcMainOld(goroot, goVersion)
 	if err != nil {
 		return fmt.Errorf("patching gc main:%w", err)
 	}
@@ -110,14 +107,6 @@ func patchCompilerInternal(goroot string, goVersion *goinfo.GoVersion) error {
 		return fmt.Errorf("patch ast type check:%w", err)
 	}
 	return nil
-}
-
-func getInternalPatch(goroot string, subDirs ...string) string {
-	dir := filepath.Join(goroot, filepath.Join(xgoRewriteInternalPatch...))
-	if len(subDirs) > 0 {
-		dir = filepath.Join(dir, filepath.Join(subDirs...))
-	}
-	return dir
 }
 
 func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
@@ -141,8 +130,9 @@ func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
 	return os.WriteFile(file, []byte("package syntax\n"+strings.Join(fragments, "\n")), 0755)
 }
 
-func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
-	file := filepath.Join(goroot, filepath.Join(gcMain...))
+// Deprecated
+func patchGcMainOld(goroot string, goVersion *goinfo.GoVersion) error {
+	file := filepath.Join(goroot, filepath.Join(CompilerGCMain...))
 	go116AndUnder := goVersion.Major == 1 && goVersion.Minor <= goinfo.GO_VERSION_16
 	go117 := goVersion.Major == 1 && goVersion.Minor == goinfo.GO_VERSION_17
 	go118 := goVersion.Major == 1 && goVersion.Minor == goinfo.GO_VERSION_18
@@ -158,6 +148,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 			`xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"`,
 			`xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"`,
 		}
+
 		content = instrument_patch.AddCodeAfterImports(content,
 			"/*<begin gc_import>*/", "/*<end gc_import>*/",
 			imports,
@@ -377,57 +368,6 @@ func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
 	})
 }
 
-const patchCompilerName = "patch"
-
-func importCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, syncWithLink bool) error {
-	dstDir := getInternalPatch(goroot)
-	if isDevelopment {
-		symLink := syncWithLink
-		if osinfo.FORCE_COPY_UNSYM {
-			// Windows: A required privilege is not held by the client.
-			symLink = false
-		}
-		// copy compiler internal dependencies
-		err := filecopy.CopyReplaceDir(filepath.Join(xgoSrc, "patch"), dstDir, symLink)
-		if err != nil {
-			return err
-		}
-
-		// remove patch/go.mod
-		err = os.RemoveAll(filepath.Join(dstDir, "go.mod"))
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return nil
-			}
-			return err
-		}
-		return nil
-	}
-
-	if forceReset {
-		// -a causes repatch
-		err := os.RemoveAll(dstDir)
-		if err != nil {
-			return err
-		}
-	} else {
-		// check if already copied
-		_, statErr := os.Stat(dstDir)
-		if statErr == nil {
-			// skip copy if already exists
-			return nil
-		}
-	}
-
-	// read from embed
-	err := copyEmbedDir(xgo.PatchFS, patchCompilerName, dstDir)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // according to https://pkg.go.dev/embed
 //
 //	'separator is a forward slash, even on Windows systems'
@@ -444,94 +384,10 @@ func concatEmbedPath(a string, b string) string {
 	return a + "/" + b
 }
 
-func embedPathToFsPath(embedPath string) string {
-	if filepath.Separator == '/' {
-		return embedPath
-	}
-	return strings.ReplaceAll(embedPath, "/", string(filepath.Separator))
-}
-
-func copyEmbedDir(srcFS embed.FS, subName string, dstDir string) error {
-	return fs.WalkDir(srcFS, subName, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if path == subName {
-			return os.MkdirAll(dstDir, 0755)
-		}
-		// join without prefix `subName`, also works on windows
-		dstPath := filepath.Join(dstDir, embedPathToFsPath(path[len(subName)+len("/"):]))
-		if d.IsDir() {
-			return os.MkdirAll(dstPath, 0755)
-		}
-
-		content, err := srcFS.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(dstPath, content, 0755)
-	})
-}
-
 func readXgoSrc(xgoSrc string, paths []string) ([]byte, error) {
 	if isDevelopment {
 		srcFile := filepath.Join(xgoSrc, "patch", filepath.Join(paths...))
 		return os.ReadFile(srcFile)
 	}
-	return xgo.PatchFS.ReadFile(patchCompilerName + "/" + strings.Join(paths, "/"))
-}
-
-func patchRuntimeDef(origGoroot string, goroot string, goVersion *goinfo.GoVersion) error {
-	err := prepareRuntimeDefs(goroot, goVersion)
-	if err != nil {
-		return err
-	}
-
-	// run mkbuiltin
-	cmd := exec.Command(filepath.Join(origGoroot, "bin", "go"), "run", "mkbuiltin.go")
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	var dirs []string
-	if goVersion.Major > 1 || (goVersion.Major == 1 && goVersion.Minor > 16) {
-		dirs = []string{goroot, "src", "cmd", "compile", "internal", "typecheck"}
-	} else {
-		dirs = []string{goroot, "src", "cmd", "compile", "internal", "gc"}
-	}
-	cmd.Dir = filepath.Join(dirs...)
-	cmd.Env, err = patchEnvWithGoroot(os.Environ(), origGoroot)
-	if err != nil {
-		return err
-	}
-	cmd.Env = appendNativeBuildEnv(cmd.Env)
-
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-func prepareRuntimeDefs(goRoot string, goVersion *goinfo.GoVersion) error {
-	runtimeDefFiles := []string(compilerRuntimeDefFile)
-	if goVersion.Major == 1 && goVersion.Minor <= 19 {
-		if goVersion.Minor > 16 {
-			// in go1.19 and below, builtin has no _ prefix
-			runtimeDefFiles = []string(compilerRuntimeDefFile18)
-		} else {
-			runtimeDefFiles = []string(compilerRuntimeDefFile16)
-		}
-	}
-	runtimeDefFile := filepath.Join(runtimeDefFiles...)
-	fullFile := filepath.Join(goRoot, runtimeDefFile)
-
-	extraDef := patch.RuntimeExtraDef
-	return instrument_patch.EditFile(fullFile, func(content string) (string, error) {
-		content = instrument_patch.AddContentAfter(content,
-			`/*<begin extra_runtime_func>*/`, `/*<end extra_runtime_func>*/`,
-			[]string{`var x86HasFMA bool`, `var armHasVFPv4 bool`, `var arm64HasATOMICS bool`},
-			extraDef,
-		)
-		return content, nil
-	})
+	return asset.CompilerPatchGenFS.ReadFile(asset.CompilerPatchGen + "/" + strings.Join(paths, "/"))
 }

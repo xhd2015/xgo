@@ -13,6 +13,7 @@ import (
 
 // this ensures runtime to be always imported
 var _ = runtime.NumCPU
+var _ = unsafe.Pointer(nil)
 
 type XgoFuncInfo = runtime.XgoFuncInfo
 

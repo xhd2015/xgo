@@ -11,13 +11,48 @@ import (
 	"github.com/xhd2015/xgo/instrument/patch"
 )
 
+type InfoKind int
+
+const (
+	InfoKind_Func   InfoKind = 0
+	InfoKind_Var    InfoKind = 1
+	InfoKind_VarPtr InfoKind = 2
+	InfoKind_Const  InfoKind = 3
+)
+
+var FUNC_INFO_FIELDS = []string{
+	"Kind int",
+	"FullName string",
+	"Pkg string",
+	"IdentityName string",
+	"Name string",
+	"RecvType string",
+	"RecvPtr bool",
+	"Interface bool",
+	"Generic bool",
+	"Closure bool",
+	"Stdlib bool",
+	"File string",
+	"Line int",
+	"PC uintptr",
+	"Func interface{}",
+	"Var interface{}",
+	"RecvName string",
+	"ArgNames []string",
+	"ResNames []string",
+	"FirstArgCtx bool",
+	"LastResultErr bool",
+}
+
 func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdlib bool) {
 	fileIndex := file.Index
 
-	const FUNC_INFO = constants.RUNTIME_FUNC_TYPE
-	const PKG_FUNC_INFO = constants.RUNTIME_PKG_FUNC_INFO_REF
-	const REGISTER = constants.RUNTIME_REGISTER_FUNC
+	REGISTER := fmt.Sprintf("%s%d", constants.LINK_REGISTER, fileIndex)
+	TRAP_FUNC := fmt.Sprintf("%s%d", constants.LINK_TRAP_FUNC, fileIndex)
+	TRAP_VAR := fmt.Sprintf("%s%d", constants.LINK_TRAP_VAR, fileIndex)
+	TRAP_VAR_PTR := fmt.Sprintf("%s%d", constants.LINK_TRAP_VAR_PTR, fileIndex)
 
+	FUNC_INFO_TYPE := fmt.Sprintf("__xgo_func_info_%d", fileIndex)
 	pkgVar := fmt.Sprintf("__xgo_pkg_%d", fileIndex)
 	fileVar := fmt.Sprintf("__xgo_file_%d", fileIndex)
 
@@ -30,12 +65,12 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 	addLiteral := func(infoVar string, literal string, delayInitProp string, delayInitValue string) {
 		idx++
 		varDefs = append(varDefs, fmt.Sprintf("var %s=%s", infoVar, literal))
-		varRegs = append(varRegs, fmt.Sprintf("%s.%s(%s)", PKG_FUNC_INFO, REGISTER, infoVar))
+		varRegs = append(varRegs, fmt.Sprintf("%s(%s)", REGISTER, infoVar))
 		if delayInitProp != "" {
 			delayInits = append(delayInits, fmt.Sprintf("%s.%s=%s", infoVar, delayInitProp, delayInitValue))
 		}
 	}
-	makeLiteral := func(kind string, name string, identityName string, pos token.Pos, extra []string) string {
+	makeLiteral := func(kind InfoKind, name string, identityName string, pos token.Pos, extra []string) string {
 		var suffix string
 		if len(extra) > 0 {
 			suffix = "," + strings.Join(extra, ",")
@@ -44,8 +79,8 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 			suffix = suffix + ",Stdlib:true"
 		}
 		lineNum := fset.Position(pos).Line
-		return fmt.Sprintf("&%s.%s{Kind:%s.%s,Pkg:%s,Name:%q,IdentityName:%q,File:%s,Line:%d%s}", PKG_FUNC_INFO, FUNC_INFO,
-			PKG_FUNC_INFO, kind,
+		return fmt.Sprintf("&%s{Kind:%d,Pkg:%s,Name:%q,IdentityName:%q,File:%s,Line:%d%s}", FUNC_INFO_TYPE,
+			kind,
 			pkgVar,
 			name,
 			identityName,
@@ -60,7 +95,7 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 			fmt.Sprintf("ResNames:[]string{%q}", varInfo.Name),
 		}
 
-		literal := makeLiteral("XgoKind_Var", varInfo.Name, varInfo.Name, varInfo.Decl.Decl.Pos(), extra)
+		literal := makeLiteral(InfoKind_Var, varInfo.Name, varInfo.Name, varInfo.Decl.Decl.Pos(), extra)
 		addLiteral(varInfo.InfoVar, literal, "", "")
 	}
 	for _, funcInfo := range file.TrapFuncs {
@@ -91,12 +126,12 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 			extra = append(extra, fmt.Sprintf("ResNames:[]string{%s}", astutil.JoinQuoteNames(funcInfo.Results.Names(), ",")))
 		}
 
-		literal := makeLiteral("XgoKind_Func", funcInfo.FuncDecl.Name.Name, identityName, funcInfo.FuncDecl.Pos(), extra)
+		literal := makeLiteral(InfoKind_Func, funcInfo.FuncDecl.Name.Name, identityName, funcInfo.FuncDecl.Pos(), extra)
 		addLiteral(funcInfo.InfoVar, literal, delayInitProp, delayInitValue)
 	}
 
 	for _, intfType := range file.InterfaceTypes {
-		literal := makeLiteral("XgoKind_Func", intfType.Name, intfType.Name, intfType.Ident.Pos(), []string{
+		literal := makeLiteral(InfoKind_Func, intfType.Name, intfType.Name, intfType.Ident.Pos(), []string{
 			"Interface:true",
 			fmt.Sprintf("RecvType: %q", intfType.Name),
 		})
@@ -109,11 +144,14 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 	fileEdit := file.Edit
 	fileSyntax := file.File.Syntax
 
-	patch.AddImport(fileEdit, fileSyntax, PKG_FUNC_INFO, constants.RUNTIME_REG_PKG)
-
 	absFile := file.File.AbsPath
 	defLines := make([]string, 0, len(varDefs)+2)
 	defLines = append(defLines,
+		fmt.Sprintf("type %s struct{%s}", FUNC_INFO_TYPE, strings.Join(FUNC_INFO_FIELDS, ";")),
+		fmt.Sprintf("var %s = %s", REGISTER, REGISTER_SIGNATURE),
+		fmt.Sprintf("var %s = %s", TRAP_FUNC, TRAP_FUNC_SIGNATURE),
+		fmt.Sprintf("var %s = %s", TRAP_VAR, TRAP_VAR_SIGNATURE),
+		fmt.Sprintf("var %s = %s", TRAP_VAR_PTR, TRAP_VAR_PTR_SIGNATURE),
 		fmt.Sprintf("var %s=%q", pkgVar, pkgPath),
 		fmt.Sprintf("var %s=%q", fileVar, absFile),
 	)
@@ -125,7 +163,19 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 	if len(delayInits) > 0 {
 		delayInitCode = ";func init(){" + strings.Join(delayInits, ";") + ";}"
 	}
-	regCodeInit := "func init(){" + regCode + ";}"
+	__xgo_init_i := fmt.Sprintf("__xgo_init_%d", fileIndex)
+	regCodeInit := "func init(){" + __xgo_init_i + "();" + regCode + ";}"
 	pos := patch.GetFuncInsertPosition(fileSyntax)
 	patch.AddCode(fileEdit, pos, defCode+delayInitCode+";"+regCodeInit)
+
+	// make IR not inline
+	// check patch/link/link_ir.go
+	__xgo_init_i_func := fmt.Sprintf("func %s(){%s=%s;%s=%s;%s=%s;%s=%s;}", __xgo_init_i,
+		// self assign
+		REGISTER, REGISTER,
+		TRAP_FUNC, TRAP_FUNC,
+		TRAP_VAR, TRAP_VAR,
+		TRAP_VAR_PTR, TRAP_VAR_PTR,
+	)
+	patch.Append(fileEdit, fileSyntax, "\n//go:noinline\n"+__xgo_init_i_func)
 }

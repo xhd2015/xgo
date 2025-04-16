@@ -377,7 +377,7 @@ func main() {
 				fmt.Printf("resetting instrument\n")
 			}
 			cmdArgs := []string{
-				"run", "./cmd/xgo", "build", "--reset-instrument", "--with-goroot", goroot,
+				"run", "./cmd/xgo", "setup", "--reset-instrument", "--with-goroot", goroot,
 			}
 			if logDebug {
 				cmdArgs = append(cmdArgs, "--log-debug=stdout")

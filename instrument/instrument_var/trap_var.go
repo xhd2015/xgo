@@ -37,7 +37,6 @@ func TrapVariables(packages *edit.Packages, recorder *resolve.Recorder) error {
 
 		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
 		for _, file := range pkg.Files {
-			var hasTrapVar bool
 			impRecorder := importRecorder{}
 			for _, decl := range file.Decls {
 				if decl.Kind != edit.DeclKindVar || len(decl.VarRefs) == 0 {
@@ -49,15 +48,7 @@ func TrapVariables(packages *edit.Packages, recorder *resolve.Recorder) error {
 						continue
 					}
 				}
-				if rewriteVarDefAndRefs(fset, pkgPath, file, decl, &impRecorder) {
-					hasTrapVar = true
-				}
-			}
-			if hasTrapVar {
-				file.Edit.Insert(file.File.Syntax.Name.End(),
-					";import "+constants.RUNTIME_PKG_NAME_VAR+` "runtime"`+
-						";import "+constants.UNSAFE_PKG_NAME_VAR+` "unsafe"`,
-				)
+				rewriteVarDefAndRefs(fset, pkgPath, file, decl, &impRecorder)
 			}
 		}
 	}
@@ -108,7 +99,7 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 	if strings.HasSuffix(file.File.Name, "_test.go") && strings.HasPrefix(varName, "Test") {
 		varPrefix = "T_"
 	}
-	code := genCode(varPrefix, varName, infoVar, typeCode)
+	code := genCode(file.Index, varPrefix, varName, infoVar, typeCode)
 
 	file.TrapVars = append(file.TrapVars, &edit.VarInfo{
 		InfoVar: infoVar,

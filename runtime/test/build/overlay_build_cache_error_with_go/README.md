@@ -9,8 +9,6 @@ xgo.helper setup-vscode ~/GOROOT_DEBUG_24
 cd runtime/test/build/overlay_build_cache_error_with_go
 ```
 
-
-
 Run first to verify the problem exist:
 ```sh
 # run first without overlay
@@ -27,5 +25,6 @@ overlay_build_cache_error_with_go/overlay/reverse/reverse.go:6:24: could not imp
 
 Debug:
 ```sh
-GOMODCACHE=$PWD/.xgo/gen/gomodcache xgo.helper debug-compile ~/GOROOT_DEBUG_24 golang.org/x/example/hello/reverse test -v -overlay ./overlay_gomod_first.json -gcflags="golang.org/x/example/hello/reverse=-v" ./overlay_test_with_gomod
+GOMODCACHE=$PWD/.xgo/gen/gomodcache 
+xgo.helper debug-compile ~/GOROOT_DEBUG_24 golang.org/x/example/hello/reverse test -v -overlay ./overlay_gomod_first.json -gcflags="golang.org/x/example/hello/reverse=-v" ./overlay_test_with_gomod
 ```

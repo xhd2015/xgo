@@ -18,30 +18,36 @@ var _ = unsafe.Pointer(nil)
 
 // this signature is to avoid relying on defined type
 // just raw string,interface{},[]string, []interface{} are needed
+
+type __xgo_intf_header struct {
+	typ  unsafe.Pointer
+	data unsafe.Pointer
+}
+
 var __xgo_trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)
 
 var __xgo_var_trap func(info unsafe.Pointer, varAddr interface{}, res interface{})
 var __xgo_var_ptr_trap func(info unsafe.Pointer, varAddr interface{}, res interface{})
 
-func XgoTrap(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool) {
+func XgoTrap(info interface{}, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool) {
 	if __xgo_trap == nil {
 		return nil, false
 	}
-	return __xgo_trap(info, recvPtr, args, results)
+	return __xgo_trap((*__xgo_intf_header)(unsafe.Pointer(&info)).data, recvPtr, args, results)
 }
 
-func XgoTrapVar(info unsafe.Pointer, varAddr interface{}, res interface{}) {
+func XgoTrapVar(info interface{}, varAddr interface{}, res interface{}) {
 	if __xgo_var_trap == nil {
 		return
 	}
-	__xgo_var_trap(info, varAddr, res)
+	__xgo_var_trap((*__xgo_intf_header)(unsafe.Pointer(&info)).data, varAddr, res)
 }
 
-func XgoTrapVarPtr(info unsafe.Pointer, varAddr interface{}, res interface{}) {
+func XgoTrapVarPtr(info interface{}, varAddr interface{}, res interface{}) {
 	if __xgo_var_ptr_trap == nil {
 		return
 	}
-	__xgo_var_ptr_trap(info, varAddr, res)
+	__xgo_var_ptr_trap((*__xgo_intf_header)(unsafe.Pointer(&info)).data, varAddr, res)
 }
 
 func XgoSetTrap(trap func(info unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool)) {
@@ -188,7 +194,7 @@ type XgoFuncInfo struct {
 
 // ==end xgo func==
 
-var __xgo_staging_funcs []*XgoFuncInfo
+var __xgo_staging_funcs []interface{}
 var __xgo_register_handler func(fn unsafe.Pointer)
 
 func XgoSetupRegisterHandler(register func(fn unsafe.Pointer)) {
@@ -199,13 +205,13 @@ func XgoSetupRegisterHandler(register func(fn unsafe.Pointer)) {
 	saved := __xgo_staging_funcs
 	__xgo_staging_funcs = nil
 	for _, fn := range saved {
-		register(unsafe.Pointer(fn))
+		register((*__xgo_intf_header)(unsafe.Pointer(&fn)).data)
 	}
 }
 
-func XgoRegister(fn *XgoFuncInfo) {
+func XgoRegister(fn interface{}) {
 	if __xgo_register_handler != nil {
-		__xgo_register_handler(unsafe.Pointer(fn))
+		__xgo_register_handler((*__xgo_intf_header)(unsafe.Pointer(&fn)).data)
 		return
 	}
 	__xgo_staging_funcs = append(__xgo_staging_funcs, fn)

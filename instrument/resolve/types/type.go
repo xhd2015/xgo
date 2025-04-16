@@ -435,6 +435,13 @@ func ResolveLazy(typ Type) Type {
 
 func ResolveAlias(typ NamedType) NamedType {
 	for {
+		if g, ok := typ.Type.(GenericInstanceType); ok {
+			t, ok := g.Type.(NamedType)
+			if ok {
+				typ = t
+				continue
+			}
+		}
 		t, ok := typ.Type.(NamedType)
 		if !ok {
 			return typ

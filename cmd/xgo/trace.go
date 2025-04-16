@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/xhd2015/xgo/cmd/xgo/asset"
 	"github.com/xhd2015/xgo/instrument/constants"
+	instrument_embed "github.com/xhd2015/xgo/instrument/embed"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/filecopy"
@@ -31,9 +32,6 @@ type importResult struct {
 	modReplace  map[overlay.AbsFile]overlay.AbsFile
 	fileReplace map[overlay.AbsFile]overlay.AbsFile
 }
-
-//go:embed runtime_gen
-var runtimeGenFS embed.FS
 
 func getProjectRoot(projectDir string, modRootRel []string) string {
 	projectRoot := projectDir
@@ -249,7 +247,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			if err != nil {
 				return nil, err
 			}
-			err = copyEmbedDir(runtimeGenFS, "runtime_gen", tmpRuntime)
+			err = instrument_embed.CopyDir(asset.RuntimeGenFS, asset.RuntimeGen, tmpRuntime, instrument_embed.CopyOptions{})
 			if err != nil {
 				return nil, err
 			}
@@ -260,7 +258,7 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 		} else {
 			// always copy trace.go because it will be instrumented
 			logDebug("extracting runtime/trace/trace.go from xgo to %s", tmpRuntime)
-			content, err := runtimeGenFS.ReadFile("runtime_gen/trace/trace.go")
+			content, err := asset.RuntimeGenFS.ReadFile(asset.RuntimeGen + "/trace/trace.go")
 			if err != nil {
 				return nil, err
 			}
@@ -405,11 +403,10 @@ func readRuntimeGenFile(xgoSrc string, path []string) ([]byte, error) {
 		rtPath := filepath.Join(xgoSrc, "runtime", filepath.Join(path...))
 		return os.ReadFile(rtPath)
 	}
-	return runtimeGenFS.ReadFile("runtime_gen/" + strings.Join(path, "/"))
+	return asset.RuntimeGenFS.ReadFile(asset.RuntimeGen + "/" + strings.Join(path, "/"))
 }
 
 func needCopyRuntimeFromXgo(targetRuntimeDir string) (bool, error) {
-	const runtimeGenRoot = "runtime_gen"
 	// compare version
 	versionFilePath := []string{"core", "version.go"}
 
@@ -425,8 +422,8 @@ func needCopyRuntimeFromXgo(targetRuntimeDir string) (bool, error) {
 		return true, nil
 	}
 	// you need to run `go run ./script/generate` to sync runtime and cmd/xgo/runtime_gen
-	embedPath := concatEmbedPath(runtimeGenRoot, joinEmbedPath(versionFilePath))
-	emebedVersion, err := runtimeGenFS.ReadFile(embedPath)
+	embedPath := concatEmbedPath(asset.RuntimeGen, joinEmbedPath(versionFilePath))
+	emebedVersion, err := asset.RuntimeGenFS.ReadFile(embedPath)
 	if err != nil {
 		return false, err
 	}

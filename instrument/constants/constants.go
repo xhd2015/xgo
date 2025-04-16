@@ -22,16 +22,12 @@ const (
 )
 
 const (
-	RUNTIME_PKG_NAME_FUNC = "__xgo_func_runtime"
-	UNSAFE_PKG_NAME_FUNC  = "__xgo_func_unsafe"
-	RUNTIME_PKG_NAME_VAR  = "__xgo_var_runtime"
-	UNSAFE_PKG_NAME_VAR   = "__xgo_var_unsafe"
+	LINK_REGISTER     = "__xgo_register_"
+	LINK_TRAP_FUNC    = "__xgo_trap_"
+	LINK_TRAP_VAR     = "__xgo_trap_var_"
+	LINK_TRAP_VAR_PTR = "__xgo_trap_varptr_"
 
-	RUNTIME_REG_PKG           = "runtime"
-	RUNTIME_PKG_FUNC_INFO_REF = "__xgo_info_runtime"
-	RUNTIME_REGISTER_FUNC     = "XgoRegister"
-	RUNTIME_FUNC_TYPE         = "XgoFuncInfo"
-	RUNTIME_FUNCTAB_REGISTER  = "RegisterFunc"
+	RUNTIME_FUNCTAB_REGISTER = "RegisterFunc"
 )
 
 const (

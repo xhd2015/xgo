@@ -136,6 +136,7 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 		funcInfo := fmt.Sprintf("%s_%d_%d", constants.FUNC_INFO, fileIndex, len(funcInfos))
 		editor.Insert(pos, fmt.Sprintf(trapTemplate,
 			line, line,
+			fileIndex,
 			funcInfo,
 			receiverAddr,
 			strings.Join(paramAddrs, ","),
@@ -159,11 +160,6 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 	if len(funcInfos) == 0 {
 		return nil
 	}
-
-	editor.Insert(file.Name.End(),
-		`;import `+constants.RUNTIME_PKG_NAME_FUNC+` "runtime"`+
-			`;import `+constants.UNSAFE_PKG_NAME_FUNC+` "unsafe"`,
-	)
 	return funcInfos
 }
 

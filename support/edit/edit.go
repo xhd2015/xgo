@@ -102,6 +102,10 @@ func (b *Buffer) HasEdits() bool {
 	return len(b.q) > 0
 }
 
+func (b *Buffer) Old() []byte {
+	return b.old
+}
+
 func (b *Buffer) RangeEdits(f func(start int, end int, new string)) {
 	for _, e := range b.q {
 		f(e.start, e.end, e.new)

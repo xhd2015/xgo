@@ -11,7 +11,7 @@ import (
 	"github.com/xhd2015/xgo/support/fileutil"
 )
 
-func genXgoRuntime(cmd string, rootDir string, needCopyTrace bool) error {
+func genXgoRuntime(rootDir string, needCopyTrace bool) error {
 	if needCopyTrace {
 		// copy stack model from xgo to runtime first
 		err := copyTraceModel(rootDir)
@@ -20,14 +20,25 @@ func genXgoRuntime(cmd string, rootDir string, needCopyTrace bool) error {
 		}
 	}
 	runtimeDir := filepath.Join(rootDir, "runtime")
-	genRuntimeDir := filepath.Join(rootDir, "cmd", "xgo", "runtime_gen")
+	genRuntimeDir := filepath.Join(rootDir, "cmd", "xgo", "asset", "runtime_gen")
 
+	return copyGoModule(runtimeDir, genRuntimeDir, []string{".xgo", "test"})
+}
+
+func genXgoCompilerPatch(rootDir string) error {
+	patchDir := filepath.Join(rootDir, "patch")
+	genPatchDir := filepath.Join(rootDir, "cmd", "xgo", "asset", "compiler_patch_gen")
+
+	return copyGoModule(patchDir, genPatchDir, []string{".xgo", "test", "legacy"})
+}
+
+func copyGoModule(src string, dst string, ignores []string) error {
 	// then copy runtime to xgo/runtime_gen
-	err := filecopy.NewOptions().Ignore(".xgo", "test").IncludeSuffix(".go", "go.mod").IgnoreSuffix("_test.go").CopyReplaceDir(runtimeDir, genRuntimeDir)
+	err := filecopy.NewOptions().Ignore(ignores...).IncludeSuffix(".go", "go.mod").IgnoreSuffix("_test.go").CopyReplaceDir(src, dst)
 	if err != nil {
 		return err
 	}
-	err = os.Rename(filepath.Join(genRuntimeDir, "go.mod"), filepath.Join(genRuntimeDir, "go.mod.txt"))
+	err = os.Rename(filepath.Join(dst, "go.mod"), filepath.Join(dst, "go.mod.txt"))
 	if err != nil {
 		return err
 	}

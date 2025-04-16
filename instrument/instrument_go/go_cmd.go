@@ -7,10 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xhd2015/xgo/instrument/build"
 	"github.com/xhd2015/xgo/instrument/patch"
-	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/goinfo"
-	"github.com/xhd2015/xgo/support/osinfo"
 )
 
 // instrument the `go` command to fix coverage with -overlay
@@ -24,7 +23,7 @@ var mainFilePath = srcCmdGoPath.Append("main.go")
 var execFilePath = srcCmdGoPath.Append("internal", "work", "exec.go")
 var xgoMainFilePath = srcCmdGoPath.Append("xgo_main.go")
 
-func InstrumentGo(goroot string, goVersion *goinfo.GoVersion) error {
+func BuildInstrument(goroot string, goVersion *goinfo.GoVersion) error {
 	err := instrumentExec(goroot, goVersion)
 	if err != nil {
 		return err
@@ -42,7 +41,7 @@ func InstrumentGo(goroot string, goVersion *goinfo.GoVersion) error {
 		return err
 	}
 	// build go command
-	return buildBinary(goroot, filepath.Join(goroot, "src"), filepath.Join(goroot, "bin"), "go", "./cmd/go")
+	return build.BuildBinary(goroot, filepath.Join(goroot, "src"), filepath.Join(goroot, "bin"), "go", "./cmd/go")
 }
 
 func instrumentGoMain(goroot string, goVersion *goinfo.GoVersion) error {
@@ -142,19 +141,4 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 		}
 		return content, nil
 	})
-}
-
-func buildBinary(goroot string, srcDir string, outputDir string, outputName string, arg string) error {
-	// on Windows, rename failed with
-	//  rename C:\Users\runneradmin\.xgo\go-instrument\go1.24.2_C_ho_wi_go_1._x6_339c415e\go1.24.2\bin\go.exe C:\Users\runneradmin\.xgo\go-instrument\go1.24.2_C_ho_wi_go_1._x6_339c415e\go1.24.2\bin\go.exe.bak: Access is denied.
-	// const USE_RENAME = false
-
-	origGo := filepath.Join(goroot, "bin", "go"+osinfo.EXE_SUFFIX)
-	origFile := filepath.Join(outputDir, outputName+osinfo.EXE_SUFFIX)
-	return cmd.Dir(srcDir).
-		Env([]string{
-			"GOROOT=" + goroot,
-			"GO_BYPASS_XGO=true", // avoid calling xgo recursively
-		}).
-		Run(origGo, "build", "-o", origFile, arg)
 }

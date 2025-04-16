@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/xhd2015/xgo/instrument/build"
+	instrument_embed "github.com/xhd2015/xgo/instrument/embed"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/osinfo"
@@ -33,7 +35,7 @@ func handleShawdow() error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	err = copyEmbedDir(shadowFS, "shadow", tmpDir)
+	err = instrument_embed.CopyDir(shadowFS, "shadow", tmpDir, instrument_embed.CopyOptions{})
 	if err != nil {
 		return err
 	}
@@ -46,7 +48,7 @@ go 1.14
 		return err
 	}
 
-	err = cmd.Dir(tmpDir).Env(appendNativeBuildEnv(nil)).Run(getNakedGo(), "build", "-o", filepath.Join(shadowDir, "go"+osinfo.EXE_SUFFIX), "./")
+	err = cmd.Dir(tmpDir).Env(build.AppendNativeBuildEnv(nil)).Run(getNakedGo(), "build", "-o", filepath.Join(shadowDir, "go"+osinfo.EXE_SUFFIX), "./")
 	if err != nil {
 		return err
 	}

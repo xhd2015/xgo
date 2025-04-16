@@ -43,6 +43,12 @@ var loadPackageDataAddRuntimeImport = []string{
 // - runtime/test/build/overlay_build_cache_ok_with_xgo
 // see https://github.com/xhd2015/xgo/issues/311#issuecomment-2800001350
 func instrumentPkgLoad(goroot string, goVersion *goinfo.GoVersion) error {
+	if false {
+		// since xgo v1.1.2, we do not import package dynamically
+		// so we don't need to add runtime import here
+		// see https://github.com/xhd2015/xgo/issues/318#issuecomment-2809243930
+		return nil
+	}
 	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 24) {
 		// src/cmd/go/internal/load/pkg.go
 		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", srcCmdGoLoadPkgPath.JoinPrefix(""), goVersion.Major, goVersion.Minor)

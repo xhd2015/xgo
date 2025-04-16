@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/cmd/xgo/patch"
+	"github.com/xhd2015/xgo/instrument/instrument_compiler"
 	"github.com/xhd2015/xgo/instrument/instrument_runtime"
 	"github.com/xhd2015/xgo/instrument/instrument_runtime/template"
 	instrument_patch "github.com/xhd2015/xgo/instrument/patch"
@@ -88,7 +89,7 @@ func addRuntimeFunctions(goroot string, goVersion *goinfo.GoVersion, xgoSrc stri
 		//   rational: when debugging, dlv will jump to __xgo_autogen_register_func_helper.go
 		// previously this file does not exist, making the debugging blind
 		runtimeAutoGenFile := filepath.Join(goroot, filepath.Join(xgoAutoGenRegisterFuncHelper...))
-		srcAutoGen := getInternalPatch(goroot, "syntax", "helper_code.go")
+		srcAutoGen := instrument_compiler.JoinInternalPatch(goroot, "syntax", "helper_code.go")
 		err = filecopy.CopyFile(srcAutoGen, runtimeAutoGenFile)
 		if err != nil {
 			return false, err
