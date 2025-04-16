@@ -32,7 +32,10 @@ func (c *Scope) resolveIndexListExpr(expr ast.Expr) (types.Info, bool) {
 	// generic type
 	switch info := info.(type) {
 	case types.Type:
-		return info, true
+		return types.GenericInstanceType{
+			Type: info,
+			// TODO: params
+		}, true
 	case types.PkgFunc:
 		return info, true
 	case types.PkgTypeMethod:

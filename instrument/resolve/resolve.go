@@ -208,7 +208,10 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		// generic type
 		switch info := info.(type) {
 		case types.Type:
-			return info
+			return types.GenericInstanceType{
+				Type: info,
+				// TODO: params
+			}
 		case types.PkgFunc:
 			return info
 		case types.PkgTypeMethod:

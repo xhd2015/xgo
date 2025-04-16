@@ -1,6 +1,8 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Info interface {
 	infoMark()
@@ -91,6 +93,11 @@ type NamedType struct {
 
 type PtrType struct {
 	Elem Type
+}
+
+type GenericInstanceType struct {
+	Type           Type // point to a NamedType
+	InstanceParams []Type
 }
 
 type Lazy func() Info
@@ -196,6 +203,15 @@ func (c PtrType) Underlying() UnderlyingType {
 }
 func (c PtrType) String() string {
 	return fmt.Sprintf("*%s", c.Elem.String())
+}
+
+func (c GenericInstanceType) infoMark() {}
+func (c GenericInstanceType) typeMark() {}
+func (c GenericInstanceType) Underlying() UnderlyingType {
+	return c.Type.Underlying()
+}
+func (c GenericInstanceType) String() string {
+	return fmt.Sprintf("%s[...]", c.Type.String())
 }
 
 func (c Lazy) infoMark() {}

@@ -7,10 +7,9 @@ import "fmt"
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
 const VERSION = "1.1.1"
-const REVISION = "d5a54d00230d85ce12b823f615f12d1b3eb3f033+1"
-const NUMBER = 414
+const REVISION = "3bc121ad3e1d5c9588d89a75e1b546942d3313b9+1"
+const NUMBER = 415
 
-// The CORE_REVISION is cache related.
 // Rationale: xgo consists of these modules:
 //
 // - cmd/xgo
