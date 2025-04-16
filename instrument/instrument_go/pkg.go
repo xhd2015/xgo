@@ -43,7 +43,7 @@ var loadPackageDataAddRuntimeImport = []string{
 // - runtime/test/build/overlay_build_cache_ok_with_xgo
 // see https://github.com/xhd2015/xgo/issues/311#issuecomment-2800001350
 func instrumentPkgLoad(goroot string, goVersion *goinfo.GoVersion) error {
-	if false {
+	if true {
 		// since xgo v1.1.2, we do not import package dynamically
 		// so we don't need to add runtime import here
 		// see https://github.com/xhd2015/xgo/issues/318#issuecomment-2809243930

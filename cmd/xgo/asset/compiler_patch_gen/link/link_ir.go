@@ -8,6 +8,43 @@ import (
 
 const xgoPrefix = "__xgo_"
 
+type Link struct {
+	From string
+	To   string
+}
+
+var links = []*Link{
+	{
+		// From: "__xgo_trap_var_",
+		From: "trap_var_",
+		To:   "XgoTrapVar",
+	},
+	{
+		// From: "__xgo_trap_varptr_",
+		From: "trap_varptr_",
+		To:   "XgoTrapVarPtr",
+	},
+	{
+		// From: "__xgo_trap_",
+		From: "trap_",
+		To:   "XgoTrap",
+	},
+	{
+		// From: "__xgo_register_",
+		From: "register_",
+		To:   "XgoRegister",
+	},
+}
+
+func findLink(name string) string {
+	for _, link := range links {
+		if strings.HasPrefix(name, link.From) {
+			return link.To
+		}
+	}
+	return ""
+}
+
 // LinkXgoInit links function defined in
 // runtime
 // the function template:
@@ -48,32 +85,15 @@ func LinkXgoInit(fn *ir.Func) {
 		if !strings.HasPrefix(symName, xgoPrefix) {
 			continue
 		}
-
-		switch {
-		case strings.HasPrefix(symName, "__xgo_trap_var_"):
-			sym := typecheck.LookupRuntime("XgoTrapVar")
-			if sym == nil {
-				continue
-			}
-			assign.Y = sym
-		case strings.HasPrefix(symName, "__xgo_trap_varptr_"):
-			sym := typecheck.LookupRuntime("XgoTrapVarPtr")
-			if sym == nil {
-				continue
-			}
-			assign.Y = sym
-		case strings.HasPrefix(symName, "__xgo_trap_"):
-			sym := typecheck.LookupRuntime("XgoTrap")
-			if sym == nil {
-				continue
-			}
-			assign.Y = sym
-		case strings.HasPrefix(symName, "__xgo_register_"):
-			sym := typecheck.LookupRuntime("XgoRegister")
-			if sym == nil {
-				continue
-			}
-			assign.Y = sym
+		link := findLink(symName[len(xgoPrefix):])
+		if link == "" {
+			continue
 		}
+		sym := typecheck.LookupRuntime(link)
+		if sym == nil {
+			continue
+		}
+		typecheckLinkedName(sym)
+		assign.Y = sym
 	}
 }

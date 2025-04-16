@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/goinfo"
 )
 
 const help = `
@@ -72,7 +73,15 @@ func run(args []string) error {
 		if strings.HasPrefix(args[1], "-") {
 			return fmt.Errorf("invalid pkg: %s", args[1])
 		}
-		err := instrumentGc(goroot)
+		goVersionStr, err := goinfo.GetGoVersionOutput(filepath.Join(goroot, "bin", "go"))
+		if err != nil {
+			return err
+		}
+		goVersion, err := goinfo.ParseGoVersion(goVersionStr)
+		if err != nil {
+			return err
+		}
+		err = instrumentGc(goroot, goVersion)
 		if err != nil {
 			return err
 		}

@@ -43,9 +43,7 @@ func TestGoModNonOverlayFirstShouldError(t *testing.T) {
 	}
 	t.Logf("go minor: %d", goMinor)
 	expectFail := true
-	if os.Getenv("XGO_IS_SETUP_GOROOT") == "true" {
-		expectFail = false
-	} else if goMinor < 19 {
+	if goMinor < 19 {
 		expectFail = false
 	}
 	if expectFail {
