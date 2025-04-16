@@ -1,1 +1,1 @@
-flags: -vet=off
+# flags: -vet=off

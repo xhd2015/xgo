@@ -9,6 +9,7 @@ import (
 
 func TestReverse(t *testing.T) {
 	res := reverse.String("hello")
+	// t.Logf("res=%s", res)
 	if res != "olleh" && !strings.HasPrefix(res, "ollehgo") {
 		t.Fatalf("res=%s", res)
 	}

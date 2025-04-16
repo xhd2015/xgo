@@ -22,24 +22,18 @@ var runtimeImportCode = []string{
 
 var loadPackageDataAddRuntimeImport = []string{
 	`if ` + checkCanAddRuntimeDep + ` {`,
-	`   var foundUnsafe bool;`,
-	`   var foundRuntime bool;`,
-	"   for _ ,imp := range p.Imports {",
-	`       if imp == "runtime" {`,
-	`           foundRuntime = true;`,
-	`       }else if imp == "unsafe" {`,
-	`           foundUnsafe = true;`,
+	`   add := func(imports []string, pkg string) []string {`,
+	`       for _, imp := range imports {`,
+	`           if imp == pkg {`,
+	`               return imports;`,
+	`           };`,
 	`       };`,
-	`       if foundRuntime && foundUnsafe {`,
-	`           break;`,
-	`       };`,
+	`       return append(imports, pkg);`,
 	`   };`,
-	`   if !foundRuntime {`,
-	`       p.Imports = append(p.Imports, "runtime");`,
-	`   };`,
-	`   if !foundUnsafe {`,
-	`       p.Imports = append(p.Imports, "unsafe");`,
-	`   };`,
+	`   p.Imports = add(p.Imports, "runtime");`,
+	`   p.Imports = add(p.Imports, "unsafe");`,
+	`   p.TestImports = add(p.TestImports, "runtime");`,
+	`   p.TestImports = add(p.TestImports, "unsafe");`,
 	`};`,
 }
 
@@ -75,6 +69,20 @@ func instrumentPkgLoad(goroot string, goVersion *goinfo.GoVersion) error {
 				strings.Join(runtimeImportCode, ""),
 			)
 		}
+
+		// add more panic info
+		content = patch.UpdateContent(content,
+			"/*<begin loadPackageData_add_panic_info>*/",
+			"/*<end loadPackageData_add_panic_info>*/",
+			[]string{
+				"\nfunc loadPackageData(ctx context.Context,",
+				`if path == "" {`,
+			},
+			1,
+			patch.UpdatePosition_After,
+			// parentPath,parentDir, parentRoot string, parentIsStd bool, mode int
+			`panic(fmt.Errorf("loadPackageData called with empty package path: parentPath=%v, parentDir=%v, parentRoot=%v, parentIsStd=%v, mode=%v", parentPath, parentDir, parentRoot, parentIsStd, mode));`,
+		)
 
 		returnAnchor := "return p, loaded, err"
 		code := strings.Join(loadPackageDataAddRuntimeImport, "")

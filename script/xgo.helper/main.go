@@ -56,6 +56,10 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
+		err = instrumentModLoad(goroot)
+		if err != nil {
+			return err
+		}
 		return debugGo(cmd == "run-go", goroot, nil, args[1:])
 	case "debug-compile":
 		if len(args) < 1 || args[0] == "" {
