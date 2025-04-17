@@ -1,5 +1,0 @@
-package link
-
-func linkLegacy() {
-
-}

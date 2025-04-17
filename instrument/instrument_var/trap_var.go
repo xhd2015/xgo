@@ -184,6 +184,10 @@ func (c *UseContext) doUseTypeInFile(typ types.Type) (res string) {
 		if typ.PkgPath == c.pkgPath {
 			return typ.Name
 		}
+		// check if name is exported
+		if !token.IsExported(typ.Name) {
+			panic(fmt.Sprintf("unexported type: %s", typ.Name))
+		}
 		pos := c.fset.Position(c.pos)
 		pkgRef, ok := c.impRecorder.RecordImport(typ.PkgPath, fmt.Sprintf("__xgo_var_ref_%d_%d", pos.Line, pos.Column))
 		if !ok {

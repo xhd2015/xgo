@@ -76,14 +76,6 @@ func ReplaceActualXgoVersion(versionCode string, xgoVersion string, xgoRevision 
 	return versionCode
 }
 
-func BypassVersionCheck(versionCode string) string {
-	return strings.Replace(versionCode,
-		"func checkVersion() error {",
-		"func checkVersion() error { if true { return nil; }",
-		1,
-	)
-}
-
 func ParseCoreVersion(versionCode string) (string, error) {
 	anchor := `const VERSION =`
 	idx := strings.Index(versionCode, anchor)
