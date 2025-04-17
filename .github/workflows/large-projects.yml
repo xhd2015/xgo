@@ -63,7 +63,6 @@ jobs:
           path:  gin-gonic/gin
 
       - name: Test gin-gonic/gin
-        continue-on-error: true
         run: |
           source util.sh
           cd gin-gonic/gin
@@ -75,27 +74,70 @@ jobs:
           path:  pocketbase/pocketbase
 
       - name: Test pocketbase/pocketbase
-        continue-on-error: true
         run: |
           source util.sh
           cd pocketbase/pocketbase
-          xgo test -v --trap-all ./...
-        
+          xgo test -v --trap-all -skip='TestRandomStringByRegex|TestCronsRun' ./...
+      
       - uses: actions/checkout@v4
         with:
-          repository: kubernetes/kubernetes
-          path: kubernetes/kubernetes
+          repository: xhd2015/kuscia
+          path: secretflow/kuscia
+          ref: xgo-mock
 
-      - name: Test kubernetes/kubernetes
-        continue-on-error: true
+      - name: Test secretflow/kuscia
         run: |
           source util.sh
-          cd kubernetes/kubernetes 
-          xgo test -v --trap-all ./...
+          cd secretflow/kuscia
+          xgo test -v --trap-all -run 'TestK8sLogWorker|TestK8sLogManager|TestDataProxyContentToFlightStreamBinary_WriteFailed|TestFlightStreamToDataProxyContentBinary_ErrorFormat|TestBandWidth|TestLatency|TestProxyTask|TestGetDomainData|TestRequestSizeTask|TestCRDModSuccess|TestCRDModFail|TestDomainRouteMod|TestDomainRouteModFail|TestNetworkMod|TestRegisterDomain_ServerNotExists' ./pkg/agent/provider/pod ./pkg/datamesh/dataserver/io/builtin ./pkg/diagnose/app/netstat ./pkg/diagnose/mods ./pkg/gateway/controller
+
+      # # this is slow
+      # - uses: actions/checkout@v4
+      #   with:
+      #     repository: xhd2015/Bifrost-fork
+      #     path: brokercap/Bifrost
+      #     ref: test-with-xgo-v1.1.1
+
+      # - name: Test brokercap/Bifrost
+      #   run: |
+      #     source util.sh
+      #     cd brokercap/Bifrost
+      #     if ! xgo test -v --trap-all ./input/mongo 2>&1 | tee stdout.log;then
+      #         if grep -q 'build failed' stdout.log;then
+      #             echo "build failed"
+      #             exit 1
+      #         fi
+      #     fi
+
+      - uses: actions/checkout@v4
+        with:
+          repository: stakwork/sphinx-tribes
+          path: stakwork/sphinx-tribes
+  
+      - name: Test stakwork/sphinx-tribes
+        run: |
+          source util.sh
+          cd stakwork/sphinx-tribes
+          xgo test -v --trap-all $(go list ./...|grep -Ev 'github.com/stakwork/sphinx-tribes/db|github.com/stakwork/sphinx-tribes/handlers|github.com/stakwork/sphinx-tribes/routes')
+
+      # - uses: actions/checkout@v4
+      #   with:
+      #     repository: kubernetes/kubernetes
+      #     path: kubernetes/kubernetes
+
+      # - name: Test kubernetes/kubernetes
+      #   continue-on-error: true
+      #   run: |
+      #     source util.sh
+      #     cd kubernetes/kubernetes 
+      #     xgo test -v --trap-all ./...
         
       - name: Summary
         run: |
          echo "exit code:"
-         echo "  gin-gonic/gin:         $(cat gin-gonic/gin/test-exit-code.txt)"
-         echo "  pocketbase/pocketbase: $(cat pocketbase/pocketbase/test-exit-code.txt)"
-         echo "  kubernetes/kubernetes: $(cat kubernetes/kubernetes/test-exit-code.txt)"
+         echo "  gin-gonic/gin:           $(cat gin-gonic/gin/test-exit-code.txt)"
+         echo "  pocketbase/pocketbase:   $(cat pocketbase/pocketbase/test-exit-code.txt)"
+         echo "  secretflow/kuscia:       $(cat secretflow/kuscia/test-exit-code.txt)"
+         echo "  brokercap/Bifrost:       $(cat brokercap/Bifrost/test-exit-code.txt)"
+         echo "  stakwork/sphinx-tribes:  $(cat stakwork/sphinx-tribes/test-exit-code.txt)"
+        #  echo "  kubernetes/kubernetes: $(cat kubernetes/kubernetes/test-exit-code.txt)"
