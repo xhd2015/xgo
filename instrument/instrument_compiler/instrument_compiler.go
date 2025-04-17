@@ -19,5 +19,5 @@ func BuildInstrument(origGoroot string, goroot string, goVersion *goinfo.GoVersi
 	}
 
 	// build go command
-	return build.BuildBinary(goroot, filepath.Join(goroot, "src"), toolPath, "compile", "./cmd/compile")
+	return build.BuildNativeBinary(goroot, filepath.Join(goroot, "src"), toolPath, "compile", "./cmd/compile")
 }

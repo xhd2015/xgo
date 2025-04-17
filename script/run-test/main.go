@@ -12,6 +12,8 @@ import (
 
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/git"
+	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/osinfo"
 )
 
 // the test driver for xgo
@@ -47,11 +49,17 @@ import (
 var globalFlags = []string{"-timeout=60s"}
 
 type TestConfig struct {
-	Dir             string
-	UsePlainGo      bool
+	Dir            string
+	UsePlainGo     bool
+	UsePrebuiltXgo bool
+	BuildOnly      bool // implies test -c -o /dev/null
+
+	Go string // minimal go version
+
 	Args            []string
 	Flags           []string
 	VendorIfMissing bool
+	Env             []string
 }
 
 var defaultTest = &TestConfig{
@@ -369,6 +377,7 @@ func main() {
 				break
 			}
 		}
+
 		begin := time.Now()
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
 		if resetInstrument {
@@ -392,6 +401,11 @@ func main() {
 				os.Exit(1)
 			}
 		}
+		goVersion, err := goinfo.GetGorootVersion(goroot)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "get go version: %v\n", err)
+			os.Exit(1)
+		}
 
 		if projectDir != "" {
 			fmt.Fprintf(os.Stderr, "--project-dir is not supported\n")
@@ -412,11 +426,27 @@ func main() {
 				continue
 			}
 			usePlainGo := testArg.UsePlainGo
+			useBuiltXgo := testArg.UsePrebuiltXgo
+			buildOnly := testArg.BuildOnly
+
+			if testArg.Go != "" {
+				testGoVersion, err := goinfo.ParseGoVersionNumber(testArg.Go)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "invalid go version: %v\n", err)
+					os.Exit(1)
+				}
+				if goVersion.Major < testGoVersion.Major || goVersion.Minor < testGoVersion.Minor {
+					// skipped
+					continue
+				}
+			}
 			// projectDir
 			runArgs := make([]string, 0, len(remainArgs)+1)
 			opts := Opts{
-				Tags:          tags,
-				IsSetupGoroot: isSetupGoroot,
+				Tags:           tags,
+				IsSetupGoroot:  isSetupGoroot,
+				UsePrebuiltXgo: useBuiltXgo,
+				BuildOnly:      buildOnly,
 			}
 			if tags != "" {
 				runArgs = append(runArgs, "-tags", tags)
@@ -457,7 +487,7 @@ func main() {
 			runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
 			runArgs = append(runArgs, testArg.Flags...)
 			runArgs = append(runArgs, remainArgs...)
-			err := doRunTest(goroot, usePlainGo, dir, runArgs, testArg.Args, nil, opts)
+			err := doRunTest(goroot, usePlainGo, dir, runArgs, testArg.Args, testArg.Env, opts)
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
 				os.Exit(1)
@@ -667,15 +697,19 @@ func runRuntimeSubTest(goroot string, args []string, tests []string, names []str
 type testKind string
 
 type Opts struct {
-	Debug         bool
-	Tags          string
-	IsSetupGoroot bool
+	Debug          bool
+	Tags           string
+	IsSetupGoroot  bool
+	UsePrebuiltXgo bool
+	BuildOnly      bool
 }
 
 func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests []string, env []string, opts ...Opts) error {
 	var debug bool
 	var tags string
 	var isSetupGoroot bool
+	var useBuiltXgo bool
+	var buildOnly bool
 	if len(opts) > 0 {
 		if len(opts) != 1 {
 			panic("only one opts is allowed")
@@ -684,13 +718,35 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		debug = opt.Debug
 		tags = opt.Tags
 		isSetupGoroot = opt.IsSetupGoroot
+		useBuiltXgo = opt.UsePrebuiltXgo
+		buildOnly = opt.BuildOnly
 	}
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
 		return err
 	}
+	var prebuiltXgo string
 	var testArgs []string
-	if !usePlainGo {
+	if usePlainGo {
+		testArgs = []string{"test"}
+	} else if useBuiltXgo {
+		buildArgs := []string{"build"}
+		if tags != "" {
+			buildArgs = append(buildArgs, "-tags", tags)
+		}
+
+		wd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		prebuiltXgo = filepath.Join(wd, "__debug_bin_xgo"+osinfo.EXE_SUFFIX)
+		buildArgs = append(buildArgs, "-o", prebuiltXgo, "./cmd/xgo")
+		err = cmd.Run("go", buildArgs...)
+		if err != nil {
+			return err
+		}
+		testArgs = []string{"test"}
+	} else {
 		if !debug {
 			testArgs = []string{"run"}
 			if tags != "" {
@@ -704,8 +760,9 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 			}
 			testArgs = append(testArgs, "./cmd/xgo", "test")
 		}
-	} else {
-		testArgs = []string{"test"}
+	}
+	if buildOnly {
+		testArgs = append(testArgs, "-c", "-o", "/dev/null")
 	}
 
 	testArgs = append(testArgs, globalFlags...)
@@ -737,6 +794,9 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		newTestArgs = append(newTestArgs, testArgs[1:]...)
 		testArgs = newTestArgs
 		fmt.Printf("xgo %s\n", strings.Join(testArgs, " "))
+	} else if useBuiltXgo {
+		binary = prebuiltXgo
+		fmt.Printf("./xgo %s\n", strings.Join(testArgs, " "))
 	} else {
 		binary = filepath.Join(goroot, "bin", "go")
 		fmt.Printf("go %s\n", strings.Join(testArgs, " "))

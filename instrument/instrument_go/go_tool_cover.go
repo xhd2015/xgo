@@ -39,7 +39,7 @@ func InstrumentGoToolCover(goroot string, goVersion *goinfo.GoVersion) error {
 	}
 
 	// build cover command
-	return build.BuildBinary(goroot, filepath.Join(goroot, "src"), toolPath, "cover", "./cmd/cover")
+	return build.BuildNativeBinary(goroot, filepath.Join(goroot, "src"), toolPath, "cover", "./cmd/cover")
 }
 
 func copyXgoCover(goroot string) error {

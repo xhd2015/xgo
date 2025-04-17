@@ -17,13 +17,14 @@ func Run(cmd string, args ...string) error {
 }
 
 type CmdBuilder struct {
-	env         []string
-	dir         string
-	debug       bool
-	ignoreError bool
-	stdin       io.Reader
-	stdout      io.Writer
-	stderr      io.Writer
+	env          []string
+	noInheritEnv bool
+	dir          string
+	debug        bool
+	ignoreError  bool
+	stdin        io.Reader
+	stdout       io.Writer
+	stderr       io.Writer
 }
 
 func Env(env []string) *CmdBuilder {
@@ -55,6 +56,19 @@ func (c *CmdBuilder) Env(env []string) *CmdBuilder {
 	c.env = env
 	return c
 }
+
+func (c *CmdBuilder) NoInheritEnv(v ...bool) *CmdBuilder {
+	if len(v) == 0 {
+		c.noInheritEnv = true
+		return c
+	}
+	if len(v) > 1 {
+		panic("NoInheritEnv only accepts 0 or 1 argument")
+	}
+	c.noInheritEnv = v[0]
+	return c
+}
+
 func (c *CmdBuilder) Dir(dir string) *CmdBuilder {
 	c.dir = dir
 	return c
@@ -134,9 +148,18 @@ func cmdExecEnv(cmd string, args []string, env []string, dir string, useStdout b
 	if c != nil {
 		execCmd.Stdin = c.stdin
 	}
+	var inheritEnv bool
+	if c == nil || !c.noInheritEnv {
+		inheritEnv = true
+	}
 	if len(env) > 0 {
-		execCmd.Env = os.Environ()
+		if inheritEnv {
+			execCmd.Env = os.Environ()
+		}
 		execCmd.Env = append(execCmd.Env, env...)
+	} else if !inheritEnv {
+		// a placeholder to prohibit env
+		execCmd.Env = []string{}
 	}
 	execCmd.Dir = dir
 	if c != nil && c.stdout != nil {

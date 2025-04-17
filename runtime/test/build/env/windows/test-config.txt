@@ -1,0 +1,3 @@
+env: GOOS=windows
+use-prebuilt-xgo: true
+build-only: true

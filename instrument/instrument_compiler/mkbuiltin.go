@@ -26,8 +26,7 @@ func MkBuiltin(origGoroot string, outputGoroot string, goVersion *goinfo.GoVersi
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	cmd.Dir = GetMkBuiltinDir(outputGoroot, goVersion)
-	cmd.Env = build.MakeGorootEnv(os.Environ(), origGoroot)
-	cmd.Env = build.AppendNativeBuildEnv(cmd.Env)
+	cmd.Env = build.EnvForNative(os.Environ(), origGoroot)
 
 	err = cmd.Run()
 	if err != nil {

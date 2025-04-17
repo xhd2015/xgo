@@ -1,0 +1,1 @@
+Test xgo in cross compile scenario.

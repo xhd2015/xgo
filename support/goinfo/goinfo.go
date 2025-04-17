@@ -3,6 +3,7 @@ package goinfo
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -28,6 +29,15 @@ func GetGoVersionOutput(goBinary string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSuffix(string(out), "\n"), nil
+}
+
+func GetGorootVersion(goroot string) (*GoVersion, error) {
+	goBinary := filepath.Join(goroot, "bin", "go")
+	version, err := GetGoVersionOutput(goBinary)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGoVersion(version)
 }
 
 func ParseGoVersion(s string) (*GoVersion, error) {
@@ -61,6 +71,8 @@ func ParseGoVersion(s string) (*GoVersion, error) {
 	return res, nil
 }
 
+// ParseGoVersionNumber parses
+// example input: 1.23rc1
 func ParseGoVersionNumber(version string) (*GoVersion, error) {
 	res := &GoVersion{}
 	verList := strings.Split(version, ".")

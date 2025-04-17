@@ -6,8 +6,20 @@ import (
 	"strings"
 )
 
+// this ensure we do not build cross-platform
+// while building native binary
 func AppendNativeBuildEnv(env []string) []string {
 	return append(env, "GOOS=", "GOARCH=")
+}
+
+// see https://github.com/xhd2015/xgo/issues/320
+// the GOEXPERIMENT,GOOS and GOARCH could affect
+// building process. we make a fresh env
+func EnvForNative(env []string, goroot string) []string {
+	cleanEnv := MakeGorootEnv(env, goroot)
+	cleanEnv = AppendNativeBuildEnv(cleanEnv)
+	cleanEnv = append(cleanEnv, "GOEXPERIMENT=")
+	return cleanEnv
 }
 
 // MakeGorootEnv makes a new env with GOROOT and PATH set

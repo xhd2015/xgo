@@ -41,7 +41,7 @@ func BuildInstrument(goroot string, goVersion *goinfo.GoVersion) error {
 		return err
 	}
 	// build go command
-	return build.BuildBinary(goroot, filepath.Join(goroot, "src"), filepath.Join(goroot, "bin"), "go", "./cmd/go")
+	return build.BuildNativeBinary(goroot, filepath.Join(goroot, "src"), filepath.Join(goroot, "bin"), "go", "./cmd/go")
 }
 
 func instrumentGoMain(goroot string, goVersion *goinfo.GoVersion) error {

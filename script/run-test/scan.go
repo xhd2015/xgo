@@ -89,8 +89,20 @@ func amedTestWithConfig(test *TestConfig, includePredefinedArgs bool) error {
 		{prefix: "use-plain-go:", f: func(content string) {
 			test.UsePlainGo = content == "true"
 		}},
+		{prefix: "use-prebuilt-xgo:", f: func(content string) {
+			test.UsePrebuiltXgo = content == "true"
+		}},
+		{prefix: "build-only:", f: func(content string) {
+			test.BuildOnly = content == "true"
+		}},
 		{prefix: "vendor-if-missing:", f: func(content string) {
 			test.VendorIfMissing = content == "true"
+		}},
+		{prefix: "env:", f: func(content string) {
+			test.Env = append(test.Env, splitList(content)...)
+		}},
+		{prefix: "go:", f: func(content string) {
+			test.Go = content
 		}},
 	}
 	lines := strings.Split(string(bytes), "\n")
