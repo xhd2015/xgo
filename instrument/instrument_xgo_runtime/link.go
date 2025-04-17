@@ -87,6 +87,50 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	var traceFile *edit.File
 	var funcTabPkg *edit.Package
 	var coreVersion string
+
+	// find version first
+	for _, pkg := range editPackages.Packages {
+		goPkg := pkg.LoadPackage.GoPackage
+		if goPkg.Incomplete {
+			continue
+		}
+		if goPkg.ImportPath != constants.RUNTIME_CORE_PKG {
+			continue
+		}
+		var versionFile *edit.File
+		for _, file := range pkg.Files {
+			if file.File.Name == constants.VERSION_FILE {
+				versionFile = file
+				break
+			}
+		}
+		if versionFile == nil {
+			break
+		}
+		content := versionFile.File.Content
+		absFile := overlay.AbsFile(versionFile.File.AbsPath)
+		var err error
+		coreVersion, err = ParseCoreVersion(content)
+		if err != nil {
+			return nil, err
+		}
+		if isDeprecatedCoreVersion(coreVersion) {
+			return nil, fmt.Errorf("%w: %s", ErrRuntimeVersionDeprecatedV1_0_0, coreVersion)
+		}
+		versionContent := ReplaceActualXgoVersion(content, xgoVersion, xgoRevision, xgoNumber)
+		if coreVersion == "1.1.0" && (xgoVersion == "1.1.1" || xgoVersion == "1.1.2") {
+			// xgo v1.1.1 can work with runtime v1.1.0 with no trouble
+			// NOTE: how to decide bypass or not?
+			// you'd check the xgo/runtime code diff across these versions
+			// and find a way to migrate from old version to new version
+			// by instrumenting the code, which is basically enhancing
+			// the code here
+			versionContent = BypassVersionCheck(versionContent)
+		}
+		overrideContent(absFile, versionContent)
+		break
+	}
+
 	for _, pkg := range editPackages.Packages {
 		goPkg := pkg.LoadPackage.GoPackage
 		if goPkg.Incomplete {
@@ -132,7 +176,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 				}
 			}
 
-			err := linkRuntimeTemplates(goroot, overlayFS, pkg.LoadPackage.GoPackage.Dir, goVersion, runtimeLinkFile, readRuntimeGenFile, overrideContent)
+			err := linkRuntimeTemplates(goroot, overlayFS, pkg.LoadPackage.GoPackage.Dir, goVersion, coreVersion, runtimeLinkFile, readRuntimeGenFile, overrideContent)
 			if err != nil {
 				return nil, err
 			}
@@ -143,28 +187,6 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			content := loadFile.Content
 			absFile := overlay.AbsFile(loadFile.AbsPath)
 			switch loadFile.Name {
-			case constants.VERSION_FILE:
-				if suffixPkg == constants.RUNTIME_CORE_PKG[n:] {
-					var err error
-					coreVersion, err = ParseCoreVersion(content)
-					if err != nil {
-						return nil, err
-					}
-					if isDeprecatedCoreVersion(coreVersion) {
-						return nil, fmt.Errorf("%w: %s", ErrRuntimeVersionDeprecatedV1_0_0, coreVersion)
-					}
-					versionContent := ReplaceActualXgoVersion(content, xgoVersion, xgoRevision, xgoNumber)
-					if coreVersion == "1.1.0" && xgoVersion == "1.1.1" {
-						// xgo v1.1.1 can work with runtime v1.1.0 with no trouble
-						// NOTE: how to decide bypass or not?
-						// you'd check the xgo/runtime code diff across these versions
-						// and find a way to migrate from old version to new version
-						// by instrumenting the code, which is basically enhancing
-						// the code here
-						versionContent = BypassVersionCheck(versionContent)
-					}
-					overrideContent(absFile, versionContent)
-				}
 			case constants.FLAG_FILE:
 				if suffixPkg == constants.RUNTIME_TRAP_FLAGS_PKG[n:] && collectTestTrace {
 					flagsContent := InjectFlags(content, collectTestTrace, collectTestTraceDir)
@@ -219,7 +241,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 // because they have special build tag:
 //
 //	'//go:build ignore'
-func linkRuntimeTemplates(goroot string, overlayFS overlay.Overlay, internalRuntimeDir string, goVersion *goinfo.GoVersion, runtimeLinkFile *edit.File, readRuntimeGenFile func(path []string) ([]byte, error), overrideContent func(absFile overlay.AbsFile, content string)) error {
+func linkRuntimeTemplates(goroot string, overlayFS overlay.Overlay, internalRuntimeDir string, goVersion *goinfo.GoVersion, coreVersion string, runtimeLinkFile *edit.File, readRuntimeGenFile func(path []string) ([]byte, error), overrideContent func(absFile overlay.AbsFile, content string)) error {
 	// fmt.Fprintf(os.Stderr, "DEBUG linkRuntimeTemplates GOROOT: %s\n", goroot)
 	// runtimeDir := filepath.Join(goroot, "src", "runtime")
 	// runtimeNames, readErr := os.ReadDir(runtimeDir)
@@ -232,11 +254,17 @@ func linkRuntimeTemplates(goroot string, overlayFS overlay.Overlay, internalRunt
 	// }
 
 	if runtimeLinkFile != nil {
-		runtimeLinkTemplateContent, err := readRuntimeFileFromDirOrGen(internalRuntimeDir, constants.RUNTIME_LINK_TEMPLATE_PATH, overlayFS, readRuntimeGenFile)
-		if err != nil {
-			return err
+		var runtimeLinkTemplateContent string
+		if coreVersion != "1.1.0" {
+			var err error
+			runtimeLinkTemplateContent, err = readRuntimeFileFromDirOrGen(internalRuntimeDir, constants.RUNTIME_LINK_TEMPLATE_PATH, overlayFS, readRuntimeGenFile)
+			if err != nil {
+				return err
+			}
+		} else {
+			runtimeLinkTemplateContent = legacyRuntimeLinkTemplate
 		}
-		runtimeLinkTemplateContent, err = patch.RemoveBuildIgnore(runtimeLinkTemplateContent)
+		runtimeLinkTemplateContent, err := patch.RemoveBuildIgnore(runtimeLinkTemplateContent)
 		if err != nil {
 			return err
 		}
@@ -245,9 +273,21 @@ func linkRuntimeTemplates(goroot string, overlayFS overlay.Overlay, internalRunt
 		overrideContent(overlay.AbsFile(runtimeLinkFile.File.AbsPath), runtimeLinkTemplateContent)
 	}
 
-	xgoTrapTemplateContent, err := readRuntimeFileFromDirOrGen(internalRuntimeDir, constants.RUNTIME_XGO_TRAP_TEMPLATE_PATH, overlayFS, readRuntimeGenFile)
-	if err != nil {
-		return err
+	var xgoTrapTemplateContent string
+	if coreVersion != "1.1.1" {
+		var err error
+		xgoTrapTemplateContent, err = readRuntimeFileFromDirOrGen(internalRuntimeDir, constants.RUNTIME_XGO_TRAP_TEMPLATE_PATH, overlayFS, readRuntimeGenFile)
+		if err != nil {
+			return err
+		}
+	} else {
+		// 1.1.1 replace with gen because we changed
+		// signature of XgoRegister from func(fn *XgoFuncInfo) to func(fn interface{})
+		content, err := readRuntimeGenFile(constants.RUNTIME_XGO_TRAP_TEMPLATE_PATH)
+		if err != nil {
+			return err
+		}
+		xgoTrapTemplateContent = string(content)
 	}
 
 	// override file under GOROOT

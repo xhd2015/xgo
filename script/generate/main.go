@@ -38,6 +38,7 @@ var allGenerateTypes = []GenernateType{
 	gen_defs.GenernateType_ScriptInstallUpgrade,
 	gen_defs.GenernateType_RuntimeCoreFunc,
 	gen_defs.GenernateType_RuntimeXgoTrapTemplate,
+	gen_defs.GenernateType_LegacyRuntimeLink,
 }
 
 func main() {
@@ -154,7 +155,13 @@ func generate(rootDir string, subGens SubGens, amend bool, noUpdateVersion bool)
 
 	}
 	if subGens.Has(gen_defs.GenernateType_RuntimeXgoTrapTemplate) {
-		err := replaceXgoTrap()
+		err := replaceFuncInXgoTrap()
+		if err != nil {
+			return err
+		}
+	}
+	if subGens.Has(gen_defs.GenernateType_LegacyRuntimeLink) {
+		err := replaceFuncInLegacyRuntimeLink()
 		if err != nil {
 			return err
 		}

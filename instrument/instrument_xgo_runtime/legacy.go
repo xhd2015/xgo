@@ -2,6 +2,7 @@ package instrument_xgo_runtime
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,9 @@ import (
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/strutil"
 )
+
+//go:embed runtime_link_template_legacy_1_1_0.go
+var legacyRuntimeLinkTemplate string
 
 // Deprecated: we can remove once xgo/runtime v1.1.0 no longer used
 func addLegacyFunctabInit(funcTabPkg *edit.Package, overrideContent func(absFile overlay.AbsFile, content string)) {

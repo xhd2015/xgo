@@ -1,0 +1,5 @@
+package link
+
+func linkLegacy() {
+
+}
