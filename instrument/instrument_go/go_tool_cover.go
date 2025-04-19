@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -33,13 +32,7 @@ func InstrumentGoToolCover(goroot string, goVersion *goinfo.GoVersion) error {
 		return err
 	}
 
-	toolPath, err := build.GetToolPath(goroot)
-	if err != nil {
-		return err
-	}
-
-	// build cover command
-	return build.BuildNativeBinary(goroot, filepath.Join(goroot, "src"), toolPath, "cover", "./cmd/cover")
+	return build.RebuildGoToolCover(goroot)
 }
 
 func copyXgoCover(goroot string) error {

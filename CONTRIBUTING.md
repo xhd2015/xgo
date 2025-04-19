@@ -97,7 +97,16 @@ If a go version is not found in `go-release`, it can be downloaded via:
 go run ./script/download-go go1.22.1
 ```
 
-# Debug `xgo`
+Run test under xgo root:
+```sh
+go test -v $(go list -e ./... | grep -Ev 'asset|internal/vendir')
+```
+
+# Debug
+
+## Native setup
+
+Debug `xgo`
 ```sh
 # build, can add -tags dev
 go build -o xgo -gcflags="all=-N -l" ./cmd/xgo
@@ -106,7 +115,32 @@ go build -o xgo -gcflags="all=-N -l" ./cmd/xgo
 dlv exec --listen=:2345 --api-version=2 --check-go-version=false --headless -- ./xgo test --project-dir runtime/test -v ./patch
 ```
 
-# Debug `go`
+## Debug with `./script/run-test`
+
+Debug `go`:
+```sh
+go run ./script/run-test --debug-go --include go1.24.1 ./test/debug
+```
+
+Debug `go tool compile`
+```sh
+go run ./script/run-test --debug-compile --include go1.24.1 ./test/debug
+go run ./script/run-test --debug-compile=some/pkg --include go1.24.1 ./test/debug
+```
+
+Debug `xgo`
+```sh
+go run ./script/run-test --debug-xgo --include go1.24.1 ./test/debug
+```
+
+Debug the program itself:
+```sh
+go run ./script/run-test --debug --include go1.24.1 ./test/debug
+```
+
+## Debug with `./script/xgo.helper`
+
+### Debug `go`
 ```sh
 go install ./script/xgo.helper
 cp -r $GOROOT ~/GOROOT_DEBUG
@@ -118,7 +152,7 @@ xgo.helper setup-vscode ~/GOROOT_DEBUG
 xgo.helper debug-go ~/GOROOT_DEBUG -C $X/xgo/runtime/test/patch/real_world/kusia_ipc test -v ./
 ```
 
-# Debug `go tool compile`
+### Debug `go tool compile`
 ```sh
 go install ./script/xgo.helper
 cp -r $GOROOT ~/GOROOT_DEBUG

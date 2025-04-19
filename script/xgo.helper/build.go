@@ -9,21 +9,6 @@ import (
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 
-func buildGo(goroot string) (string, error) {
-	absGoroot, err := filepath.Abs(goroot)
-	if err != nil {
-		return "", err
-	}
-	src := filepath.Join(absGoroot, "src")
-	bin := filepath.Join(absGoroot, "bin")
-	output := filepath.Join(bin, "go.debug"+osinfo.EXE_SUFFIX)
-	err = cmd.Debug().Dir(src).Env([]string{"GOROOT=" + absGoroot, "GO_BYPASS_XGO=true"}).Run(filepath.Join(bin, "go"+osinfo.EXE_SUFFIX), "build", "-gcflags=all=-N -l", "-o", output, "./cmd/go")
-	if err != nil {
-		return "", fmt.Errorf("build go: %w", err)
-	}
-	return output, nil
-}
-
 func buildCompiler(goroot string) (string, error) {
 	absGoroot, err := filepath.Abs(goroot)
 	if err != nil {

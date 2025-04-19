@@ -1,0 +1,1 @@
+flags: -gcflags=all=-N\ -l

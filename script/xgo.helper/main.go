@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/xhd2015/xgo/instrument/build"
+	"github.com/xhd2015/xgo/script/xgo.helper/instrument"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
@@ -81,7 +83,7 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		err = instrumentGc(goroot, goVersion)
+		err = instrument.InstrumentGc(goroot, goVersion)
 		if err != nil {
 			return err
 		}
@@ -136,11 +138,11 @@ func debugGo(runOnly bool, goroot string, env []string, args []string) error {
 		return fmt.Errorf("requires cmd: build,test or run")
 	}
 
-	goExe, err := buildGo(goroot)
+	goExe, err := build.BuildGoDebugBinary(goroot)
 	if err != nil {
 		return err
 	}
-	_, err = buildCompiler(goroot)
+	_, err = build.BuildGoToolCompileDebugBinary(goroot)
 	if err != nil {
 		return err
 	}

@@ -67,12 +67,12 @@ func MultipleStatements() {
 
 	// Verify all functions have the trap injected
 	expectedFuncs := []string{
-		"func HelloWorld() {defer runtime.XgoTrap()();",
-		"func EmptyFunc() {defer runtime.XgoTrap()();",
-		"func (m MyStruct) Method() {defer runtime.XgoTrap()();",
-		"func (m *MyStruct) PointerMethod() {defer runtime.XgoTrap()();",
-		"func Add(a, b int) int {defer runtime.XgoTrap()();",
-		"func MultipleStatements() {defer runtime.XgoTrap()();",
+		"func HelloWorld() {defer __xgo_trap_runtime.XgoTrap()();",
+		"func EmptyFunc() {defer __xgo_trap_runtime.XgoTrap()();",
+		"func (m MyStruct) Method() {defer __xgo_trap_runtime.XgoTrap()();",
+		"func (m *MyStruct) PointerMethod() {defer __xgo_trap_runtime.XgoTrap()();",
+		"func Add(a, b int) int {defer __xgo_trap_runtime.XgoTrap()();",
+		"func MultipleStatements() {defer __xgo_trap_runtime.XgoTrap()();",
 	}
 
 	for _, expected := range expectedFuncs {

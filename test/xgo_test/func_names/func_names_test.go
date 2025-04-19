@@ -15,7 +15,10 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
+
+	"github.com/xhd2015/xgo/support/goinfo"
 )
 
 func F() {
@@ -56,15 +59,33 @@ func TestFuncNames(t *testing.T) {
 
 	c2()
 
+	version := runtime.Version()
+	t.Logf("version: %s", version)
+
+	goVersion, err := goinfo.ParseGoVersionNumber(strings.TrimPrefix(version, "go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c3Name := "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.TestFuncNames.func1.func2"
+	if goVersion.Major == 1 {
+		if goVersion.Minor <= 20 {
+			c3Name = "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.func2"
+		}
+		//  else if goVersion.Minor <= 21 {
+		// 	c3Name = "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.func1.1"
+		// }
+	}
+
 	var s S
 	var i I = s
 	var e E = s
 	var tests = []*testCase{
 		{F, "github.com/xhd2015/xgo/test/xgo_test/func_names.F"},
-		{c, expectTopLevelFunc},                                                       // closure
-		{c2, "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.func1"},   // closure
-		{c3, "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.func1.1"}, // closure
-		{s.F, "github.com/xhd2015/xgo/test/xgo_test/func_names.S.F-fm"},               // -fm suffix
+		{c, expectTopLevelFunc},                                                     // closure
+		{c2, "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.func1"}, // closure
+		{c3, c3Name}, // closure
+		{s.F, "github.com/xhd2015/xgo/test/xgo_test/func_names.S.F-fm"}, // -fm suffix
 		{S.F, "github.com/xhd2015/xgo/test/xgo_test/func_names.S.F"},
 		{i.F, "github.com/xhd2015/xgo/test/xgo_test/func_names.I.F-fm"}, // -fm suffix
 		{I.F, "github.com/xhd2015/xgo/test/xgo_test/func_names.I.F"},

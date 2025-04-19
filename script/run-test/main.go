@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/instrument/build"
+	"github.com/xhd2015/xgo/script/xgo.helper/instrument"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/git"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -62,17 +64,36 @@ type TestConfig struct {
 	Env             []string
 }
 
+func init() {
+	// go list -e ./... | grep -Ev 'asset|internal/vendir'
+	rootTestsOutput, err := cmd.Output("go", "list", "-e", "./...")
+	if err != nil {
+		panic(err)
+	}
+	list := strings.Split(rootTestsOutput, "\n")
+	var defaultTestArgs []string
+	for _, s := range list {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if strings.Contains(s, "asset") || strings.Contains(s, "internal/vendir") {
+			continue
+		}
+		defaultTestArgs = append(defaultTestArgs, s)
+	}
+	// fmt.Printf("DEBUG defaultTestArgs: %v\n", defaultTestArgs)
+
+	defaultTest.Args = defaultTestArgs
+}
+
 var defaultTest = &TestConfig{
 	// test using go
+	// go test -v $(go list -e ./... | grep -Ev 'asset|internal/vendir')
 	Dir:        "",
 	UsePlainGo: true,
-	Args: []string{
-		// "./...",
-		// "./test",
-		"./support/...",
-		"./instrument/...",
-		"./cmd/xgo",
-	},
+	// go list -e ./... | grep -Ev 'asset|internal/vendir'
+	Args: nil, // filled later
 }
 var runtimeTest = &TestConfig{
 	Dir:        "runtime",
@@ -106,6 +127,9 @@ func main() {
 
 	var debug bool
 	var debugXgo bool
+	var debugGo bool
+	var debugCompile string
+
 	var cover bool
 	var coverpkgs []string
 	var coverprofile string
@@ -214,6 +238,30 @@ func main() {
 			debugXgo = true
 			continue
 		}
+		if arg == "--debug-go" {
+			debugGo = true
+			continue
+		}
+		if arg == "--debug-compile" {
+			var val string
+			if i+1 < n && !strings.HasPrefix(args[i+1], "-") {
+				val = args[i+1]
+				i++
+			}
+			if val == "" {
+				val = "true"
+			}
+			debugCompile = val
+			continue
+		} else if strings.HasPrefix(arg, "--debug-compile=") {
+			val := arg[len("--debug-compile="):]
+			if val == "" {
+				val = "true"
+			}
+			debugCompile = val
+			continue
+		}
+
 		if arg == "--install-xgo" {
 			installXgo = true
 			continue
@@ -369,6 +417,30 @@ func main() {
 			goroots = append(goroots, setupGoroots...)
 		}
 	}
+	var debugNum int
+	if debug {
+		debugNum++
+	}
+	if debugXgo {
+		debugNum++
+	}
+	if debugCompile != "" {
+		debugNum++
+	}
+	if debugGo {
+		debugNum++
+	}
+	if debugNum > 0 {
+		if debugNum > 1 {
+			fmt.Fprintf(os.Stderr, "--debug, --debug-xgo, --debug-go and --debug-compile cannot be used together\n")
+			os.Exit(1)
+		}
+		if len(goroots) > 1 {
+			fmt.Fprintf(os.Stderr, "--debug* is not supported with multiple goroots, use --include GOROOT to specify one\n")
+			os.Exit(1)
+		}
+	}
+
 	for _, goroot := range goroots {
 		var isSetupGoroot bool
 		for _, setupGoroot := range setupGoroots {
@@ -416,6 +488,39 @@ func main() {
 			fmt.Fprintf(os.Stderr, "no tests to run: %v\n", remainTests)
 			os.Exit(1)
 		}
+		var goExe string
+		if debugNum > 0 {
+			if len(testArgs) > 1 {
+				fmt.Fprintf(os.Stderr, "--debug* is not supported with multiple tests, please specify exact test\n")
+				os.Exit(1)
+			}
+			if debugCompile != "" {
+				err := instrument.InstrumentGc(goroot, goVersion)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "instrument gc: %v\n", err)
+					os.Exit(1)
+				}
+				// build
+				goExe, err = build.BuildGoDebugBinary(goroot)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "build go debug binary: %v\n", err)
+					os.Exit(1)
+				}
+				_, err = build.BuildGoToolCompileDebugBinary(goroot)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "build go tool compile: %v\n", err)
+					os.Exit(1)
+				}
+			}
+			if debugGo {
+				// build
+				goExe, err = build.BuildGoDebugBinary(goroot)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "build go debug binary: %v\n", err)
+					os.Exit(1)
+				}
+			}
+		}
 		for _, testArg := range testArgs {
 			if len(testArg.Args) == 0 {
 				logDir := testArg.Dir
@@ -424,6 +529,10 @@ func main() {
 				}
 				fmt.Fprintf(os.Stderr, "SKIP %s: no tests to run\n", logDir)
 				continue
+			}
+			if debugGo && !testArg.UsePlainGo {
+				fmt.Fprintf(os.Stderr, "--debug-go must be used with go, not xgo\n")
+				os.Exit(1)
 			}
 			usePlainGo := testArg.UsePlainGo
 			useBuiltXgo := testArg.UsePrebuiltXgo
@@ -447,6 +556,8 @@ func main() {
 				IsSetupGoroot:  isSetupGoroot,
 				UsePrebuiltXgo: useBuiltXgo,
 				BuildOnly:      buildOnly,
+				GoBinary:       goExe,
+				DebugGo:        debugGo,
 			}
 			if tags != "" {
 				runArgs = append(runArgs, "-tags", tags)
@@ -460,7 +571,7 @@ func main() {
 					runArgs = append(runArgs, "--debug")
 				}
 				if debugXgo {
-					opts.Debug = true
+					opts.DebugXgo = true
 				}
 			}
 			var coverageVariant string
@@ -484,10 +595,42 @@ func main() {
 					}
 				}
 			}
+
+			env := testArg.Env
+			if debugCompile != "" {
+				listArg := []string{debugCompile}
+				if debugCompile == "true" {
+					listArg = testArg.Args
+				}
+				// list pkg
+				listArgs := []string{"list"}
+				listArgs = append(listArgs, listArg...)
+				// fmt.Fprintf(os.Stderr, "go %v\n", listArgs)
+				output, err := cmd.Dir(testArg.Dir).Output("go", listArgs...)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "list pkg: %v\n", err)
+					os.Exit(1)
+				}
+				pkgs := strings.Split(string(output), "\n")
+				if len(pkgs) == 0 {
+					fmt.Fprintf(os.Stderr, "no pkg found\n")
+					os.Exit(1)
+				}
+				if len(pkgs) > 1 {
+					fmt.Fprintf(os.Stderr, "multiple pkgs found, please specify exact --debug-compile=pkg\n")
+					os.Exit(1)
+				}
+				pkg := pkgs[0]
+				env = append(env, instrument.XGO_HELPER_DEBUG_PKG+"="+pkg)
+			}
 			runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
+			if debugCompile != "" {
+				runArgs = append(runArgs, "-a")
+			}
 			runArgs = append(runArgs, testArg.Flags...)
 			runArgs = append(runArgs, remainArgs...)
-			err := doRunTest(goroot, usePlainGo, dir, runArgs, testArg.Args, testArg.Env, opts)
+
+			err := doRunTest(goroot, usePlainGo, dir, runArgs, testArg.Args, env, opts)
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
 				os.Exit(1)
@@ -582,144 +725,38 @@ func listGoroots(dir string) ([]string, error) {
 	return dirs, nil
 }
 
-func hasName(names []string, name string) bool {
-	if len(names) == 0 {
-		return true
-	}
-	for _, e := range names {
-		if e == name {
-			return true
-		}
-	}
-	return false
-}
-
-func runRuntimeSubTest(goroot string, args []string, tests []string, names []string) error {
-	amendArgs := func(customArgs []string, flags []string) []string {
-		newArgs := make([]string, 0, len(args)+len(customArgs)+len(flags))
-		newArgs = append(newArgs, args...)
-		newArgs = append(newArgs, customArgs...)
-		newArgs = append(newArgs, flags...)
-		return newArgs
-	}
-	for _, tt := range extraSubTests {
-		if !hasName(names, tt.name) {
-			continue
-		}
-		if tt.skipOnCover {
-			var hasCoverFlag bool
-			for _, arg := range args {
-				if strings.HasPrefix(arg, "-cover") {
-					hasCoverFlag = true
-					break
-				}
-			}
-			if hasCoverFlag {
-				fmt.Printf("skip on cover: %s\n", tt.name)
-				continue
-			}
-		}
-		dir := tt.dir
-		env := tt.env
-		var subDirs bool
-		if strings.HasSuffix(dir, "/...") {
-			subDirs = true
-			dir = strings.TrimSuffix(dir, "/...")
-		}
-		var hasHook bool
-		if !subDirs {
-			hookFile := filepath.Join(dir, "hook_test.go")
-			_, statErr := os.Stat(hookFile)
-			hasHook = statErr == nil
-		}
-		dotDir := "./" + dir
-
-		var runDir string
-		var extraArgs []string
-		if tt.usePlainGo {
-			runDir = dotDir
-		} else {
-			extraArgs = []string{"--project-dir", dotDir}
-		}
-
-		if hasHook {
-			err := doRunTest(goroot, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPreCheck"}...), nil), []string{"./hook_test.go"}, env)
-			if err != nil {
-				return err
-			}
-		}
-		var testArgDir string
-		if !subDirs {
-			testArgDir = "./"
-		} else {
-			testArgDir = "./..."
-		}
-		testFlags := tt.flags
-		if runtime.GOOS == "windows" && tt.windowsFlags != nil {
-			testFlags = tt.windowsFlags
-		}
-		var skipped bool
-		runErr := doRunTest(goroot, tt.usePlainGo, runDir, amendArgs(extraArgs, testFlags), []string{testArgDir}, env)
-		if runErr != nil {
-			if tt.windowsFailIgnore && runtime.GOOS == "windows" {
-				skipped = true
-				fmt.Printf("SKIP test failure on windows\n")
-			}
-			if !skipped && tt.skipOnTimeout {
-				// see https://github.com/xhd2015/xgo/issues/272#issuecomment-2466539209
-				if runErr, ok := runErr.(*commandError); ok && runErr.timeoutDetector.found() {
-					skipped = true
-					fmt.Printf("SKIP test timed out\n")
-				}
-			}
-			if !skipped {
-				return runErr
-			}
-		}
-
-		if !skipped && hasHook {
-			err := doRunTest(goroot, tt.usePlainGo, runDir, amendArgs(append(extraArgs, []string{"-run", "TestPostCheck"}...), nil), []string{"./hook_test.go"}, env)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	if len(names) == 0 {
-		panic("TODO fix")
-		err := doRunTest(goroot, false, "", args, tests, nil)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 type testKind string
 
 type Opts struct {
-	Debug          bool
 	Tags           string
 	IsSetupGoroot  bool
 	UsePrebuiltXgo bool
 	BuildOnly      bool
+	GoBinary       string
+	DebugXgo       bool
+	DebugGo        bool
 }
 
 func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests []string, env []string, opts ...Opts) error {
-	var debug bool
+	var debugXgo bool
 	var tags string
 	var isSetupGoroot bool
 	var useBuiltXgo bool
 	var buildOnly bool
+	var goBinary string
+	var debugGo bool
 	if len(opts) > 0 {
 		if len(opts) != 1 {
 			panic("only one opts is allowed")
 		}
 		opt := opts[0]
-		debug = opt.Debug
+		debugXgo = opt.DebugXgo
 		tags = opt.Tags
 		isSetupGoroot = opt.IsSetupGoroot
 		useBuiltXgo = opt.UsePrebuiltXgo
 		buildOnly = opt.BuildOnly
+		goBinary = opt.GoBinary
+		debugGo = opt.DebugGo
 	}
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
@@ -747,7 +784,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		}
 		testArgs = []string{"test"}
 	} else {
-		if !debug {
+		if !debugXgo {
 			testArgs = []string{"run"}
 			if tags != "" {
 				testArgs = append(testArgs, "-tags", tags)
@@ -783,9 +820,13 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		testArgs = testArgs[:i]
 	}
 
+	for _, env := range env {
+		fmt.Fprintln(os.Stderr, env)
+	}
+
 	// debug
 	var binary string
-	if debug {
+	if debugXgo {
 		fmt.Printf("testArgs: %v\n", testArgs)
 		binary = "xgo"
 		newTestArgs := make([]string, 2, len(testArgs)+1)
@@ -798,8 +839,21 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		binary = prebuiltXgo
 		fmt.Printf("./xgo %s\n", strings.Join(testArgs, " "))
 	} else {
-		binary = filepath.Join(goroot, "bin", "go")
-		fmt.Printf("go %s\n", strings.Join(testArgs, " "))
+		if goBinary != "" {
+			binary = goBinary
+		} else {
+			binary = filepath.Join(goroot, "bin", "go")
+		}
+		fmt.Printf("%s %s\n", binary, strings.Join(testArgs, " "))
+	}
+	if debugGo {
+		if goBinary == "" {
+			return fmt.Errorf("--debug-go requires go binary to be specified")
+		}
+		vscodeDebug := strings.ReplaceAll(instrument.VScodeDebug, "2346", "2345")
+		fmt.Fprintf(os.Stderr, "VSCode add the following config to .vscode/launch.json:\n%s\nThen set breakpoint at %s\n", vscodeDebug, filepath.Join(goroot, "src", "cmd", "go", "main.go"))
+		testArgs = append([]string{"exec", "--listen=:2345", "--api-version=2", "--check-go-version=false", "--headless", "--", goBinary}, testArgs...)
+		binary = "dlv"
 	}
 
 	execCmd := exec.Command(binary, testArgs...)

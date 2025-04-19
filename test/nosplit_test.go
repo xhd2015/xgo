@@ -2,28 +2,29 @@ package test
 
 import (
 	"bytes"
-	"os"
-	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
+
+	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/strutil"
 )
 
 // go test -run TestLongFuncNoSplitShouldNotCompileWithDebugFlags -v ./test
 func TestLongFuncNoSplitShouldNotCompileWithDebugFlags(t *testing.T) {
-	t.Parallel()
-	goVersion, err := getGoVersion()
+	goVersion, err := goinfo.GetGorootVersion(runtime.GOROOT())
 	if err != nil {
-		t.Fatal(getErrMsg(err))
+		t.Fatal(err)
 	}
+
 	var errBuf bytes.Buffer
-	_, buildErr := buildAndRunOutputArgs([]string{"-gcflags=all=-N -l", "./testdata/nosplit/long_func_overflow.go"}, buildAndOutputOptions{
-		build: func(args []string) error {
-			// use go build
-			buildCmd := exec.Command("go", append([]string{"build"}, args...)...)
-			buildCmd.Stderr = &errBuf
-			buildCmd.Stdout = os.Stdout
-			return buildCmd.Run()
-		},
-	})
+	buildErr := cmd.Dir(filepath.Join("testdata", "nosplit", "longfunc")).
+		Stderr(&errBuf).
+		Stdout(&errBuf).
+		Run("go", "build", "-gcflags=all=-N -l", "-o", "/dev/null", "./")
+
 	if buildErr == nil {
 		t.Fatalf("expect build fail")
 	}
@@ -39,54 +40,23 @@ func TestLongFuncNoSplitShouldNotCompileWithDebugFlags(t *testing.T) {
 		}
 	}
 
-	expectSequence(t, errOutput, expects)
+	idx := strutil.IndexSequence(errOutput, expects)
+	if idx < 0 {
+		t.Fatalf("expect contains %v, actual: %s", expects, errOutput)
+	}
 }
 
 // go test -run TestSmallFuncNoSplitShouldCompileWithDebugFlagsWithGo -v ./test
 func TestSmallFuncNoSplitShouldCompileWithDebugFlagsWithGo(t *testing.T) {
-	output, err := buildAndRunOutputArgs([]string{"-gcflags=all=-N -l", "./testdata/nosplit/small_func_should_compile.go"}, buildAndOutputOptions{
-		build: func(args []string) error {
-			// use go build
-			buildCmd := exec.Command("go", append([]string{"build"}, args...)...)
-			buildCmd.Stderr = os.Stderr
-			buildCmd.Stdout = os.Stdout
-			return buildCmd.Run()
-		},
-	})
+	output, err := cmd.Dir(filepath.Join("testdata", "nosplit", "shortfunc")).
+		Output("go", "run", "-gcflags=all=-N -l", "./")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expect := "hello nosplit:<nil>\n"
+	output = strings.TrimSpace(output)
+	expect := "hello nosplit:<nil>"
 	if output != expect {
 		t.Fatalf("expect output: %q, actual: %q", expect, output)
 	}
 }
-
-// go test -run TestSmallFuncNoSplitShouldCompileWithoutDebugWithXgo -v ./test
-func TestSmallFuncNoSplitShouldCompileWithoutDebugWithXgo(t *testing.T) {
-	output, err := buildAndRunOutputArgs([]string{"./testdata/nosplit/small_func_should_compile.go"}, buildAndOutputOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expect := "hello nosplit:<nil>\n"
-	if output != expect {
-		t.Fatalf("expect output: %q, actual: %q", expect, output)
-	}
-}
-
-// go test -run TestSmallFuncNoSplitShouldCompileWithDebugFlagsWithXgo -v ./test
-func TestSmallFuncNoSplitShouldCompileWithDebugFlagsWithXgo(t *testing.T) {
-	output, err := buildAndRunOutputArgs([]string{"--", "-gcflags=all=-N -l", "./testdata/nosplit/small_func_should_compile.go"}, buildAndOutputOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expect := "hello nosplit:<nil>\n"
-	if output != expect {
-		t.Fatalf("expect output: %q, actual: %q", expect, output)
-	}
-}
-
-// TODO: add test that nosplit are not trapped
