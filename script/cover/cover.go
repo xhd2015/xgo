@@ -61,7 +61,8 @@ func mergeCover(files []string, outFile string) error {
 		if err != nil {
 			return err
 		}
-		covs = append(covs, coverage.Parse(string(content)))
+		_, lines := coverage.Parse(string(content))
+		covs = append(covs, lines)
 	}
 	res := coverage.Merge(covs...)
 	res = coverage.Filter(res, func(line *coverage.CovLine) bool {

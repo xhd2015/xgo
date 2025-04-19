@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/xhd2015/xgo/instrument/build"
@@ -41,7 +40,7 @@ func BuildInstrument(goroot string, goVersion *goinfo.GoVersion) error {
 		return err
 	}
 	// build go command
-	return build.BuildNativeBinary(goroot, filepath.Join(goroot, "src"), filepath.Join(goroot, "bin"), "go", "./cmd/go")
+	return build.RebuildGoBinary(goroot)
 }
 
 func instrumentGoMain(goroot string, goVersion *goinfo.GoVersion) error {

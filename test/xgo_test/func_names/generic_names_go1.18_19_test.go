@@ -24,11 +24,11 @@ func init() {
 	getGenericTests = func() []*testCase {
 		return []*testCase{
 			// init.2 because helper file takes some space
-			{GF[int], "github.com/xhd2015/xgo/test/xgo_test/func_names.init.2.func1.1"},
-			{(*GS[int]).F, "github.com/xhd2015/xgo/test/xgo_test/func_names.init.2.func1.2"},
+			{GF[int], "github.com/xhd2015/xgo/test/xgo_test/func_names.init.0.func1.1"},
+			{(*GS[int]).F, "github.com/xhd2015/xgo/test/xgo_test/func_names.init.0.func1.2"},
 			// it seems that with go1.18,go1.19 ,gs.F does not end with -fm suffix
 			// that may cause generic mock failed.
-			{gs.F, "github.com/xhd2015/xgo/test/xgo_test/func_names.init.2.func1.3"},
+			{gs.F, "github.com/xhd2015/xgo/test/xgo_test/func_names.init.0.func1.3"},
 			{GI[int].F, "github.com/xhd2015/xgo/test/xgo_test/func_names.GI[...].F"},
 			{gi.F, "github.com/xhd2015/xgo/test/xgo_test/func_names.GI[...].F-fm"},
 		}
