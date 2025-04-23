@@ -179,11 +179,3 @@ func replaceContentAfter(content []byte, anchor []byte, old []byte, new []byte) 
 	copy(newContent[i:], content[oldStart+len(old):])
 	return newContent, true
 }
-
-func bypassVersionCheck(versionCode string) string {
-	return strings.Replace(versionCode,
-		"func checkVersion() error {",
-		"func checkVersion() error { if true { return nil; }",
-		1,
-	)
-}

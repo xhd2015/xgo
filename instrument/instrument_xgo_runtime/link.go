@@ -86,7 +86,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	var foundLegacyCoreInfoPkg bool
 	var traceFile *edit.File
 	var funcTabPkg *edit.Package
-	var coreVersion string
+	var runtimeCoreVersion string
 
 	// find version first
 	for _, pkg := range editPackages.Packages {
@@ -110,27 +110,15 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		content := versionFile.File.Content
 		absFile := overlay.AbsFile(versionFile.File.AbsPath)
 		var err error
-		coreVersion, err = ParseCoreVersion(content)
+		runtimeCoreVersion, err = ParseCoreVersion(content)
 		if err != nil {
 			return nil, err
 		}
-		if isDeprecatedCoreVersion(coreVersion) {
-			return nil, fmt.Errorf("%w: %s", ErrRuntimeVersionDeprecatedV1_0_0, coreVersion)
+		if isDeprecatedCoreVersion(runtimeCoreVersion) {
+			return nil, fmt.Errorf("%w: %s", ErrRuntimeVersionDeprecatedV1_0_0, runtimeCoreVersion)
 		}
 		versionContent := ReplaceActualXgoVersion(content, xgoVersion, xgoRevision, xgoNumber)
-		if coreVersion == "1.1.0" || coreVersion == "1.1.1" {
-			// newer xgo can work with runtime v1.1.0/1.1.1/... with no trouble
-			// NOTE: how to decide bypass or not?
-			// you'd check the xgo/runtime code diff across these versions
-			// and find a way to migrate from old version to new version
-			// by instrumenting the code, which is basically enhancing
-			// the code here
-			// also add test under runtime/test/build
-			//  - runtime/test/build/legacy_depend_1_0_52
-			//  - runtime/test/build/legacy_depend_1_1_0
-			//  - runtime/test/build/legacy_depend_1_1_1
-			versionContent = bypassVersionCheck(versionContent)
-		}
+		versionContent = checkBypassVersionCheck(versionContent, runtimeCoreVersion)
 		overrideContent(absFile, versionContent)
 		break
 	}
@@ -180,7 +168,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 				}
 			}
 
-			err := linkRuntimeTemplates(goroot, overlayFS, pkg.LoadPackage.GoPackage.Dir, goVersion, coreVersion, runtimeLinkFile, readRuntimeGenFile, overrideContent)
+			err := linkRuntimeTemplates(goroot, overlayFS, pkg.LoadPackage.GoPackage.Dir, goVersion, runtimeCoreVersion, runtimeLinkFile, readRuntimeGenFile, overrideContent)
 			if err != nil {
 				return nil, err
 			}
@@ -212,7 +200,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		}
 		return editPackages, ErrLinkFileNotRequired
 	}
-	if coreVersion == "1.1.0" && runtimeLinkPkg != nil {
+	if runtimeCoreVersion == "1.1.0" && runtimeLinkPkg != nil {
 		// remove the buggy var ptr trap behavior in runtime v1.1.0
 		dir := runtimeLinkPkg.LoadPackage.GoPackage.Dir
 		err := patchLegacy(dir, overrideContent)
