@@ -141,6 +141,7 @@ func main() {
 	var withSetup bool
 	var withSetupOnly bool
 	var tags string
+	var flagRace bool
 
 	var flagList bool
 	var flagJSON bool
@@ -276,6 +277,10 @@ func main() {
 			}
 			tags = args[i+1]
 			i++
+			continue
+		}
+		if arg == "-race" {
+			flagRace = true
 			continue
 		}
 		if strings.HasPrefix(arg, "-") {
@@ -624,6 +629,9 @@ func main() {
 				env = append(env, instrument.XGO_HELPER_DEBUG_PKG+"="+pkg)
 			}
 			runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
+			if flagRace {
+				runArgs = append(runArgs, "-race")
+			}
 			if debugCompile != "" {
 				runArgs = append(runArgs, "-a")
 			}

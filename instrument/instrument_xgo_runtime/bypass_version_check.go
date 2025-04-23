@@ -4,7 +4,7 @@ import "strings"
 
 func checkBypassVersionCheck(versionCode string, coreVersion string) string {
 	if coreVersion == "1.1.2" {
-		// xgo v1.1.2 has addressed the serveral issues that
+		// xgo v1.1.2 has addressed the several issues that
 		// affect correctness. older v1.1.0 need to upgrade
 		//
 		// newer xgo can work with runtime v1.1.0/1.1.1/... with no trouble

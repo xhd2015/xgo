@@ -22,4 +22,8 @@ func TestFlagRace(t *testing.T) {
 
 	os.Getenv("GORACE")
 
+	res := buf.String()
+	if res != "Getenv\n" {
+		t.Fatalf("expect Getenv, but got %s", res)
+	}
 }

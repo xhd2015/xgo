@@ -1,6 +1,7 @@
 package trap
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -77,41 +78,51 @@ func pushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
 func pushRecorderInterceptor(fn interface{}, preInterceptor PreInterceptor, postInterceptor PostInterceptor) func() {
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() == reflect.Ptr {
+		// variable
+		if preInterceptor == nil && postInterceptor == nil {
+			panic(fmt.Errorf("preInterceptor and postInterceptor should not be both nil"))
+		}
 		varPtr := fnv.Pointer()
 		funcInfo := functab.InfoVarAddr(varPtr)
 		if funcInfo == nil {
 			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
 		}
-		// variable
-		preHandler := func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool) {
-			var argObj object
-			resObject := object{
-				{
-					name:   fnInfo.Name,
-					valPtr: res,
-				},
-			}
-			data, err := preInterceptor(nil, funcInfo, argObj, resObject)
-			if err != nil {
-				if err == ErrMocked {
-					return nil, true
-				}
-				panic(err)
-			}
+		var preHandler func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool)
+		var postHandler func(fnInfo *core.FuncInfo, res interface{}, data interface{})
 
-			return data, false
-		}
-		postHandler := func(fnInfo *core.FuncInfo, res interface{}, data interface{}) {
-			var argObj object
-			resObject := object{
-				{
-					name:   fnInfo.Name,
-					valPtr: res,
-				},
+		if preInterceptor != nil {
+			preHandler = func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool) {
+				var argObj object
+				resObject := object{
+					{
+						name:   fnInfo.Name,
+						valPtr: res,
+					},
+				}
+				data, err := preInterceptor(context.Background(), funcInfo, argObj, resObject)
+				if err != nil {
+					if err == ErrMocked {
+						return nil, true
+					}
+					panic(err)
+				}
+
+				return data, false
 			}
-			err := postInterceptor(nil, funcInfo, argObj, resObject, data)
-			if err != nil {
-				panic(err)
+		}
+		if postInterceptor != nil {
+			postHandler = func(fnInfo *core.FuncInfo, res interface{}, data interface{}) {
+				var argObj object
+				resObject := object{
+					{
+						name:   fnInfo.Name,
+						valPtr: res,
+					},
+				}
+				err := postInterceptor(context.Background(), funcInfo, argObj, resObject, data)
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 		return PushVarRecordHandler(varPtr, preHandler, postHandler)
