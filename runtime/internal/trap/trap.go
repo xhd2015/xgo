@@ -105,25 +105,29 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 				}
 			}
 		}
-		if stackData == nil && isStartTracing {
-			// trace starting cannot happen on empty stack
-			// stk might be InitGStack
-			if stk != nil {
-				// this should never happen
-				panic("stackData is nil while stk is not nil!")
+		if isStartTracing {
+			if stackData == nil {
+				// trace starting cannot happen on empty stack
+				// stk might be InitGStack
+				if stk != nil {
+					// this should never happen
+					panic("stackData is nil while stk is not nil!")
+				}
+				stackData = &StackData{
+					hasStartedTracing: true,
+				}
+				begin = xgo_runtime.XgoRealTimeNow()
+				stk = &stack.Stack{
+					Begin: begin,
+					Data: map[interface{}]interface{}{
+						dataKey: stackData,
+					},
+				}
+				stack.Attach(stk)
+				stackAttached = true
+			} else {
+				stackData.hasStartedTracing = true
 			}
-			stackData = &StackData{
-				hasStartedTracing: true,
-			}
-			begin = xgo_runtime.XgoRealTimeNow()
-			stk = &stack.Stack{
-				Begin: begin,
-				Data: map[interface{}]interface{}{
-					dataKey: stackData,
-				},
-			}
-			stack.Attach(stk)
-			stackAttached = true
 		}
 	}
 	// === end detect trapping and tracing ===
