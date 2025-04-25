@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"os"
 
+	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/instrument_func"
@@ -214,7 +215,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		funcInfos, extraFuncs := instrument_func.TrapFuncs(edit, constants.RUNTIME_TRACE_PKG, traceFile.File.Syntax, traceFile.Index, instrument_func.Options{
 			// trap all funcs inside trace.go,
 			// in reality there is only one func: Trace
-			TrapAll: true,
+			InstrumentMode: config.InstrumentMode_All,
 			// force in place edit, which uses overlay
 			ForceInPlace: true,
 		})

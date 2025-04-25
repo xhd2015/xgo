@@ -28,15 +28,14 @@ type Options struct {
 	PkgConfig   *config.PkgConfig
 
 	// flags
-	Stdlib  bool
-	Main    bool
-	Initial bool
+	Main bool
 
-	// TrapAll the flag --trap-all
-	TrapAll bool
+	InstrumentMode config.InstrumentMode
 
 	// force in place edit
 	ForceInPlace bool
+
+	PkgExtraQuota *int
 }
 
 // TrapFuncs parses the given file as golang AST,
@@ -59,14 +58,12 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 
 	recorder := opts.PkgRecorder
 	cfg := opts.PkgConfig
-	stdlib := opts.Stdlib
 	main := opts.Main
-	initial := opts.Initial
-	trapAll := opts.TrapAll
 	forceInPlace := opts.ForceInPlace
+	pkgLeft := opts.PkgExtraQuota
 
 	// --trap-all not effective for stdlib
-	defaultAllow := main || initial || (!stdlib && trapAll)
+	instrumentMode := opts.InstrumentMode
 
 	var funcInfos []*edit.FuncInfo
 	var extraFuncs []*compiler_extra.Func
@@ -90,42 +87,67 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 			// certain function is specifically left for xgo to call
 			continue
 		}
+		var hasNosplit bool
+		if funcDecl.Doc != nil {
+			for _, comment := range funcDecl.Doc.List {
+				// see https://github.com/xhd2015/xgo/issues/340
+				if strings.HasPrefix(comment.Text, "//go:nosplit") {
+					hasNosplit = true
+					break
+				}
+			}
+		}
+		if hasNosplit {
+			continue
+		}
 		astReceiver := getReceiver(funcDecl, fset)
 		identityName, recvPtr, recvGeneric, recvType := ParseReceiverInfo(funcName, astReceiver)
 		if config.DEBUG {
 			config_debug.OnTrapFunc(pkgPath, funcDecl, identityName)
 		}
 
-		var hitRecorder bool
-		if recorder != nil {
-			var hasFnRecord bool
-			var hasTypeMethodRecord bool
-			fnRecorder := recorder.Get(funcName)
-			if fnRecorder != nil && fnRecorder.HasMockRef {
-				hasFnRecord = true
-			}
-			if !hasFnRecord && recvType != nil {
-				typeRecorder := recorder.Get(recvType.Name)
-				if typeRecorder != nil && typeRecorder.NamesHavingMock[funcName] {
-					hasTypeMethodRecord = true
+		if instrumentMode != config.InstrumentMode_All {
+			var hitRecorder bool
+			if recorder != nil {
+				var hasFnRecord bool
+				var hasTypeMethodRecord bool
+				fnRecorder := recorder.Get(funcName)
+				if fnRecorder != nil && fnRecorder.HasMockRef {
+					hasFnRecord = true
+				}
+				if !hasFnRecord && recvType != nil {
+					typeRecorder := recorder.Get(recvType.Name)
+					if typeRecorder != nil && typeRecorder.NamesHavingMock[funcName] {
+						hasTypeMethodRecord = true
+					}
+				}
+				if hasFnRecord || hasTypeMethodRecord {
+					hitRecorder = true
 				}
 			}
-			if hasFnRecord || hasTypeMethodRecord {
-				hitRecorder = true
-			}
-		}
 
-		if !hitRecorder {
-			// if not hit recorder, we fallback to cfg-based filter
-			// which is whitelist mode for stdlib
-			if cfg != nil {
-				if !cfg.WhitelistFunc[identityName] && !matchAnyPrefix(cfg.WhitelistFuncPrefix, identityName) {
-					// TODO: may enforce only exporeted function on standard lib?
+			if !hitRecorder {
+				// if not hit recorder, we fallback to cfg-based filter
+				// which is whitelist mode for stdlib
+				if cfg != nil {
+					if !cfg.WhitelistFunc[identityName] && !matchAnyPrefix(cfg.WhitelistFuncPrefix, identityName) {
+						// TODO: may enforce only exporeted function on standard lib?
+						continue
+					}
+				} else if instrumentMode == config.InstrumentMode_None {
+					// by default, we don't instrument stdlib and third party packages
+					continue
+				} else if instrumentMode == config.InstrumentMode_Exported {
+					if !token.IsExported(funcName) {
+						continue
+					}
+				} else {
+					// unknown
+					if config.IS_DEV {
+						panic(fmt.Sprintf("unhandled instrument mode: %d", instrumentMode))
+					}
 					continue
 				}
-			} else if !defaultAllow {
-				// by default, we don't instrument stdlib and third party packages
-				continue
 			}
 		}
 
@@ -135,12 +157,19 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 			// see
 			//  - https://github.com/xhd2015/xgo/issues/333
 			//  - https://github.com/xhd2015/xgo/issues/335
-			extraFuncs = append(extraFuncs, &compiler_extra.Func{
-				IdentityName: identityName,
-			})
+			// take the first 100, see
+			//  - https://github.com/xhd2015/xgo/issues/333#issuecomment-2830937257
+			if instrumentMode == config.InstrumentMode_Exported && len(extraFuncs) < config.MAX_EXTRA_FUNCS_PER_FILE {
+				if pkgLeft != nil && *pkgLeft <= 0 {
+					continue
+				}
+				extraFuncs = append(extraFuncs, &compiler_extra.Func{
+					IdentityName: identityName,
+				})
+				*pkgLeft--
+			}
 			continue
 		}
-
 		// for mainOrInitial, edit file in place
 		// for non
 

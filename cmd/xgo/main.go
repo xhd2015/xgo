@@ -524,7 +524,7 @@ func handleBuild(cmd string, args []string) error {
 				fmt.Fprintf(os.Stderr, "patch GOROOT\n")
 			}
 			logDebug("patch runtime at: %s", instrumentGoroot)
-			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged, isDevelopment)
+			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, isDevelopment || syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged, isDevelopment)
 			if err != nil {
 				return err
 			}

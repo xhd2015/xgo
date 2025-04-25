@@ -4,9 +4,12 @@ import (
 	"cmd/compile/internal/base"
 	"cmd/compile/internal/syntax"
 	"cmd/compile/internal/xgo_rewrite_internal/patch/info"
+	"cmd/compile/internal/xgo_rewrite_internal/patch/instrument/compiler_extra"
+	"path/filepath"
 )
 
 type File struct {
+	Name    string
 	Syntax  *syntax.File
 	Index   int
 	AbsPath string
@@ -26,6 +29,7 @@ func initFiles(syntaxFiles []*syntax.File) []*File {
 			file = f.Pos().RelFilename()
 		}
 		files[i] = &File{
+			Name:    filepath.Base(file),
 			Syntax:  f,
 			Index:   i,
 			AbsPath: file,
@@ -34,22 +38,36 @@ func initFiles(syntaxFiles []*syntax.File) []*File {
 	return files
 }
 
-func getFuncDecls(files []*File) []*info.DeclInfo {
+func getFuncDecls(files []*File, fileMapping map[string]*compiler_extra.FileMapping) ([]*File, []*info.DeclInfo) {
 	// fileInfos := make([]*FileDecl, 0, len(files))
 	var declFuncs []*info.DeclInfo
+
+	i := 0
 	for _, f := range files {
+		fmapping := fileMapping[f.Name]
+		if fmapping == nil {
+			continue
+		}
+		var hasDecl bool
 		for declIdx, decl := range f.Syntax.DeclList {
-			fnDecls := extractFuncDecls(f.Index, declIdx, f.Syntax, f.AbsPath, decl)
+			fnDecls := extractFuncDecls(f.Index, declIdx, f.Syntax, f.AbsPath, decl, fmapping)
+			if len(fnDecls) > 0 {
+				hasDecl = true
+			}
 			declFuncs = append(declFuncs, fnDecls...)
 		}
+		if hasDecl {
+			files[i] = f
+			i++
+		}
 	}
-	return declFuncs
+	return files[:i], declFuncs
 }
 
-func extractFuncDecls(fileIndex int, declIndex int, f *syntax.File, file string, decl syntax.Decl) []*info.DeclInfo {
+func extractFuncDecls(fileIndex int, declIndex int, f *syntax.File, file string, decl syntax.Decl, fileMapping *compiler_extra.FileMapping) []*info.DeclInfo {
 	switch decl := decl.(type) {
 	case *syntax.FuncDecl:
-		fnInfo := getFuncDeclInfo(fileIndex, declIndex, f, file, decl)
+		fnInfo := getFuncDeclInfo(fileIndex, declIndex, f, file, decl, fileMapping.Funcs)
 		if fnInfo == nil {
 			return nil
 		}
@@ -67,9 +85,14 @@ func extractFuncDecls(fileIndex int, declIndex int, f *syntax.File, file string,
 		// because we cannot handle Embed interface if
 		// the that comes from other package
 		if _, ok := decl.Type.(*syntax.InterfaceType); ok {
+			idName := decl.Name.Value
+			_, ok := fileMapping.Interfaces[idName]
+			if !ok {
+				return nil
+			}
 			return []*info.DeclInfo{
 				{
-					RecvTypeName: decl.Name.Value,
+					RecvTypeName: idName,
 					Interface:    true,
 
 					FileSyntax: f,
@@ -84,7 +107,7 @@ func extractFuncDecls(fileIndex int, declIndex int, f *syntax.File, file string,
 	return nil
 }
 
-func getFuncDeclInfo(fileIndex int, declIndex int, f *syntax.File, file string, fn *syntax.FuncDecl) *info.DeclInfo {
+func getFuncDeclInfo(fileIndex int, declIndex int, f *syntax.File, file string, fn *syntax.FuncDecl, funcsMapping map[string]*compiler_extra.FuncMapping) *info.DeclInfo {
 	if fn.Body == nil {
 		// see bug https://github.com/xhd2015/xgo/issues/202
 		return nil
@@ -132,7 +155,7 @@ func getFuncDeclInfo(fileIndex int, declIndex int, f *syntax.File, file string, 
 		recvTypeName = recvTypeExpr.(*syntax.Name).Value
 	}
 
-	return &info.DeclInfo{
+	declInfo := &info.DeclInfo{
 		FuncDecl:     fn,
 		Name:         fnName,
 		RecvTypeName: recvTypeName,
@@ -143,8 +166,9 @@ func getFuncDeclInfo(fileIndex int, declIndex int, f *syntax.File, file string, 
 		Stdlib: base.Flag.Std,
 
 		RecvName: recvName,
-		ArgNames: getFieldNames(fn.Type.ParamList),
-		ResNames: getFieldNames(fn.Type.ResultList),
+		// filled later
+		// ArgNames: getFieldNames(fn.Type.ParamList),
+		// ResNames: getFieldNames(fn.Type.ResultList),
 
 		FileSyntax: f,
 		FileIndex:  fileIndex,
@@ -153,4 +177,12 @@ func getFuncDeclInfo(fileIndex int, declIndex int, f *syntax.File, file string, 
 		File: file,
 		Line: int(line),
 	}
+	idName := declInfo.IdentityName()
+	_, ok := funcsMapping[idName]
+	if !ok {
+		return nil
+	}
+	declInfo.ArgNames = getFieldNames(fn.Type.ParamList)
+	declInfo.ResNames = getFieldNames(fn.Type.ResultList)
+	return declInfo
 }

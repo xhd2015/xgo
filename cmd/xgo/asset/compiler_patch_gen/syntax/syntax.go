@@ -17,6 +17,10 @@ func AfterFilesParsed(syntaxFiles []*syntax.File, addFile func(name string, r io
 	if len(syntaxFiles) == 0 {
 		return
 	}
+	// if true {
+	// 	// DEBUG only
+	// 	return
+	// }
 	pkgPath := ctxt.GetPkgPath()
 	// mainModule := ctxt.XGO_MAIN_MODULE
 	packagesFile := ctxt.XGO_COMPILER_SYNTAX_REWRITE_PACKAGES_FILE
@@ -39,11 +43,14 @@ func AfterFilesParsed(syntaxFiles []*syntax.File, addFile func(name string, r io
 	}
 
 	files := initFiles(syntaxFiles)
-	funcDelcs := getFuncDecls(files)
+	files, funcDelcs := getFuncDecls(files, pkgMapping.Files)
+	if len(funcDelcs) == 0 {
+		return
+	}
 
 	// always __xgo_trap_0
 	__xgo_trap := constants.Trap(0)
-	trapCount := trapFuncs(funcDelcs, __xgo_trap, pkgMapping.Files)
+	trapCount := trapFuncs(funcDelcs, __xgo_trap)
 	if trapCount == 0 {
 		return
 	}

@@ -15,6 +15,9 @@ var PREDEFINED_STD_PKGS = []string{
 	"io/ioutil",
 }
 
+const MAX_EXTRA_FUNCS_PER_FILE = 16
+const MAX_EXTRA_FUNCS_PER_PKG = 6 * MAX_EXTRA_FUNCS_PER_FILE
+
 // `go list -deps runtime` to check all dependencies
 //
 //	internal/goarch
@@ -69,6 +72,29 @@ func CheckInstrument(pkgPath string) (isXgo bool, allow bool) {
 		return false, false
 	}
 	return false, true
+}
+
+type InstrumentMode int
+
+const (
+	InstrumentMode_Exported InstrumentMode = iota
+	InstrumentMode_All
+	InstrumentMode_None
+)
+
+func CheckInstrumentMode(stdlib bool, main bool, initial bool, trapAll bool) InstrumentMode {
+	if main || initial {
+		return InstrumentMode_All
+	}
+	if stdlib {
+		return InstrumentMode_None
+	}
+	if trapAll {
+		// trap-all causes excessive memory usage
+		// see https://github.com/xhd2015/xgo/issues/333#issuecomment-2830867588
+		return InstrumentMode_Exported
+	}
+	return InstrumentMode_None
 }
 
 func isXgoRuntimePkg(pkgPath string) bool {

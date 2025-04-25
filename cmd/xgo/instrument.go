@@ -238,34 +238,49 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 			hasVarTrap = true
 		}
 
+		mode := config.CheckInstrumentMode(stdlib, main, initial, needTrapAll)
+
 		var extraFiles []*compiler_extra.File
+		pkgExtraQuota := config.MAX_EXTRA_FUNCS_PER_PKG
 		for _, file := range pkg.Files {
 			if !pkg.Main && strings.HasSuffix(file.File.Name, "_test.go") {
 				// skip test files outside main package
 				continue
 			}
 			funcs, extraFuncs := instrument_func.TrapFuncs(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{
-				PkgRecorder: pkgRecorder,
-				PkgConfig:   cfg,
-				Stdlib:      stdlib,
-				Main:        main,
-				Initial:     initial,
-				TrapAll:     needTrapAll,
+				PkgRecorder:    pkgRecorder,
+				PkgConfig:      cfg,
+				Main:           main,
+				InstrumentMode: mode,
+				PkgExtraQuota:  &pkgExtraQuota,
 			})
 			file.TrapFuncs = append(file.TrapFuncs, funcs...)
 
 			// interface types
-			intfTypes := instrument_intf.CollectInterfaces(file)
 			var extraInterfaces []*compiler_extra.Interface
-			if main {
-				file.InterfaceTypes = append(file.InterfaceTypes, intfTypes...)
-			} else {
-				for _, intf := range intfTypes {
-					extraInterfaces = append(extraInterfaces, &compiler_extra.Interface{
-						Name: intf.Name,
-					})
+			if mode != config.InstrumentMode_None {
+				intfTypes := instrument_intf.CollectInterfaces(file)
+				if main {
+					file.InterfaceTypes = append(file.InterfaceTypes, intfTypes...)
+				} else {
+					for _, intf := range intfTypes {
+						if mode == config.InstrumentMode_Exported {
+							if !token.IsExported(intf.Name) {
+								continue
+							}
+							extraInterfaces = append(extraInterfaces, &compiler_extra.Interface{
+								Name: intf.Name,
+							})
+						} else {
+							if config.IS_DEV {
+								panic(fmt.Sprintf("unhandled instrument mode: %d", mode))
+							}
+						}
+
+					}
 				}
 			}
+
 			if len(extraFuncs) > 0 || len(extraInterfaces) > 0 {
 				extraFiles = append(extraFiles, &compiler_extra.File{
 					Name:       file.File.Name,

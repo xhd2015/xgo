@@ -4,9 +4,7 @@ import (
 	"cmd/compile/internal/base"
 	"cmd/compile/internal/syntax"
 	"cmd/compile/internal/xgo_rewrite_internal/patch/info"
-	"cmd/compile/internal/xgo_rewrite_internal/patch/instrument/compiler_extra"
 	"os"
-	"path/filepath"
 
 	"strconv"
 )
@@ -25,7 +23,7 @@ const XgoTrapPrefix = "__xgo_trap_"
 //	  if stopV {
 //		    return
 //	  }
-func trapFuncs(funcDecls []*info.DeclInfo, xgoTrap string, fileMapping map[string]*compiler_extra.FileMapping) int {
+func trapFuncs(funcDecls []*info.DeclInfo, __xgo_trap string) int {
 	count := 0
 	for _, fn := range funcDecls {
 		if isBlankName(fn.Name) {
@@ -54,16 +52,6 @@ func trapFuncs(funcDecls []*info.DeclInfo, xgoTrap string, fileMapping map[strin
 		// 		continue
 		// 	}
 		// }
-		baseFile := filepath.Base(fn.File)
-		file := fileMapping[baseFile]
-		if file == nil {
-			continue
-		}
-		funcInfo := file.Funcs[fn.IdentityName()]
-		if funcInfo == nil {
-			continue
-		}
-
 		fnDecl := fn.FuncDecl
 		fnType := fnDecl.Type
 		pos := fn.FuncDecl.Pos()
@@ -79,14 +67,14 @@ func trapFuncs(funcDecls []*info.DeclInfo, xgoTrap string, fileMapping map[strin
 		// }
 
 		preset := getPresetNames(fnDecl)
-		if preset[xgoTrap] {
+		if preset[__xgo_trap] {
 			// cannot trap because name conflict
 			continue
 		}
 
 		// stop if __xgo_link_generated_trap conflict with recv?
 		fillNames(pos, fnDecl.Recv, fnDecl.Type, preset)
-		preset[xgoTrap] = true
+		preset[__xgo_trap] = true
 
 		var recvRef syntax.Expr
 		if fnDecl.Recv != nil {
@@ -122,7 +110,7 @@ func trapFuncs(funcDecls []*info.DeclInfo, xgoTrap string, fileMapping map[strin
 					},
 				},
 				Rhs: &syntax.CallExpr{
-					Fun: syntax.NewName(pos, xgoTrap),
+					Fun: syntax.NewName(pos, __xgo_trap),
 					ArgList: []syntax.Expr{
 						syntax.NewName(pos, fn.FuncInfoVarName()),
 						recvRef,
