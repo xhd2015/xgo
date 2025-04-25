@@ -24,6 +24,14 @@ func patchCompiler(origGoroot string, goroot string, goVersion *goinfo.GoVersion
 	if err != nil {
 		return err
 	}
+	err = PatchNoder(goroot, goVersion)
+	if err != nil {
+		return err
+	}
+	err = PatchSyntaxNode(goroot, goVersion)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

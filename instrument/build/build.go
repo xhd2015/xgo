@@ -37,12 +37,12 @@ func BuildNativeBinary(goroot string, dir string, flags []string, outputDir stri
 }
 
 func RebuildGoBinary(goroot string) error {
-	_, err := BuildGoBinray(goroot, nil, "go")
+	_, err := BuildGoBinray(goroot, []string{"-a"}, "go")
 	return err
 }
 
 func RebuildGoToolCompile(goroot string) error {
-	_, err := BuildToolBinray(goroot, nil, "./cmd/compile", "compile")
+	_, err := BuildToolBinray(goroot, []string{"-a"}, "./cmd/compile", "compile")
 	return err
 }
 
@@ -81,9 +81,9 @@ func BuildToolBinray(goroot string, flags []string, arg string, outputName strin
 
 // debug
 func BuildGoDebugBinary(goroot string) (string, error) {
-	return BuildGoBinray(goroot, []string{"-gcflags=all=-N -l"}, "go.debug")
+	return BuildGoBinray(goroot, []string{"-a", "-gcflags=all=-N -l"}, "go.debug")
 }
 
 func BuildGoToolCompileDebugBinary(goroot string) (string, error) {
-	return BuildToolBinray(goroot, []string{"-gcflags=all=-N -l"}, "./cmd/compile", "compile.debug")
+	return BuildToolBinray(goroot, []string{"-a", "-gcflags=all=-N -l"}, "./cmd/compile", "compile.debug")
 }

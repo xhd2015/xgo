@@ -25,13 +25,6 @@ func genXgoRuntime(rootDir string, needCopyTrace bool) error {
 	return copyGoModule(runtimeDir, genRuntimeDir, []string{".xgo", "test"})
 }
 
-func genXgoCompilerPatch(rootDir string) error {
-	patchDir := filepath.Join(rootDir, "patch")
-	genPatchDir := filepath.Join(rootDir, "cmd", "xgo", "asset", "compiler_patch_gen")
-
-	return copyGoModule(patchDir, genPatchDir, []string{".xgo", "test", "legacy"})
-}
-
 func copyGoModule(src string, dst string, ignores []string) error {
 	// then copy runtime to xgo/runtime_gen
 	err := filecopy.NewOptions().Ignore(ignores...).IncludeSuffix(".go", "go.mod").IgnoreSuffix("_test.go").CopyReplaceDir(src, dst)

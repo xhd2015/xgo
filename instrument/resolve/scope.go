@@ -39,6 +39,8 @@ func (c *Recorder) GetOrInit(pkgPath string) *PkgRecorder {
 
 type PkgRecorder struct {
 	Names map[string]*NameRecorder
+	// Names count of vars
+	NumVars int
 }
 
 func (c *PkgRecorder) GetOrInit(name string) *NameRecorder {

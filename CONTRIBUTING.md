@@ -102,6 +102,15 @@ Run test under xgo root:
 go test -v $(go list -e ./... | grep -Ev 'asset|internal/vendir')
 ```
 
+# Develop `patch`
+```sh
+# download go1.24.2 
+go run ./script/download-go go1.24.2
+
+# debug compiler(with linked files)
+go run -tags=dev ./cmd/xgo test --with-goroot go-release/go1.24.2 --debug-compile=time --project-dir ./runtime/test/patch/debug -a -v ./
+```
+
 # Debug
 
 ## Native setup
@@ -161,7 +170,20 @@ cp -r $GOROOT ~/GOROOT_DEBUG
 xgo.helper setup-vscode ~/GOROOT_DEBUG
 
 # debug compile a specific package
-xgo.helper debug-compile ~/GOROOT_DEBUG golang.org/x/example/hello/reverse -C $PWD test -v -a ./
+xgo.helper debug-compile ~/GOROOT_DEBUG golang.org/x/example/hello/reverse test -v -a ./
+```
+
+### Debug `go tool compile` under xgo instrumented GOROOT
+```sh
+# output GOROOT
+go run -tags=dev ./cmd/xgo setup --with-goroot go-release/go1.24.2
+
+xgo.helper setup-vscode /Users/xhd2015/.xgo/go-instrument-dev/go1.24.2_Us_xh_Pr_xh_xg_go_go_dfa5d02c/go1.24.2
+
+go run -tags=dev ./cmd/xgo test --with-goroot go-release/go1.24.2 --debug-compile=golang.org/x/example/hello/reverse --project-dir test/debug/reverse -v -a ./
+
+# or
+go run ./script/run-test --include go1.24.2 -tags=dev --log-debug --debug-compile=github.com/xhd2015/xgo/runtime/test/build/debug --debug-xgo ./runtime/test/build/debug
 ```
 
 # Debug target

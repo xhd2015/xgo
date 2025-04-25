@@ -76,8 +76,8 @@ type Package struct {
 
 	Collected bool
 
-	// Main indicates whether
-	// the package is within main module
+	// Main indicates the package is
+	// within the main module
 	// NOTE: this does not consider go.mod
 	// boundaries, it only consider the
 	// prefix of the package path.

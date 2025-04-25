@@ -10,7 +10,7 @@ func unsafePointer(ptr uintptr) unsafe.Pointer {
 	type P struct {
 		ptr unsafe.Pointer
 	}
-	p := (*P)(unsafe.Pointer(&ptr))
-
-	return p.ptr
+	// p := *(*P)(unsafe.Pointer(&ptr))
+	// return p.ptr
+	return (*(*P)(unsafe.Pointer(&ptr))).ptr
 }

@@ -3,6 +3,7 @@ package patch
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/xhd2015/xgo/support/fileutil"
 	"github.com/xhd2015/xgo/support/strutil"
@@ -36,13 +37,51 @@ func EditFile(file string, callback func(content string) (string, error)) (err e
 	return fileutil.WriteFile(file, []byte(newContent))
 }
 
-// Deprecated: use AddContentAtIndex instead
-func AddCodeAfterImports(code string, beginMark string, endMark string, contents []string) string {
+// Deprecated: use AddImportAfterName instead
+func AddCodeAfterImportsLegacy(code string, beginMark string, endMark string, contents []string) string {
 	idx := indexSeq(code, []string{"import", "(", "\n"}, false)
 	if idx < 0 {
 		panic(fmt.Errorf("import not found"))
 	}
 	return insertContentLinesNoDuplicate(code, beginMark, endMark, idx, strings.Join(contents, "\n")+"\n")
+}
+
+// return start and end index of package name
+func mustFindPackageName(code string) (int, int) {
+	const PACKAGE_MARK = "package "
+	pkgIdx := strings.Index(code, PACKAGE_MARK)
+	if pkgIdx < 0 {
+		panic(fmt.Errorf("package not found"))
+	}
+	base := pkgIdx + len(PACKAGE_MARK)
+
+	// until next non-space
+	n := len(code)
+	nameStart := -1
+	for i := base; i < n; i++ {
+		if code[i] != ' ' && code[i] != '\t' {
+			nameStart = i
+			break
+		}
+	}
+	if nameStart < 0 {
+		panic(fmt.Errorf("package name not found"))
+	}
+	if !isToken(code[nameStart]) {
+		panic(fmt.Errorf("package not expected symbol: %q", code[nameStart]))
+	}
+	nameEnd := n
+	for i := nameStart + 1; i < n; i++ {
+		if !isToken(code[i]) {
+			nameEnd = i
+			break
+		}
+	}
+	return nameStart, nameEnd
+}
+
+func isToken(c byte) bool {
+	return c == '_' || unicode.IsLetter(rune(c)) || unicode.IsDigit(rune(c))
 }
 
 // Deprecated: use AddContentAtIndex instead
@@ -162,6 +201,9 @@ func insertOrReplaceContentNoDuplicate(content string, replace bool, replaceLen 
 }
 
 func tryReplaceWithMark(content string, beginMark string, endMark string, separator string, patchContent string) (string, bool) {
+	if beginMark == "" || endMark == "" {
+		panic(fmt.Errorf("beginMark or endMark is empty"))
+	}
 	beginIdx := strings.Index(content, beginMark)
 	if beginIdx < 0 {
 		return content, false

@@ -72,7 +72,7 @@ func init() {
 
 func AfterFilesParsed(fileList []*syntax.File, addFile func(name string, r io.Reader) *syntax.File) {
 	xgo_ctxt.InitAfterLoad()
-	defer xgo_ctxt.LogSpan("AfterFilesParsed")()
+	defer xgo_ctxt.LogSpan("AfterFilesParsed2")()
 	if !xgo_ctxt.XGO_COMPILER_ENABLE_SYNTAX {
 		return
 	}
@@ -932,6 +932,7 @@ func generateFuncRegBody(pos syntax.Pos, funcDecls []*DeclInfo, xgoRegFunc strin
 	allStmts = append(allStmts, stmts...)
 	return allStmts
 }
+
 func generateRegFileCode(pkgName string, fnName string, body string) string {
 	autoGenStmts := []string{
 		"package " + pkgName,

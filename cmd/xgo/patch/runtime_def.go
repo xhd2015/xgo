@@ -32,98 +32,6 @@ const TestingEnd = `for _,__xgo_on_test_end:=range __xgo_link_get_test_ends(){
 }
 `
 
-const NoderFiles_1_17 = `	// auto gen
-if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
-	files := make([]*syntax.File, 0, len(noders))
-	for _, n := range noders {
-		files = append(files, n.file)
-	}
-	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) *syntax.File {
-		p := &noder{
-			err: make(chan syntax.Error),
-		}
-		fbase := syntax.NewFileBase(name)
-		file, err := syntax.Parse(fbase, r, nil, p.pragma, syntax.CheckBranches)
-		if err != nil {
-			e := err.(syntax.Error)
-			p.error(e)
-			return nil
-		}
-		p.file = file
-		noders = append(noders, p)
-
-		// move to head
-		n := len(noders)
-		for i:=n-1;i>0;i--{
-			noders[i]=noders[i-1]
-		}
-		noders[0]=p
-
-		return file
-	})
-}
-`
-
-const NoderFiles_1_20 = `	// auto gen
-if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
-	files := make([]*syntax.File, 0, len(noders))
-	for _, n := range noders {
-		files = append(files, n.file)
-	}
-	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) *syntax.File {
-		p := &noder{}
-		fbase := syntax.NewFileBase(name)
-		file, err := syntax.Parse(fbase, r, nil, p.pragma, syntax.CheckBranches)
-		if err != nil {
-			e := err.(syntax.Error)
-			base.ErrorfAt(p.makeXPos(e.Pos), "%s", e.Msg)
-			return nil
-		}
-		p.file = file
-		noders = append(noders, p)
-
-		// move to head
-		n := len(noders)
-		for i:=n-1;i>0;i--{
-			noders[i]=noders[i-1]
-		}
-		noders[0]=p
-
-		return file
-	})
-}
-`
-
-const NoderFiles_1_21 = `	// auto gen
-if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
-	files := make([]*syntax.File, 0, len(noders))
-	for _, n := range noders {
-		files = append(files, n.file)
-	}
-	xgo_syntax.AfterFilesParsed(files, func(name string, r io.Reader) *syntax.File {
-		p := &noder{}
-		fbase := syntax.NewFileBase(name)
-		file, err := syntax.Parse(fbase, r, nil, p.pragma, syntax.CheckBranches)
-		if err != nil {
-			e := err.(syntax.Error)
-			base.ErrorfAt(m.makeXPos(e.Pos), 0,"%s", e.Msg)
-			return nil
-		}
-		p.file = file
-		noders = append(noders, p)
-
-		// move to head
-		n := len(noders)
-		for i:=n-1;i>0;i--{
-			noders[i]=noders[i-1]
-		}
-		noders[0]=p
-
-		return file
-	})
-}
-`
-
 const GenericTrapForGo118And119 = `// for all generic functions, add trap before them.
 // NOTE this is a workaround for go1.18 and go1.19,
 // because capturing generic variable after instantiation
@@ -148,21 +56,5 @@ if os.Getenv("XGO_COMPILER_ENABLE")=="true" {
 		}
 		xgo_patch.InsertTrapForFunc(fnDecl, true)
 	}
-}
-`
-
-// only missing in go1.21 and below
-const NodesGen = `
-func (n *node) SetPos(p Pos) {
-	n.pos = p
-}
-`
-
-const Nodes_Inspect_117 = `
-// Walk stops when f returns true, so invert it here
-func Inspect(root Node, f func(Node) bool) {
-	Walk(root, func(n Node) bool {
-		return !f(n)
-	})
 }
 `

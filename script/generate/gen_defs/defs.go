@@ -27,5 +27,8 @@ const (
 	// copy from runtime/internal/runtime/xgo_trap_template.go to runtime/internal/runtime/xgo_trap_template.go
 	GenernateType_RuntimeXgoTrapTemplate GenernateType = "runtime/internal/runtime/xgo_trap_template.go"
 
+	// copy from instrument/compiler_extra to patch/instrument
+	GenernateType_CompilerInstrument GenernateType = "patch/instrument"
+
 	GenernateType_LegacyRuntimeLink GenernateType = "instrument/instrument_xgo_runtime/runtime_link_template_legacy_1_1_0.go"
 )

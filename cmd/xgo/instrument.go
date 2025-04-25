@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/instrument/compiler_extra"
 	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
@@ -39,14 +40,18 @@ import (
 // known for: go1.19
 const MAX_FILE_SIZE = 1 * 1024 * 1024
 
+type instrumentResult struct {
+	compilerExtra *compiler_extra.Packages
+}
+
 // goroot is critical for stdlib
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, trapAll string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) error {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, trapAll string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) (*instrumentResult, error) {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
 		vendorDir, err := getVendorDir(projectRoot)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if vendorDir != "" {
 			mod = "vendor"
@@ -81,7 +86,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	})
 	if err != nil {
 		if err == instrument_xgo_runtime.ErrLinkFileNotRequired {
-			return nil
+			return nil, nil
 		}
 		if err == instrument_xgo_runtime.ErrLinkFileNotFound {
 			if !goFlag {
@@ -90,28 +95,28 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
   import _ %q
 	`, constants.RUNTIME_INTERNAL_TRAP_PKG, constants.RUNTIME_INTERNAL_TRAP_PKG)
 			}
-			return nil
+			return nil, nil
 		}
 		if errors.Is(err, instrument_xgo_runtime.ErrRuntimeVersionDeprecatedV1_0_0) {
 			if !goFlag {
 				if triedUpgrade {
-					return fmt.Errorf("xgo v%s auto upgrade failed, you can fix this by:\n  go get %s@latest", VERSION, constants.RUNTIME_MODULE)
+					return nil, fmt.Errorf("xgo v%s auto upgrade failed, you can fix this by:\n  go get %s@latest", VERSION, constants.RUNTIME_MODULE)
 				}
-				return fmt.Errorf("xgo v%s cannot work with deprecated xgo/runtime: %w, upgrade with:\n  go get %s@latest", VERSION, err, constants.RUNTIME_MODULE)
+				return nil, fmt.Errorf("xgo v%s cannot work with deprecated xgo/runtime: %w, upgrade with:\n  go get %s@latest", VERSION, err, constants.RUNTIME_MODULE)
 			}
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 	funcTabPkg := xgoPkgs.PackageByPath[constants.RUNTIME_FUNCTAB_PKG]
 	if funcTabPkg == nil || !hasFunc(funcTabPkg, constants.RUNTIME_FUNCTAB_REGISTER) {
 		logDebug("skip functab registering")
-		return nil
+		return nil, nil
 	}
 
 	includeMain, loadPkgs, err := getLoadPackages(rules)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	logDebug("loadPkgs: includeMain=%v loadPkgs=%v", includeMain, loadPkgs)
 	var loadArgs []string
@@ -141,7 +146,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	logDebug("start load: %v", loadArgs)
 	loadPackages, err := load.LoadPackages(loadArgs, pkgs.LoadOptions)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	pkgs.Add(loadPackages)
 	// remove deps flag
@@ -199,49 +204,82 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	var recorder resolve.Recorder
 	err = resolve.Traverse(reg, mainPkgs, &recorder)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	logDebug("traverse: cost=%v", time.Since(traverseBegin))
 
 	logDebug("start instrumentVarTrap: len(mainPkgs)=%d", len(mainPkgs))
 	err = instrument_var.TrapVariables(pkgs, &recorder)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// ""->default
 	needTrapAll := trapAll == "true" || (trapAll == "" && recorder.HasTrapInterceptorRef)
 
 	logDebug("start instrumentFuncTrap: len(packages)=%d, needTrapAll=%v", len(pkgs.Packages), needTrapAll)
+	var extraPkgs []*compiler_extra.Package
 	for _, pkg := range pkgs.Packages {
 		if !pkg.AllowInstrument {
 			continue
 		}
 		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
 		cfg := config.GetPkgConfig(pkgPath)
-		var defaultAllow bool
-		if !pkg.LoadPackage.GoPackage.Standard {
-			if needTrapAll || pkg.Initial {
-				defaultAllow = true
-			}
+		stdlib := pkg.LoadPackage.GoPackage.Standard
+		main := pkg.Main
+		initial := pkg.Initial
+		pkgRecorder := recorder.GetOrInit(pkgPath)
+
+		var hasVarTrap bool
+		if pkgRecorder != nil && pkgRecorder.NumVars > 0 {
+			hasVarTrap = true
 		}
+
+		var extraFiles []*compiler_extra.File
 		for _, file := range pkg.Files {
 			if !pkg.Main && strings.HasSuffix(file.File.Name, "_test.go") {
 				// skip test files outside main package
 				continue
 			}
-			funcs := instrument_func.TrapFuncs(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{
-				PkgRecorder:    recorder.Pkgs[pkgPath],
-				PkgConfig:      cfg,
-				DefaultDisable: !defaultAllow,
+			funcs, extraFuncs := instrument_func.TrapFuncs(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{
+				PkgRecorder: pkgRecorder,
+				PkgConfig:   cfg,
+				Stdlib:      stdlib,
+				Main:        main,
+				Initial:     initial,
+				TrapAll:     needTrapAll,
 			})
 			file.TrapFuncs = append(file.TrapFuncs, funcs...)
 
 			// interface types
 			intfTypes := instrument_intf.CollectInterfaces(file)
-			file.InterfaceTypes = append(file.InterfaceTypes, intfTypes...)
+			var extraInterfaces []*compiler_extra.Interface
+			if main {
+				file.InterfaceTypes = append(file.InterfaceTypes, intfTypes...)
+			} else {
+				for _, intf := range intfTypes {
+					extraInterfaces = append(extraInterfaces, &compiler_extra.Interface{
+						Name: intf.Name,
+					})
+				}
+			}
+			if len(extraFuncs) > 0 || len(extraInterfaces) > 0 {
+				extraFiles = append(extraFiles, &compiler_extra.File{
+					Name:       file.File.Name,
+					Funcs:      extraFuncs,
+					Interfaces: extraInterfaces,
+				})
+			}
+		}
+		if len(extraFiles) > 0 {
+			extraPkgs = append(extraPkgs, &compiler_extra.Package{
+				Path:       pkg.LoadPackage.GoPackage.ImportPath,
+				Files:      extraFiles,
+				HasVarTrap: hasVarTrap,
+			})
 		}
 	}
+	logDebug("extraPkgs: %d", len(extraPkgs))
 
 	logDebug("generate functab register")
 	registerFuncTab(pkgs)
@@ -249,10 +287,18 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	logDebug("collect edits")
 	updatedFiles, err := applyInstrumentWithEditNotes(overlayFS, pkgs, mayHaveCover, overrideXgoContent)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	var compilerExtra *compiler_extra.Packages
+	if len(extraPkgs) > 0 {
+		compilerExtra = &compiler_extra.Packages{
+			Packages: extraPkgs,
+		}
 	}
 	logDebug("finish instruments, updated %d files", updatedFiles)
-	return nil
+	return &instrumentResult{
+		compilerExtra: compilerExtra,
+	}, nil
 }
 
 func registerFuncTab(packages *edit.Packages) {
