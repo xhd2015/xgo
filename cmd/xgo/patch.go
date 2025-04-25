@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/instrument/build"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/instrument_compiler"
 	"github.com/xhd2015/xgo/instrument/instrument_go"
@@ -33,7 +34,7 @@ type _FilePath = patch.FilePath
 // assume go 1.20
 // the patch should be idempotent
 // the origGoroot is used to generate runtime defs, see https://github.com/xhd2015/xgo/issues/4#issuecomment-2017880791
-func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrCoreRevisionChanged bool) error {
+func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrCoreRevisionChanged bool, allowDebugCompile bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
@@ -45,7 +46,7 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 	}
 
 	// instrument go
-	err := instrument_go.BuildInstrument(goroot, goVersion)
+	err := instrument_go.BuildInstrument(goroot, goVersion, allowDebugCompile)
 	if err != nil {
 		return err
 	}
@@ -72,6 +73,13 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 	err = instrument_compiler.BuildInstrument(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
 	if err != nil {
 		return err
+	}
+
+	if allowDebugCompile {
+		_, err = build.BuildGoToolCompileDebugBinary(goroot)
+		if err != nil {
+			return err
+		}
 	}
 
 	if V1_0_0 {

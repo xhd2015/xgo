@@ -18,6 +18,7 @@ import (
 	"github.com/xhd2015/xgo/instrument/build"
 	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
+	"github.com/xhd2015/xgo/instrument/instrument_go/instrument_gc"
 	"github.com/xhd2015/xgo/instrument/instrument_xgo_runtime"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	cmd_support "github.com/xhd2015/xgo/support/cmd"
@@ -523,7 +524,7 @@ func handleBuild(cmd string, args []string) error {
 				fmt.Fprintf(os.Stderr, "patch GOROOT\n")
 			}
 			logDebug("patch runtime at: %s", instrumentGoroot)
-			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged)
+			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged, isDevelopment)
 			if err != nil {
 				return err
 			}
@@ -617,6 +618,8 @@ func handleBuild(cmd string, args []string) error {
 
 	var execCmd *exec.Cmd
 	var logCmdExec func()
+
+	var instrumentUserCodeResult *instrumentResult
 	if !cmdExec {
 		if modfile != "" {
 			// make modfile absolute
@@ -742,7 +745,7 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, goFlag, needUpgrade)
+		instrumentUserCodeResult, err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, goFlag, needUpgrade)
 		if err != nil {
 			return err
 		}
@@ -834,6 +837,9 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 				buildCmdArgs = append(buildCmdArgs, "-c")
 			}
 		}
+		if debugCompilePkg != "" {
+			execCmdEnv = append(execCmdEnv, instrument_gc.XGO_HELPER_DEBUG_PKG+"="+debugCompilePkg)
+		}
 
 		if cmdBuild || (cmdTest && flagC) || debugMode {
 			// output
@@ -909,6 +915,26 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			// exec allows go to call `go build`,`go test` and `go run` in turn
 			execCmdEnv = append(execCmdEnv, exec_tool.GO_BYPASS_XGO+"=true")
 		}
+	}
+
+	// write compiler extra file
+	if instrumentUserCodeResult != nil && instrumentUserCodeResult.compilerExtra != nil && len(instrumentUserCodeResult.compilerExtra.Packages) > 0 {
+		mapping := instrumentUserCodeResult.compilerExtra.BuildMapping()
+		extraData, err := json.Marshal(mapping)
+		if err != nil {
+			return err
+		}
+		compilerExtraFile := filepath.Join(localXgoGenDir, "compiler_extra.json")
+		err = os.WriteFile(compilerExtraFile, extraData, 0755)
+		if err != nil {
+			return fmt.Errorf("write compiler extra file: %w", err)
+		}
+		compilerExtraAbsFile, err := filepath.Abs(compilerExtraFile)
+		if err != nil {
+			return fmt.Errorf("make compiler extra file absolute: %w", err)
+		}
+		execCmdEnv = append(execCmdEnv, exec_tool.XGO_COMPILER_SYNTAX_REWRITE_ENABLE+"=true")
+		execCmdEnv = append(execCmdEnv, exec_tool.XGO_COMPILER_SYNTAX_REWRITE_PACKAGES_FILE+"="+compilerExtraAbsFile)
 	}
 
 	if !noInstrument && V1_0_0 {

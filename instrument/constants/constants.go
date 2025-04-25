@@ -22,32 +22,18 @@ const (
 )
 
 const (
-	LINK_REGISTER     = "__xgo_register_"
-	LINK_TRAP_FUNC    = "__xgo_trap_"
-	LINK_TRAP_VAR     = "__xgo_trap_var_"
-	LINK_TRAP_VAR_PTR = "__xgo_trap_varptr_"
-
-	RUNTIME_FUNCTAB_REGISTER = "RegisterFunc"
-)
-
-const (
 	RUNTIME_LINK_TEMPLATE_FILE = "runtime_link_template.go"
 	RUNTIME_LINK_FILE          = "runtime_link.go" // xgo/runtime/internal/runtime/runtime_link.go
 
 	XGO_TRAP_TEMPLATE_FILE = "xgo_trap_template.go"
 	XGO_TRAP_FILE          = "xgo_trap.go" // GOROOT/src/runtime/xgo_trap.go
 
-	FUNCTAB_FILE = "functab.go"
+	FUNCTAB_FILE             = "functab.go"
+	RUNTIME_FUNCTAB_REGISTER = "RegisterFunc"
 
 	VERSION_FILE = "version.go"
 	FLAG_FILE    = "flags.go"
 	TRACE_FILE   = "trace.go"
-)
-
-const (
-	FUNC_INFO = "__xgo_func_info"
-	VAR_INFO  = "__xgo_var_info"
-	INTF_INFO = "__xgo_intf_info"
 )
 
 const (

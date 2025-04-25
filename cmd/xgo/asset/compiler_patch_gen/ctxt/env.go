@@ -1,0 +1,9 @@
+package ctxt
+
+import "os"
+
+var XGO_MAIN_MODULE = os.Getenv("XGO_MAIN_MODULE")
+
+var XgoCompilePkgDataDir = os.Getenv("XGO_COMPILE_PKG_DATA_DIR")
+
+var XGO_COMPILER_SYNTAX_REWRITE_PACKAGES_FILE = os.Getenv("XGO_COMPILER_SYNTAX_REWRITE_PACKAGES_FILE")

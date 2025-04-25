@@ -1,4 +1,4 @@
-package instrument
+package instrument_gc
 
 import (
 	"fmt"

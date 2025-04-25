@@ -24,7 +24,8 @@ type options struct {
 
 	logCompile bool
 
-	logDebug     *string
+	logDebug *string
+	// --debug-compile, --debug-compile=x
 	debugCompile *string
 
 	debug *string
@@ -386,7 +387,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			continue
 		}
 
-		if V1_0_0 {
+		if isDevelopment {
 			debugCompileVal, ok := tryParseOption("--debug-compile", args, &i)
 			if ok {
 				debugCompile = &debugCompileVal
@@ -598,11 +599,11 @@ func tryParseValue(flag string, args []string, i int, optional bool) (string, in
 	suffix := arg[len(flag):]
 	if suffix == "" {
 		if optional {
-			if i >= len(args) || strings.HasPrefix(args[i], "-") {
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
 				return "", i, true, nil
 			}
 		} else {
-			if i >= len(args) {
+			if i+1 >= len(args) {
 				return "", i, false, fmt.Errorf("%s: requires value", flag)
 			}
 		}

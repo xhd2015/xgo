@@ -1,0 +1,34 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  tests-with-coverage:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest]
+        go: [ '1.24' ]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '${{ matrix.go }}'
+
+    - name: Test
+      continue-on-error: true
+      run: go run ./script/run-test --install-xgo --reset-instrument --log-debug -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out ./runtime/test/patch/patch_arbitrary_stdlib
+    
+    - name: Print debug
+      continue-on-error: true
+      run: cat /home/runner/work/xgo/xgo/runtime/test/patch/patch_arbitrary_stdlib/.xgo/gen/compiler_extra.json

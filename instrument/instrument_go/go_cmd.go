@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/instrument/build"
+	"github.com/xhd2015/xgo/instrument/instrument_go/instrument_gc"
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
@@ -22,7 +23,7 @@ var mainFilePath = srcCmdGoPath.Append("main.go")
 var execFilePath = srcCmdGoPath.Append("internal", "work", "exec.go")
 var xgoMainFilePath = srcCmdGoPath.Append("xgo_main.go")
 
-func BuildInstrument(goroot string, goVersion *goinfo.GoVersion) error {
+func BuildInstrument(goroot string, goVersion *goinfo.GoVersion, allowDebugCompile bool) error {
 	err := instrumentExec(goroot, goVersion)
 	if err != nil {
 		return err
@@ -38,6 +39,12 @@ func BuildInstrument(goroot string, goVersion *goinfo.GoVersion) error {
 	err = instrumentPkgLoad(goroot, goVersion)
 	if err != nil {
 		return err
+	}
+	if allowDebugCompile {
+		err = instrument_gc.InstrumentGc(goroot, goVersion)
+		if err != nil {
+			return err
+		}
 	}
 	// build go command
 	return build.RebuildGoBinary(goroot)

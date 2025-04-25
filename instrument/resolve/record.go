@@ -83,9 +83,11 @@ func (c *Scope) recordMockRef(fn ast.Expr) {
 		return
 	}
 
-	topRecord := recorder.GetOrInit(pkgPath).GetOrInit(name)
+	pkgRecord := recorder.GetOrInit(pkgPath)
+	topRecord := pkgRecord.GetOrInit(name)
 	if isVar {
 		topRecord.HasVarTrap = true
+		pkgRecord.NumVars++
 	} else {
 		if field == "" {
 			topRecord.HasMockRef = true

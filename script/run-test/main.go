@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/xgo/instrument/build"
-	"github.com/xhd2015/xgo/script/xgo.helper/instrument"
+	"github.com/xhd2015/xgo/instrument/instrument_go/instrument_gc"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/git"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -494,27 +494,32 @@ func main() {
 			os.Exit(1)
 		}
 		var goExe string
+		var xgoDebugCompile string
 		if debugNum > 0 {
 			if len(testArgs) > 1 {
-				fmt.Fprintf(os.Stderr, "--debug* is not supported with multiple tests, please specify exact test\n")
+				fmt.Fprintf(os.Stderr, "--debug* is not supported with multiple tests, please specify exact test: %v\n", testArgs)
 				os.Exit(1)
 			}
 			if debugCompile != "" {
-				err := instrument.InstrumentGc(goroot, goVersion)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "instrument gc: %v\n", err)
-					os.Exit(1)
-				}
-				// build
-				goExe, err = build.BuildGoDebugBinary(goroot)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "build go debug binary: %v\n", err)
-					os.Exit(1)
-				}
-				_, err = build.BuildGoToolCompileDebugBinary(goroot)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "build go tool compile: %v\n", err)
-					os.Exit(1)
+				if len(testArgs) > 0 && testArgs[0].UsePlainGo {
+					err := instrument_gc.InstrumentGc(goroot, goVersion)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "instrument gc: %v\n", err)
+						os.Exit(1)
+					}
+					// build
+					goExe, err = build.BuildGoDebugBinary(goroot)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "build go debug binary: %v\n", err)
+						os.Exit(1)
+					}
+					_, err = build.BuildGoToolCompileDebugBinary(goroot)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "build go tool compile: %v\n", err)
+						os.Exit(1)
+					}
+				} else {
+					xgoDebugCompile = debugCompile
 				}
 			}
 			if debugGo {
@@ -557,12 +562,13 @@ func main() {
 			// projectDir
 			runArgs := make([]string, 0, len(remainArgs)+1)
 			opts := Opts{
-				Tags:           tags,
-				IsSetupGoroot:  isSetupGoroot,
-				UsePrebuiltXgo: useBuiltXgo,
-				BuildOnly:      buildOnly,
-				GoBinary:       goExe,
-				DebugGo:        debugGo,
+				Tags:            tags,
+				IsSetupGoroot:   isSetupGoroot,
+				UsePrebuiltXgo:  useBuiltXgo,
+				BuildOnly:       buildOnly,
+				GoBinary:        goExe,
+				DebugGo:         debugGo,
+				XgoDebugCompile: xgoDebugCompile,
 			}
 			if tags != "" {
 				runArgs = append(runArgs, "-tags", tags)
@@ -626,7 +632,7 @@ func main() {
 					os.Exit(1)
 				}
 				pkg := pkgs[0]
-				env = append(env, instrument.XGO_HELPER_DEBUG_PKG+"="+pkg)
+				env = append(env, instrument_gc.XGO_HELPER_DEBUG_PKG+"="+pkg)
 			}
 			runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
 			if flagRace {
@@ -743,6 +749,8 @@ type Opts struct {
 	GoBinary       string
 	DebugXgo       bool
 	DebugGo        bool
+
+	XgoDebugCompile string
 }
 
 func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests []string, env []string, opts ...Opts) error {
@@ -753,6 +761,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 	var buildOnly bool
 	var goBinary string
 	var debugGo bool
+	var xgoDebugCompile string
 	if len(opts) > 0 {
 		if len(opts) != 1 {
 			panic("only one opts is allowed")
@@ -765,6 +774,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		buildOnly = opt.BuildOnly
 		goBinary = opt.GoBinary
 		debugGo = opt.DebugGo
+		xgoDebugCompile = opt.XgoDebugCompile
 	}
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
@@ -794,10 +804,23 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 	} else {
 		if !debugXgo {
 			testArgs = []string{"run"}
-			if tags != "" {
-				testArgs = append(testArgs, "-tags", tags)
+
+			runTag := tags
+			if tags == "" && xgoDebugCompile != "" {
+				runTag = "dev"
+			}
+			if runTag != "" {
+				testArgs = append(testArgs, "-tags", runTag)
 			}
 			testArgs = append(testArgs, "./cmd/xgo", "test")
+
+			if xgoDebugCompile != "" {
+				var val string
+				if xgoDebugCompile != "true" {
+					val = "=" + xgoDebugCompile
+				}
+				testArgs = append(testArgs, "--debug-compile"+val)
+			}
 		} else {
 			testArgs = []string{"run"}
 			if tags != "" {
@@ -858,7 +881,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		if goBinary == "" {
 			return fmt.Errorf("--debug-go requires go binary to be specified")
 		}
-		vscodeDebug := strings.ReplaceAll(instrument.VScodeDebug, "2346", "2345")
+		vscodeDebug := strings.ReplaceAll(instrument_gc.VScodeDebug, "2346", "2345")
 		fmt.Fprintf(os.Stderr, "VSCode add the following config to .vscode/launch.json:\n%s\nThen set breakpoint at %s\n", vscodeDebug, filepath.Join(goroot, "src", "cmd", "go", "main.go"))
 		testArgs = append([]string{"exec", "--listen=:2345", "--api-version=2", "--check-go-version=false", "--headless", "--", goBinary}, testArgs...)
 		binary = "dlv"

@@ -318,7 +318,6 @@ func fillPos(pos syntax.Pos, node syntax.Node) {
 		n.(ISetPos).SetPos(pos)
 		return true
 	})
-
 }
 
 // auto fill unnamed parameters

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/instrument/build"
-	"github.com/xhd2015/xgo/script/xgo.helper/instrument"
+	"github.com/xhd2015/xgo/instrument/instrument_go/instrument_gc"
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
@@ -83,7 +83,7 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		err = instrument.InstrumentGc(goroot, goVersion)
+		err = instrument_gc.InstrumentGc(goroot, goVersion)
 		if err != nil {
 			return err
 		}

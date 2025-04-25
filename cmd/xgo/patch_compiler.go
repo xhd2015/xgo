@@ -17,11 +17,11 @@ import (
 
 var XgoRewriteInternal = instrument_compiler.XgoRewriteInternal
 var XgoRewriteInternalPatch = instrument_compiler.XgoRewriteInternalPatch
+var xgoNodes = instrument_compiler.SyntaxNodesFile
 
-var xgoNodes = _FilePath{"src", "cmd", "compile", "internal", "syntax", "xgo_nodes.go"}
 var CompilerGCMain = instrument_compiler.CompilerGCMain
-var noderFile = _FilePath{"src", "cmd", "compile", "internal", "noder", "noder.go"}
-var noderFile16 = _FilePath{"src", "cmd", "compile", "internal", "gc", "noder.go"}
+var noderFile = instrument_compiler.NoderFile
+var noderFile16 = instrument_compiler.NoderFile16
 var irgenFile = _FilePath{"src", "cmd", "compile", "internal", "noder", "irgen.go"}
 
 var compilerRuntimeDefFile = instrument_compiler.CompilerRuntimeDefFile
@@ -84,7 +84,7 @@ func patchCompilerLegacy(origGoroot string, goroot string, goVersion *goinfo.GoV
 // Deprecated
 func patchCompilerInternalLegacy(goroot string, goVersion *goinfo.GoVersion) error {
 	// src/cmd/compile/internal/noder/noder.go
-	err := patchCompilerNoder(goroot, goVersion)
+	err := instrument_compiler.PatchNoder(goroot, goVersion)
 	if err != nil {
 		return fmt.Errorf("patching noder: %w", err)
 	}
@@ -94,7 +94,7 @@ func patchCompilerInternalLegacy(goroot string, goVersion *goinfo.GoVersion) err
 			return fmt.Errorf("patching generic trap: %w", err)
 		}
 	}
-	err = patchSyntaxNode(goroot, goVersion)
+	err = instrument_compiler.PatchSyntaxNode(goroot, goVersion)
 	if err != nil {
 		return fmt.Errorf("patching syntax node:%w", err)
 	}
@@ -107,27 +107,6 @@ func patchCompilerInternalLegacy(goroot string, goVersion *goinfo.GoVersion) err
 		return fmt.Errorf("patch ast type check:%w", err)
 	}
 	return nil
-}
-
-func patchSyntaxNode(goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major > 1 || goVersion.Minor >= goinfo.GO_VERSION_22 {
-		return nil
-	}
-	var fragments []string
-
-	if goVersion.Major == 1 {
-		if goVersion.Minor <= goinfo.GO_VERSION_21 {
-			fragments = append(fragments, patch.NodesGen)
-		}
-		if goVersion.Minor <= goinfo.GO_VERSION_17 {
-			fragments = append(fragments, patch.Nodes_Inspect_117)
-		}
-	}
-	if len(fragments) == 0 {
-		return nil
-	}
-	file := filepath.Join(goroot, filepath.Join(xgoNodes...))
-	return os.WriteFile(file, []byte("package syntax\n"+strings.Join(fragments, "\n")), 0755)
 }
 
 // Deprecated
@@ -149,7 +128,7 @@ func patchGcMainOld(goroot string, goVersion *goinfo.GoVersion) error {
 			`xgo_record "cmd/compile/internal/xgo_rewrite_internal/patch/record"`,
 		}
 
-		content = instrument_patch.AddCodeAfterImports(content,
+		content = instrument_patch.AddCodeAfterImportsLegacy(content,
 			"/*<begin gc_import>*/", "/*<end gc_import>*/",
 			imports,
 		)
@@ -259,90 +238,6 @@ func patchGcMainOld(goroot string, goVersion *goinfo.GoVersion) error {
 	})
 }
 
-func patchCompilerNoder(goroot string, goVersion *goinfo.GoVersion) error {
-	files := []string(noderFile)
-	var noderFiles string
-	if goVersion.Major == goinfo.GO_MAJOR_1 {
-		minor := goVersion.Minor
-		if minor == goinfo.GO_VERSION_16 {
-			files = []string(noderFile16)
-			noderFiles = patch.NoderFiles_1_17
-		} else if minor == goinfo.GO_VERSION_17 {
-			noderFiles = patch.NoderFiles_1_17
-		} else if minor == goinfo.GO_VERSION_18 {
-			noderFiles = patch.NoderFiles_1_17
-		} else if minor == goinfo.GO_VERSION_19 {
-			noderFiles = patch.NoderFiles_1_17
-		} else if minor == goinfo.GO_VERSION_20 {
-			noderFiles = patch.NoderFiles_1_20
-		} else if minor == goinfo.GO_VERSION_21 {
-			noderFiles = patch.NoderFiles_1_21
-		} else if minor == goinfo.GO_VERSION_22 {
-			noderFiles = patch.NoderFiles_1_21
-		} else if minor == goinfo.GO_VERSION_23 {
-			// TODO: verify
-			noderFiles = patch.NoderFiles_1_21
-		}
-	}
-	if noderFiles == "" {
-		return fmt.Errorf("unsupported: %v", goVersion)
-	}
-	file := filepath.Join(files...)
-	return instrument_patch.EditFile(filepath.Join(goroot, file), func(content string) (string, error) {
-		content = instrument_patch.AddCodeAfterImports(content,
-			"/*<begin file_autogen_import>*/", "/*<end file_autogen_import>*/",
-			[]string{
-				`xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"`,
-				`"io"`,
-			},
-		)
-		var anchors []string
-		if goVersion.Major == 1 && goVersion.Minor <= 16 {
-			anchors = []string{
-				"func parseFiles(filenames []string)",
-				"for _, p := range noders {",
-				"localpkg.Height = myheight",
-				"\n",
-			}
-		} else {
-			anchors = []string{
-				`func LoadPackage`,
-				`for _, p := range noders {`,
-				`base.Timer.AddEvent(int64(lines), "lines")`,
-				"\n",
-			}
-		}
-		content = instrument_patch.AddContentAfter(content, "/*<begin file_autogen>*/", "/*<end file_autogen>*/", anchors,
-			noderFiles)
-
-		// expose the trimFilename func for recording
-		if goVersion.Major == 1 && goVersion.Minor <= 17 {
-			content = instrument_patch.UpdateContentLines(content,
-				"/*<begin expose_abs_filename>*/", "/*<end expose_abs_filename>*/",
-				[]string{
-					`func absFilename(name string) string {`,
-				},
-				0,
-				instrument_patch.UpdatePosition_Before,
-				"func init(){ xgo_syntax.AbsFilename = absFilename;}\n",
-			)
-		} else {
-			content = instrument_patch.UpdateContentLines(content,
-				"/*<begin expose_trim_filename>*/", "/*<end expose_trim_filename>*/",
-				[]string{
-					`func trimFilename(b *syntax.PosBase) string {`,
-				},
-				0,
-				instrument_patch.UpdatePosition_Before,
-				"func init(){ xgo_syntax.TrimFilename = trimFilename;}\n",
-			)
-		}
-
-		// func trimFilename(b *syntax.PosBase) string {
-		return content, nil
-	})
-}
-
 func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
 	file := irgenFile.JoinPrefix(goroot)
 	return instrument_patch.EditFile(file, func(content string) (string, error) {
@@ -352,7 +247,7 @@ func poatchIRGenericGen(goroot string, goVersion *goinfo.GoVersion) error {
 		if goVersion.Major == 1 && goVersion.Minor >= 19 {
 			imports = append(imports, `"os"`)
 		}
-		content = instrument_patch.AddCodeAfterImports(content,
+		content = instrument_patch.AddCodeAfterImportsLegacy(content,
 			"/*<begin irgen_autogen_import>*/", "/*<end irgen_autogen_import>*/",
 			imports,
 		)

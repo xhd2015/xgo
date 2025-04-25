@@ -211,7 +211,16 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	if foundFunctabPkg && traceFile != nil {
 		// trap trace.go
 		edit := traceFile.Edit
-		funcInfos := instrument_func.TrapFuncs(edit, constants.RUNTIME_TRACE_PKG, traceFile.File.Syntax, traceFile.Index, instrument_func.Options{})
+		funcInfos, extraFuncs := instrument_func.TrapFuncs(edit, constants.RUNTIME_TRACE_PKG, traceFile.File.Syntax, traceFile.Index, instrument_func.Options{
+			// trap all funcs inside trace.go,
+			// in reality there is only one func: Trace
+			TrapAll: true,
+			// force in place edit, which uses overlay
+			ForceInPlace: true,
+		})
+		if len(extraFuncs) > 0 {
+			panic(fmt.Errorf("instrument %s.%s: unexpected extra compiler-assisted func: %d", constants.RUNTIME_TRACE_PKG, "Trace", len(extraFuncs)))
+		}
 		if edit.HasEdit() {
 			overrideContent(overlay.AbsFile(traceFile.File.AbsPath), edit.Buffer().String())
 		}

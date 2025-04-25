@@ -61,7 +61,9 @@ func ImportCompileInternalPatch(goroot string, xgoSrc string, forceReset bool, s
 	}
 
 	// read from embed
-	err := embed.CopyDir(asset.CompilerPatchGenFS, asset.CompilerPatchGen, dstDir, embed.CopyOptions{})
+	err := embed.CopyDir(asset.CompilerPatchGenFS, asset.CompilerPatchGen, dstDir, embed.CopyOptions{
+		IgnorePaths: []string{"go.mod", "legacy"},
+	})
 	if err != nil {
 		return err
 	}
