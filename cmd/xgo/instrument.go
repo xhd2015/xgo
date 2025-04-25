@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -266,16 +269,19 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 			if len(extraFuncs) > 0 || len(extraInterfaces) > 0 {
 				extraFiles = append(extraFiles, &compiler_extra.File{
 					Name:       file.File.Name,
+					AbsFile:    file.File.AbsPath,
 					Funcs:      extraFuncs,
 					Interfaces: extraInterfaces,
 				})
 			}
 		}
 		if len(extraFiles) > 0 {
+			md5sum := md5sumTraps(extraFiles, hasVarTrap)
 			extraPkgs = append(extraPkgs, &compiler_extra.Package{
 				Path:       pkg.LoadPackage.GoPackage.ImportPath,
 				Files:      extraFiles,
 				HasVarTrap: hasVarTrap,
+				TrapMD5Sum: md5sum,
 			})
 		}
 	}
@@ -299,6 +305,27 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	return &instrumentResult{
 		compilerExtra: compilerExtra,
 	}, nil
+}
+
+func md5sumTraps(files []*compiler_extra.File, hasVarTrap bool) string {
+	h := md5.New()
+	for _, file := range files {
+		// assume files are stable
+		io.WriteString(h, file.Name)
+		for _, fn := range file.Funcs {
+			io.WriteString(h, fn.IdentityName)
+		}
+		for _, intf := range file.Interfaces {
+			io.WriteString(h, intf.Name)
+		}
+	}
+	var v string = "v:0"
+	if hasVarTrap {
+		v = "v:1"
+	}
+	io.WriteString(h, v)
+	md5 := h.Sum(nil)
+	return hex.EncodeToString(md5[:])
 }
 
 func registerFuncTab(packages *edit.Packages) {
@@ -567,4 +594,28 @@ func humanReadablePath(path string) string {
 		return path
 	}
 	return rel
+}
+
+func writeCompilerExtra(compilerExtra *compiler_extra.Packages, compilerExtraFile string, compilerExtraSumFile string) error {
+	mapping := compilerExtra.BuildMapping()
+	extraData, err := json.Marshal(mapping)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(compilerExtraFile, extraData, 0755)
+	if err != nil {
+		return fmt.Errorf("write compiler extra file: %w", err)
+	}
+
+	// pkg->sum
+	md5sumMapping := compilerExtra.BuildMD5SumMapping()
+	sumData, err := json.Marshal(md5sumMapping)
+	if err != nil {
+		return fmt.Errorf("write compiler extra sum file: %w", err)
+	}
+	err = os.WriteFile(compilerExtraSumFile, sumData, 0755)
+	if err != nil {
+		return fmt.Errorf("write compiler extra sum file: %w", err)
+	}
+	return nil
 }

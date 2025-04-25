@@ -59,12 +59,14 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 
 	recorder := opts.PkgRecorder
 	cfg := opts.PkgConfig
+	stdlib := opts.Stdlib
 	main := opts.Main
 	initial := opts.Initial
 	trapAll := opts.TrapAll
 	forceInPlace := opts.ForceInPlace
 
-	defaultAllow := trapAll || main || initial
+	// --trap-all not effective for stdlib
+	defaultAllow := main || initial || (!stdlib && trapAll)
 
 	var funcInfos []*edit.FuncInfo
 	var extraFuncs []*compiler_extra.Func

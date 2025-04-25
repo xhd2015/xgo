@@ -9,5 +9,8 @@ func (c FilePath) JoinPrefix(s ...string) string {
 }
 
 func (c FilePath) Append(s ...string) FilePath {
-	return append(c, s...)
+	clone := make(FilePath, len(c)+len(s))
+	copy(clone, c)
+	copy(clone[len(c):], s)
+	return clone
 }

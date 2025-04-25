@@ -10,6 +10,10 @@ func AddImportAfterName(code string, beginMark string, endMark string, name stri
 	} else {
 		insertContent = fmt.Sprintf(";import %s %q", name, pkgPath)
 	}
+	return AddContentAfterName(code, beginMark, endMark, insertContent)
+}
+
+func AddContentAfterName(code string, beginMark string, endMark string, insertContent string) string {
 	_, end := mustFindPackageName(code)
 	content, ok := tryReplaceWithMark(code, beginMark, endMark, "", insertContent)
 	if ok {

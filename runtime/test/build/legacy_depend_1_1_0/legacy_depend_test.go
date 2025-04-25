@@ -44,7 +44,9 @@ func TestTrap(t *testing.T) {
 	var records []string
 	trap.AddInterceptor(&trap.Interceptor{
 		Pre: func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) (interface{}, error) {
-			records = append(records, args.GetFieldIndex(0).Value().(string))
+			if fn.IdentityName == "greet" {
+				records = append(records, args.GetFieldIndex(0).Value().(string))
+			}
 			return nil, nil
 		},
 	})

@@ -535,8 +535,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		syncXgoOnly:   syncXgoOnly,
 		setupDev:      setupDev,
 		buildCompiler: buildCompiler,
-		// default true
-		syncWithLink: syncWithLink == nil || *syncWithLink,
+		// default false
+		syncWithLink: syncWithLink != nil && *syncWithLink,
 
 		mod:                             mod,
 		gcflags:                         gcflags,

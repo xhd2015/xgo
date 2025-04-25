@@ -13,10 +13,12 @@ type Package struct {
 	Path       string  `json:"path,omitempty"`
 	HasVarTrap bool    `json:"hasVarTrap,omitempty"`
 	Files      []*File `json:"files,omitempty"`
+	TrapMD5Sum string  `json:"trapMD5Sum,omitempty"`
 }
 
 type File struct {
 	Name       string       `json:"name,omitempty"`
+	AbsFile    string       `json:"absFile,omitempty"`
 	Funcs      []*Func      `json:"funcs,omitempty"`
 	Interfaces []*Interface `json:"interfaces,omitempty"`
 }
@@ -66,6 +68,28 @@ func (c *Packages) BuildMapping() *PackagesMapping {
 	return &PackagesMapping{
 		Packages: mapping,
 	}
+}
+
+func (c *Packages) BuildLookup() map[string]*Package {
+	if c == nil {
+		return nil
+	}
+	mapping := make(map[string]*Package, len(c.Packages))
+	for _, pkg := range c.Packages {
+		mapping[pkg.Path] = pkg
+	}
+	return mapping
+}
+
+func (c *Packages) BuildMD5SumMapping() map[string]string {
+	if c == nil {
+		return nil
+	}
+	mapping := make(map[string]string, len(c.Packages))
+	for _, pkg := range c.Packages {
+		mapping[pkg.Path] = pkg.TrapMD5Sum
+	}
+	return mapping
 }
 
 func (c *File) BuildMapping() *FileMapping {

@@ -750,6 +750,23 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			return err
 		}
 
+		// write compiler extra file
+		if instrumentUserCodeResult != nil && instrumentUserCodeResult.compilerExtra != nil && len(instrumentUserCodeResult.compilerExtra.Packages) > 0 {
+			absLocalGen, err := filepath.Abs(localXgoGenDir)
+			if err != nil {
+				return fmt.Errorf("make compiler extra file absolute: %w", err)
+			}
+			compilerExtraFile := filepath.Join(absLocalGen, "compiler_extra.json")
+			compilerExtraSumFile := filepath.Join(absLocalGen, "compiler_extra.sum.json")
+			err = writeCompilerExtra(instrumentUserCodeResult.compilerExtra, compilerExtraFile, compilerExtraSumFile)
+			if err != nil {
+				return err
+			}
+			execCmdEnv = append(execCmdEnv, exec_tool.XGO_COMPILER_SYNTAX_REWRITE_ENABLE+"=true")
+			execCmdEnv = append(execCmdEnv, exec_tool.XGO_COMPILER_SYNTAX_REWRITE_PACKAGES_FILE+"="+compilerExtraFile)
+			execCmdEnv = append(execCmdEnv, exec_tool.XGO_COMPILER_SYNTAX_REWRITE_PACKAGES_SUM_FILE+"="+compilerExtraSumFile)
+		}
+
 		if len(overlayFS) > 0 {
 			goOverlay, err := overlayFS.MakeGoOverlay(filepath.Join(localXgoGenDir, "overlay"), overlay.Options{
 				NoLineDirective: noLineDirective,
@@ -915,26 +932,6 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			// exec allows go to call `go build`,`go test` and `go run` in turn
 			execCmdEnv = append(execCmdEnv, exec_tool.GO_BYPASS_XGO+"=true")
 		}
-	}
-
-	// write compiler extra file
-	if instrumentUserCodeResult != nil && instrumentUserCodeResult.compilerExtra != nil && len(instrumentUserCodeResult.compilerExtra.Packages) > 0 {
-		mapping := instrumentUserCodeResult.compilerExtra.BuildMapping()
-		extraData, err := json.Marshal(mapping)
-		if err != nil {
-			return err
-		}
-		compilerExtraFile := filepath.Join(localXgoGenDir, "compiler_extra.json")
-		err = os.WriteFile(compilerExtraFile, extraData, 0755)
-		if err != nil {
-			return fmt.Errorf("write compiler extra file: %w", err)
-		}
-		compilerExtraAbsFile, err := filepath.Abs(compilerExtraFile)
-		if err != nil {
-			return fmt.Errorf("make compiler extra file absolute: %w", err)
-		}
-		execCmdEnv = append(execCmdEnv, exec_tool.XGO_COMPILER_SYNTAX_REWRITE_ENABLE+"=true")
-		execCmdEnv = append(execCmdEnv, exec_tool.XGO_COMPILER_SYNTAX_REWRITE_PACKAGES_FILE+"="+compilerExtraAbsFile)
 	}
 
 	if !noInstrument && V1_0_0 {
