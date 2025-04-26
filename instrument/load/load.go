@@ -6,12 +6,15 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/strutil"
 )
 
 type LoadOptions struct {
@@ -87,50 +90,130 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 	}
 
 	begin := time.Now()
-	var numFiles int
-	// TODO: parallelize
-	for _, pkg := range loadPkgs {
-		addFile := func(file string) {
-			absFilePath := filepath.Join(pkg.GoPackage.Dir, file)
-			pkgFile, err := doParseFile(fset, overlayFS, absFilePath, maxFileSize)
-			numFiles++
-			if err != nil {
-				if filterErrorFile {
+
+	var wg sync.WaitGroup
+	done := make(chan struct{})
+
+	// credit to https://github.com/golang/tools/blob/4ec26d68b3c042c274fa5dcc633cb014846e2dd9/go/packages/packages.go#L1332
+	// see https://github.com/xhd2015/xgo/issues/336
+	const IO_LIMIT = 20
+	var CPU_LIMIT = runtime.GOMAXPROCS(0) // this could be 10
+
+	readChan := make(chan *File, IO_LIMIT)
+	parseChan := make(chan *File, CPU_LIMIT)
+
+	// parallelize readers and parsers
+	for i := 0; i < IO_LIMIT; i++ {
+		go func() {
+			for {
+				select {
+				case f := <-readChan:
+					content, err := readFile(overlayFS, f.AbsPath, maxFileSize)
+					if err != nil {
+						// mark the file done
+						wg.Done()
+						f.Error = err
+						continue
+					}
+					f.Content = content
+					parseChan <- f
+				case <-done:
 					return
 				}
-				pkg.Files = append(pkg.Files, &File{Error: err})
-				return
 			}
-			if pkgFile.Error != nil && filterErrorFile {
-				return
+		}()
+	}
+
+	// Parsing is CPU intensive
+	for i := 0; i < CPU_LIMIT; i++ {
+		go func() {
+			for {
+				select {
+				case f := <-parseChan:
+					syntax, err := parseFile(fset, f.AbsPath, f.Content)
+
+					// mark the file done
+					wg.Done()
+					f.Error = err
+					f.Syntax = syntax
+				case <-done:
+					return
+				}
 			}
-			pkg.Files = append(pkg.Files, pkgFile)
-		}
+		}()
+	}
+
+	// parse packages
+	for _, pkg := range loadPkgs {
+		var files []string
 		for _, file := range pkg.GoPackage.GoFiles {
 			if !strings.HasSuffix(file, ".go") {
 				continue
 			}
-			addFile(file)
+			files = append(files, file)
 		}
 		if opts.IncludeTest {
 			for _, file := range pkg.GoPackage.TestGoFiles {
 				if !strings.HasSuffix(file, ".go") {
 					continue
 				}
-				addFile(file)
+				files = append(files, file)
 			}
 			for _, file := range pkg.GoPackage.XTestGoFiles {
 				if !strings.HasSuffix(file, ".go") {
 					continue
 				}
-				addFile(file)
+				files = append(files, file)
 			}
 		}
+		if len(files) == 0 {
+			continue
+		}
+		pkgFiles := make([]*File, len(files))
+		for i, file := range files {
+			parsingFile := &File{
+				AbsPath: filepath.Join(pkg.GoPackage.Dir, file),
+				Name:    file,
+			}
+			pkgFiles[i] = parsingFile
+
+			// enque a file
+			wg.Add(1)
+			readChan <- parsingFile
+		}
+		pkg.Files = pkgFiles
+	}
+	wg.Wait()
+	close(done)
+
+	// filter error files
+	var numFiles int
+	var numErrFiles int
+	for _, pkg := range loadPkgs {
+		n := len(pkg.Files)
+		j := 0
+		for i := 0; i < n; i++ {
+			file := pkg.Files[i]
+			if filterErrorFile && file.Error != nil {
+				continue
+			}
+			pkg.Files[j] = file
+			j++
+		}
+		pkg.Files = pkg.Files[:j]
+
+		numFiles += n
+		numErrFiles += n - j
 	}
 
-	// LoadPackages: loaded 173 packages, parsed 1636 files, cost 1.054140333s
-	// LoadPackages: loaded 2250 packages, parsed 14565 files, cost 4.262132333s
-	config.LogDebug("LoadPackages: loaded %d packages, parsed %d files, cost %v", len(loadPkgs), numFiles, time.Since(begin))
+	// serial loading:
+	// - LoadPackages: loaded 173 packages, parsed 1636 files, cost 1.054140333s
+	// - LoadPackages: loaded 2250 packages, parsed 14565 files, cost 4.262132333s
+	// parallel loading:
+	// - LoadPackages: loaded 2487 packages, parsed 11973 files, 6 files error, cost 709.993875ms
+	if config.EnabledLogDebug() {
+		config.LogDebug("LoadPackages: loaded %d packages, parsed %d files, %d files error, cost %v", len(loadPkgs), numFiles, numErrFiles, time.Since(begin))
+	}
 
 	return &Packages{
 		Fset:     fset,
@@ -138,17 +221,22 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 	}, nil
 }
 
-func doParseFile(fset *token.FileSet, overlayFS overlay.Overlay, absFilePath string, maxFileSize int64) (*File, error) {
+func readFile(overlayFS overlay.Overlay, absFilePath string, maxFileSize int64) (string, error) {
 	if maxFileSize > 0 {
 		size, err := overlayFS.Size(overlay.AbsFile(absFilePath))
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		if size > maxFileSize {
-			return nil, fmt.Errorf("file size %d large than %d", size, maxFileSize)
+			return "", fmt.Errorf("file size %d large than %d", size, maxFileSize)
 		}
 	}
-	return parseFile(fset, absFilePath, overlayFS), nil
+	_, content, err := overlayFS.Read(overlay.AbsFile(absFilePath))
+	return content, err
+}
+
+func parseFile(fset *token.FileSet, absFilePath string, content string) (*ast.File, error) {
+	return parser.ParseFile(fset, string(absFilePath), strutil.ToReadonlyBytes(content), parser.ParseComments)
 }
 
 func (c *Packages) Filter(f func(pkg *Package) bool) *Packages {
@@ -164,19 +252,20 @@ func (c *Packages) Filter(f func(pkg *Package) bool) *Packages {
 	}
 }
 
-func parseFile(fset *token.FileSet, asbFilePath string, overlayFS overlay.Overlay) *File {
+func readAndParseFile(fset *token.FileSet, absFilePath string, overlayFS overlay.Overlay) *File {
 	f := &File{
-		AbsPath: asbFilePath,
-		Name:    filepath.Base(asbFilePath),
+		AbsPath: absFilePath,
+		Name:    filepath.Base(absFilePath),
 	}
-	_, content, err := overlayFS.Read(overlay.AbsFile(asbFilePath))
+
+	_, content, err := overlayFS.Read(overlay.AbsFile(absFilePath))
 	if err != nil {
 		f.Error = err
 		return f
 	}
 	f.Content = string(content)
 
-	file, err := parser.ParseFile(fset, string(asbFilePath), content, parser.ParseComments)
+	file, err := parser.ParseFile(fset, string(absFilePath), content, parser.ParseComments)
 	if err != nil {
 		f.Error = err
 		return f
