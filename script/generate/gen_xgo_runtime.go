@@ -11,7 +11,7 @@ import (
 	"github.com/xhd2015/xgo/support/fileutil"
 )
 
-func genXgoRuntime(rootDir string, needCopyTrace bool) error {
+func genXgoRuntime(rootDir string, needCopyTrace bool, genName string) error {
 	if needCopyTrace {
 		// copy stack model from xgo to runtime first
 		err := copyTraceModel(rootDir)
@@ -39,13 +39,14 @@ func copyGoModule(src string, dst string, ignores []string) error {
 }
 
 func copyTraceModel(rootDir string) error {
+	genName := string(gen_defs.GenernateType_RuntimeTraceModel)
 	runtimeDir := filepath.Join(rootDir, "runtime")
 
 	traceRenderingStackModel := filepath.Join(rootDir, "cmd", "xgo", "trace", "render", "stack_model", "stack_model.go")
 	runtimeStackModel := filepath.Join(runtimeDir, "trace", "stack_model", "stack_model.go")
 
 	// copy stack model from xgo to runtime
-	return copyStackTraceExport(string(gen_defs.GenernateType_RuntimeTraceModel), traceRenderingStackModel, runtimeStackModel)
+	return copyStackTraceExport(genName, traceRenderingStackModel, runtimeStackModel)
 }
 
 func copyStackTraceExport(cmd string, srcFile string, dstFile string) error {

@@ -163,7 +163,7 @@ func generate(rootDir string, subGens SubGens, amend bool, noUpdateVersion bool)
 	}
 
 	if subGens.Has(gen_defs.GenernateType_CompilerInstrument) {
-		err := copyCompilerInstrument(rootDir)
+		err := copyCompilerInstrument(rootDir, string(gen_defs.GenernateType_CompilerInstrument))
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func generate(rootDir string, subGens SubGens, amend bool, noUpdateVersion bool)
 
 	// gen
 	if subGens.Has(gen_defs.GenernateType_XgoRuntimeGen) {
-		err := genXgoRuntime(rootDir, needCopyTrace)
+		err := genXgoRuntime(rootDir, needCopyTrace, string(gen_defs.GenernateType_XgoRuntimeGen))
 		if err != nil {
 			return err
 		}
