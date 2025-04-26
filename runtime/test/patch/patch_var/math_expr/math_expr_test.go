@@ -67,22 +67,11 @@ func TestMulTime(t *testing.T) {
 	if before != 10*time.Second {
 		t.Errorf("expect before: %d, actual: %d", 10*time.Second, before)
 	}
-	// expect panic
-	// because we are not collecting const declarations
-	var panicErr interface{}
-	func() {
-		defer func() {
-			panicErr = recover()
-		}()
-		mock.Patch(&D, func() time.Duration {
-			return 123 * time.Second
-		})
-	}()
-	if panicErr == nil {
-		t.Errorf("expect panic, actual nil")
-	}
+	mock.Patch(&D, func() time.Duration {
+		return 123 * time.Second
+	})
 	after := D
-	if after != 10*time.Second {
-		t.Errorf("expect after: %d, actual: %d", 10*time.Second, after)
+	if after != 123*time.Second {
+		t.Errorf("expect after: %d, actual: %d", 123*time.Second, after)
 	}
 }

@@ -101,6 +101,9 @@ func OnRewriteVarDefAndRefs(pkgPath string, file *edit.File, decl *edit.Decl) {
 
 // go run ./script/run-test --include go1.24.2 -tags=dev --log-debug --debug-xgo ./runtime/test/patch/patch_var/math_expr/
 func OnResolveInfo(pkgPath string, fileName string, expr ast.Expr) {
+	if pkgPath == "time" && DebugExprStr(expr) == "Second" {
+		Debugpoint()
+	}
 	if fileName == "math_expr_test.go" && DebugExprStr(expr) == "C" {
 		Debugpoint()
 	}

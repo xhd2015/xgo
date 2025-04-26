@@ -121,7 +121,7 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 					}
 					c.recordPkgNameDecl(pkgPath, name, decl)
 					return namedType
-				} else if decl.Kind == edit.DeclKindVar {
+				} else if decl.Kind == edit.DeclKindVar || decl.Kind == edit.DeclKindConst {
 					var varType types.Type
 					if decl.Type != nil {
 						varType = c.resolveType(decl.Type)
