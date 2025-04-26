@@ -394,7 +394,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 				continue
 			}
 		}
-		debugVal, ok := tryParseOption("--debug", args, &i)
+		debugVal, ok := tryParseEqSuffixValue("--debug", args[i])
 		if ok {
 			debug = &debugVal
 			continue
@@ -613,6 +613,20 @@ func tryParseValue(flag string, args []string, i int, optional bool) (string, in
 		return "", i, false, nil
 	}
 	return suffix[1:], i, true, nil
+}
+
+func tryParseEqSuffixValue(flag string, arg string) (string, bool) {
+	if !strings.HasPrefix(arg, flag) {
+		return "", false
+	}
+	suffix := arg[len(flag):]
+	if suffix == "" {
+		return "", true
+	}
+	if !strings.HasPrefix(suffix, "=") {
+		return "", false
+	}
+	return suffix[1:], true
 }
 
 func parseStackTraceFlag(arg string) (string, bool) {

@@ -60,7 +60,7 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 	cfg := opts.PkgConfig
 	main := opts.Main
 	forceInPlace := opts.ForceInPlace
-	pkgLeft := opts.PkgExtraQuota
+	pkgQuota := opts.PkgExtraQuota
 
 	// --trap-all not effective for stdlib
 	instrumentMode := opts.InstrumentMode
@@ -84,7 +84,7 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 			continue
 		}
 		if pkgPath == "time" && (funcName == constants.XGO_REAL_NOW || funcName == constants.XGO_REAL_SLEEP) {
-			// certain function is specifically left for xgo to call
+			// certain functions are specifically left for xgo to call
 			continue
 		}
 		var hasNosplit bool
@@ -159,14 +159,23 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 			//  - https://github.com/xhd2015/xgo/issues/335
 			// take the first 100, see
 			//  - https://github.com/xhd2015/xgo/issues/333#issuecomment-2830937257
-			if instrumentMode == config.InstrumentMode_Exported && len(extraFuncs) < config.MAX_EXTRA_FUNCS_PER_FILE {
-				if pkgLeft != nil && *pkgLeft <= 0 {
-					continue
+			var addExtra bool
+			if instrumentMode == config.InstrumentMode_All {
+				addExtra = true
+			} else if len(extraFuncs) < config.MAX_EXTRA_FUNCS_PER_FILE {
+				if pkgQuota != nil {
+					n := *pkgQuota
+					if n <= 0 {
+						continue
+					}
+					*pkgQuota = n - 1
 				}
+				addExtra = true
+			}
+			if addExtra {
 				extraFuncs = append(extraFuncs, &compiler_extra.Func{
 					IdentityName: identityName,
 				})
-				*pkgLeft--
 			}
 			continue
 		}

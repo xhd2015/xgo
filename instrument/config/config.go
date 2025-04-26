@@ -84,6 +84,7 @@ const (
 
 func CheckInstrumentMode(stdlib bool, main bool, initial bool, trapAll bool) InstrumentMode {
 	if main || initial {
+		// NOTE: if stdlib is put on args, it can be initial
 		return InstrumentMode_All
 	}
 	if stdlib {
