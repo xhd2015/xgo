@@ -131,10 +131,12 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 				case f := <-parseChan:
 					syntax, err := parseFile(fset, f.AbsPath, f.Content)
 
-					// mark the file done
-					wg.Done()
 					f.Error = err
 					f.Syntax = syntax
+
+					// mark the file done
+					// see https://github.com/xhd2015/xgo/issues/344
+					wg.Done()
 				case <-done:
 					return
 				}
