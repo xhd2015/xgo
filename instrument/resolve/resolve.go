@@ -213,18 +213,23 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 	case *ast.BinaryExpr:
 		// +-*/%
 		switch expr.Op {
-		case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+		case token.ADD, token.SUB, token.MUL, token.QUO, token.REM, token.LAND, token.LOR,
+			token.AND, token.OR, token.XOR:
 			// first op type
 			opValue := c.resolveObject(expr.X)
+			// if untyped literal, resolve the second op
+			if _, ok := opValue.(types.UntypedLiteral); ok {
+				opValue = c.resolveObject(expr.Y)
+			}
 			if types.IsUnknown(opValue) {
 				return types.Unknown{}
 			}
 			return types.Value{
 				Type_: opValue.Type(),
 			}
-		case token.LAND, token.LOR, token.AND, token.OR, token.XOR, token.SHL, token.SHR:
+		case token.SHL, token.SHR:
 			// && ||
-			// first op type
+			// always first op type
 			opValue := c.resolveObject(expr.X)
 			if types.IsUnknown(opValue) {
 				return types.Unknown{}
@@ -278,7 +283,7 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		if types.IsUnknown(typ) {
 			return types.Unknown{}
 		}
-		return types.Literal{
+		return types.UntypedLiteral{
 			Type_: typ,
 		}
 	case *ast.StructType:

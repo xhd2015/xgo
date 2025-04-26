@@ -14,7 +14,8 @@ import (
 func TestSimple(t *testing.T) {
 	fset := token.NewFileSet()
 	opts := load.LoadOptions{
-		Fset: fset,
+		FilterErrorFile: true,
+		Fset:            fset,
 	}
 	packages := &edit.Packages{
 		Fset:        fset,
@@ -51,7 +52,8 @@ func TestSimple(t *testing.T) {
 func TestVarGroup(t *testing.T) {
 	fset := token.NewFileSet()
 	opts := load.LoadOptions{
-		Fset: fset,
+		FilterErrorFile: true,
+		Fset:            fset,
 	}
 	packages := &edit.Packages{
 		Fset:        fset,
@@ -87,8 +89,9 @@ func TestVarGroup(t *testing.T) {
 func TestCustom(t *testing.T) {
 	fset := token.NewFileSet()
 	opts := load.LoadOptions{
-		Fset: fset,
-		Mod:  "vendor",
+		FilterErrorFile: true,
+		Fset:            fset,
+		Mod:             "vendor",
 	}
 	packages := &edit.Packages{
 		Fset:        fset,

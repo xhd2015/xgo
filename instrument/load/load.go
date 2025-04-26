@@ -177,7 +177,7 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 			}
 			pkgFiles[i] = parsingFile
 
-			// enque a file
+			// enqueue a file
 			wg.Add(1)
 			readChan <- parsingFile
 		}

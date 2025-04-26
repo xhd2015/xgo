@@ -78,6 +78,11 @@ type Literal struct {
 	Type_ Type
 }
 
+// e.g. 10
+type UntypedLiteral struct {
+	Type_ Type
+}
+
 type ScopeVariable struct {
 	Value Object
 }
@@ -284,6 +289,15 @@ func (c Literal) Type() Type {
 	return c.Type_
 }
 func (c Literal) String() string {
+	return fmt.Sprintf("%s{}", c.Type_.String())
+}
+
+func (c UntypedLiteral) infoMark()   {}
+func (c UntypedLiteral) objectMark() {}
+func (c UntypedLiteral) Type() Type {
+	return c.Type_
+}
+func (c UntypedLiteral) String() string {
 	return fmt.Sprintf("%s{}", c.Type_.String())
 }
 

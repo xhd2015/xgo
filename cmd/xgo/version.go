@@ -7,8 +7,8 @@ import "fmt"
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
 const VERSION = "1.1.4"
-const REVISION = "6bf913f723c35d16f7be8831ac87e65024485b83+1"
-const NUMBER = 433
+const REVISION = "017d6722622746d8c9fbf8acfb66ce0d84573723+1"
+const NUMBER = 434
 
 // Rationale: xgo consists of these modules:
 //
@@ -42,8 +42,8 @@ const NUMBER = 433
 //
 // finally you will find that the two groups of constants are the same.
 const CORE_VERSION = "1.1.4"
-const CORE_REVISION = "56475e163a941b455511d6af6d729692f22040d0+1"
-const CORE_NUMBER = 428
+const CORE_REVISION = "017d6722622746d8c9fbf8acfb66ce0d84573723+1"
+const CORE_NUMBER = 434
 
 func getRevision() string {
 	return formatRevision(VERSION, REVISION, NUMBER)

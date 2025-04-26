@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest]
-        go: [ '1.24' ]
+        go: [ '1.18' ]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
@@ -27,8 +27,8 @@ jobs:
 
     - name: Test
       continue-on-error: true
-      run: go run ./script/run-test --install-xgo --reset-instrument --log-debug -v -cover -coverpkg github.com/xhd2015/xgo/runtime/... -coverprofile cover.out ./runtime/test/patch/patch_arbitrary_stdlib
+      run: go run ./script/run-test --install-xgo --reset-instrument --log-debug -v ./runtime/test/build/legacy_depend_1_0_52
     
     - name: Print debug
       continue-on-error: true
-      run: cat /home/runner/work/xgo/xgo/runtime/test/patch/patch_arbitrary_stdlib/.xgo/gen/compiler_extra.json
+      run: cat /home/runner/work/xgo/xgo/runtime/test/build/legacy_depend_1_0_52/.xgo/gen/compiler_extra.json

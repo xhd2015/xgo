@@ -107,7 +107,7 @@ func OnResolveInfo(pkgPath string, fileName string, expr ast.Expr) {
 }
 
 func OnResolvePackageDeclareInfo(pkgPath string, fileName string, expr ast.Expr) {
-	if fileName == "math_expr_test.go" && DebugExprStr(expr) == "C" {
+	if fileName == "math_expr_test.go" && DebugExprStr(expr) == "D" {
 		Debugpoint()
 	}
 }

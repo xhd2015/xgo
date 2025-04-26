@@ -1,10 +1,13 @@
 package instrument_xgo_runtime
 
-import "strings"
+import (
+	"github.com/xhd2015/xgo/instrument/patch"
+	"github.com/xhd2015/xgo/support/goinfo"
+)
 
-func checkBypassVersionCheck(versionCode string, coreVersion string) string {
-	if coreVersion == "1.1.2" {
-		// xgo v1.1.2 has addressed the several issues that
+func checkBypassVersionCheck(versionCode string, runtimeVersion string) string {
+	if goinfo.CompareSemVer("v"+runtimeVersion, "v1.1.4") < 0 {
+		// xgo v1.1.2 and v1.1.4 has addressed several issues that
 		// affect correctness. older v1.1.0 need to upgrade
 		//
 		// newer xgo can work with runtime v1.1.0/1.1.1/... with no trouble
@@ -24,9 +27,14 @@ func checkBypassVersionCheck(versionCode string, coreVersion string) string {
 }
 
 func bypassVersionCheck(versionCode string) string {
-	return strings.Replace(versionCode,
-		"func checkVersion() error {",
-		"func checkVersion() error { if true { return nil; }",
-		1,
+	return patch.UpdateContent(versionCode,
+		"/*<begin bypass_version_check>*/",
+		"/*<end bypass_version_check>*/",
+		[]string{
+			"func checkVersion() error {",
+		},
+		0,
+		patch.UpdatePosition_After,
+		"if true { return nil; }",
 	)
 }

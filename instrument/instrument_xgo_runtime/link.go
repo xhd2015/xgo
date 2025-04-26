@@ -90,24 +90,28 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	var runtimeCoreVersion string
 
 	// find version first
+	var corePkg *edit.Package
 	for _, pkg := range editPackages.Packages {
 		goPkg := pkg.LoadPackage.GoPackage
 		if goPkg.Incomplete {
 			continue
 		}
-		if goPkg.ImportPath != constants.RUNTIME_CORE_PKG {
-			continue
+		if goPkg.ImportPath == constants.RUNTIME_CORE_PKG {
+			corePkg = pkg
+			break
 		}
-		var versionFile *edit.File
-		for _, file := range pkg.Files {
+	}
+	var versionFile *edit.File
+	if corePkg != nil {
+		for _, file := range corePkg.Files {
 			if file.File.Name == constants.VERSION_FILE {
 				versionFile = file
 				break
 			}
 		}
-		if versionFile == nil {
-			break
-		}
+	}
+
+	if versionFile != nil {
 		content := versionFile.File.Content
 		absFile := overlay.AbsFile(versionFile.File.AbsPath)
 		var err error
@@ -121,7 +125,6 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		versionContent := ReplaceActualXgoVersion(content, xgoVersion, xgoRevision, xgoNumber)
 		versionContent = checkBypassVersionCheck(versionContent, runtimeCoreVersion)
 		overrideContent(absFile, versionContent)
-		break
 	}
 
 	for _, pkg := range editPackages.Packages {
