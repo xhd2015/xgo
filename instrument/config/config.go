@@ -65,6 +65,13 @@ func CheckInstrument(pkgPath string) (isXgo bool, allow bool) {
 	if ok {
 		return false, false
 	}
+	// golang has a dedicated vendor directory
+	// we don't instrument it
+	// see https://github.com/xhd2015/xgo/issues/333#issuecomment-2830937257
+	_, ok = goinfo.PkgWithinModule(pkgPath, "vendor")
+	if ok {
+		return false, false
+	}
 	if isXgoRuntimePkg(pkgPath) {
 		return true, false
 	}

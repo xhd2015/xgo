@@ -595,7 +595,7 @@ func handleBuild(cmd string, args []string) error {
 	var buildDebug bool
 
 	var runFlagsAfterBuild []string
-	if debug != nil {
+	if debug != nil && *debug != "false" {
 		if cmdRun {
 			runDebug = true
 		} else if cmdTest {

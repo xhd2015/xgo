@@ -278,7 +278,11 @@ func main() {
 			tags = args[i+1]
 			i++
 			continue
+		} else if strings.HasPrefix(arg, "-tags=") {
+			tags = arg[len("-tags="):]
+			continue
 		}
+
 		if arg == "-race" {
 			flagRace = true
 			continue
@@ -572,7 +576,6 @@ func main() {
 			}
 			if tags != "" {
 				runArgs = append(runArgs, "-tags", tags)
-				opts.Tags = tags
 			}
 			if !usePlainGo {
 				if logDebug {

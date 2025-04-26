@@ -72,6 +72,18 @@ func (c *Scope) resolveType(expr ast.Expr) types.Type {
 	return types.Unknown{}
 }
 
+func (c *Scope) resolveObject(expr ast.Expr) types.Object {
+	info := c.resolveInfo(expr)
+	if types.IsUnknown(info) {
+		return types.Unknown{}
+	}
+	obj, ok := info.(types.Object)
+	if ok {
+		return obj
+	}
+	return types.Unknown{}
+}
+
 func (c *Scope) lazyResolveType(expr ast.Expr) types.Type {
 	return types.LazyType(func() types.Type {
 		return c.resolveType(expr)
@@ -79,6 +91,9 @@ func (c *Scope) lazyResolveType(expr ast.Expr) types.Type {
 }
 
 func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
+	if config.DEBUG {
+		config_debug.OnResolveInfo(c.Package.PkgPath(), c.File.File.File.Name, expr)
+	}
 	switch expr := expr.(type) {
 	case *ast.Ident:
 		name := expr.Name
@@ -90,6 +105,9 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 			// check decl before imports
 			decl := c.Package.Decls[name]
 			if decl != nil {
+				if config.DEBUG {
+					config_debug.OnResolvePackageDeclareInfo(c.Package.PkgPath(), c.File.File.File.Name, expr)
+				}
 				if decl.Kind == edit.DeclKindType {
 					typ := c.resolveType(decl.Type)
 					if types.IsUnknown(typ) {
@@ -149,7 +167,7 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 			case "new", "make", "cap", "len", "copy", "append", "delete", "close", "complex", "real", "imag", "panic", "recover":
 				return types.OperationName(expr.Name)
 			}
-			return parseBasicName(expr.Name)
+			return validateBasicName(expr.Name)
 		}
 		return types.Unknown{}
 	case *ast.SelectorExpr:
@@ -185,6 +203,39 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 				return types.Pointer{
 					Value: info,
 				}
+			} else if expr.Op == token.NOT {
+				return types.Value{
+					Type_: info.Type(),
+				}
+			}
+		}
+		return types.Unknown{}
+	case *ast.BinaryExpr:
+		// +-*/%
+		switch expr.Op {
+		case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+			// first op type
+			opValue := c.resolveObject(expr.X)
+			if types.IsUnknown(opValue) {
+				return types.Unknown{}
+			}
+			return types.Value{
+				Type_: opValue.Type(),
+			}
+		case token.LAND, token.LOR, token.AND, token.OR, token.XOR, token.SHL, token.SHR:
+			// && ||
+			// first op type
+			opValue := c.resolveObject(expr.X)
+			if types.IsUnknown(opValue) {
+				return types.Unknown{}
+			}
+			return types.Value{
+				Type_: opValue.Type(),
+			}
+		case token.EQL, token.NEQ, token.LSS, token.GTR, token.LEQ, token.GEQ:
+			// boolean
+			return types.Value{
+				Type_: types.Basic("bool"),
 			}
 		}
 		return types.Unknown{}
@@ -261,8 +312,17 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 			Value: c.lazyResolveType(expr.Value),
 		}
 	case *ast.ArrayType:
-		return types.Array{
-			Elem: c.resolveType(expr.Elt),
+		elemType := c.resolveType(expr.Elt)
+		if types.IsUnknown(elemType) {
+			return types.Unknown{}
+		}
+		if expr.Len != nil {
+			return types.Array{
+				Elem: elemType,
+			}
+		}
+		return types.Slice{
+			Elem: elemType,
 		}
 	case *ast.InterfaceType:
 		return types.Interface{}
@@ -293,7 +353,6 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 			Type_: typ,
 		}
 	case *ast.CallExpr:
-		// TODO more cases
 		fnInfo := c.resolveInfo(expr.Fun)
 		if op, ok := fnInfo.(types.OperationName); ok {
 			if op == "new" {
@@ -309,8 +368,30 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 						Type_: argType,
 					},
 				}
+			} else if op == "make" {
+				// see https://github.com/xhd2015/xgo/issues/331
+				if len(expr.Args) < 1 {
+					return types.Unknown{}
+				}
+				argType := c.resolveType(expr.Args[0])
+				if types.IsUnknown(argType) {
+					return types.Unknown{}
+				}
+				return types.Value{
+					Type_: argType,
+				}
+			} else if op == "append" {
+				if len(expr.Args) < 1 {
+					return types.Unknown{}
+				}
+				arg0 := c.resolveObject(expr.Args[0])
+				if types.IsUnknown(arg0) {
+					return types.Unknown{}
+				}
+				return types.Value{
+					Type_: arg0.Type(),
+				}
 			}
-			// TODO more
 			return types.Unknown{}
 		}
 		if typ, ok := fnInfo.(types.Type); ok {
@@ -357,7 +438,7 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 	return types.Unknown{}
 }
 
-func parseBasicName(name string) types.Type {
+func validateBasicName(name string) types.Type {
 	switch name {
 	case "string", "byte":
 		return types.Basic(name)

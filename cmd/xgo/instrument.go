@@ -264,19 +264,20 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 					file.InterfaceTypes = append(file.InterfaceTypes, intfTypes...)
 				} else {
 					for _, intf := range intfTypes {
-						if mode == config.InstrumentMode_Exported {
+						if mode == config.InstrumentMode_All {
+							// pass
+						} else if mode == config.InstrumentMode_Exported {
 							if !token.IsExported(intf.Name) {
 								continue
 							}
-							extraInterfaces = append(extraInterfaces, &compiler_extra.Interface{
-								Name: intf.Name,
-							})
 						} else {
 							if config.IS_DEV {
 								panic(fmt.Sprintf("unhandled instrument mode: %d", mode))
 							}
 						}
-
+						extraInterfaces = append(extraInterfaces, &compiler_extra.Interface{
+							Name: intf.Name,
+						})
 					}
 				}
 			}

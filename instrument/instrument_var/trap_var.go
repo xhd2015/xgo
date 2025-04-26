@@ -215,6 +215,9 @@ func (c *UseContext) doUseTypeInFile(typ types.Type) (res string) {
 		return "(" + strings.Join(list, ", ") + ")"
 	case types.Map:
 		return fmt.Sprintf("map[%s]%s", c.doUseTypeInFile(typ.Key), c.doUseTypeInFile(typ.Value))
+	case types.Slice:
+		// slice, but not array
+		return fmt.Sprintf("[]%s", c.doUseTypeInFile(typ.Elem))
 	case types.LazyType:
 		return c.doUseTypeInFile(typ())
 	default:

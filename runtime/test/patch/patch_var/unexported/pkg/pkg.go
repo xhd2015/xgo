@@ -1,13 +1,13 @@
 package pkg
 
-type unexported struct {
+type xgoTestPatchVarUnexported struct {
 	val int
 }
 
-func NewUnexported(n int) *unexported {
-	return &unexported{val: n}
+func NewUnexported(n int) *xgoTestPatchVarUnexported {
+	return &xgoTestPatchVarUnexported{val: n}
 }
 
-func (u *unexported) Get() int {
+func (u *xgoTestPatchVarUnexported) Get() int {
 	return u.val
 }

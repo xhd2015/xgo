@@ -24,6 +24,12 @@ func OnCollectFileDecl(pkg *edit.Package, file *edit.File) {
 	}
 }
 
+func OnCollectVarRef(fileName string, varName string) {
+	if fileName == "math_expr_test.go" && varName == "C" {
+		Debugpoint()
+	}
+}
+
 func OnTraverseFuncDecl(pkg *edit.Package, file *edit.File, fnDecl *ast.FuncDecl) {
 	var funcName string
 	if fnDecl.Name != nil {
@@ -36,7 +42,7 @@ func OnTraverseFuncDecl(pkg *edit.Package, file *edit.File, fnDecl *ast.FuncDecl
 			}
 		}
 	}
-	if funcName == "TestTypeAliasGenericNonPtrDebug" {
+	if funcName == "TestDebugOpAppend" {
 		Debugpoint()
 	}
 }
@@ -85,5 +91,23 @@ func OnRewriteVarDefAndRefs(pkgPath string, file *edit.File, decl *edit.Decl) {
 		if declName == "Tree" {
 			Debugpoint()
 		}
+	}
+	if fileName == "math_expr_test.go" {
+		if declName == "C" {
+			Debugpoint()
+		}
+	}
+}
+
+// go run ./script/run-test --include go1.24.2 -tags=dev --log-debug --debug-xgo ./runtime/test/patch/patch_var/math_expr/
+func OnResolveInfo(pkgPath string, fileName string, expr ast.Expr) {
+	if fileName == "math_expr_test.go" && DebugExprStr(expr) == "C" {
+		Debugpoint()
+	}
+}
+
+func OnResolvePackageDeclareInfo(pkgPath string, fileName string, expr ast.Expr) {
+	if fileName == "math_expr_test.go" && DebugExprStr(expr) == "C" {
+		Debugpoint()
 	}
 }

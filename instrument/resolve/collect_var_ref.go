@@ -5,6 +5,7 @@ import (
 	"go/token"
 
 	"github.com/xhd2015/xgo/instrument/config"
+	"github.com/xhd2015/xgo/instrument/config/config_debug"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/resolve/types"
 )
@@ -13,6 +14,9 @@ import (
 func (c *Scope) collectIdent(addr *ast.UnaryExpr, idt *ast.Ident) bool {
 	if isBlankName(idt.Name) || c.Has(idt.Name) {
 		return false
+	}
+	if config.DEBUG {
+		config_debug.OnCollectVarRef(c.File.File.File.Name, idt.Name)
 	}
 	return c.collectVarRef(addr, idt)
 }
