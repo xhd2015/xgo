@@ -15,6 +15,7 @@ import (
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
+	"github.com/xhd2015/xgo/support/strutil"
 )
 
 var ErrLinkFileNotFound = errors.New("xgo: link file not found")
@@ -117,14 +118,14 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		content := versionFile.File.Content
 		absFile := overlay.AbsFile(versionFile.File.AbsPath)
 		var err error
-		runtimeCoreVersion, err = ParseCoreVersion(content)
+		runtimeCoreVersion, err = ParseCoreVersion(strutil.ToReadonlyString(content))
 		if err != nil {
 			return nil, err
 		}
 		if isDeprecatedCoreVersion(runtimeCoreVersion) {
 			return nil, fmt.Errorf("%w: %s", ErrRuntimeVersionDeprecatedV1_0_0, runtimeCoreVersion)
 		}
-		versionContent := ReplaceActualXgoVersion(content, xgoVersion, xgoRevision, xgoNumber)
+		versionContent := ReplaceActualXgoVersion(strutil.ToReadonlyString(content), xgoVersion, xgoRevision, xgoNumber)
 		versionContent = checkBypassVersionCheck(versionContent, runtimeCoreVersion)
 		overrideContent(absFile, versionContent)
 	}
@@ -187,7 +188,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			switch loadFile.Name {
 			case constants.FLAG_FILE:
 				if suffixPkg == constants.RUNTIME_TRAP_FLAGS_PKG[n:] && (collectTestTrace || collectTestTraceDir != "" || xgoRaceSafe) {
-					flagsContent := InjectFlags(content, collectTestTrace, collectTestTraceDir, xgoRaceSafe)
+					flagsContent := InjectFlags(strutil.ToReadonlyString(content), collectTestTrace, collectTestTraceDir, xgoRaceSafe)
 					overrideContent(absFile, flagsContent)
 				}
 			case constants.TRACE_FILE:

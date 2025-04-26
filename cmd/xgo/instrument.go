@@ -366,7 +366,7 @@ func applyInstrumentWithEditNotes(overlayFS overlay.Overlay, packages *edit.Pack
 			content := string(file.Edit.Buffer().Bytes())
 			if mayHaveCover {
 				var err error
-				content, err = instrument_go.AddEditsNotes(file.Edit, file.File.AbsPath, file.File.Content, content)
+				content, err = instrument_go.AddEditsNotes(file.Edit, file.File.AbsPath, strutil.ToReadonlyString(file.File.Content), content)
 				if err != nil {
 					return 0, fmt.Errorf("failed to add edits: %s %w", file.File.AbsPath, err)
 				}

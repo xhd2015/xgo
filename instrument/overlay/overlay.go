@@ -80,6 +80,25 @@ func (o Overlay) Read(absFile AbsFile) (hitContent bool, content string, err err
 	return false, string(data), nil
 }
 
+func (o Overlay) ReadBytes(absFile AbsFile) (hitContent bool, content []byte, err error) {
+	overlayFile := o.Get(absFile)
+
+	readOSFile := absFile
+	if overlayFile != nil {
+		if overlayFile.hasOverriddenContent {
+			return true, []byte(overlayFile.Content), nil
+		}
+		if overlayFile.AbsFile != "" {
+			readOSFile = overlayFile.AbsFile
+		}
+	}
+	data, err := os.ReadFile(string(readOSFile))
+	if err != nil {
+		return false, nil, err
+	}
+	return false, data, nil
+}
+
 type Options struct {
 	NoLineDirective bool
 	PathMappings    []PathMapping

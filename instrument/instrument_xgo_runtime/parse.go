@@ -11,6 +11,7 @@ import (
 	"github.com/xhd2015/xgo/instrument/load"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/instrument/patch"
+	"github.com/xhd2015/xgo/support/strutil"
 )
 
 func CheckRuntimeLegacyVersion(projectDir string, overlayFS overlay.Overlay, mod string, modfile string) (bool, string, error) {
@@ -46,7 +47,7 @@ func CheckRuntimeLegacyVersion(projectDir string, overlayFS overlay.Overlay, mod
 	if foundFile == nil {
 		return false, "", nil
 	}
-	coreVersion, err := ParseCoreVersion(foundFile.Content)
+	coreVersion, err := ParseCoreVersion(strutil.ToReadonlyString(foundFile.Content))
 	if err != nil {
 		return false, "", err
 	}

@@ -14,7 +14,6 @@ import (
 	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/overlay"
 	"github.com/xhd2015/xgo/support/goinfo"
-	"github.com/xhd2015/xgo/support/strutil"
 )
 
 type LoadOptions struct {
@@ -46,7 +45,7 @@ type Package struct {
 type File struct {
 	AbsPath string
 	Name    string
-	Content string
+	Content []byte
 	Error   error
 	Syntax  *ast.File
 }
@@ -221,22 +220,22 @@ func LoadPackages(args []string, opts LoadOptions) (*Packages, error) {
 	}, nil
 }
 
-func readFile(overlayFS overlay.Overlay, absFilePath string, maxFileSize int64) (string, error) {
+func readFile(overlayFS overlay.Overlay, absFilePath string, maxFileSize int64) ([]byte, error) {
 	if maxFileSize > 0 {
 		size, err := overlayFS.Size(overlay.AbsFile(absFilePath))
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if size > maxFileSize {
-			return "", fmt.Errorf("file size %d large than %d", size, maxFileSize)
+			return nil, fmt.Errorf("file size %d large than %d", size, maxFileSize)
 		}
 	}
-	_, content, err := overlayFS.Read(overlay.AbsFile(absFilePath))
+	_, content, err := overlayFS.ReadBytes(overlay.AbsFile(absFilePath))
 	return content, err
 }
 
-func parseFile(fset *token.FileSet, absFilePath string, content string) (*ast.File, error) {
-	return parser.ParseFile(fset, string(absFilePath), strutil.ToReadonlyBytes(content), parser.ParseComments)
+func parseFile(fset *token.FileSet, absFilePath string, content []byte) (*ast.File, error) {
+	return parser.ParseFile(fset, string(absFilePath), content, parser.ParseComments)
 }
 
 func (c *Packages) Filter(f func(pkg *Package) bool) *Packages {
@@ -258,12 +257,12 @@ func readAndParseFile(fset *token.FileSet, absFilePath string, overlayFS overlay
 		Name:    filepath.Base(absFilePath),
 	}
 
-	_, content, err := overlayFS.Read(overlay.AbsFile(absFilePath))
+	_, content, err := overlayFS.ReadBytes(overlay.AbsFile(absFilePath))
 	if err != nil {
 		f.Error = err
 		return f
 	}
-	f.Content = string(content)
+	f.Content = content
 
 	file, err := parser.ParseFile(fset, string(absFilePath), content, parser.ParseComments)
 	if err != nil {
