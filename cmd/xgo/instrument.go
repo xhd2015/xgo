@@ -48,7 +48,7 @@ type instrumentResult struct {
 }
 
 // goroot is critical for stdlib
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, trapAll string, collectTestTrace bool, collectTestTraceDir string, goFlag bool, triedUpgrade bool) (*instrumentResult, error) {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, trapAll string, collectTestTrace bool, collectTestTraceDir string, xgoRaceSafe bool, goFlag bool, triedUpgrade bool) (*instrumentResult, error) {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
 	if mod == "" {
 		// check vendor dir
@@ -83,6 +83,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		XgoNumber:           NUMBER,
 		CollectTestTrace:    collectTestTrace,
 		CollectTestTraceDir: collectTestTraceDir,
+		XgoRaceSafe:         xgoRaceSafe,
 		ReadRuntimeGenFile: func(path []string) ([]byte, error) {
 			return readRuntimeGenFile(xgoSrc, path)
 		},

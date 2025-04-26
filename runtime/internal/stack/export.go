@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/internal/flags"
 	"github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
@@ -42,19 +43,23 @@ func ExportStackEntry(entry *Entry, rootBegin time.Time, offsetNS int64) *stack_
 	endNs := entry.EndNs + offsetNS
 	fnInfo := ExportFuncInfo(entry)
 	if entry.Go && entry.GetStack != nil {
-		// handle async stack
-		stack := entry.GetStack()
-		if stack != nil {
-			// NOTE: this might be unsafe since the
-			// child goroutine might be running
-			exportedStack := Export(stack, beginNs)
-			children = append(children, exportedStack.Children...)
-			if stack.End.IsZero() {
-				isRunning = true
-				endNs = runtime.XgoRealTimeNow().UnixNano() - stack.Begin.UnixNano() + beginNs
-			} else {
-				endNs = stack.End.UnixNano() - stack.Begin.UnixNano() + beginNs
+		if !flags.XGO_RACE_SAFE {
+			// handle async stack
+			stack := entry.GetStack()
+			if stack != nil {
+				// NOTE: this might be unsafe since the
+				// child goroutine might be running
+				exportedStack := Export(stack, beginNs)
+				children = append(children, exportedStack.Children...)
+				if stack.End.IsZero() {
+					isRunning = true
+					endNs = runtime.XgoRealTimeNow().UnixNano() - stack.Begin.UnixNano() + beginNs
+				} else {
+					endNs = stack.End.UnixNano() - stack.Begin.UnixNano() + beginNs
+				}
 			}
+		} else {
+			fnInfo.Name += " (hidden by --xgo-race-safe)"
 		}
 	} else if !entry.Finished {
 		endNs += runtime.XgoRealTimeNow().UnixNano() - rootBegin.UnixNano()

@@ -4,6 +4,7 @@ import "unsafe"
 
 // keep in sync with runtime.__xgo_g
 type G struct {
+	// how about we change this to a linked list?
 	gls                 map[interface{}]interface{}
 	looseJsonMarshaling bool
 

@@ -104,6 +104,9 @@ func amedTestWithConfig(test *TestConfig, includePredefinedArgs bool) error {
 		{prefix: "go:", f: func(content string) {
 			test.Go = content
 		}},
+		{prefix: "skip:", f: func(content string) {
+			test.Skip = content
+		}},
 	}
 	lines := strings.Split(string(bytes), "\n")
 	for _, line := range lines {

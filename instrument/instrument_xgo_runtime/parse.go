@@ -99,9 +99,10 @@ func ParseCoreVersion(versionCode string) (string, error) {
 	return ver, nil
 }
 
-func InjectFlags(flagsCode string, collectTestTrace bool, collectTestTraceDir string) string {
+func InjectFlags(flagsCode string, collectTestTrace bool, collectTestTraceDir string, xgoRaceSafe bool) string {
 	flagsCode = replaceByLine(flagsCode, `const COLLECT_TEST_TRACE = `, fmt.Sprintf(`const COLLECT_TEST_TRACE = %t`, collectTestTrace))
 	flagsCode = replaceByLine(flagsCode, `const COLLECT_TEST_TRACE_DIR = `, fmt.Sprintf(`const COLLECT_TEST_TRACE_DIR = %q`, collectTestTraceDir))
+	flagsCode = replaceByLine(flagsCode, `const XGO_RACE_SAFE = `, fmt.Sprintf(`const XGO_RACE_SAFE = %t`, xgoRaceSafe))
 	return flagsCode
 }
 

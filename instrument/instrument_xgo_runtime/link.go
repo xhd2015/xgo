@@ -30,6 +30,7 @@ type LinkOptions struct {
 	XgoNumber           int
 	CollectTestTrace    bool
 	CollectTestTraceDir string
+	XgoRaceSafe         bool
 
 	ReadRuntimeGenFile func(path []string) ([]byte, error)
 }
@@ -43,6 +44,7 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 	xgoNumber := linkOpts.XgoNumber
 	collectTestTrace := linkOpts.CollectTestTrace
 	collectTestTraceDir := linkOpts.CollectTestTraceDir
+	xgoRaceSafe := linkOpts.XgoRaceSafe
 	readRuntimeGenFile := linkOpts.ReadRuntimeGenFile
 
 	var opts load.LoadOptions
@@ -184,8 +186,8 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			absFile := overlay.AbsFile(loadFile.AbsPath)
 			switch loadFile.Name {
 			case constants.FLAG_FILE:
-				if suffixPkg == constants.RUNTIME_TRAP_FLAGS_PKG[n:] && collectTestTrace {
-					flagsContent := InjectFlags(content, collectTestTrace, collectTestTraceDir)
+				if suffixPkg == constants.RUNTIME_TRAP_FLAGS_PKG[n:] && (collectTestTrace || collectTestTraceDir != "" || xgoRaceSafe) {
+					flagsContent := InjectFlags(content, collectTestTrace, collectTestTraceDir, xgoRaceSafe)
 					overrideContent(absFile, flagsContent)
 				}
 			case constants.TRACE_FILE:

@@ -62,6 +62,8 @@ type TestConfig struct {
 	Flags           []string
 	VendorIfMissing bool
 	Env             []string
+
+	Skip string
 }
 
 func init() {
@@ -142,6 +144,7 @@ func main() {
 	var withSetupOnly bool
 	var tags string
 	var flagRace bool
+	var flagXgoRaceSafe bool
 
 	var flagList bool
 	var flagJSON bool
@@ -285,6 +288,10 @@ func main() {
 
 		if arg == "-race" {
 			flagRace = true
+			continue
+		}
+		if arg == "--xgo-race-safe" {
+			flagXgoRaceSafe = true
 			continue
 		}
 		if strings.HasPrefix(arg, "-") {
@@ -544,6 +551,10 @@ func main() {
 				fmt.Fprintf(os.Stderr, "SKIP %s: no tests to run\n", logDir)
 				continue
 			}
+			if testArg.Skip != "" {
+				fmt.Fprintf(os.Stderr, "SKIP %s: %s\n", testArg.Dir, testArg.Skip)
+				continue
+			}
 			if debugGo && !testArg.UsePlainGo {
 				fmt.Fprintf(os.Stderr, "--debug-go must be used with go, not xgo\n")
 				os.Exit(1)
@@ -640,6 +651,9 @@ func main() {
 			runArgs = addGoFlags(runArgs, cover, coverpkgs, coverprofile, coverageVariant)
 			if flagRace {
 				runArgs = append(runArgs, "-race")
+			}
+			if !usePlainGo && flagXgoRaceSafe {
+				runArgs = append(runArgs, "--xgo-race-safe")
 			}
 			if debugCompile != "" {
 				runArgs = append(runArgs, "-a")

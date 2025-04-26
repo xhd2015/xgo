@@ -94,6 +94,9 @@ type options struct {
 	// this flag indicates the xgo is called from
 	// go command, so checks can be bypassed
 	goFlag bool
+	// --xgo-race-safe
+	// skip some functionalities that are not race-safe
+	xgoRaceSafe bool
 
 	remainArgs []string
 
@@ -163,6 +166,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 
 	var deleteFlag bool
 	var goFlag bool
+	var xgoRaceSafe bool
 
 	nArg := len(args)
 
@@ -282,6 +286,13 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			Single: true,
 			Set: func(v string) {
 				goFlag = true
+			},
+		},
+		{
+			Flags:  []string{"--xgo-race-safe"},
+			Single: true,
+			Set: func(v string) {
+				xgoRaceSafe = v == "" || v == "true"
 			},
 		},
 	}
@@ -557,6 +568,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		noLineDirective: noLineDirective,
 		deleteFlag:      deleteFlag,
 		goFlag:          goFlag,
+		xgoRaceSafe:     xgoRaceSafe,
 	}, nil
 }
 

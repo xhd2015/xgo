@@ -212,6 +212,7 @@ func handleBuild(cmd string, args []string) error {
 	noLineDirective := opts.noLineDirective
 	deleteFlag := opts.deleteFlag
 	goFlag := opts.goFlag
+	xgoRaceSafe := opts.xgoRaceSafe
 
 	if cmdExec && len(remainArgs) == 0 {
 		return fmt.Errorf("exec requires command")
@@ -745,7 +746,7 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		instrumentUserCodeResult, err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, goFlag, needUpgrade)
+		instrumentUserCodeResult, err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, xgoRaceSafe, goFlag, needUpgrade)
 		if err != nil {
 			return err
 		}

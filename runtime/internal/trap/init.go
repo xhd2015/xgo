@@ -3,6 +3,7 @@ package trap
 import (
 	"unsafe"
 
+	"github.com/xhd2015/xgo/runtime/internal/flags"
 	"github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/internal/stack"
 )
@@ -28,6 +29,10 @@ func init() {
 }
 
 func inerhitStack(curG stack.G, newG stack.G) {
+	if flags.XGO_RACE_SAFE {
+		// race-safe, see https://github.com/xhd2015/xgo/issues/341
+		return
+	}
 	curStack := curG.GetStack()
 	if curStack == nil {
 		return

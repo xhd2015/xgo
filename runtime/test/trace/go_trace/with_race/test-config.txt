@@ -1,0 +1,4 @@
+flags: -race --xgo-race-safe
+
+# cannot be easily addressed
+# skip: this cannot be easily fixed since xgo has some instrumentations beyond goroutine scope. we may provide a flag for user to turn off functionalities that broken by race, such as mock inheritance and trace exporting
