@@ -130,6 +130,11 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 						if obj, ok := valInfo.(types.Object); ok {
 							varType = obj.Type()
 						}
+					} else {
+						// no type, no value
+						// the iota case
+						// see https://github.com/xhd2015/xgo/issues/345
+						return types.Unknown{}
 					}
 					if types.IsUnknown(varType) {
 						return types.Unknown{}
