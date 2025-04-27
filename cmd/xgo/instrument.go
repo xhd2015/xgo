@@ -481,33 +481,27 @@ func splitCommaList(s string) []string {
 	return trimmedList
 }
 
-func getLocalXgoGenDir(projectRootDir string) (string, error) {
-	xgoDir, err := getLocalXgoDir(projectRootDir)
-	if err != nil {
-		return "", err
-	}
-	xgoGenDir := filepath.Join(xgoDir, "gen")
-
+func setupLocalXgoGenDir(xgoGenDir string) error {
 	// to avoid `go mod vendor` detecting this gen dir
 	xgoGenGoMod := filepath.Join(xgoGenDir, "go.mod")
 	stat, statErr := os.Stat(xgoGenGoMod)
 	if statErr != nil {
 		if !os.IsNotExist(statErr) {
-			return "", statErr
+			return statErr
 		}
 	} else {
 		if !stat.IsDir() {
-			return xgoGenDir, nil
+			return nil
 		}
-		err = os.RemoveAll(xgoGenGoMod)
+		err := os.RemoveAll(xgoGenGoMod)
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 
-	err = os.MkdirAll(xgoGenDir, 0755)
+	err := os.MkdirAll(xgoGenDir, 0755)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	err = os.WriteFile(xgoGenGoMod, []byte(strings.Join([]string{
@@ -518,9 +512,21 @@ func getLocalXgoGenDir(projectRootDir string) (string, error) {
 		"",
 	}, "\n")), 0644)
 	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getLocalXgoGenDir(projectRootDir string) (string, error) {
+	xgoDir, err := getLocalXgoDir(projectRootDir)
+	if err != nil {
 		return "", err
 	}
-
+	xgoGenDir := filepath.Join(xgoDir, "gen")
+	err = setupLocalXgoGenDir(xgoGenDir)
+	if err != nil {
+		return "", err
+	}
 	return xgoGenDir, nil
 }
 

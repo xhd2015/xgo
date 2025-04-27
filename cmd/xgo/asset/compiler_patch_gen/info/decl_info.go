@@ -54,7 +54,7 @@ type DeclInfo struct {
 	Stdlib       bool
 
 	// this is an interface type declare
-	// only the RecvTypeName is valid
+	// only the Name is valid
 	Interface bool
 
 	// arg names
@@ -105,7 +105,7 @@ func (c *DeclInfo) GenericName() string {
 
 func (c *DeclInfo) IdentityName() string {
 	if c.Interface {
-		return c.RecvTypeName
+		return c.Name
 	}
 	if !c.Kind.IsFunc() {
 		if c.Kind == Kind_VarPtr {

@@ -33,6 +33,7 @@ func TestStructGreet(t *testing.T) {
 	}
 }
 
+// should panic because we did not explicitly add `--trap-pkg some.pkg` or `--trap-all`
 func TestInterfaceMethodShouldPanic(t *testing.T) {
 	isvc := intf.NewGreetService()
 

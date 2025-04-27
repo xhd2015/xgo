@@ -6,7 +6,9 @@ import (
 )
 
 func checkBypassVersionCheck(versionCode string, runtimeVersion string) string {
-	if goinfo.CompareSemVer("v"+runtimeVersion, "v1.1.4") < 0 {
+	if goinfo.CompareSemVer("v"+runtimeVersion, "v1.1.4") >= 0 {
+		// xgo v1.1.5 accepts runtime/v1.1.4
+		//
 		// xgo v1.1.2 and v1.1.4 has addressed several issues that
 		// affect correctness. older v1.1.0 need to upgrade
 		//

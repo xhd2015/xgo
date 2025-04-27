@@ -23,8 +23,8 @@ const XgoTrapPrefix = "__xgo_trap_"
 //	  if stopV {
 //		    return
 //	  }
-func trapFuncs(funcDecls []*info.DeclInfo, __xgo_trap string) int {
-	count := 0
+func trapFuncs(funcDecls []*info.DeclInfo, __xgo_trap string) []*info.DeclInfo {
+	j := 0
 	for _, fn := range funcDecls {
 		if isBlankName(fn.Name) {
 			continue
@@ -33,6 +33,9 @@ func trapFuncs(funcDecls []*info.DeclInfo, __xgo_trap string) int {
 			continue
 		}
 		if fn.Interface {
+			// interface ok
+			funcDecls[j] = fn
+			j++
 			continue
 		}
 		if fn.Closure {
@@ -171,9 +174,10 @@ func trapFuncs(funcDecls []*info.DeclInfo, __xgo_trap string) int {
 			// debug
 			syntax.Fdump(os.Stderr, fnDecl)
 		}
-		count++
+		funcDecls[j] = fn
+		j++
 	}
-	return count
+	return funcDecls[:j]
 }
 
 // for closures outside stdlib

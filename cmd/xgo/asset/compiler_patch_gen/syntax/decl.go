@@ -92,8 +92,8 @@ func extractFuncDecls(fileIndex int, declIndex int, f *syntax.File, file string,
 			}
 			return []*info.DeclInfo{
 				{
-					RecvTypeName: idName,
-					Interface:    true,
+					Name:      idName,
+					Interface: true,
 
 					FileSyntax: f,
 					FileIndex:  fileIndex,

@@ -50,13 +50,11 @@ func AfterFilesParsed(syntaxFiles []*syntax.File, addFile func(name string, r io
 
 	// always __xgo_trap_0
 	__xgo_trap := constants.Trap(0)
-	trapCount := trapFuncs(funcDelcs, __xgo_trap)
-	if trapCount == 0 {
+
+	// trap and filter
+	funcDelcs = trapFuncs(funcDelcs, __xgo_trap)
+	if len(funcDelcs) == 0 {
 		return
-	}
-	// filter
-	if trapCount != len(funcDelcs) {
-		funcDelcs = filterFuncDecls(funcDelcs, trapCount)
 	}
 	batchFuncDecls := splitBatch(funcDelcs, 1024)
 
@@ -146,17 +144,6 @@ func AfterFilesParsed(syntaxFiles []*syntax.File, addFile func(name string, r io
 		regFileCode := fmt.Sprintf("package %s\n%s", pkgName, body)
 		addFile(fileNameBase+".go", strings.NewReader(regFileCode))
 	}
-}
-
-func filterFuncDecls(funcDecls []*info.DeclInfo, n int) []*info.DeclInfo {
-	res := make([]*info.DeclInfo, 0, n)
-	for _, funcDecl := range funcDecls {
-		if !funcDecl.HasFuncTrap {
-			continue
-		}
-		res = append(res, funcDecl)
-	}
-	return res
 }
 
 func convertFuncDecl(funcDecl *info.DeclInfo) *compiler_extra.FuncInfo {
