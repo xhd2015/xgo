@@ -193,6 +193,6 @@ func traverseFuncDecls(global *GlobalScope, pkg *edit.Package, file *edit.File) 
 		if config.DEBUG {
 			config_debug.OnTraverseFuncDecl(pkg, file, fnDecl)
 		}
-		fileScope.traverseFunc(fnDecl.Recv, fnDecl.Type, fnDecl.Body)
+		fileScope.traverseFunc(fnDecl.Recv, fnDecl.Name.Name, fnDecl.Type, fnDecl.Body)
 	}
 }
