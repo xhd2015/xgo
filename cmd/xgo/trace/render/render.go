@@ -20,12 +20,16 @@ func readStacks(file string, force bool) ([]*stack_model.Stack, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
+	return readStacksFromReader(reader, force)
+}
 
+func readStacksFromReader(reader io.Reader, force bool) ([]*stack_model.Stack, bool, error) {
 	var stacks []*stack_model.Stack
 	decoder := json.NewDecoder(reader)
+	decoder.UseNumber()
 	// decode first
 	var stack stack_model.Stack
-	err = decoder.Decode(&stack)
+	err := decoder.Decode(&stack)
 	if err != nil {
 		if err == io.EOF {
 			return nil, true, nil

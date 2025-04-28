@@ -2,13 +2,16 @@ package trap
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
+
+// default size to shrink 1M
+const DEFAULT_SIZE_LIMIT = 1 * 1024 * 1024
 
 type object []field
 
@@ -103,11 +106,16 @@ func newStructValue(names []string, values []interface{}) *structValue {
 func (c *structValue) MarshalJSON() ([]byte, error) {
 	fields := make([]string, len(c.Names))
 	for i, name := range c.Names {
-		val, err := json.Marshal(c.Values[i])
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal field %s: %w", name, err)
+		fieldName := name
+		if name == "" {
+			fieldName = fmt.Sprintf("__field_%d", i)
 		}
-		fields[i] = fmt.Sprintf("%q: %s", name, val)
+		res := runtime.MarshalNoError(c.Values[i])
+		if len(res) > DEFAULT_SIZE_LIMIT {
+			fields[i] = fmt.Sprintf("%q: %q", fieldName, string(res[:DEFAULT_SIZE_LIMIT]))
+		} else {
+			fields[i] = fmt.Sprintf("%q: %s", fieldName, res)
+		}
 	}
 	return []byte(fmt.Sprintf("{%s}", strings.Join(fields, ","))), nil
 }
