@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// see https://github.com/xhd2015/xgo/issues/351
 func TestReadStacksFromReader_LargeNumber(t *testing.T) {
 	// Create a test case with a very large number in Results field
 	testJSON := `{

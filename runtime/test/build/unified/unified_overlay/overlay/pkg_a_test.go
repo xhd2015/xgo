@@ -3,7 +3,7 @@ package overlay
 import (
 	"testing"
 
-	"github.com/xhd2015/xgo/test/example/unified/overlay/pkg_a"
+	"github.com/xhd2015/xgo/runtime/test/build/unified/unified_overlay/overlay/pkg_a"
 )
 
 func TestBase(t *testing.T) {

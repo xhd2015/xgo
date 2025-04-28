@@ -1,4 +1,4 @@
-//line /Users/xhd2015/Projects/xhd2015/xgo/test/example/unified/orig/pkg_b/pkg_b_test.go:1
+//line EXAMPLE/orig/pkg_b/pkg_b_test.go:1
 package pkg_b
 
 import "testing"
