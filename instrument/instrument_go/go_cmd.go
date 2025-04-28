@@ -7,6 +7,7 @@ import (
 
 	"github.com/xhd2015/xgo/instrument/build"
 	"github.com/xhd2015/xgo/instrument/instrument_go/instrument_gc"
+	"github.com/xhd2015/xgo/instrument/instrument_go/instrument_unifiedtest"
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
@@ -55,6 +56,13 @@ func BuildInstrument(goroot string, goVersion *goinfo.GoVersion, allowDebugCompi
 			return err
 		}
 	}
+
+	// go test
+	err = instrument_unifiedtest.Unify(goroot, goVersion)
+	if err != nil {
+		return err
+	}
+
 	// build go command
 	return build.RebuildGoBinary(goroot)
 }

@@ -209,6 +209,7 @@ func handleBuild(cmd string, args []string) error {
 	trapStdlib := opts.trapStdlib
 	trapAll := opts.trapAll
 	trapPkgs := opts.trap
+	unified := opts.unified
 	noLineDirective := opts.noLineDirective
 	deleteFlag := opts.deleteFlag
 	goFlag := opts.goFlag
@@ -863,6 +864,9 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		}
 		if debugCompilePkg != "" {
 			execCmdEnv = append(execCmdEnv, instrument_gc.XGO_HELPER_DEBUG_PKG+"="+debugCompilePkg)
+		}
+		if unified {
+			execCmdEnv = append(execCmdEnv, exec_tool.XGO_UNIFIEDTEST+"=true")
 		}
 
 		if cmdBuild || (cmdTest && flagC) || debugMode {

@@ -98,6 +98,10 @@ type options struct {
 	// skip some functionalities that are not race-safe
 	xgoRaceSafe bool
 
+	// --unified
+	// use unified test mode
+	unified bool
+
 	remainArgs []string
 
 	testArgs   []string
@@ -156,6 +160,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var trapStdlib bool
 	var trapAll string
 	var trap []string
+
+	var unified bool
 
 	var remainArgs []string
 	var testArgs []string
@@ -315,6 +321,19 @@ func parseOptions(cmd string, args []string) (*options, error) {
 
 	if cmd == "test" {
 		trapStdlib = true
+		flagValues = append(flagValues, FlagValue{
+			Flags:  []string{"--unified"},
+			Single: true,
+			Set: func(v string) {
+				if v == "" || v == "true" {
+					unified = true
+				} else if v == "false" {
+					unified = false
+				} else {
+					panic(fmt.Errorf("unrecognized value %s: %s, expects <empty>,true or false", "--unified", v))
+				}
+			},
+		})
 	}
 
 	for i := 0; i < nArg; i++ {
@@ -560,6 +579,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		trapStdlib:                      trapStdlib,
 		trapAll:                         trapAll,
 		trap:                            trap,
+
+		unified: unified,
 
 		remainArgs:      remainArgs,
 		testArgs:        testArgs,

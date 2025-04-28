@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/xhd2015/xgo/instrument/constants"
+	"github.com/xhd2015/xgo/instrument/instrument_runtime/instrument_testing"
 	"github.com/xhd2015/xgo/instrument/instrument_runtime/template"
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -90,6 +91,11 @@ func InstrumentRuntime(goroot string, goVersion *goinfo.GoVersion, xgoTrapTempla
 	err = instrumentJsonEncoding(goroot, goVersion.Major, goVersion.Minor)
 	if err != nil {
 		return fmt.Errorf("instrument json encoding: %w", err)
+	}
+
+	err = instrument_testing.Instrument(goroot, goVersion)
+	if err != nil {
+		return fmt.Errorf("instrument testing: %w", err)
 	}
 
 	// instrument xgo_trap.go
