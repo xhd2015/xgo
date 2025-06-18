@@ -225,7 +225,7 @@ Debug with IDEs:
                         "host": "127.0.0.1",
                         "cwd":"./"
                 }
-        }
+        ]
     }
     NOTE: VSCode will map source files to workspace's goroot, which causes problem when debugging go compiler.
       To fix this, update go.goroot in .vscode/settings.json to:

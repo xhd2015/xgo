@@ -19,12 +19,12 @@ func TestPatchSimpleFunc(t *testing.T) {
 	}
 }
 
-func TestPatchVaradicFunc(t *testing.T) {
-	mock.Patch(greetVaradic, func(s ...string) string {
+func TestPatchVariadicFunc(t *testing.T) {
+	mock.Patch(greetVariadic, func(s ...string) string {
 		return "mock " + strings.Join(s, ",")
 	})
 
-	res := greetVaradic("earth", "moon")
+	res := greetVariadic("earth", "moon")
 	if res != "mock earth,moon" {
 		t.Fatalf("expect patched result to be %q, actual: %q", "mock earth,moon", res)
 	}

@@ -9,7 +9,7 @@ func greet(s string) string {
 	return "hello " + s
 }
 
-func greetVaradic(s ...string) string {
+func greetVariadic(s ...string) string {
 	return "hello " + strings.Join(s, ",")
 }
 

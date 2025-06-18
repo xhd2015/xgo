@@ -220,6 +220,12 @@ func (c *UseContext) doUseTypeInFile(typ types.Type) (res string) {
 		return fmt.Sprintf("[]%s", c.doUseTypeInFile(typ.Elem))
 	case types.LazyType:
 		return c.doUseTypeInFile(typ())
+	case types.GenericInstanceType:
+		instanceParams := make([]string, len(typ.InstanceParams))
+		for i, param := range typ.InstanceParams {
+			instanceParams[i] = c.doUseTypeInFile(param)
+		}
+		return fmt.Sprintf("%s[%s]", c.doUseTypeInFile(typ.Type), strings.Join(instanceParams, ", "))
 	default:
 		panic(fmt.Sprintf("unsupported type: %T", typ))
 	}

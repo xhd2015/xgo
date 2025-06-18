@@ -49,16 +49,16 @@ func TestRecordCall(t *testing.T) {
 	}
 }
 
-func Varadic(msg string, args ...string) {
+func Variadic(msg string, args ...string) {
 }
 
-func TestRecordFuncVaradic(t *testing.T) {
+func TestRecordFuncVariadic(t *testing.T) {
 	var records []string
-	trace.RecordCall(Varadic, func(msg *string, args *[]string) {
-		records = append(records, fmt.Sprintf("Varadic is called: %s, %v", *msg, *args))
+	trace.RecordCall(Variadic, func(msg *string, args *[]string) {
+		records = append(records, fmt.Sprintf("Variadic is called: %s, %v", *msg, *args))
 	})
-	Varadic("hello", "world", "foo", "bar")
-	expected := "Varadic is called: hello, [world foo bar]"
+	Variadic("hello", "world", "foo", "bar")
+	expected := "Variadic is called: hello, [world foo bar]"
 	if diff := assert.Diff(expected, strings.Join(records, "\n")); diff != "" {
 		t.Error(diff)
 	}

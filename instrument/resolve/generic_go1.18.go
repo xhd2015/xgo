@@ -32,9 +32,17 @@ func (c *Scope) resolveIndexListExpr(expr ast.Expr) (types.Info, bool) {
 	// generic type
 	switch info := info.(type) {
 	case types.Type:
+		instanceParams := make([]types.Type, len(list.Indices))
+		for i, index := range list.Indices {
+			typ := c.resolveType(index)
+			if types.IsUnknown(typ) {
+				return types.Unknown{}, true
+			}
+			instanceParams[i] = typ
+		}
 		return types.GenericInstanceType{
-			Type: info,
-			// TODO: params
+			Type:           info,
+			InstanceParams: instanceParams,
 		}, true
 	case types.PkgFunc:
 		return info, true

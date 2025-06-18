@@ -1,7 +1,10 @@
 package config_debug
 
 import (
+	"bytes"
 	"go/ast"
+	"go/printer"
+	"go/token"
 
 	"github.com/xhd2015/xgo/instrument/edit"
 )
@@ -58,6 +61,16 @@ func recvNoName(recv *ast.FieldList) bool {
 }
 
 func DebugExprStr(expr ast.Expr) string {
+	var buf bytes.Buffer
+	fset := token.NewFileSet()
+	err := printer.Fprint(&buf, fset, expr)
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+	return buf.String() // Outputs: fmt.Println(x)
+}
+
+func DebugExprStrOld(expr ast.Expr) string {
 	switch expr := expr.(type) {
 	case *ast.Ident:
 		return expr.Name
@@ -65,6 +78,7 @@ func DebugExprStr(expr ast.Expr) string {
 		return DebugExprStr(expr.X) + "." + expr.Sel.Name
 	case *ast.ParenExpr:
 		return "(" + DebugExprStr(expr.X) + ")"
+	case *ast.UnaryExpr:
 	}
 	return ""
 }
@@ -97,6 +111,11 @@ func OnRewriteVarDefAndRefs(pkgPath string, file *edit.File, decl *edit.Decl) {
 			Debugpoint()
 		}
 	}
+	if fileName == "mock_var_generic.go" {
+		if declName == "instance" {
+			Debugpoint()
+		}
+	}
 }
 
 // go run ./script/run-test --include go1.24.2 -tags=dev --log-debug --debug-xgo ./runtime/test/patch/patch_var/math_expr/
@@ -105,6 +124,20 @@ func OnResolveInfo(pkgPath string, fileName string, expr ast.Expr) {
 		Debugpoint()
 	}
 	if fileName == "math_expr_test.go" && DebugExprStr(expr) == "C" {
+		Debugpoint()
+	}
+	if pkgPath == "github.com/xhd2015/xgo/runtime/test/mock/mock_var/mock_var_generic" {
+		exprDebug := DebugExprStr(expr)
+		// println(exprDebug)
+		if exprDebug == "&instance" {
+			Debugpoint()
+		}
+	}
+	exprDebug := DebugExprStr(expr)
+	switch exprDebug {
+	case "third.MustBuild[int](1)":
+		Debugpoint()
+	case "Wrapper[Concrete, Concrete2]":
 		Debugpoint()
 	}
 }

@@ -252,13 +252,27 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 	case *ast.CompositeLit:
 		// generic
 		litType := expr.Type
+		var indexTypeExpr ast.Expr
 		if idxExpr, ok := expr.Type.(*ast.IndexExpr); ok {
 			litType = idxExpr.X
+			indexTypeExpr = idxExpr.Index
 		}
 
 		typ := c.resolveType(litType)
 		if types.IsUnknown(typ) {
 			return types.Unknown{}
+		}
+		if indexTypeExpr != nil {
+			indexType := c.resolveType(indexTypeExpr)
+			if types.IsUnknown(indexType) {
+				return types.Unknown{}
+			}
+			// NOTE: multiple params will be
+			// resolved as type *IndexListExpr
+			typ = types.GenericInstanceType{
+				Type:           typ,
+				InstanceParams: []types.Type{indexType},
+			}
 		}
 		return types.Literal{
 			Type_: typ,
@@ -269,9 +283,13 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 		// generic type
 		switch info := info.(type) {
 		case types.Type:
+			indexType := c.resolveType(expr.Index)
+			if types.IsUnknown(indexType) {
+				return types.Unknown{}
+			}
 			return types.GenericInstanceType{
-				Type: info,
-				// TODO: params
+				Type:           info,
+				InstanceParams: []types.Type{indexType},
 			}
 		case types.PkgFunc:
 			return info

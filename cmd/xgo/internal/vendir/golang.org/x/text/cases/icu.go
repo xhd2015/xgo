@@ -21,7 +21,7 @@ package cases
 #include <unicode/localpointer.h>
 #include <unicode/ucasemap.h>
 */
-import "github.com/xhd2015/xgo/cmd/xgo/internal/vendir/C"
+import "C"
 
 import "unsafe"
 
