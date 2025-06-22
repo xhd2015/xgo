@@ -189,8 +189,8 @@ func (c *UseContext) doUseTypeInFile(typ types.Type) (res string) {
 			panic(fmt.Sprintf("unexported type: %s", typ.Name))
 		}
 		pos := c.fset.Position(c.pos)
-		pkgRef, ok := c.impRecorder.RecordImport(typ.PkgPath, fmt.Sprintf("__xgo_var_ref_%d_%d", pos.Line, pos.Column))
-		if !ok {
+		pkgRef, isNew := c.impRecorder.RecordImport(typ.PkgPath, fmt.Sprintf("__xgo_var_ref_%d_%d", pos.Line, pos.Column))
+		if isNew {
 			c.importEdits = append(c.importEdits, &ImportEdit{
 				pkgPath: typ.PkgPath,
 				ref:     pkgRef,
@@ -239,21 +239,27 @@ type importRecorder struct {
 	// where line and col is the first position
 	// that requires this import
 	pkgPathToPkgRef map[string]string
+
+	refNum int
 }
 
-func (c *importRecorder) RecordImport(pkgPath string, ref string) (actualRef string, exists bool) {
+func (c *importRecorder) RecordImport(pkgPath string, ref string) (actualRef string, isNew bool) {
 	if pkgPath == "" || ref == "" {
 		panic("pkgPath or ref is empty")
 	}
 	prev, ok := c.pkgPathToPkgRef[pkgPath]
 	if ok {
-		return prev, true
+		return prev, false
 	}
 	if c.pkgPathToPkgRef == nil {
 		c.pkgPathToPkgRef = make(map[string]string, 1)
 	}
+	if c.refNum > 0 {
+		ref = fmt.Sprintf("%s_%d", ref, c.refNum)
+	}
 	c.pkgPathToPkgRef[pkgPath] = ref
-	return ref, false
+	c.refNum++
+	return ref, true
 }
 
 func (c *importRecorder) Remove(pkgPath string) {

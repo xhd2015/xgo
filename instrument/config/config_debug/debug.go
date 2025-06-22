@@ -95,6 +95,9 @@ func OnRewriteVarDefAndRefs(pkgPath string, file *edit.File, decl *edit.Decl) {
 	if decl.Ident != nil {
 		declName = decl.Ident.Name
 	}
+	if fileName == "mypackage.go" {
+		Debugpoint()
+	}
 
 	if fileName == "type_ref_multiple_times_test.go" {
 		if declName == "testMap" {
@@ -138,6 +141,8 @@ func OnResolveInfo(pkgPath string, fileName string, expr ast.Expr) {
 	case "third.MustBuild[int](1)":
 		Debugpoint()
 	case "Wrapper[Concrete, Concrete2]":
+		Debugpoint()
+	case "MyTasker":
 		Debugpoint()
 	}
 }
