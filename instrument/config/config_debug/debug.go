@@ -119,6 +119,10 @@ func OnRewriteVarDefAndRefs(pkgPath string, file *edit.File, decl *edit.Decl) {
 			Debugpoint()
 		}
 	}
+	switch fileName {
+	case "mock_var_no_type_test.go":
+		Debugpoint()
+	}
 }
 
 // go run ./script/run-test --include go1.24.2 -tags=dev --log-debug --debug-xgo ./runtime/test/patch/patch_var/math_expr/
@@ -143,6 +147,8 @@ func OnResolveInfo(pkgPath string, fileName string, expr ast.Expr) {
 	case "Wrapper[Concrete, Concrete2]":
 		Debugpoint()
 	case "MyTasker":
+		Debugpoint()
+	case "tom.Name":
 		Debugpoint()
 	}
 }

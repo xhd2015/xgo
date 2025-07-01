@@ -718,11 +718,13 @@ func (c *Scope) resolveFieldToObject(valType types.Type, fieldName string, onDet
 					v := types.Value{
 						Type_: fieldType,
 					}
-					if isPtr && !types.IsPointer(fieldType) {
-						return types.Pointer{
-							Value: v,
-						}
-					}
+					// comment the following code due to: https://github.com/xhd2015/xgo/issues/361
+					_ = isPtr
+					// if isPtr && !types.IsPointer(fieldType) {
+					// 	return types.Pointer{
+					// 		Value: v,
+					// 	}
+					// }
 					return v
 				}
 			}

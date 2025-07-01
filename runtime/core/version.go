@@ -9,9 +9,9 @@ import (
 // these fields are automatically copied
 // from when running
 // `go run ./script/generate runtime/core/version.go`
-const VERSION = "1.1.9"
-const REVISION = "dfa579fb54f29e56b79fd73404248aaf22f1febf+1"
-const NUMBER = 448
+const VERSION = "1.1.10"
+const REVISION = "dcf95d891f95d1abee67679615130f08602827db+1"
+const NUMBER = 449
 
 // these fields will be filled by compiler when xgo builds with xgo/runtime
 // see CORE_VERSION in cmd/xgo/version.go
