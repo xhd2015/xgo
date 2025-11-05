@@ -3,6 +3,8 @@ package resolve
 import (
 	"go/ast"
 	"go/token"
+
+	"github.com/xhd2015/xgo/instrument/resolve/types"
 )
 
 func (ctx *Scope) traverseExprs(nodes []ast.Expr) {
@@ -78,8 +80,24 @@ func (c *Scope) traverseExpr(node ast.Expr) {
 					return
 				}
 			case *ast.SelectorExpr:
-				if c.collectSelector(node, x) {
+				collected := c.collectSelector(node, x)
+				if collected {
 					return
+				}
+				// If collectSelector returned false, check if it's because we detected
+				// the &pkgVar.Field pattern and skipped it. If so, we should not traverse
+				// into the selector to avoid collecting the base variable separately.
+				xInfo := c.resolveInfo(x.X)
+				if obj, ok := xInfo.(types.Object); ok {
+					// Unwrap Pointer if present
+					if ptrObj, ok := obj.(types.Pointer); ok {
+						obj = ptrObj.Value
+					}
+					// Check if it's a package variable
+					if _, ok := obj.(types.PkgVariable); ok {
+						// This is &pkgVar.Field pattern that was skipped, don't traverse
+						return
+					}
 				}
 			}
 		}

@@ -55,13 +55,14 @@ func main() {
 		os.Exit(1)
 	}
 	var err error
-	if cmd == "install" {
+	switch cmd {
+	case "install":
 		err = install()
-	} else if cmd == "pre-commit" {
+	case "pre-commit":
 		err = preCommitCheck(noCommit, amend, noUpdateVersion)
-	} else if cmd == "post-commit" {
+	case "post-commit":
 		err = postCommitCheck(noCommit)
-	} else {
+	default:
 		fmt.Fprintf(os.Stderr, "unrecognized command: %s\n", cmd)
 		os.Exit(1)
 	}

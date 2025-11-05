@@ -120,8 +120,8 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 
 func applyRewrite(prefix string, varRef *edit.VarRef) {
 	fileEdit := varRef.File.Edit
-	if varRef.Addr != nil {
-		// delete &
+	if varRef.Addr != nil && !varRef.FieldAccess {
+		// delete & (but keep it for field access pattern)
 		fileEdit.Delete(varRef.Addr.Pos(), varRef.Addr.X.Pos())
 	}
 	if prefix != "" {

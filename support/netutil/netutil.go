@@ -64,6 +64,22 @@ func ServePort(host string, port int, autoIncrPort bool, watchTimeout time.Durat
 	}
 }
 
+func FindListenablePort(host string, port int) (int, error) {
+	for {
+		addr := net.JoinHostPort(host, strconv.Itoa(port))
+		serving, err := IsTCPAddrServing(addr, 20*time.Millisecond)
+		if err != nil {
+			return 0, err
+		}
+		if serving {
+			port++
+			continue
+		}
+
+		return port, nil
+	}
+}
+
 // executing action
 func watchSignalWithinTimeout(timeout time.Duration, errSignal chan struct{}, action func()) {
 	select {

@@ -1,7 +1,7 @@
 package cov_control
 
 // this controller is not used in practice, we may use it to
-// optimaze user experience in the future.
+// optimize user experience in the future.
 import (
 	"encoding/json"
 	"fmt"

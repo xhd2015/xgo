@@ -330,7 +330,7 @@ func handleTracePre(ctx context.Context, f *core.FuncInfo, args core.Object, res
 			}
 		}
 
-		// check if allow main module to be defaultly snapshoted
+		// check if allow main module to be defaultly snapshotted
 		if !snapshotTrace && localOpts.disableSnapshotMainModule != flagType_true {
 			if (localOpts.disableSnapshotMainModule == flagType_default && flags.STRACE_SNAPSHOT_MAIN_MODULE_DEFAULT != "false") || localOpts.disableSnapshotMainModule == flagType_false {
 				checkMainModuleSnapshot = true

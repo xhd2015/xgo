@@ -8,8 +8,8 @@ var countParenNested int
 // NOTE: if lock is captured, this function will
 // panic: fatal error: sync: unlock of unlocked mutex
 func incrLocked_ParenNested() {
-	// ((x)) will be simplied to (x)
-	f := ((lock)).Lock
+	// ((x)) will be simplified to (x)
+	f := (lock).Lock
 	f()
 	countParenNested = countParenNested + 1
 	lock.Unlock()

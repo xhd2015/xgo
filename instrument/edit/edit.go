@@ -52,6 +52,9 @@ type VarRef struct {
 	NameStart token.Pos
 	// the end position of the name
 	NameEnd token.Pos
+	// FieldAccess indicates this is &variable.Field pattern
+	// In this case, keep the & and use _xgo_get() instead of _xgo_get_addr()
+	FieldAccess bool
 }
 
 type FuncDecl struct {

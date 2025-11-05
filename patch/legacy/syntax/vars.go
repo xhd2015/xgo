@@ -648,7 +648,7 @@ func (ctx *BlockContext) traverseCallExpr(node *syntax.CallExpr, globaleNames ma
 		}
 	}
 
-	// NOTE: previousely we skip capturing a name as a function(i.e. the next statement is commented out)
+	// NOTE: previously we skip capturing a name as a function(i.e. the next statement is commented out)
 	// reason: we cannot tell if the receiver is
 	// a pointer or a value. If the target function requires a
 	// pointer while we assign a value, then effect will lost, such

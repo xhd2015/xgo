@@ -617,7 +617,7 @@ In conclusion, `xgo` and monkey are compared as the following:
 |Closure Mock|Y|Y|
 |Stack Trace|Y|N|
 |General Trap|Y|N|
-|Compatiblility|NO LIMIT|limited to amd64 and arm64|
+|Compatibility|NO LIMIT|limited to amd64 and arm64|
 |API|simple|complex|
 |Integration Effort|easy|hard|
 

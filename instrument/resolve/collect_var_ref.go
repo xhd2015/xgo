@@ -18,7 +18,7 @@ func (c *Scope) collectIdent(addr *ast.UnaryExpr, idt *ast.Ident) bool {
 	if config.DEBUG {
 		config_debug.OnCollectVarRef(c.File.File.File.Name, idt.Name)
 	}
-	return c.collectVarRef(addr, idt)
+	return c.collectVarRef(addr, idt, nil)
 }
 
 // if is &pkg.VarName, return &pkg.VarName_xgo_get_addr()
@@ -33,16 +33,22 @@ func (c *Scope) collectSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr) bool
 	// if this is a package variable, we need to trap the variable
 	// instead of the selector
 	expr := sel.X
+	var originalSel *ast.SelectorExpr
 	_, ok := selInfo.(types.PkgVariable)
 	if ok {
 		expr = sel.Sel
+		// This is pkg.VarName, not variable.Field
+		originalSel = nil
+	} else {
+		// This is variable.Field
+		originalSel = sel
 	}
 
 	// selInfo should be an object
-	return c.collectVarRef(addr, expr)
+	return c.collectVarRef(addr, expr, originalSel)
 }
 
-func (c *Scope) collectVarRef(addr *ast.UnaryExpr, expr ast.Expr) bool {
+func (c *Scope) collectVarRef(addr *ast.UnaryExpr, expr ast.Expr, originalSel *ast.SelectorExpr) bool {
 	expr = deparen(expr)
 	exprInfo := c.resolveInfo(expr)
 	obj, ok := exprInfo.(types.Object)
@@ -76,10 +82,29 @@ func (c *Scope) collectVarRef(addr *ast.UnaryExpr, expr ast.Expr) bool {
 		return false
 	}
 
+	// Check if this is &variable.Field pattern
+	fieldAccess := false
+	if addr != nil && originalSel != nil {
+		// This is &variable.Field pattern
+		// For pointer-typed variables, we can rewrite to &variable_xgo_get().Field
+		// For non-pointer variables, we cannot rewrite because variable_xgo_get() returns a value
+		if !types.IsPointer(pkgVar.Type()) {
+			// Cannot rewrite &nonPtrVar.Field
+			return false
+		}
+		// For pointer variables, use _xgo_get() instead of _xgo_get_addr()
+		fieldAccess = true
+	}
+
 	var needPtr bool
 	if addr != nil {
-		// force use addr
-		needPtr = true
+		if fieldAccess {
+			// For &ptrVariable.Field, we use _xgo_get() not _xgo_get_addr()
+			needPtr = false
+		} else {
+			// force use addr
+			needPtr = true
+		}
 	} else {
 		// if original type is not pointer, check
 		// if the ref is a pointer
@@ -94,11 +119,12 @@ func (c *Scope) collectVarRef(addr *ast.UnaryExpr, expr ast.Expr) bool {
 		nameStart = expr.Pos()
 	}
 	decl.VarRefs = append(decl.VarRefs, &edit.VarRef{
-		File:      c.File.File,
-		Addr:      addr,
-		NeedPtr:   needPtr,
-		NameStart: nameStart,
-		NameEnd:   expr.End(),
+		File:        c.File.File,
+		Addr:        addr,
+		NeedPtr:     needPtr,
+		NameStart:   nameStart,
+		NameEnd:     expr.End(),
+		FieldAccess: fieldAccess,
 	})
 	return true
 }
