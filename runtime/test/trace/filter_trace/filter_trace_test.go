@@ -213,6 +213,58 @@ func TestFilterTraceComplex(t *testing.T) {
 	}
 }
 
+// TestFilterTraceDeep tests a more complex filtering scenario
+func TestFilterTraceDeep(t *testing.T) {
+	var capturedStack stack_model.IStack
+
+	trace.Trace(trace.Config{
+		OnFinish: func(stack stack_model.IStack) {
+			capturedStack = stack
+		},
+		FilterTrace: func(funcInfo *core.FuncInfo) bool {
+			if funcInfo.Stdlib || funcInfo.Closure {
+				return false
+			}
+			if funcInfo.IdentityName == "deep2" {
+				return false
+			}
+			return true
+		},
+	}, nil, func() (interface{}, error) {
+		// Call functions at the same level
+		deepCall()
+		return nil, nil
+	})
+
+	if capturedStack == nil {
+		t.Fatal("expected trace to be captured")
+	}
+
+	data, err := capturedStack.JSON()
+	if err != nil {
+		t.Fatalf("failed to marshal stack: %v", err)
+	}
+
+	if !strings.Contains(string(data), "deepCall") {
+		t.Errorf("expected trace to contain deepCall, got: %s", string(data))
+	}
+	if !strings.Contains(string(data), "deep1") {
+		t.Errorf("expected trace to contain deep1, got: %s", string(data))
+	}
+	if !strings.Contains(string(data), "deep1A") {
+		t.Errorf("expected trace to contain deep1A, got: %s", string(data))
+	}
+	if !strings.Contains(string(data), "deep3") {
+		t.Errorf("expected trace to contain deep3, got: %s", string(data))
+	}
+
+	// should not contain deep2
+	if strings.Contains(string(data), "deep2") {
+		t.Errorf("expected trace to NOT contain deep2, got: %s", string(data))
+	}
+
+}
+
 // Helper functions for tests
 
 func functionInclude1() string {
@@ -273,4 +325,25 @@ func helperE1() string {
 
 func helperWithoutMatch() string {
 	return "no match"
+}
+
+func deepCall() {
+	deep1()
+	deep1A()
+}
+
+func deep1() {
+	deep2()
+}
+
+func deep1A() {
+	deep1()
+}
+
+func deep2() {
+	deep3()
+}
+
+func deep3() {
+
 }

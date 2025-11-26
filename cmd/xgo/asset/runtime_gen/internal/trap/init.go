@@ -62,6 +62,7 @@ func inerhitStack(curG stack.G, newG stack.G) {
 	// associate trace
 	if stackData.hasStartedTracing {
 		newStackData.hasStartedTracing = true
+		newStackData.filterTrace = stackData.filterTrace
 
 		if curStack.Top != nil {
 			child := &stack.Entry{
