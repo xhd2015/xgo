@@ -32,7 +32,9 @@ func trapVar(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 	var interceptors []*recorderHolder
 	if depth <= 1 {
 		if stkData != nil && stkData.hasStartedTracing {
-			tracing = true
+			if stkData.filterTrace == nil || stkData.filterTrace(funcInfo) {
+				tracing = true
+			}
 		}
 		interceptors = stkData.getGeneralInterceptors()
 	}
@@ -91,7 +93,9 @@ func trapVarPtr(infoPtr unsafe.Pointer, varAddr interface{}, res interface{}) {
 	var interceptors []*recorderHolder
 	if depth <= 1 {
 		if stkData != nil && stkData.hasStartedTracing {
-			tracing = true
+			if stkData.filterTrace == nil || stkData.filterTrace(funcInfo) {
+				tracing = true
+			}
 		}
 		interceptors = stkData.getGeneralInterceptors()
 	}
