@@ -15,6 +15,7 @@ var globalInterceptorHolder interceptorHolders
 type StackData struct {
 	hasStartedTracing bool
 
+	filterTrace     func(funcInfo *core.FuncInfo) bool
 	onFinish        func(stack stack_model.IStack)
 	stackOutputFile string
 

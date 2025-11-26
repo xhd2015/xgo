@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -207,6 +208,12 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		}
 	}
 
+	// filter trace
+	var allowTracingThisEntry bool
+	if isTracing && (stackData.filterTrace == nil || stackData.filterTrace(funcInfo)) {
+		allowTracingThisEntry = true
+	}
+
 	var callRecorderWithDepth func()
 	if postRecorder != nil {
 		callRecorderWithDepth = func() {
@@ -229,7 +236,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 			return callRecorderWithDepth, false
 		}
 
-		if !isTracing {
+		if !allowTracingThisEntry {
 			// without tracing, mock becomes simpler
 			if mock != nil {
 				ok := mock(funcInfo, recvPtr, args, results)
@@ -239,7 +246,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 			return callRecorderWithDepth, false
 		}
 	} else {
-		if !isTracing {
+		if !allowTracingThisEntry {
 			return callRecorderWithDepth, true
 		}
 	}
@@ -258,6 +265,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 	if isStartTracing && !isTesting {
 		var onFinish func(stack stack_model.IStack)
 		var outputFile string
+		var filterTrace func(funcInfo *core.FuncInfo) bool
 		var config interface{}
 		for i, arg := range args {
 			if argNames[i] == "config" {
@@ -285,8 +293,16 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 						onFinish = f
 					}
 				}
+				filterTraceField := rvalue.FieldByName("FilterTrace")
+				if filterTraceField.IsValid() {
+					f, ok := filterTraceField.Interface().(func(funcInfo *core.FuncInfo) bool)
+					if ok {
+						filterTrace = f
+					}
+				}
 			}
 		}
+		stackData.filterTrace = filterTrace
 		if outputFile == "" && onFinish == nil {
 			if stackAttached {
 				stack.Detach()
@@ -390,10 +406,11 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		stk.Depth--
 		if isStartTracing {
 			exportedStack := stack.Export(stk, 0)
-			exportedStackJSON := xgo_runtime.MarshalNoError(exportedStack)
 			if isTesting {
 				outputFile := filepath.Join(flags.COLLECT_TEST_TRACE_DIR, testName+".json")
 				os.MkdirAll(filepath.Dir(outputFile), 0755)
+
+				exportedStackJSON := xgo_runtime.MarshalNoError(exportedStack)
 				err := os.WriteFile(outputFile, exportedStackJSON, 0644)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "error writing stack: %v\n", err)
@@ -402,10 +419,10 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 				if stackData.onFinish != nil {
 					stackData.onFinish(&StackDataExportImpl{
 						data: exportedStack,
-						json: exportedStackJSON,
 					})
 				}
 				if stackData.stackOutputFile != "" {
+					exportedStackJSON := xgo_runtime.MarshalNoError(exportedStack)
 					err := os.WriteFile(stackData.stackOutputFile, exportedStackJSON, 0644)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "error writing stack: %v\n", err)
@@ -427,7 +444,9 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 
 type StackDataExportImpl struct {
 	data *stack_model.Stack
-	json []byte
+
+	jsonCached int32
+	json       []byte
 }
 
 func (c *StackDataExportImpl) Data() *stack_model.Stack {
@@ -435,5 +454,10 @@ func (c *StackDataExportImpl) Data() *stack_model.Stack {
 }
 
 func (c *StackDataExportImpl) JSON() ([]byte, error) {
+	if atomic.LoadInt32(&c.jsonCached) == 1 {
+		return c.json, nil
+	}
+	c.json = xgo_runtime.MarshalNoError(c.data)
+	atomic.StoreInt32(&c.jsonCached, 1)
 	return c.json, nil
 }

@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"github.com/xhd2015/xgo/runtime/core"
 	_ "github.com/xhd2015/xgo/runtime/internal/trap"
 	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
@@ -16,6 +17,9 @@ type Config struct {
 	// in json format, which can be open by:
 	//      xgo tool trace <OutputFile>
 	OutputFile string `json:"OutputFile,omitempty"`
+
+	// FilterTrace is called to filter the trace
+	FilterTrace func(funcInfo *core.FuncInfo) bool `json:"-"`
 }
 
 // the `request` and `response` are only for recording purpose
