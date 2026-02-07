@@ -692,7 +692,11 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		// sticks to old mod and modfile
 		modForLoad := mod
 		modfileForLoad := modfile
-		if enableStackTrace || needUpgrade {
+		// In Go 1.25+, overlays cannot replace files in GOMODCACHE.
+		// Always load runtime into a local dir so xgo writes modifications
+		// there instead of creating GOMODCACHE overlays.
+		needLocalRuntime := goVersion.Minor >= 25
+		if enableStackTrace || needUpgrade || needLocalRuntime {
 			// check if xgo/runtime ready
 			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, needUpgrade, remainArgs)
 			if impRuntimeErr != nil {
@@ -701,6 +705,10 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 					fmt.Fprintf(os.Stderr, "WARNING: --strace requires: import _ %q\n   failed to auto import %s: %v\n", constants.RUNTIME_TRACE_PKG, constants.RUNTIME_TRACE_PKG, impRuntimeErr)
 				} else if needUpgrade {
 					fmt.Fprintf(os.Stderr, "WARNING: auto upgrade fails: %v\n", impRuntimeErr)
+				} else if needLocalRuntime {
+					// Go 1.25+: loading runtime locally failed, fall back to overlay
+					// (may fail if runtime is in GOMODCACHE)
+					logDebug("WARNING: failed to load runtime locally for Go 1.25+: %v", impRuntimeErr)
 				} else {
 					return impRuntimeErr
 				}
