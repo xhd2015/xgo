@@ -86,9 +86,9 @@ func copyWorkSum(goroot string) error {
 }
 
 func instrumentGoMain(goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 24) {
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
 		// src/cmd/go/main.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", execFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", execFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
 	}
 	mainFile := mainFilePath.JoinPrefix(goroot)
 	return patch.EditFile(mainFile, func(content string) (string, error) {

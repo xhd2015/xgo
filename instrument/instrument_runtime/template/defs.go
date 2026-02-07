@@ -8,9 +8,9 @@ func __xgo_get_pc_name_impl(pc uintptr) string {
 
 // start with go1.21, the runtime.FuncForPC(pc).Name()
 // is wrapped in funcNameForPrint(...), we unwrap it.
-// it is confirmed that in go1.21,go1.22 and go1.23,
+// it is confirmed that in go1.21~go1.25,
 // the name is wrapped.
-// NOTE: when upgrading to go1.24, should check
+// NOTE: when upgrading to go1.26, should check
 // the implementation again
 const RuntimeGetFuncName_Go121 = `
 func __xgo_get_pc_name_impl(pc uintptr) string {

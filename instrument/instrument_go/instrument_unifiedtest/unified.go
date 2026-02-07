@@ -25,8 +25,8 @@ var testFile = patch.FilePath{"src", "cmd", "go", "internal", "test", "test.go"}
 
 func Unify(goroot string, goVersion *goinfo.GoVersion) error {
 	// src/cmd/go/internal/test
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 24) {
-		return fmt.Errorf("unified test unsupported version: go%d.%d, available: go1.17~go1.24", goVersion.Major, goVersion.Minor)
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
+		return fmt.Errorf("unified test unsupported version: go%d.%d, available: go1.17~go1.25", goVersion.Major, goVersion.Minor)
 	}
 
 	err := copyFiles(internalTestPath.JoinPrefix(goroot))
@@ -89,8 +89,8 @@ func copyXgoTestunified(targetDir string) error {
 
 func instrumentTestUnifyAndCleanup(goroot string, goVersion *goinfo.GoVersion) error {
 	fileName := testFile.JoinPrefix()
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 24) {
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", fileName, goVersion.Major, goVersion.Minor)
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", fileName, goVersion.Major, goVersion.Minor)
 	}
 
 	return patch.EditFile(filepath.Join(goroot, fileName), func(content string) (string, error) {

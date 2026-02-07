@@ -13,9 +13,9 @@ var timeSleepPath = patch.FilePath{"src", "time", "sleep.go"}
 var runtimeTimePath = patch.FilePath{"src", "runtime", "time.go"}
 
 func instrumentTimeNow(goroot string, goMajor int, goMinor int) error {
-	if goMajor != 1 || (goMinor < 17 || goMinor > 24) {
+	if goMajor != 1 || (goMinor < 17 || goMinor > 25) {
 		// src/time/time.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", timePath.JoinPrefix(""), goMajor, goMinor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", timePath.JoinPrefix(""), goMajor, goMinor)
 	}
 	timeFile := timePath.JoinPrefix(goroot)
 	return patch.EditFile(timeFile, func(content string) (string, error) {
@@ -44,9 +44,9 @@ func instrumentTimeNow(goroot string, goMajor int, goMinor int) error {
 }
 
 func instrumentTimeSleep(goroot string, goMajor int, goMinor int) error {
-	if goMajor != 1 || (goMinor < 17 || goMinor > 24) {
+	if goMajor != 1 || (goMinor < 17 || goMinor > 25) {
 		// src/time/sleep.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", timeSleepPath.JoinPrefix(""), goMajor, goMinor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", timeSleepPath.JoinPrefix(""), goMajor, goMinor)
 	}
 	timeFile := timeSleepPath.JoinPrefix(goroot)
 	return patch.EditFile(timeFile, func(content string) (string, error) {
@@ -66,9 +66,9 @@ func instrumentTimeSleep(goroot string, goMajor int, goMinor int) error {
 }
 
 func instrumentRuntimeTimeSleep(goroot string, goMajor int, goMinor int) error {
-	if goMajor != 1 || (goMinor < 17 || goMinor > 24) {
+	if goMajor != 1 || (goMinor < 17 || goMinor > 25) {
 		// src/runtime/time.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", runtimeTimePath.JoinPrefix(""), goMajor, goMinor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", runtimeTimePath.JoinPrefix(""), goMajor, goMinor)
 	}
 	timeFile := runtimeTimePath.JoinPrefix(goroot)
 	return patch.EditFile(timeFile, func(content string) (string, error) {
