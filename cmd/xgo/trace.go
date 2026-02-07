@@ -279,6 +279,11 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 		return nil, err
 	}
 
+	// Copy go.sum alongside go.mod so -modfile can find it
+	goSum := strings.TrimSuffix(goMod, "go.mod") + "go.sum"
+	tmpGoSum := strings.TrimSuffix(tmpGoMod, "go.mod") + "go.sum"
+	_ = filecopy.CopyFileAll(goSum, tmpGoSum) // best-effort: go.sum may not exist
+
 	// use -modfile ?
 	var modfile string
 	var mod string
