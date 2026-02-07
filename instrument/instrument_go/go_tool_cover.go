@@ -45,9 +45,9 @@ func copyXgoCover(goroot string) error {
 }
 
 func instrumentCmdCover(goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 24) {
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
 		// src/cmd/cover/cover.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", coverFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", coverFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
 	}
 	coverFile := coverFilePath.JoinPrefix(goroot)
 

@@ -49,9 +49,9 @@ func instrumentPkgLoad(goroot string, goVersion *goinfo.GoVersion) error {
 		// see https://github.com/xhd2015/xgo/issues/318#issuecomment-2809243930
 		return nil
 	}
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 24) {
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
 		// src/cmd/go/internal/load/pkg.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", srcCmdGoLoadPkgPath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", srcCmdGoLoadPkgPath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
 	}
 	pkgFile := srcCmdGoLoadPkgPath.JoinPrefix(goroot)
 	return patch.EditFile(pkgFile, func(content string) (string, error) {

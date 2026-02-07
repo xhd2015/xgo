@@ -1134,8 +1134,8 @@ func checkGoVersion(goroot string, needCheckVersion bool) (*goinfo.GoVersion, er
 	}
 	if needCheckVersion {
 		minor := goVersion.Minor
-		if goVersion.Major != 1 || (minor < 17 || minor > 24) {
-			return nil, fmt.Errorf("xgo only support go1.17 ~ go1.24, current: %s", goVersionStr)
+		if goVersion.Major != 1 || (minor < 17 || minor > 25) {
+			return nil, fmt.Errorf("xgo only support go1.17 ~ go1.25, current: %s", goVersionStr)
 		}
 	}
 	return goVersion, nil

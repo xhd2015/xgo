@@ -13,9 +13,9 @@ var xgoWorkSumFilePath = internalWorkPath.Append("xgo_work_sum.go") // src/cmd/g
 
 // instrumentExec instrument the internal exec.go to fix coverage with -overlay
 func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 24) {
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
 		// src/cmd/go/internal/work/exec.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.24", execFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", execFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
 	}
 	execFile := execFilePath.JoinPrefix(goroot)
 
@@ -26,40 +26,50 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 		if goVersion.Minor < 24 {
 			getActualFile = "__xgo_overlay_source_file, _ := fsys.OverlayPath(sourceFile);"
 		}
+		// In go1.25, b.cover call changed from "if err := b.cover(" to "if newoutfiles, err := b.cover("
+		coverCallAnchor := "if err := b.cover("
+		if goVersion.Minor >= 25 {
+			coverCallAnchor = "if newoutfiles, err := b.cover("
+		}
 		switch goVersion.Minor {
 		case 20, 21:
 			coverLine = `if p.Internal.CoverMode != "" {`
 		case 18, 19, 17:
 			coverLine = `if a.Package.Internal.CoverMode != "" {`
 		}
-		content = patch.UpdateContent(content,
-			"/*<begin fix_cover_overlay_var_declare>*/",
-			"/*<end fix_cover_overlay_var_declare>*/",
-			[]string{
-				"func (b *Builder) build(",
-				coverLine,
-				"if err := b.cover(",
-			},
-			2,
-			patch.UpdatePosition_Before,
-			getActualFile,
-		)
-		content = patch.UpdateContent(content,
-			"/*<begin fix_cover_overlay_var_replace>*/",
-			"/*<end fix_cover_overlay_var_replace>*/",
-			[]string{
-				"func (b *Builder) build(",
-				coverLine,
-				"if err := b.cover(",
-				"sourceFile,",
-			},
-			3,
-			patch.UpdatePosition_Replace,
-			"__xgo_overlay_source_file,",
-		)
+		// In go1.25, sourceFile is no longer passed directly to b.cover - it goes
+		// through infiles. So the var_declare and var_replace patches only apply to <go1.25.
+		if goVersion.Minor < 25 {
+			content = patch.UpdateContent(content,
+				"/*<begin fix_cover_overlay_var_declare>*/",
+				"/*<end fix_cover_overlay_var_declare>*/",
+				[]string{
+					"func (b *Builder) build(",
+					coverLine,
+					coverCallAnchor,
+				},
+				2,
+				patch.UpdatePosition_Before,
+				getActualFile,
+			)
+			content = patch.UpdateContent(content,
+				"/*<begin fix_cover_overlay_var_replace>*/",
+				"/*<end fix_cover_overlay_var_replace>*/",
+				[]string{
+					"func (b *Builder) build(",
+					coverLine,
+					coverCallAnchor,
+					"sourceFile,",
+				},
+				3,
+				patch.UpdatePosition_Replace,
+				"__xgo_overlay_source_file,",
+			)
+		}
 		// redesign
-		if goVersion.Minor >= 20 {
-			// fmt.Fprintf(os.Stderr, "DEBUG content: \n%s\n", content)
+		if goVersion.Minor >= 20 && goVersion.Minor < 25 {
+			// In go1.25, CoverageRedesign is the default and the cfg.Experiment check was removed.
+			// The infiles append is now unconditional within the cover mode block.
 			content = patch.UpdateContent(content,
 				"/*<begin modify_infiles>*/",
 				"/*<end modify_infiles>*/",
@@ -70,6 +80,21 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 					"infiles = append(infiles, sourceFile)",
 				},
 				3,
+				patch.UpdatePosition_Replace,
+				strings.TrimSuffix(getActualFile, ";")+";"+"infiles = append(infiles, __xgo_overlay_source_file)",
+			)
+		}
+		if goVersion.Minor >= 25 {
+			// In go1.25, CoverageRedesign is always on, so infiles append is unconditional
+			content = patch.UpdateContent(content,
+				"/*<begin modify_infiles>*/",
+				"/*<end modify_infiles>*/",
+				[]string{
+					"func (b *Builder) build(",
+					coverLine,
+					"infiles = append(infiles, sourceFile)",
+				},
+				2,
 				patch.UpdatePosition_Replace,
 				strings.TrimSuffix(getActualFile, ";")+";"+"infiles = append(infiles, __xgo_overlay_source_file)",
 			)
