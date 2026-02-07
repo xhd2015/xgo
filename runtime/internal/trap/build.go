@@ -300,8 +300,12 @@ func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterce
 			}
 			var ctx context.Context = context.TODO()
 			if funcInfo.FirstArgCtx {
-				ptr := args[0].(*context.Context)
-				ctx = *ptr
+				argCtx := reflect.ValueOf(args[0]).Elem().Interface()
+				if argCtx != nil {
+					if expectCtx, ok := argCtx.(context.Context); ok {
+						ctx = expectCtx
+					}
+				}
 			}
 			data, err := preInterceptor(ctx, funcInfo, argObj, resObject)
 			if err != nil {
