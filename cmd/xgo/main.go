@@ -698,7 +698,7 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		needLocalRuntime := goVersion.Minor >= 25
 		if enableStackTrace || needUpgrade || needLocalRuntime {
 			// check if xgo/runtime ready
-			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, needUpgrade, remainArgs)
+			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, needUpgrade || needLocalRuntime, remainArgs)
 			if impRuntimeErr != nil {
 				// can be silently ignored
 				if enableStackTrace {
