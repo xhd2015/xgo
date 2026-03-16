@@ -9,9 +9,9 @@ import (
 const enableCyclicDetect = false
 
 func instrumentJsonEncoding(goroot string, goMajor int, goMinor int) error {
-	if goMajor != 1 || (goMinor < 17 || goMinor > 25) {
+	if goMajor != 1 || (goMinor < 17 || goMinor > 26) {
 		// src/encoding/json/encode.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", jsonEncodingPath.JoinPrefix(""), goMajor, goMinor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.26", jsonEncodingPath.JoinPrefix(""), goMajor, goMinor)
 	}
 	return patch.EditFile(jsonEncodingPath.JoinPrefix(goroot), func(content string) (string, error) {
 		content = patch.UpdateContent(content,

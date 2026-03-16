@@ -26,7 +26,7 @@ func PatchNoder(goroot string, goVersion *goinfo.GoVersion) error {
 			noderFiles = NoderFiles_1_17
 		} else if minor == goinfo.GO_VERSION_20 {
 			noderFiles = NoderFiles_1_20
-		} else if minor >= goinfo.GO_VERSION_21 && minor <= goinfo.GO_VERSION_25 {
+		} else if minor >= goinfo.GO_VERSION_21 && minor <= goinfo.GO_VERSION_26 {
 			noderFiles = NoderFiles_1_21
 		} else {
 			return fmt.Errorf("patch compiler noder:unsupported: %v", goVersion)

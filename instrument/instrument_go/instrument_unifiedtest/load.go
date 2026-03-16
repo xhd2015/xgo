@@ -14,17 +14,22 @@ var loadTestFile = patch.FilePath{"src", "cmd", "go", "internal", "load", "test.
 
 func instrumentLoadTest(goroot string, goVersion *goinfo.GoVersion) error {
 	fileName := loadTestFile.JoinPrefix()
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", fileName, goVersion.Major, goVersion.Minor)
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 26) {
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.26", fileName, goVersion.Major, goVersion.Minor)
 	}
 	file := filepath.Join(goroot, fileName)
 
 	return patch.EditFile(file, func(content string) (string, error) {
+		// In go1.26, TestPackagesAndErrors signature changed to include loaderstate param
+		testPkgsAnchor := "func TestPackagesAndErrors(ctx context.Context,"
+		if goVersion.Minor >= 26 {
+			testPkgsAnchor = "func TestPackagesAndErrors(loaderstate *modload.State, ctx context.Context,"
+		}
 		content = patch.UpdateContent(content,
 			"/*<begin declare_XgoAfterGenerateTestMain>*/",
 			"/*<end declare_XgoAfterGenerateTestMain>*/",
 			[]string{
-				"func TestPackagesAndErrors(ctx context.Context,",
+				testPkgsAnchor,
 			},
 			0,
 			patch.UpdatePosition_Before,
@@ -35,7 +40,7 @@ func instrumentLoadTest(goroot string, goVersion *goinfo.GoVersion) error {
 			"/*<begin call_XgoAfterGenerateTestMain>*/",
 			"/*<end call_XgoAfterGenerateTestMain>*/",
 			[]string{
-				"func TestPackagesAndErrors(ctx context.Context,",
+				testPkgsAnchor,
 				", err := formatTestmain(t)",
 			},
 			1,

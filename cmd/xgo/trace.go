@@ -139,9 +139,15 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 	}
 
 	pkgArgs := getPkgArgs(args)
-	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, overlayDir)
-	if err != nil {
-		return nil, err
+	// Skip blank imports when the main module is the xgo runtime itself,
+	// as adding import _ "runtime/trace" to runtime/core would create a cycle.
+	var fileReplace map[string]string
+	if mainModule != constants.RUNTIME_MODULE {
+		var err2 error
+		fileReplace, err2 = addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, overlayDir)
+		if err2 != nil {
+			return nil, err2
+		}
 	}
 
 	absFileReplace := make(map[overlay.AbsFile]overlay.AbsFile, len(fileReplace))
@@ -381,13 +387,19 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 	}
 
 	logDebug("require %s v%s, replaced: %s", constants.RUNTIME_MODULE, VERSION, tmpRuntime)
-	err = cmd.Env([]string{
-		"GOROOT=" + goroot,
-	}).Run(goBinary, "mod", "edit",
+	modEditArgs := []string{"mod", "edit",
 		fmt.Sprintf("-require=%s@v%s", constants.RUNTIME_MODULE, VERSION),
 		fmt.Sprintf("-replace=%s=%s", constants.RUNTIME_MODULE, tmpRuntime),
-		tmpGoMod,
-	)
+	}
+	// In Go 1.26+, 'go mod tidy' is required when using old go directives (e.g. go 1.14)
+	// with require/replace. Bump the go directive to at least 1.18 to avoid this.
+	if goVersion.Minor >= 26 {
+		modEditArgs = append(modEditArgs, fmt.Sprintf("-go=%d.%d", goVersion.Major, goVersion.Minor))
+	}
+	modEditArgs = append(modEditArgs, tmpGoMod)
+	err = cmd.Env([]string{
+		"GOROOT=" + goroot,
+	}).Run(goBinary, modEditArgs...)
 	logDebug("copy and edit go.mod: %s", tmpGoMod)
 	if err != nil {
 		return nil, err

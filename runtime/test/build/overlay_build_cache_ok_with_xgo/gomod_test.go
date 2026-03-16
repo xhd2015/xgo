@@ -50,15 +50,25 @@ func TestGoModNonOverlayFirstShouldNotError(t *testing.T) {
 		if afterErr == nil {
 			t.Errorf("expect cache+overlay combination error, actual nil")
 		}
-		expectContains := "could not import runtime (open : no such file or directory)"
-		if runtime.GOOS == "windows" {
-			expectContains = "could not import runtime (open : The system cannot find the file specified.)"
-		}
 		errOutStr := errOut.String()
-		if !strings.Contains(errOutStr, expectContains) {
-			t.Errorf("expect containing %q, actual none", expectContains)
-			t.Logf("DEBUG: %s", errOutStr)
-			return
+		// Go 1.25+ forbids GOMODCACHE overlays entirely, giving a different error
+		if goMinor >= 25 {
+			expectContains := "must not be replaced"
+			if !strings.Contains(errOutStr, expectContains) {
+				t.Errorf("expect containing %q, actual none", expectContains)
+				t.Logf("DEBUG: %s", errOutStr)
+				return
+			}
+		} else {
+			expectContains := "could not import runtime (open : no such file or directory)"
+			if runtime.GOOS == "windows" {
+				expectContains = "could not import runtime (open : The system cannot find the file specified.)"
+			}
+			if !strings.Contains(errOutStr, expectContains) {
+				t.Errorf("expect containing %q, actual none", expectContains)
+				t.Logf("DEBUG: %s", errOutStr)
+				return
+			}
 		}
 	} else {
 		if afterErr != nil {
@@ -68,6 +78,15 @@ func TestGoModNonOverlayFirstShouldNotError(t *testing.T) {
 }
 
 func TestGoModNonOverlayLaterShouldSucceed(t *testing.T) {
+	goMinor, err := getGo1MinorVersion()
+	if err != nil {
+		t.Fatalf("failed to get go minor version: %v", err)
+	}
+	// Go 1.25+ forbids overlays for files in GOMODCACHE
+	if goMinor >= 25 {
+		t.Skip("Go 1.25+ forbids GOMODCACHE overlays")
+	}
+
 	overlayFile, err := setupReverse("gomod_later")
 	if err != nil {
 		t.Fatalf("failed to setup reverse: %v", err)

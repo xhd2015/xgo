@@ -14,8 +14,8 @@ var test2jsonFile = patch.FilePath{"src", "cmd", "internal", "test2json", "test2
 
 func instrumentTest2json(goroot string, goVersion *goinfo.GoVersion) error {
 	fileName := test2jsonFile.JoinPrefix()
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", fileName, goVersion.Major, goVersion.Minor)
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 26) {
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.26", fileName, goVersion.Major, goVersion.Minor)
 	}
 	file := filepath.Join(goroot, fileName)
 

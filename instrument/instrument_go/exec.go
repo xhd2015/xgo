@@ -13,9 +13,9 @@ var xgoWorkSumFilePath = internalWorkPath.Append("xgo_work_sum.go") // src/cmd/g
 
 // instrumentExec instrument the internal exec.go to fix coverage with -overlay
 func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 26) {
 		// src/cmd/go/internal/work/exec.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", execFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.26", execFilePath.JoinPrefix(""), goVersion.Major, goVersion.Minor)
 	}
 	execFile := execFilePath.JoinPrefix(goroot)
 
@@ -84,8 +84,9 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 				strings.TrimSuffix(getActualFile, ";")+";"+"infiles = append(infiles, __xgo_overlay_source_file)",
 			)
 		}
-		if goVersion.Minor >= 25 {
+		if goVersion.Minor == 25 {
 			// In go1.25, CoverageRedesign is always on, so infiles append is unconditional
+			// but still inside func (b *Builder) build(
 			content = patch.UpdateContent(content,
 				"/*<begin modify_infiles>*/",
 				"/*<end modify_infiles>*/",
@@ -95,6 +96,21 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 					"infiles = append(infiles, sourceFile)",
 				},
 				2,
+				patch.UpdatePosition_Replace,
+				strings.TrimSuffix(getActualFile, ";")+";"+"infiles = append(infiles, __xgo_overlay_source_file)",
+			)
+		}
+		if goVersion.Minor >= 26 {
+			// In go1.26, coverage logic was moved from build() to runCover().
+			// The infiles append is in func (b *Builder) runCover(, unconditional.
+			content = patch.UpdateContent(content,
+				"/*<begin modify_infiles>*/",
+				"/*<end modify_infiles>*/",
+				[]string{
+					"func (b *Builder) runCover(",
+					"infiles = append(infiles, sourceFile)",
+				},
+				1,
 				patch.UpdatePosition_Replace,
 				strings.TrimSuffix(getActualFile, ";")+";"+"infiles = append(infiles, __xgo_overlay_source_file)",
 			)

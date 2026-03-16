@@ -91,9 +91,15 @@ func TestFuncTab(t *testing.T) {
 	}
 	allFuncInfos := functab.GetFuncs()
 	funcInfos := make([]*core.FuncInfo, 0, len(allFuncInfos))
+	const thisPkg = "github.com/xhd2015/xgo/runtime/test/functab"
 	for _, fnInfo := range allFuncInfos {
 		// because we added --trap-stdlib=true,..., so filter them out
 		if fnInfo.Stdlib {
+			continue
+		}
+		// filter to only functions from this package to avoid
+		// picking up xgo runtime functions (e.g. trace.Trace)
+		if fnInfo.Pkg != thisPkg {
 			continue
 		}
 		funcInfos = append(funcInfos, fnInfo)

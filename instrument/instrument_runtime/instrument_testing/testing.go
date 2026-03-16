@@ -15,8 +15,8 @@ var testingFile = patch.FilePath{"src", "testing", "testing.go"}
 
 func Instrument(goroot string, goVersion *goinfo.GoVersion) error {
 	fileName := testingFile.JoinPrefix()
-	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 25) {
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", fileName, goVersion.Major, goVersion.Minor)
+	if goVersion.Major != 1 || (goVersion.Minor < 17 || goVersion.Minor > 26) {
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.26", fileName, goVersion.Major, goVersion.Minor)
 	}
 
 	return patch.EditFile(filepath.Join(goroot, fileName), func(content string) (string, error) {

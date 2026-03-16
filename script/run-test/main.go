@@ -56,7 +56,8 @@ type TestConfig struct {
 	UsePrebuiltXgo bool
 	BuildOnly      bool // implies test -c -o /dev/null
 
-	Go string // minimal go version
+	Go    string // minimal go version
+	GoMax string // maximal go version (exclusive)
 
 	Args            []string
 	Flags           []string
@@ -571,6 +572,17 @@ func main() {
 				}
 				if goVersion.Major < testGoVersion.Major || goVersion.Minor < testGoVersion.Minor {
 					// skipped
+					continue
+				}
+			}
+			if testArg.GoMax != "" {
+				testGoMaxVersion, err := goinfo.ParseGoVersionNumber(testArg.GoMax)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "invalid go-max version: %v\n", err)
+					os.Exit(1)
+				}
+				if goVersion.Major > testGoMaxVersion.Major || (goVersion.Major == testGoMaxVersion.Major && goVersion.Minor >= testGoMaxVersion.Minor) {
+					// skipped: current go version is >= max
 					continue
 				}
 			}

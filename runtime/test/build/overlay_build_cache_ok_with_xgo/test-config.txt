@@ -1,0 +1,2 @@
+# Go 1.25+ forbids GOMODCACHE overlays, so this test cannot work as designed
+go-max: 1.25

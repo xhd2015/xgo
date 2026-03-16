@@ -1,3 +1,5 @@
-# only go1.20 allows this flag
+# only go1.20~go1.24 allows this flag
+# go1.25+ made CoverageRedesign the default and removed the experiment
 go: 1.20
+go-max: 1.25
 env: GOEXPERIMENT=nocoverageredesign
