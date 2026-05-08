@@ -45,3 +45,5 @@ __debug_bin*
 
 cover.out
 **/.xgo/gen
+
+/go-patch-diff/
