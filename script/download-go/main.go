@@ -1,9 +1,11 @@
 package main
 
 import (
+	"archive/zip"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -19,8 +21,10 @@ import (
 
 const downloadListURL = "https://go.dev/dl"
 
-// download link example: https://go.dev/dl/go1.22.1.linux-386.tar.gz
-const baseNameTemplate = "go%s.%s-%s.tar.gz"
+// download link examples:
+//   https://go.dev/dl/go1.22.1.linux-386.tar.gz
+//   https://go.dev/dl/go1.22.1.windows-amd64.zip
+const baseNameTemplate = "go%s.%s-%s%s"
 const downloadLinkPrefix = "https://go.dev/dl/"
 
 const goReleaseDir = "go-release"
@@ -132,7 +136,7 @@ func downloadGo(ctx context.Context, version string, downloadDir string) error {
 		return err
 	}
 
-	baseName := fmt.Sprintf(baseNameTemplate, nakedVersion, goos, goarch)
+	baseName := fmt.Sprintf(baseNameTemplate, nakedVersion, goos, goarch, getArchiveSuffix(goos))
 	downloadLink := downloadLinkPrefix + baseName
 
 	goDirName := filepath.Join(downloadDir, "go"+nakedVersion)
@@ -164,12 +168,12 @@ func downloadGo(ctx context.Context, version string, downloadDir string) error {
 		return err
 	}
 
-	goTmpDir, err := os.MkdirTemp(".", "go")
+	goTmpDir, err := os.MkdirTemp(downloadDir, "go-extract-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(goTmpDir)
-	err = cmd_exec.Run("tar", "-C", goTmpDir, "-xzf", downloadFile)
+	err = extractArchive(downloadFile, goTmpDir)
 	if err != nil {
 		return err
 	}
@@ -181,6 +185,82 @@ func downloadGo(ctx context.Context, version string, downloadDir string) error {
 }
 func curlDownload(url string, file string) error {
 	return cmd_exec.Run("curl"+osinfo.EXE_SUFFIX, "-L", "-o", file, url)
+}
+
+func getArchiveSuffix(goos string) string {
+	if goos == "windows" {
+		return ".zip"
+	}
+	return ".tar.gz"
+}
+
+func extractArchive(archiveFile string, targetDir string) error {
+	if strings.HasSuffix(archiveFile, ".zip") {
+		return unzip(archiveFile, targetDir)
+	}
+	return cmd_exec.Run("tar", "-C", targetDir, "-xzf", archiveFile)
+}
+
+func unzip(zipFile string, targetDir string) error {
+	r, err := zip.OpenReader(zipFile)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		name := filepath.Clean(f.Name)
+		fullPath := filepath.Join(targetDir, name)
+		rel, err := filepath.Rel(targetDir, fullPath)
+		if err != nil {
+			return err
+		}
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("zip entry escapes target dir: %s", f.Name)
+		}
+
+		if f.FileInfo().IsDir() {
+			err = os.MkdirAll(fullPath, 0755)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		err = os.MkdirAll(filepath.Dir(fullPath), 0755)
+		if err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+
+		perm := f.Mode().Perm()
+		if perm == 0 {
+			perm = 0644
+		}
+		w, err := os.OpenFile(fullPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
+		if err != nil {
+			rc.Close()
+			return err
+		}
+
+		_, copyErr := io.Copy(w, rc)
+		closeErr := w.Close()
+		rcErr := rc.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if rcErr != nil {
+			return rcErr
+		}
+	}
+	return nil
 }
 
 type DownloadInfo struct {
