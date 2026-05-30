@@ -1,0 +1,18 @@
+<patch xgo_gc_main_import>
+# Description: Import xgo_patch package into the Go compiler's main package.
+# The xgo_patch package contains AST/IR rewriting hooks called during compilation.
+# Inserted after: package gc
+# After: package gc\n;import xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"
+match package gc
+insert_after ;import xgo_patch "cmd/compile/internal/xgo_rewrite_internal/patch"
+</patch>
+
+<patch xgo_gc_main_call>
+# Description: Call xgo_patch.Patch() after compiler initialization.
+# This triggers xgo's AST/IR rewriting pass after InitRuntime and InitConfig.
+# Inserted after: ssagen.InitConfig()
+# After: ssagen.InitConfig()\n;xgo_patch.Patch()
+goto func Main
+match ssagen.InitConfig()
+insert_after ;xgo_patch.Patch()
+</patch>

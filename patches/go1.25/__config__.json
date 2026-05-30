@@ -1,0 +1,23 @@
+{
+  "version": "go1.25+",
+  "copy": [
+    {"from": "patch/", "to": "src/cmd/compile/internal/xgo_rewrite_internal/patch/"}
+  ],
+  "generate": [
+    {
+      "cmd": "go run ${XGO_SRC}/script/generate-mkbuiltin/main.go --orig-goroot=${ORIG_GOROOT} --output-goroot=${GOROOT} --go-version=${GO_VERSION}",
+      "outputs": [
+        "src/cmd/compile/internal/typecheck/_builtin/runtime.go",
+        "src/cmd/compile/internal/typecheck/builtin.go"
+      ]
+    },
+    {
+      "cmd": "${GOROOT}/bin/go build -a -o ${GOROOT}/pkg/tool/${GOOS}_${GOARCH}/compile ${GOROOT}/src/cmd/compile",
+      "outputs": []
+    },
+    {
+      "cmd": "${GOROOT}/bin/go build -a -o ${GOROOT}/bin/go ${GOROOT}/src/cmd/go",
+      "outputs": []
+    }
+  ]
+}

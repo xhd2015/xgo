@@ -1,0 +1,8 @@
+<patch xgo_time_now>
+# Description: Rename time.Now to XgoRealNow so xgo can intercept it.
+# Replaces: func Now() Time
+# With:     func XgoRealNow() Time
+# xgo provides its own Now() that calls XgoRealNow() with trap support.
+find_for_replace func Now() Time
+replace func XgoRealNow() Time
+</patch>

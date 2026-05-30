@@ -1,0 +1,19 @@
+<patch xgo_load_test_declare>
+# Description: Declare XgoAfterGenerateTestMain callback variable.
+# This hook allows xgo to modify the generated test main after it's created.
+# Inserted before: func TestPackagesAndErrors(
+# After: var XgoAfterGenerateTestMain func(...) []byte;\nfunc TestPackagesAndErrors(
+goto func TestPackagesAndErrors
+insert_before var XgoAfterGenerateTestMain func(p *Package, pmain *Package, code []byte) []byte;
+newline
+</patch>
+
+<patch xgo_load_test_call>
+# Description: Call XgoAfterGenerateTestMain after test main is formatted.
+# Modifies the generated test code before it's written.
+# Inserted after: , err := formatTestmain(t)
+# After: ;code = XgoAfterGenerateTestMain(p, pmain, code)
+goto func TestPackagesAndErrors
+match , err := formatTestmain(t)
+insert_after ;code = XgoAfterGenerateTestMain(p, pmain, code)
+</patch>

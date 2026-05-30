@@ -325,6 +325,15 @@ func handleBuild(cmd string, args []string) error {
 		return err
 	}
 
+	useFilePatches, warning, err := resolveUseFilePatches(opts.useFilePatches, goVersion)
+	if err != nil {
+		return err
+	}
+	if warning != "" {
+		fmt.Fprintf(os.Stderr, "%s\n", warning)
+	}
+	opts.useFilePatches = &useFilePatches
+
 	goVersionName := fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch)
 	logDebug("go version: %s", goVersionName)
 
@@ -532,7 +541,7 @@ func handleBuild(cmd string, args []string) error {
 			}
 
 			logDebug("patch runtime at: %s", instrumentGoroot)
-			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, isDevelopment || syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged, isDevelopment)
+			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, isDevelopment || syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged, isDevelopment, *opts.useFilePatches)
 			if err != nil {
 				return err
 			}

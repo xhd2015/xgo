@@ -1,0 +1,43 @@
+<patch xgo_exec_cover_var>
+# Description: Add overlay-aware source file variable before b.cover call.
+# In go1.24, b.cover() returns (error). fsys.Actual checks the overlay
+# to get the real file path when source files are replaced via -overlay.
+# Inserted before: if err := b.cover(a,
+# After: __xgo_overlay_source_file := sourceFile; if _actual := fsys.Actual(...); ...
+#       if err := b.cover(a,
+goto func (b *Builder) build
+match if err := b.cover(a,
+insert_before __xgo_overlay_source_file := sourceFile; if _actual := fsys.Actual(sourceFile); _actual != "" { __xgo_overlay_source_file = _actual; };
+newline
+</patch>
+
+<patch xgo_exec_cover_sourcefile>
+# Description: Replace sourceFile with overlay-aware __xgo_overlay_source_file
+# in the b.cover() call arguments.
+# Replaces: sourceFile,
+# With:     __xgo_overlay_source_file,
+goto func (b *Builder) build
+find_for_replace sourceFile,
+replace __xgo_overlay_source_file,
+</patch>
+
+<patch xgo_exec_cover_infiles>
+# Description: Replace infiles = append(infiles, sourceFile) with overlay-aware version.
+# The replacement adds fsys.Actual check and uses __xgo_overlay_source_file.
+# Replaces: infiles = append(infiles, sourceFile)
+# With:     __xgo_overlay_source_file := sourceFile; ...;infiles = append(infiles, __xgo_overlay_source_file)
+goto func (b *Builder) build
+find_for_replace infiles = append(infiles, sourceFile)
+replace __xgo_overlay_source_file := sourceFile; if _actual := fsys.Actual(sourceFile); _actual != "" { __xgo_overlay_source_file = _actual; };infiles = append(infiles, __xgo_overlay_source_file)
+</patch>
+
+<patch xgo_exec_trap_sum>
+# Description: Add trap sum to build action ID for cache invalidation.
+# When trap configuration changes, the build action ID changes, forcing recompilation.
+# Inserted after: fmt.Fprintf(h, "compile\n")
+# After: ;if xgoSum := getXgoPackageTrapSum(p.ImportPath); xgoSum!="" { fmt.Fprintf(h, "xgo trap sum %s\n", xgoSum); }
+goto func (b *Builder) buildActionID
+match fmt.Fprintf(h, "compile\n")
+insert_after ;if xgoSum := getXgoPackageTrapSum(p.ImportPath); xgoSum!="" { fmt.Fprintf(h, "xgo trap sum %s\n", xgoSum); }
+newline
+</patch>

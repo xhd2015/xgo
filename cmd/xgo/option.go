@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/xhd2015/xgo/support/flag"
+	"github.com/xhd2015/xgo/support/goinfo"
 )
 
 type options struct {
@@ -102,6 +103,11 @@ type options struct {
 	// use unified test mode
 	unified bool
 
+	// --use-file-patches
+	// use file-based .xgo.patch instead of programmatic patching
+	// nil = not set; resolved later based on go version
+	useFilePatches *bool
+
 	remainArgs []string
 
 	testArgs   []string
@@ -173,6 +179,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var deleteFlag bool
 	var goFlag bool
 	var xgoRaceSafe bool
+
+	var useFilePatches *bool
 
 	nArg := len(args)
 
@@ -416,6 +424,24 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			noLineDirective = true
 			continue
 		}
+		if arg == "--use-file-patches" {
+			v := true
+			useFilePatches = &v
+			continue
+		}
+		if strings.HasPrefix(arg, "--use-file-patches=") {
+			val := strings.TrimPrefix(arg, "--use-file-patches=")
+			if val == "true" || val == "" {
+				v := true
+				useFilePatches = &v
+			} else if val == "false" {
+				v := false
+				useFilePatches = &v
+			} else {
+				return nil, fmt.Errorf("--use-file-patches expects true or false, got %q", val)
+			}
+			continue
+		}
 
 		if isDevelopment {
 			debugCompileVal, ok := tryParseOption("--debug-compile", args, &i)
@@ -590,6 +616,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		deleteFlag:      deleteFlag,
 		goFlag:          goFlag,
 		xgoRaceSafe:     xgoRaceSafe,
+		useFilePatches:  useFilePatches,
 	}, nil
 }
 
@@ -686,6 +713,30 @@ func parseStackTraceFlag(arg string) (string, bool) {
 		return "off", true
 	}
 	panic(fmt.Errorf("unrecognized value %s: %s, expects on|off", arg, val))
+}
+
+func resolveUseFilePatches(explicit *bool, goVersion *goinfo.GoVersion) (value bool, warning string, err error) {
+	if explicit == nil {
+		if goVersion != nil && goVersion.Major == 1 && goVersion.Minor == 25 {
+			return true, "", nil
+		}
+		return false, "", nil
+	}
+	if *explicit {
+		if goVersion == nil || !(goVersion.Major == 1 && (goVersion.Minor == 24 || goVersion.Minor == 25)) {
+			ver := "unknown"
+			if goVersion != nil {
+				ver = fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor)
+			}
+			return false, "", fmt.Errorf("--use-file-patches is only supported for go1.24 and go1.25, got %s; use --use-file-patches=false to disable", ver)
+		}
+		return true, "", nil
+	}
+	// explicitly false
+	if goVersion != nil && !(goVersion.Major == 1 && (goVersion.Minor == 24 || goVersion.Minor == 25)) {
+		return false, fmt.Sprintf("WARNING: --use-file-patches is only supported for go1.24 and go1.25, got go%d.%d", goVersion.Major, goVersion.Minor), nil
+	}
+	return false, "", nil
 }
 
 func getPkgArgs(args []string) []string {

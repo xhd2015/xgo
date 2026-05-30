@@ -1,0 +1,29 @@
+<patch xgo_noder_import_syntax>
+# Description: Import xgo_syntax and io packages into the noder.
+# These are used for AST-level syntax rewriting of instrumented packages.
+# Inserted after: package noder
+# After: ;import xgo_io "io";import xgo_syntax "..."
+match package noder
+insert_after ;import xgo_io "io";import xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"
+</patch>
+
+<patch xgo_noder_syntax_call>
+# Description: Call xgo_syntax.AfterFilesParsed after loading packages.
+# Triggers syntax rewriting pass that adds trap calls and function registration.
+# Inserted after: base.Timer.AddEvent(int64(lines), "lines")
+# After: xgo_syntax.AfterFilesParsed(base.Timer, noderFiles)
+goto func LoadPackage
+match base.Timer.AddEvent(int64(lines), "lines")
+insert_after xgo_syntax.AfterFilesParsed(base.Timer, noderFiles)
+newline
+</patch>
+
+<patch xgo_noder_expose_trim>
+# Description: Expose trimFilename function to xgo_syntax package.
+# Registers the compiler's filename trimming function for use in rewriting.
+# Inserted before: func trimFilename(
+# After: func init(){ xgo_syntax.TrimFilename = trimFilename; };\nfunc trimFilename(
+goto func trimFilename
+insert_before func init(){ xgo_syntax.TrimFilename = trimFilename;};
+newline
+</patch>

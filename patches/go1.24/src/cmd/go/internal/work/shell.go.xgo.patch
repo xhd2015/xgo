@@ -1,0 +1,110 @@
+<patch xgo_shell_intercept>
+# Description: Insert dlv debug interception code after the cmdline assignment.
+# When XGO_HELPER_DEBUG_PKG is set, replaces compile with dlv exec for debugging.
+# Uses ; prefix on first line because inline markers place text on same line as match.
+goto func (sh *Shell) runOut
+match str.StringList(cmdargs...)
+insert_after ;var dlvDebug bool
+newline
+insert_after xgoDebugPkg := os.Getenv("XGO_HELPER_DEBUG_PKG")
+newline
+insert_after if xgoDebugPkg!="" {
+newline
+insert_after 	var pkg string
+newline
+insert_after 	for i, arg := range cmdline {
+newline
+insert_after 		if arg == "-p" {
+newline
+insert_after 			if i+1 < len(cmdline) {
+newline
+insert_after 				pkg = cmdline[i+1]
+newline
+insert_after 				break
+newline
+insert_after 			}
+newline
+insert_after 		}
+newline
+insert_after 	}
+newline
+insert_after 	if pkg == xgoDebugPkg {
+newline
+insert_after 		dlvDebug = true
+newline
+insert_after 		base := filepath.Base(cmdline[0])
+newline
+insert_after 		if base == "compile" {
+newline
+insert_after 			cmdline[0] = filepath.Join(filepath.Dir(cmdline[0]), "compile.debug")
+newline
+insert_after 			oldCmdline := cmdline
+newline
+insert_after 			cmdline = []string{
+newline
+insert_after 				"dlv",
+newline
+insert_after 				"exec",
+newline
+insert_after 				"--listen=:2346",
+newline
+insert_after 				"--api-version=2",
+newline
+insert_after 				"--check-go-version=false",
+newline
+insert_after 				"--headless",
+newline
+insert_after 				"--",
+newline
+insert_after 			}
+newline
+insert_after 			cmdline = append(cmdline, oldCmdline...)
+newline
+insert_after 		}
+newline
+insert_after 	}
+newline
+insert_after }
+</patch>
+
+<patch xgo_shell_pipeoutput>
+# Description: When dlvDebug is true, pipe stdout/stderr to MultiWriter.
+# Uses ; prefix because inline markers place text on same line as match.
+goto func (sh *Shell) runOut
+match start := time.Now()
+insert_after ;if dlvDebug {
+newline
+insert_after 	cmd.Stdout = io.MultiWriter(cmd.Stdout, os.Stdout)
+newline
+insert_after 	cmd.Stderr = io.MultiWriter(cmd.Stderr, os.Stderr)
+newline
+insert_after 	fmt.Fprintf(os.Stderr, "VSCode: add the following config to .vscode/launch.json:\n%s\nThen set breakpoint at %s\n", `{
+newline
+insert_after     "configurations": [
+newline
+insert_after         {
+newline
+insert_after             "name": "Debug dlv localhost:2346",
+newline
+insert_after             "type": "go",
+newline
+insert_after             "debugAdapter": "dlv-dap",
+newline
+insert_after             "request": "attach",
+newline
+insert_after             "mode": "remote",
+newline
+insert_after             "port": 2346,
+newline
+insert_after             "host": "127.0.0.1",
+newline
+insert_after             "cwd": "./"
+newline
+insert_after         }
+newline
+insert_after     ]
+newline
+insert_after }`, runtime.GOROOT() + "/src/cmd/compile/main.go")
+newline
+insert_after }
+</patch>

@@ -1,0 +1,8 @@
+<patch xgo_runtime_time_linkname>
+# Description: Redirect the go:linkname from time.Sleep to time.XgoRealSleep.
+# This allows xgo to intercept time.Sleep calls via function trapping.
+# Replaces: //go:linkname timeSleep time.Sleep
+# With:     //go:linkname timeSleep time.XgoRealSleep
+find_for_replace //go:linkname timeSleep time.Sleep
+replace //go:linkname timeSleep time.XgoRealSleep
+</patch>

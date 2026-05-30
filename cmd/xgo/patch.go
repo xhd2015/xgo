@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -34,7 +35,7 @@ type _FilePath = patch.FilePath
 // assume go 1.20
 // the patch should be idempotent
 // the origGoroot is used to generate runtime defs, see https://github.com/xhd2015/xgo/issues/4#issuecomment-2017880791
-func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrCoreRevisionChanged bool, allowDebugCompile bool) error {
+func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrCoreRevisionChanged bool, allowDebugCompile bool, useFilePatches bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
@@ -43,6 +44,22 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 	}
 	if !isDevelopment && !resetOrCoreRevisionChanged {
 		return nil
+	}
+
+	if useFilePatches && goVersion.Minor >= 24 {
+		patchDir := filepath.Join(xgoSrc, "patches", fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor))
+		if _, err := os.Stat(patchDir); os.IsNotExist(err) {
+			return fmt.Errorf("file-based patch directory not found: %s", patchDir)
+		}
+		extraEnv := map[string]string{
+			"XGO_SRC":       xgoSrc,
+			"GOROOT":        goroot,
+			"ORIG_GOROOT":   origGoroot,
+			"GO_VERSION":    fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch),
+			"GOOS":          runtime.GOOS,
+			"GOARCH":        runtime.GOARCH,
+		}
+		return patch.ApplyPatches(patchDir, goroot, xgoSrc, extraEnv)
 	}
 
 	// instrument go
