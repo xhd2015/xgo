@@ -209,56 +209,56 @@ func unzip(zipFile string, targetDir string) error {
 	defer r.Close()
 
 	for _, f := range r.File {
-		name := filepath.Clean(f.Name)
-		fullPath := filepath.Join(targetDir, name)
-		rel, err := filepath.Rel(targetDir, fullPath)
-		if err != nil {
+		if err := unzipFile(f, targetDir); err != nil {
 			return err
 		}
-		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return fmt.Errorf("zip entry escapes target dir: %s", f.Name)
-		}
+	}
+	return nil
+}
 
-		if f.FileInfo().IsDir() {
-			err = os.MkdirAll(fullPath, 0755)
-			if err != nil {
-				return err
-			}
-			continue
-		}
+func unzipFile(f *zip.File, targetDir string) (err error) {
+	name := filepath.Clean(f.Name)
+	fullPath := filepath.Join(targetDir, name)
 
-		err = os.MkdirAll(filepath.Dir(fullPath), 0755)
-		if err != nil {
-			return err
-		}
+	rel, err := filepath.Rel(targetDir, fullPath)
+	if err != nil {
+		return err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("zip entry escapes target dir: %s", f.Name)
+	}
 
-		rc, err := f.Open()
-		if err != nil {
-			return err
-		}
+	if f.FileInfo().IsDir() {
+		return os.MkdirAll(fullPath, 0755)
+	}
 
-		perm := f.Mode().Perm()
-		if perm == 0 {
-			perm = 0644
-		}
-		w, err := os.OpenFile(fullPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
-		if err != nil {
-			rc.Close()
-			return err
-		}
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return err
+	}
 
-		_, copyErr := io.Copy(w, rc)
-		closeErr := w.Close()
-		rcErr := rc.Close()
-		if copyErr != nil {
-			return copyErr
+	rc, err := f.Open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+
+	perm := f.Mode().Perm()
+	if perm == 0 {
+		perm = 0644
+	}
+	w, err := os.OpenFile(fullPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cerr := w.Close()
+		if err == nil {
+			err = cerr
 		}
-		if closeErr != nil {
-			return closeErr
-		}
-		if rcErr != nil {
-			return rcErr
-		}
+	}()
+
+	if _, err = io.Copy(w, rc); err != nil {
+		return err
 	}
 	return nil
 }
