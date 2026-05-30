@@ -243,9 +243,13 @@ func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func
 
 		var ctx context.Context = context.TODO()
 		if funcInfo.FirstArgCtx {
-			// see https://github.com/xhd2015/xgo/issues/316
-			ptr := args[0].(*context.Context)
-			ctx = *ptr
+			// see https://github.com/xhd2015/xgo/issues/316 and https://github.com/xhd2015/xgo/issues/377
+			argCtx := reflect.ValueOf(args[0]).Elem().Interface()
+			if argCtx != nil {
+				if expectCtx, ok := argCtx.(context.Context); ok {
+					ctx = expectCtx
+				}
+			}
 		}
 
 		err := interceptor(ctx, funcInfo, argObj, resObject)
@@ -352,8 +356,13 @@ func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterce
 			}
 			var ctx context.Context = context.TODO()
 			if funcInfo.FirstArgCtx {
-				ptr := args[0].(*context.Context)
-				ctx = *ptr
+				// see https://github.com/xhd2015/xgo/issues/377
+				argCtx := reflect.ValueOf(args[0]).Elem().Interface()
+				if argCtx != nil {
+					if expectCtx, ok := argCtx.(context.Context); ok {
+						ctx = expectCtx
+					}
+				}
 			}
 			err := postInterceptor(ctx, funcInfo, argObj, resObject, data)
 			if err != nil {

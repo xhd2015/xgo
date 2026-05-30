@@ -19,6 +19,10 @@ func Greet(ctx context.Context, name string) (string, error) {
 	return "hello " + name, nil
 }
 
+func GreetCustomCtx(c *CustomContext, name string) (string, error) {
+	return "hello " + name, nil
+}
+
 func TestFuncCtx(t *testing.T) {
 	mock.Mock(Greet, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
 		results.GetFieldIndex(0).Set("mock " + args.GetFieldIndex(1).Value().(string))
@@ -58,6 +62,21 @@ func TestMethodReceiverCtx(t *testing.T) {
 	})
 
 	results, err := svc.Greet(context.Background(), "world")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if results != "mock world" {
+		t.Fatal("results not equal")
+	}
+}
+
+func TestMockFuncCustomCtxDirectParam(t *testing.T) {
+	mock.Mock(GreetCustomCtx, func(ctx context.Context, fn *core.FuncInfo, args, results core.Object) error {
+		results.GetFieldIndex(0).Set("mock " + args.GetFieldIndex(1).Value().(string))
+		return nil
+	})
+
+	results, err := GreetCustomCtx(NewCustomContext(), "world")
 	if err != nil {
 		t.Fatal(err)
 	}

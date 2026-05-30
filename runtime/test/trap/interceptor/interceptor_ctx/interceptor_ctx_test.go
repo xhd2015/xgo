@@ -68,6 +68,10 @@ func TestTypeFuncReceiverCtx(t *testing.T) {
 	}
 }
 
+func GreetCustomCtx(c *CustomContext, name string) (string, error) {
+	return "hello " + name, nil
+}
+
 // always expect func receiver ctx
 func TestMethodReceiverCtx(t *testing.T) {
 	svc := &Service{}
