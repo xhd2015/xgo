@@ -1,27 +1,3 @@
-<patch xgo_exec_cover_var>
-# Description: Add overlay-aware source file variable before b.cover call.
-# In go1.25, b.cover() returns (newoutfiles, err). fsys.Actual checks the overlay
-# to get the real file path when source files are replaced via -overlay.
-# Inserted before: if newoutfiles, err := b.cover(
-# After: __xgo_overlay_source_file := sourceFile; if _actual := fsys.Actual(...);
-#       if newoutfiles, err := b.cover(
-goto func (b *Builder) build
-match if newoutfiles, err := b.cover(
-insert_before __xgo_overlay_source_file := sourceFile; if _actual := fsys.Actual(sourceFile); _actual != "" { __xgo_overlay_source_file = _actual; };
-newline
-</patch>
-
-<patch xgo_exec_cover_sourcefile>
-# Description: Replace sourceFile with overlay-aware __xgo_overlay_source_file
-# in the b.cover() call arguments (go1.24 and earlier branch only).
-# For go1.25+, sourceFile goes through infiles instead of directly to b.cover.
-# Replaces: sourceFile,
-# With:     __xgo_overlay_source_file,
-goto func (b *Builder) build
-find_for_replace sourceFile,
-replace __xgo_overlay_source_file,
-</patch>
-
 <patch xgo_exec_cover_infiles>
 # Description: Replace infiles = append(infiles, sourceFile) with overlay-aware version.
 # In go1.25, CoverageRedesign is always on, so infiles is always appended to.
@@ -41,5 +17,4 @@ replace __xgo_overlay_source_file := sourceFile; if _actual := fsys.Actual(sourc
 goto func (b *Builder) buildActionID
 match fmt.Fprintf(h, "compile\n")
 insert_after ;if xgoSum := getXgoPackageTrapSum(p.ImportPath); xgoSum!="" { fmt.Fprintf(h, "xgo trap sum %s\n", xgoSum); }
-newline
 </patch>

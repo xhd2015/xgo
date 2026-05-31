@@ -1,7 +1,6 @@
 package instrument_compiler
 
-const NoderFiles_1_17 = `
-// auto gen
+const NoderFiles_1_17 = `// auto gen
 if /*os.Getenv("XGO_COMPILER_SYNTAX_REWRITE_ENABLE")=="true"*/ true {
 	files := make([]*syntax.File, 0, len(noders))
 	for _, n := range noders {
@@ -33,8 +32,7 @@ if /*os.Getenv("XGO_COMPILER_SYNTAX_REWRITE_ENABLE")=="true"*/ true {
 }
 `
 
-const NoderFiles_1_20 = `
-// auto gen
+const NoderFiles_1_20 = `// auto gen
 if os.Getenv("XGO_COMPILER_SYNTAX_REWRITE_ENABLE")=="true" {
 	files := make([]*syntax.File, 0, len(noders))
 	for _, n := range noders {
@@ -64,8 +62,7 @@ if os.Getenv("XGO_COMPILER_SYNTAX_REWRITE_ENABLE")=="true" {
 }
 `
 
-const NoderFiles_1_21 = `
-// auto gen
+const NoderFiles_1_21 = `// auto gen
 if os.Getenv("XGO_COMPILER_SYNTAX_REWRITE_ENABLE")=="true" {
 	files := make([]*syntax.File, 0, len(noders))
 	for _, n := range noders {

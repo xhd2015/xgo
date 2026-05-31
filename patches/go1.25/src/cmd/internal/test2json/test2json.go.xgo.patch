@@ -3,18 +3,18 @@
 # Allows xgo to intercept test output events before they're written.
 # Inserted before: func writeEvent(
 # After: var XgoOnTestEvent func(b *bytes.Buffer);\nfunc writeEvent(
-goto func writeEvent
-insert_before var XgoOnTestEvent func(b *bytes.Buffer);
+goto func (*Converter) writeEvent
+insert_before var XgoGetTestName func(testPkgPath string, name string) (pkgPath string, testName string);
 newline
 </patch>
 
 <patch xgo_test2json_call>
-# Description: Call XgoOnTestEvent before writing the newline terminator.
-# Invokes the callback to modify or intercept the test event buffer.
-# Inserted before: b.WriteByte('\n')
-# After: if XgoOnTestEvent != nil { XgoOnTestEvent(b); };\nb.WriteByte('\n')
-goto func writeEvent
-match b.WriteByte('\n')
-insert_before if XgoOnTestEvent != nil { XgoOnTestEvent(b); };
+# Description: Call XgoGetTestName to rename test events before marshalling.
+# Triggers the callback to modify the test event.
+# Inserted before: js, err := json.Marshal(e)
+# After: if XgoGetTestName != nil && e.Test != "" { ... };
+goto func (*Converter) writeEvent
+match js, err := json.Marshal(e)
+insert_before if XgoGetTestName != nil && e.Test != "" {  tpkg, tname := XgoGetTestName(e.Package, e.Test);  if tpkg != "" {    e.Package = tpkg;  };  if tname != "" {    e.Test = tname;  };};
 newline
 </patch>

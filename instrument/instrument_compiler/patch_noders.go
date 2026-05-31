@@ -35,7 +35,6 @@ func PatchNoder(goroot string, goVersion *goinfo.GoVersion) error {
 	if noderFiles == "" {
 		return fmt.Errorf("patch compiler noder:unsupported: %v", goVersion)
 	}
-
 	return patch.EditFile(filePath.JoinPrefix(goroot), func(content string) (string, error) {
 		content = patch.AddImportAfterName(content,
 			"/*<begin import_xgo_syntax>*/",

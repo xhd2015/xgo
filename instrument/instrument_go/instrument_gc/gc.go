@@ -3,7 +3,6 @@ package instrument_gc
 import (
 	"fmt"
 	"path/filepath"
-
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/goinfo"
 )
@@ -25,8 +24,7 @@ const VScodeDebug = `{
     ]
 }`
 
-const interceptCompile = `
-   var dlvDebug bool
+const interceptCompile = `var dlvDebug bool
    xgoDebugPkg := os.Getenv("` + XGO_HELPER_DEBUG_PKG + `")
 	if xgoDebugPkg!="" {
 		var pkg string
@@ -61,12 +59,11 @@ const interceptCompile = `
 	}
 `
 
-const pipeoutput = `
-	if dlvDebug {
-		cmd.Stdout = io.MultiWriter(cmd.Stdout, os.Stdout)
-		cmd.Stderr = io.MultiWriter(cmd.Stderr, os.Stderr)
-		fmt.Fprintf(os.Stderr, "VSCode: add the following config to .vscode/launch.json:\n%s\nThen set breakpoint at %s\n", ` + "`" + VScodeDebug + "`" + `, runtime.GOROOT() + "/src/cmd/compile/main.go")
-	}
+const pipeoutput = `if dlvDebug {
+	cmd.Stdout = io.MultiWriter(cmd.Stdout, os.Stdout)
+	cmd.Stderr = io.MultiWriter(cmd.Stderr, os.Stderr)
+	fmt.Fprintf(os.Stderr, "VSCode: add the following config to .vscode/launch.json:\n%s\nThen set breakpoint at %s\n", ` + "`" + VScodeDebug + "`" + `, runtime.GOROOT() + "/src/cmd/compile/main.go")
+}
 `
 
 func InstrumentGc(goroot string, goVersion *goinfo.GoVersion) error {
@@ -77,15 +74,12 @@ func InstrumentGc(goroot string, goVersion *goinfo.GoVersion) error {
 	}
 	var shellGo string
 	var fnAnchor string
-	var runAnchor string
 	if goVersion.Minor >= 22 {
 		shellGo = filepath.Join(goroot, "src", "cmd", "go", "internal", "work", "shell.go")
 		fnAnchor = "\nfunc (sh *Shell) runOut(dir string"
-		runAnchor = "err = cmd.Run()"
 	} else {
 		shellGo = filepath.Join(goroot, "src", "cmd", "go", "internal", "work", "exec.go")
 		fnAnchor = `func (b *Builder) runOut(a *Action, dir string,`
-		runAnchor = "err := cmd.Run()"
 	}
 
 	err := patch.EditFile(shellGo, func(content string) (string, error) {
@@ -106,10 +100,11 @@ func InstrumentGc(goroot string, goVersion *goinfo.GoVersion) error {
 			"/*<end pipeoutput>*/",
 			[]string{
 				fnAnchor,
-				runAnchor,
+				"start := time.Now()",
+				"\n",
 			},
-			1,
-			patch.UpdatePosition_Before,
+			2,
+			patch.UpdatePosition_After,
 			pipeoutput,
 		)
 

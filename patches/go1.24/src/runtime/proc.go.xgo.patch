@@ -1,4 +1,4 @@
-<patch xgo_proc_newproc>
+<patch declare_xgo_curg>
 # Description: Capture current goroutine and declare new goroutine pointer
 # before systemstack call in newproc. Used to pass goroutine info to callback.
 # Inserted before: systemstack(func() {
@@ -8,7 +8,7 @@ match systemstack(func() {
 insert_before __xgo_curg := gp.m.curg;var __xgo_newg *g;
 </patch>
 
-<patch xgo_proc_newproc_callback>
+<patch add_go_newproc_callback_v2>
 # Description: Add __xgo_callback_on_create_g call after newproc1 creates a goroutine.
 # Wraps the newproc1 call to save newg and invoke the callback.
 # Replaces: newg := newproc1(fn, gp, pc, false, waitReasonZero)
@@ -18,15 +18,15 @@ goto func newproc
 	insert_after ;__xgo_newg=newg});__xgo_callback_on_create_g(__xgo_curg,__xgo_newg);systemstack(func(){newg:=__xgo_newg;
 </patch>
 
-<patch xgo_proc_goexit1>
+<patch add_go_exit1_callback>
 # Description: Add __xgo_callback_on_exit_g call at the start of goexit1.
 # Inserted after: func goexit1() {
 goto func goexit1
 goto opening {
-insert_after __xgo_callback_on_exit_g()
+insert_after ;__xgo_callback_on_exit_g()
 </patch>
 
-<patch xgo_proc_init_finished>
+<patch set_init_finished_mark>
 # Description: Signal that runtime initialization is complete.
 # Calls __xgo_callback_on_init_finished() just before close(main_init_done) in main().
 goto func main

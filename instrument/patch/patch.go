@@ -113,7 +113,7 @@ const (
 // UpdateContentLines add content before or after the `i`'s anchor in `seq`
 // two lines will be automatically added after `beginMark`, and before `endMark`, so you don't need to include a line in `addContent`
 func UpdateContentLines(content string, beginMark string, endMark string, seq []string, i int, position UpdatePosition, addContent string) string {
-	return updateContent(content, beginMark, endMark, seq, i, position, addContent, "\n")
+	return updateContent(content, beginMark, endMark, seq, i, position, addContent, "")
 }
 
 func UpdateContent(content string, beginMark string, endMark string, seq []string, i int, position UpdatePosition, addContent string) string {
@@ -157,7 +157,7 @@ func ReplaceContentAfter(content string, beginMark string, endMark string, seq [
 	if replaceContent == "" {
 		return content
 	}
-	closuerContent := beginMark + "\n" + replaceContent + "\n" + endMark + "\n"
+	closuerContent := beginMark + replaceContent + endMark
 	idx := indexSeq(content, seq, false)
 	if idx < 0 {
 		panic(fmt.Errorf("sequence not found: %v", seq))
@@ -165,7 +165,7 @@ func ReplaceContentAfter(content string, beginMark string, endMark string, seq [
 	if strings.Contains(content, closuerContent) {
 		return content
 	}
-	content, ok := tryReplaceWithMark(content, beginMark, endMark, "\n", replaceContent)
+	content, ok := tryReplaceWithMark(content, beginMark, endMark, "", replaceContent)
 	if ok {
 		return content
 	}
@@ -179,7 +179,7 @@ func ReplaceContentAfter(content string, beginMark string, endMark string, seq [
 // signature example: /*<begin ident>*/ {content} /*<end ident>*/
 // insert content at index
 func insertContentLinesNoDuplicate(content string, beginMark string, endMark string, idx int, insertContent string) string {
-	return insertOrReplaceContentNoDuplicate(content, false, 0, beginMark, endMark, idx, insertContent, "\n")
+	return insertOrReplaceContentNoDuplicate(content, false, 0, beginMark, endMark, idx, insertContent, "")
 }
 
 func insertOrReplaceContentNoDuplicate(content string, replace bool, replaceLen int, beginMark string, endMark string, idx int, insertContent string, separator string) string {

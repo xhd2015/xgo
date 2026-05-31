@@ -108,6 +108,17 @@ type options struct {
 	// nil = not set; resolved later based on go version
 	useFilePatches *bool
 
+	// --patch-goroot-in-place
+	// when set for `xgo setup`, skip syncing/copying the GOROOT
+	// and directly patch the given --with-goroot in-place.
+	// caller is responsible for providing a fresh/copy of the GOROOT.
+	patchGorootInPlace bool
+
+	// --skip-rebuild-compiler-and-go
+	// when set for `xgo setup`, skip rebuilding compiler and go binaries
+	// after patching. Used by tests to speed up src-only comparisons.
+	skipRebuildCompilerAndGo bool
+
 	remainArgs []string
 
 	testArgs   []string
@@ -181,6 +192,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 	var xgoRaceSafe bool
 
 	var useFilePatches *bool
+	var patchGorootInPlace bool
+	var skipRebuildCompilerAndGo bool
 
 	nArg := len(args)
 
@@ -323,6 +336,20 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			Single: true,
 			Set: func(v string) {
 				deleteFlag = true
+			},
+		})
+		flagValues = append(flagValues, FlagValue{
+			Flags:  []string{"--patch-goroot-in-place"},
+			Single: true,
+			Set: func(v string) {
+				patchGorootInPlace = true
+			},
+		})
+		flagValues = append(flagValues, FlagValue{
+			Flags:  []string{"--skip-rebuild-compiler-and-go"},
+			Single: true,
+			Set: func(v string) {
+				skipRebuildCompilerAndGo = true
 			},
 		})
 	}
@@ -616,7 +643,9 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		deleteFlag:      deleteFlag,
 		goFlag:          goFlag,
 		xgoRaceSafe:     xgoRaceSafe,
-		useFilePatches:  useFilePatches,
+		useFilePatches:      useFilePatches,
+		patchGorootInPlace:  patchGorootInPlace,
+		skipRebuildCompilerAndGo: skipRebuildCompilerAndGo,
 	}, nil
 }
 

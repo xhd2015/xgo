@@ -4,6 +4,14 @@
 
 xgo is a Go tool that instruments Go code for testing, mocking, tracing, and intercepting. It acts as a drop-in replacement for `go` commands (build, test, run, etc.).
 
+## Clean `go.mod`
+
+Both `go.mod` and `runtime/go.mod` are very thin, has no any dependencies.
+
+That is delibrate, because `xgo` serve as a foundamental driver for go testing, so it should not introduce any dependency burden to end user.
+
+Please always keep them clean.
+
 ## Testing
 
 Tests are located under `runtime/test/` and are organized as standalone Go modules (each with its own `go.mod`, replacing `github.com/xhd2015/xgo/runtime` with the local `../../..`). They require the xgo instrumentation to work, so they must be run via the xgo test driver.
@@ -80,6 +88,8 @@ Each test module under `runtime/test/`:
 | `runtime/` | The xgo runtime library (trap, mock, trace, core) |
 | `runtime/internal/trap/` | Low-level trap implementation |
 | `runtime/test/` | Integration tests (standalone modules, xgo-instrumented) |
+| `instrument/patch/` | Patch DSL parser/engine for instrumenting Go stdlib (see [PATCH_DSL.md](PATCH_DSL.md)) |
+| `patches/` | Per-version `.xgo.patch` files for GOROOT instrumentation |
 | `script/` | Build and test scripts |
 | `script/run-test/` | Test driver |
 | `script/download-go/` | Downloads Go releases for cross-version testing |

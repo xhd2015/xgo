@@ -35,7 +35,7 @@ type _FilePath = patch.FilePath
 // assume go 1.20
 // the patch should be idempotent
 // the origGoroot is used to generate runtime defs, see https://github.com/xhd2015/xgo/issues/4#issuecomment-2017880791
-func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrCoreRevisionChanged bool, allowDebugCompile bool, useFilePatches bool) error {
+func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *goinfo.GoVersion, syncWithLink bool, resetOrCoreRevisionChanged bool, allowDebugCompile bool, useFilePatches bool, skipRebuildCompilerAndGo bool) error {
 	if goroot == "" {
 		return fmt.Errorf("requires goroot")
 	}
@@ -51,6 +51,7 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 		if _, err := os.Stat(patchDir); os.IsNotExist(err) {
 			return fmt.Errorf("file-based patch directory not found: %s", patchDir)
 		}
+
 		extraEnv := map[string]string{
 			"XGO_SRC":       xgoSrc,
 			"GOROOT":        goroot,
@@ -59,11 +60,15 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 			"GOOS":          runtime.GOOS,
 			"GOARCH":        runtime.GOARCH,
 		}
-		return patch.ApplyPatches(patchDir, goroot, xgoSrc, extraEnv)
+		var skipKinds []string
+		if skipRebuildCompilerAndGo {
+			skipKinds = []string{"rebuild-compiler", "rebuild-go"}
+		}
+		return patch.ApplyPatches(patchDir, goroot, xgoSrc, extraEnv, skipKinds)
 	}
 
 	// instrument go
-	err := instrument_go.BuildInstrument(goroot, goVersion, allowDebugCompile)
+	err := instrument_go.BuildInstrument(goroot, goVersion, allowDebugCompile, skipRebuildCompilerAndGo)
 	if err != nil {
 		return err
 	}
@@ -87,7 +92,7 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 		return err
 	}
 
-	err = instrument_compiler.BuildInstrument(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink)
+	err = instrument_compiler.BuildInstrument(origGoroot, goroot, goVersion, xgoSrc, resetOrCoreRevisionChanged, syncWithLink, skipRebuildCompilerAndGo)
 	if err != nil {
 		return err
 	}

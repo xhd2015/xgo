@@ -49,8 +49,8 @@ func Instrument(goroot string, goVersion *goinfo.GoVersion) error {
 			2,
 			patch.UpdatePosition_Before,
 			strings.Join([]string{
-				`if xgoDir := XgoTestNameToDir[test.Name]; xgoDir != "" {`,
-				`  os.Chdir(xgoDir);`,
+				`if xgoDir := XgoTestNameToDir[test.Name]; xgoDir != "" { `,
+				`os.Chdir(xgoDir); `,
 				`};`,
 			}, ""),
 		)

@@ -61,7 +61,7 @@ func patchGcMain(goroot string, goVersion *goinfo.GoVersion) error {
 		content = patch.UpdateContent(
 			content,
 			"/*<begin call_xgo_patch>*/",
-			"/*<end gc_import>*/",
+			"/*<end call_xgo_patch>*/",
 			[]string{
 				"func Main(",
 				"typecheck.InitRuntime()",

@@ -20,6 +20,7 @@
 
 /go-release
 /xgo-release
+/go-release-git-versioned
 
 # generated traces
 /runtime/test/**/*.json

@@ -35,6 +35,7 @@ func instrumentTimeNow(goroot string, goMajor int, goMinor int) error {
 
 		// insert to end of file
 		xgoBody := strings.ReplaceAll(body, anchor, "func "+constants.XGO_REAL_NOW+"() Time {")
+		xgoBody = strings.TrimSuffix(xgoBody, "\n")
 		xgoBodyWithMarker := "/*<begin add_xgo_real_time_now>*/" + xgoBody + "/*<end add_xgo_real_time_now>*/"
 		if !strings.HasSuffix(content, "\n") {
 			xgoBodyWithMarker = "\n" + xgoBodyWithMarker
@@ -52,15 +53,13 @@ func instrumentTimeSleep(goroot string, goMajor int, goMinor int) error {
 	return patch.EditFile(timeFile, func(content string) (string, error) {
 		anchor := "func Sleep(d Duration)"
 		replaceWith := "func " + constants.XGO_REAL_SLEEP + "(d Duration);func /*xgo_instrumented*/Sleep(d Duration){ " + constants.XGO_REAL_SLEEP + "(d); }"
+		beginMark := "/*<begin xgo_time_sleep>*/"
+		endMark := "/*<end xgo_time_sleep>*/"
 		idx := strings.Index(content, anchor)
 		if idx < 0 {
-			// already instrumented
-			if strings.Index(content, replaceWith) > 0 {
-				return content, nil
-			}
 			panic(fmt.Sprintf("%s not found", anchor))
 		}
-		content = content[:idx] + replaceWith + content[idx+len(anchor):]
+		content = content[:idx] + beginMark + "/*old:" + anchor + "*/" + replaceWith + endMark + content[idx+len(anchor):]
 		return content, nil
 	})
 }
@@ -76,14 +75,10 @@ func instrumentRuntimeTimeSleep(goroot string, goMajor int, goMinor int) error {
 		replaceWith := "//go:linkname timeSleep time." + constants.XGO_REAL_SLEEP
 		idx := strings.Index(content, anchor)
 		if idx < 0 {
-			// already instrumented
-			if strings.Index(content, replaceWith) > 0 {
-				return content, nil
-			}
 			panic(fmt.Sprintf("%s not found", anchor))
 		}
-		content = content[:idx] + replaceWith + content[idx+len(anchor):]
-
+		annot := "/*<next-line-original xgo_runtime_time_linkname>" + anchor + "</next-line-original>*/\n"
+		content = content[:idx] + annot + replaceWith + content[idx+len(anchor):]
 		return content, nil
 	})
 }

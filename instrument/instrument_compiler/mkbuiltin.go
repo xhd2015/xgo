@@ -33,6 +33,9 @@ func MkBuiltin(origGoroot string, outputGoroot string, goVersion *goinfo.GoVersi
 		return err
 	}
 
+	// Clean up .xgo directory that xgo (as drop-in go) may have created
+	os.RemoveAll(filepath.Join(cmd.Dir, ".xgo"))
+
 	return nil
 }
 

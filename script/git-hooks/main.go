@@ -141,6 +141,11 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 	for _, genDir := range genDirs {
 		affectedFiles = append(affectedFiles, filepath.Join(genDir...))
 	}
+	err = cmd.Dir(rootDir).Run("go", "run", "./script/git-hooks/pre-commit/go-mods-are-clean")
+	if err != nil {
+		return err
+	}
+
 	if !noCommit {
 		err = cmd.Run("git", append([]string{"add"}, affectedFiles...)...)
 		if err != nil {

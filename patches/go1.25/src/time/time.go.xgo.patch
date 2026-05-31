@@ -1,8 +1,6 @@
-<patch xgo_time_now>
-# Description: Rename time.Now to XgoRealNow so xgo can intercept it.
-# Replaces: func Now() Time
-# With:     func XgoRealNow() Time
-# xgo provides its own Now() that calls XgoRealNow() with trap support.
-find_for_replace func Now() Time
-replace func XgoRealNow() Time
+<patch add_xgo_real_time_now>
+# Description: Keep Now() and append XgoRealNow() copy at end of file.
+# The runtime linkname redirect points to XgoRealNow for interception.
+# Copies Now() function body, renames to XgoRealNow(), and appends to file end.
+copy_func Now as XgoRealNow append to file end
 </patch>

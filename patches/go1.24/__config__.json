@@ -1,22 +1,24 @@
 {
   "version": "go1.24",
   "copy": [
-    {"from": "patch/", "to": "src/cmd/compile/internal/xgo_rewrite_internal/patch/"}
+    {"from": "patch/", "to": "src/cmd/compile/internal/xgo_rewrite_internal/patch/", "ignore_files": ["src/cmd/compile/internal/xgo_rewrite_internal/patch/go.mod"]}
   ],
   "generate": [
     {
-      "cmd": "go run ${XGO_SRC}/script/generate-mkbuiltin/main.go --orig-goroot=${ORIG_GOROOT} --output-goroot=${GOROOT} --go-version=${GO_VERSION}",
+      "cmd": "go run -C ${XGO_SRC} ./script/generate-mkbuiltin/main.go --orig-goroot=${ORIG_GOROOT} --output-goroot=${GOROOT} --go-version=${GO_VERSION}",
       "outputs": [
         "src/cmd/compile/internal/typecheck/_builtin/runtime.go",
         "src/cmd/compile/internal/typecheck/builtin.go"
       ]
     },
     {
-      "cmd": "${GOROOT}/bin/go build -a -o ${GOROOT}/pkg/tool/${GOOS}_${GOARCH}/compile ${GOROOT}/src/cmd/compile",
+      "kind": "rebuild-compiler",
+      "cmd": "${GOROOT}/bin/go build -C ${GOROOT}/src/cmd -a -o ${GOROOT}/pkg/tool/${GOOS}_${GOARCH}/compile cmd/compile",
       "outputs": []
     },
     {
-      "cmd": "${GOROOT}/bin/go build -a -o ${GOROOT}/bin/go ${GOROOT}/src/cmd/go",
+      "kind": "rebuild-go",
+      "cmd": "${GOROOT}/bin/go build -C ${GOROOT}/src/cmd -a -o ${GOROOT}/bin/go cmd/go",
       "outputs": []
     }
   ]

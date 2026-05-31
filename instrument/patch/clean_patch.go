@@ -4,9 +4,50 @@ import (
 	"strings"
 )
 
-// CleanPatch removes all content between /*<begin and /*<end markers
+// CleanPatch removes all content between /*<begin and /*<end markers,
+// and also handles <next-line-original> annotations.
 func CleanPatch(content string) string {
+	content = cleanNextLineOriginal(content)
 	return CleanPatchMarkers(content, PatchMarker{Begin: "/*<begin", End: ">*/"}, PatchMarker{Begin: "/*<end", End: ">*/"})
+}
+
+func cleanNextLineOriginal(content string) string {
+	annotStart := "/*<next-line-original "
+	annotEnd := "</next-line-original>*/"
+	for {
+		annotIdx := strings.Index(content, annotStart)
+		if annotIdx < 0 {
+			break
+		}
+		nameEnd := strings.Index(content[annotIdx+len(annotStart):], ">")
+		if nameEnd < 0 {
+			break
+		}
+		nameEnd += annotIdx + len(annotStart)
+		annotContentStart := nameEnd + 1
+		annotCloseIdx := strings.Index(content[annotContentStart:], annotEnd)
+		if annotCloseIdx < 0 {
+			break
+		}
+		annotCloseIdx += annotContentStart
+		oldText := content[annotContentStart:annotCloseIdx]
+		nextLineStart := annotCloseIdx + len(annotEnd)
+		var nextLineEnd int
+		firstNL := strings.Index(content[nextLineStart:], "\n")
+		if firstNL < 0 {
+			nextLineEnd = len(content)
+		} else {
+			afterFirst := nextLineStart + firstNL + 1
+			secondNL := strings.Index(content[afterFirst:], "\n")
+			if secondNL < 0 {
+				nextLineEnd = len(content)
+			} else {
+				nextLineEnd = afterFirst + secondNL
+			}
+		}
+		content = content[:annotIdx] + oldText + content[nextLineEnd:]
+	}
+	return content
 }
 
 type PatchMarker struct {

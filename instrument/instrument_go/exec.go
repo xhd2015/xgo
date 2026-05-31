@@ -22,7 +22,7 @@ func instrumentExec(goroot string, goVersion *goinfo.GoVersion) error {
 	return patch.EditFile(execFile, func(content string) (string, error) {
 		// since 22
 		coverLine := `if p.Internal.Cover.Mode != "" {`
-		getActualFile := `__xgo_overlay_source_file := sourceFile; if _actual := fsys.Actual(sourceFile); _actual != "" { __xgo_overlay_source_file = _actual; }; ` // since 24
+		getActualFile := `__xgo_overlay_source_file := sourceFile; if _actual := fsys.Actual(sourceFile); _actual != "" { __xgo_overlay_source_file = _actual; };` // since 24
 		if goVersion.Minor < 24 {
 			getActualFile = "__xgo_overlay_source_file, _ := fsys.OverlayPath(sourceFile);"
 		}

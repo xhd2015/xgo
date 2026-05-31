@@ -215,9 +215,9 @@ func TestUpdateContent_VsUpdateContentLines(t *testing.T) {
 	// With UpdateContentLines (newline separator)
 	resultWithSeparator := UpdateContentLines(content, beginMark, endMark, seq, 0, UpdatePosition_Before, addContent)
 
-	// Expected results
+	// Expected results — both now use empty separator
 	expectedNoSeparator := "/*<begin>*/// Added content/*<end>*/func main() {\n\tfmt.Println(\"test\")\n}"
-	expectedWithSeparator := "/*<begin>*/\n// Added content\n/*<end>*/\nfunc main() {\n\tfmt.Println(\"test\")\n}"
+	expectedWithSeparator := expectedNoSeparator
 
 	// Normalize line endings for comparison
 	resultNoSeparator = strings.ReplaceAll(resultNoSeparator, "\r\n", "\n")

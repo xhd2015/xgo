@@ -1,19 +1,24 @@
-<patch xgo_load_test_declare>
+<patch declare_XgoAfterGenerateTestMain>
 # Description: Declare XgoAfterGenerateTestMain callback variable.
 # This hook allows xgo to modify the generated test main after it's created.
 # Inserted before: func TestPackagesAndErrors(
-# After: var XgoAfterGenerateTestMain func(...) []byte;\nfunc TestPackagesAndErrors(
 goto func TestPackagesAndErrors
 insert_before var XgoAfterGenerateTestMain func(p *Package, pmain *Package, code []byte) []byte;
-newline
 </patch>
 
-<patch xgo_load_test_call>
+<patch call_XgoAfterGenerateTestMain>
 # Description: Call XgoAfterGenerateTestMain after test main is formatted.
 # Modifies the generated test code before it's written.
-# Inserted after: , err := formatTestmain(t)
-# After: ;code = XgoAfterGenerateTestMain(p, pmain, code)
+# Checks err==nil before calling callback.
 goto func TestPackagesAndErrors
 match , err := formatTestmain(t)
-insert_after ;code = XgoAfterGenerateTestMain(p, pmain, code)
+insert_after ;if err==nil && XgoAfterGenerateTestMain!=nil {  data = XgoAfterGenerateTestMain(p, pmain, data);};
+</patch>
+
+<patch export_XgoLoadTestFuncs>
+# Description: Export XgoTestFunc, XgoTestFuncs, and XgoLoadTestFuncs.
+# These allow xgo to introspect test functions for unified test mode.
+# Inserted before: func loadTestFuncs(ptest *Package)
+goto func loadTestFuncs
+insert_before type XgoTestFunc = testFunc;type XgoTestFuncs struct {  Tests    []XgoTestFunc;  TestMain *XgoTestFunc;  Package  *Package;};func XgoLoadTestFuncs(ptest *Package) (*XgoTestFuncs, error) {  res, err := loadTestFuncs(ptest);  if err != nil {    return nil, err;  };  return &XgoTestFuncs{    Tests:    res.Tests,    TestMain: res.TestMain,    Package:  ptest,  }, nil;};
 </patch>

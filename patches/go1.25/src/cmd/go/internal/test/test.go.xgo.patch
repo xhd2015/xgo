@@ -5,7 +5,6 @@
 goto func runTest
 goto opening {
 insert_after defer xgoCleanup();
-newline
 </patch>
 
 <patch xgo_test_unify_pkgs>
@@ -26,5 +25,4 @@ insert_after ;pkgs = xgoUnifyTestPackages(ctx, pkgs)
 goto func (r *runTestActor) Act
 match cmd.Dir = a.Package.Dir
 insert_after ;if xgoCmdDir:=xgoGetCmdDir(a.Package); xgoCmdDir != "" { cmd.Dir = xgoCmdDir; }
-newline
 </patch>

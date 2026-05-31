@@ -29,7 +29,7 @@ var internalWorkPath = srcCmdGoPath.Append("internal", "work") // src/cmd/go/int
 var mainFilePath = srcCmdGoPath.Append("main.go")
 var xgoMainFilePath = srcCmdGoPath.Append("xgo_main.go")
 
-func BuildInstrument(goroot string, goVersion *goinfo.GoVersion, allowDebugCompile bool) error {
+func BuildInstrument(goroot string, goVersion *goinfo.GoVersion, allowDebugCompile bool, skipRebuildGo bool) error {
 	err := instrumentExec(goroot, goVersion)
 	if err != nil {
 		return err
@@ -64,6 +64,9 @@ func BuildInstrument(goroot string, goVersion *goinfo.GoVersion, allowDebugCompi
 	}
 
 	// build go command
+	if skipRebuildGo {
+		return nil
+	}
 	return build.RebuildGoBinary(goroot)
 }
 

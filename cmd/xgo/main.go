@@ -418,6 +418,9 @@ func handleBuild(cmd string, args []string) error {
 	compilerBin := filepath.Join(instrumentDir, "compile"+exeSuffix)
 	compilerBuildID := filepath.Join(instrumentDir, "compile.buildid.txt")
 	instrumentGoroot := filepath.Join(instrumentDir, goVersionName)
+	if opts.patchGorootInPlace {
+		instrumentGoroot = goroot
+	}
 	packageDataDir := filepath.Join(instrumentDir, "pkgdata")
 
 	// also ensure GOROOT itself exists
@@ -524,8 +527,8 @@ func handleBuild(cmd string, args []string) error {
 		}
 
 		resetOrRevisionChanged := resetInstrument || buildCompiler || coreRevisionChanged || instrumentedGorootNeedRecreate
-		if isDevelopment || resetOrRevisionChanged {
-			if instrumentedGorootNeedRecreate || !instrumented {
+		if opts.patchGorootInPlace || isDevelopment || resetOrRevisionChanged {
+			if !opts.patchGorootInPlace && (instrumentedGorootNeedRecreate || !instrumented) {
 				if cmdSetup && flagV {
 					fmt.Fprintf(os.Stderr, "sync GOROOT %s -> %s\n", goroot, instrumentGoroot)
 				}
@@ -541,13 +544,13 @@ func handleBuild(cmd string, args []string) error {
 			}
 
 			logDebug("patch runtime at: %s", instrumentGoroot)
-			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, isDevelopment || syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged, isDevelopment, *opts.useFilePatches)
+			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, isDevelopment || syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged || opts.patchGorootInPlace, isDevelopment, *opts.useFilePatches, opts.skipRebuildCompilerAndGo)
 			if err != nil {
 				return err
 			}
 		}
 
-		if resetOrRevisionChanged {
+		if resetOrRevisionChanged || opts.patchGorootInPlace {
 			logDebug("revision %s write to %s", coreRevision, revisionFile)
 			err := os.WriteFile(revisionFile, []byte(coreRevision), 0755)
 			if err != nil {

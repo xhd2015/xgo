@@ -859,7 +859,7 @@ func TestApplyPatches_GenerateVariableSubstitution(t *testing.T) {
 
 	err := ApplyPatches(tmpDir, goroot, xgoSrc, map[string]string{
 		"NAME": "world",
-	})
+	}, nil)
 	// This will try to run "echo hello world" and succeed
 	if err != nil {
 		// If echo isn't found, skip (Windows might not have it)
@@ -871,5 +871,116 @@ func writeTestFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func mustMkdirAll(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGenerateEntry_KindField(t *testing.T) {
+	configJSON := `{
+		"version": "test",
+		"generate": [
+			{"cmd": "echo always", "outputs": []},
+			{"kind": "rebuild-compiler", "cmd": "echo compile", "outputs": []},
+			{"kind": "rebuild-go", "cmd": "echo go", "outputs": []}
+		]
+	}`
+	tmpDir := t.TempDir()
+	writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
+
+	cfg, err := LoadConfig(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Generate) != 3 {
+		t.Fatalf("expected 3 generate entries, got %d", len(cfg.Generate))
+	}
+	if cfg.Generate[0].Kind != "" {
+		t.Errorf("entry 0 kind should be empty, got %q", cfg.Generate[0].Kind)
+	}
+	if cfg.Generate[1].Kind != "rebuild-compiler" {
+		t.Errorf("entry 1 kind should be rebuild-compiler, got %q", cfg.Generate[1].Kind)
+	}
+	if cfg.Generate[2].Kind != "rebuild-go" {
+		t.Errorf("entry 2 kind should be rebuild-go, got %q", cfg.Generate[2].Kind)
+	}
+}
+
+func TestApplyPatches_SkipKinds(t *testing.T) {
+	tmpDir := t.TempDir()
+	goroot := t.TempDir()
+	xgoSrc := t.TempDir()
+
+	configJSON := `{
+		"version": "test",
+		"generate": [
+			{"cmd": "echo always", "outputs": []},
+			{"kind": "rebuild-compiler", "cmd": "echo should_skip", "outputs": []},
+			{"kind": "rebuild-go", "cmd": "echo should_skip", "outputs": []}
+		]
+	}`
+	writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
+
+	skipKinds := []string{"rebuild-compiler", "rebuild-go"}
+	err := ApplyPatches(tmpDir, goroot, xgoSrc, nil, skipKinds)
+	if err != nil {
+		t.Fatalf("ApplyPatches failed: %v", err)
+	}
+}
+
+func TestApplyPatches_SkipKinds_NoSkipWithoutKinds(t *testing.T) {
+	tmpDir := t.TempDir()
+	goroot := t.TempDir()
+	xgoSrc := t.TempDir()
+
+	configJSON := `{
+		"version": "test",
+		"generate": [
+			{"cmd": "echo run_me", "outputs": []},
+			{"kind": "rebuild-compiler", "cmd": "echo skip_me", "outputs": []}
+		]
+	}`
+	writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
+
+	skipKinds := []string{"rebuild-go"}
+	err := ApplyPatches(tmpDir, goroot, xgoSrc, nil, skipKinds)
+	if err != nil {
+		t.Fatalf("ApplyPatches failed: %v", err)
+	}
+}
+
+func TestApplyPatches_IgnoreFiles(t *testing.T) {
+	xgoSrc := t.TempDir()
+	goroot := t.TempDir()
+	patchDir := t.TempDir()
+
+	srcDir := filepath.Join(xgoSrc, "test-src")
+	mustMkdirAll(t, srcDir)
+	writeTestFile(t, filepath.Join(srcDir, "keep.txt"), "keep me")
+	writeTestFile(t, filepath.Join(srcDir, "go.mod"), "module test")
+
+	configJSON := `{
+		"version": "test",
+		"copy": [
+			{"from": "test-src/", "to": ".", "ignore_files": ["go.mod"]}
+		]
+	}`
+	writeTestFile(t, filepath.Join(patchDir, "__config__.json"), configJSON)
+
+	err := ApplyPatches(patchDir, goroot, xgoSrc, nil, nil)
+	if err != nil {
+		t.Fatalf("ApplyPatches failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(goroot, "keep.txt")); err != nil {
+		t.Errorf("keep.txt should exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(goroot, "go.mod")); !os.IsNotExist(err) {
+		t.Errorf("go.mod should be removed by ignore_files, got err=%v", err)
 	}
 }

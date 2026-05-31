@@ -63,7 +63,7 @@ func parseBlock(blockContent string) (PatchBlock, error) {
 
 	lines := strings.Split(bodyContent, "\n")
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
+		line = strings.TrimRight(line, " \t\r")
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -79,41 +79,64 @@ func parseBlock(blockContent string) (PatchBlock, error) {
 }
 
 func parseLine(line string) (Command, error) {
+	cmd, rest := splitCommand(line)
 	switch {
-	case strings.HasPrefix(line, "goto "):
-		return parseGoto(line)
-	case strings.HasPrefix(line, "match "):
-		return Command{Type: CmdMatch, SearchText: strings.TrimSpace(line[len("match "):])}, nil
-	case strings.HasPrefix(line, "find_for_replace "):
-		return Command{Type: CmdFindForReplace, SearchText: strings.TrimSpace(line[len("find_for_replace "):])}, nil
-	case strings.HasPrefix(line, "insert_before "):
-		text := line[len("insert_before "):]
-		if text == "" {
+	case cmd == "goto":
+		return parseGotoTarget(rest)
+	case cmd == "match":
+		return Command{Type: CmdMatch, SearchText: rest}, nil
+	case cmd == "find_for_replace":
+		return Command{Type: CmdFindForReplace, SearchText: rest}, nil
+	case cmd == "insert_before":
+		if rest == "" {
 			return Command{}, fmt.Errorf("insert_before requires text")
 		}
-		return Command{Type: CmdInsertBefore, EditText: text}, nil
-	case strings.HasPrefix(line, "insert_after "):
-		text := line[len("insert_after "):]
-		if text == "" {
+		return Command{Type: CmdInsertBefore, EditText: rest}, nil
+	case cmd == "insert_after_line":
+		if rest == "" {
+			return Command{}, fmt.Errorf("insert_after_line requires text")
+		}
+		return Command{Type: CmdInsertAfterLine, EditText: rest}, nil
+	case cmd == "insert_after":
+		if rest == "" {
 			return Command{}, fmt.Errorf("insert_after requires text")
 		}
-		return Command{Type: CmdInsertAfter, EditText: text}, nil
-	case strings.HasPrefix(line, "replace "):
-		text := line[len("replace "):]
-		if text == "" {
+		return Command{Type: CmdInsertAfter, EditText: rest}, nil
+	case cmd == "replace":
+		if rest == "" {
 			return Command{}, fmt.Errorf("replace requires text")
 		}
-		return Command{Type: CmdReplace, EditText: text}, nil
-	case line == "newline":
+		return Command{Type: CmdReplace, EditText: rest}, nil
+	case cmd == "newline":
 		return Command{Type: CmdNewline}, nil
+	case cmd == "copy_func":
+		return parseCopyFuncLine(rest)
+	case cmd == "replace_directive":
+		return parseReplaceDirectiveLine(rest)
 	default:
 		return Command{}, fmt.Errorf("unknown command: %q", line)
 	}
 }
 
+func splitCommand(line string) (cmd string, rest string) {
+	line = strings.TrimRight(line, " \t\r")
+	trimmed := strings.TrimLeft(line, " \t")
+	leadingLen := len(line) - len(trimmed)
+	spaceIdx := strings.Index(trimmed, " ")
+	if spaceIdx < 0 {
+		return trimmed, ""
+	}
+	cmd = trimmed[:spaceIdx]
+	rest = line[leadingLen+spaceIdx+1:]
+	return
+}
+
 func parseGoto(line string) (Command, error) {
 	target := strings.TrimSpace(line[len("goto "):])
+	return parseGotoTarget(target)
+}
 
+func parseGotoTarget(target string) (Command, error) {
 	if target == "opening {" || target == "closing }" {
 		return Command{Type: CmdGoto, GotoTarget: target}, nil
 	}
@@ -135,6 +158,36 @@ func parseGoto(line string) (Command, error) {
 	}
 
 	return Command{}, fmt.Errorf("unknown goto target: %q", target)
+}
+
+func parseCopyFuncLine(rest string) (Command, error) {
+	rest = strings.TrimSpace(rest)
+	asIdx := strings.Index(rest, " as ")
+	if asIdx < 0 {
+		return Command{}, fmt.Errorf("copy_func requires 'as' keyword: %q", rest)
+	}
+	source := rest[:asIdx]
+	target := strings.TrimSuffix(rest[asIdx+4:], " append to file end")
+	return Command{
+		Type:       CmdCopyFunc,
+		CopySource: source,
+		CopyTarget: target,
+	}, nil
+}
+
+func parseReplaceDirectiveLine(rest string) (Command, error) {
+	rest = strings.TrimSpace(rest)
+	withIdx := strings.Index(rest, " with ")
+	if withIdx < 0 {
+		return Command{}, fmt.Errorf("replace_directive requires 'with' keyword: %q", rest)
+	}
+	oldText := rest[:withIdx]
+	newText := rest[withIdx+len(" with "):]
+	return Command{
+		Type:       CmdReplaceDirective,
+		SearchText: oldText,
+		CopyTarget: newText,
+	}, nil
 }
 
 func min(a, b int) int {

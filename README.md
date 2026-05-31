@@ -575,6 +575,8 @@ This blog has a basic explanation: https://blog.xhd2015.xyz/posts/xgo-monkey-pat
 
 And you can also check the generated `.xgo/gen` directory, which contains all instrumented overlay files.
 
+For Go 1.25+, patches use a [declarative DSL](PATCH_DSL.md) with AST-aware navigation. See [patches/DESIGN_FILE_PATCH.md](patches/DESIGN_FILE_PATCH.md) for internal architecture.
+
 See [Issue#7](https://github.com/xhd2015/xgo/issues/7) for more details.
 
 # Why `xgo`?

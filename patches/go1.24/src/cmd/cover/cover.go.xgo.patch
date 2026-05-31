@@ -1,4 +1,4 @@
-<patch xgo_cover_edits>
+<patch get_xgo_edits>
 # Description: Collect xgo edits before parsing the coverage file.
 # Calls xgoParseApply to get edit operations that modify coverage annotations.
 # Inserted before: parsedFile, err := parser.ParseFile(
@@ -6,10 +6,9 @@
 goto func (p *Package) annotateFile
 match parsedFile, err := parser.ParseFile(
 insert_before __xgo_edits := xgoParseApply(&name, &content);
-newline
 </patch>
 
-<patch xgo_cover_apply_edits>
+<patch apply_xgo_edits>
 # Description: Apply collected xgo edits to the coverage file after parsing.
 # Replaces the parsed file content with instrumentation-aware edits.
 # Inserted before: newContent := file.edit.Bytes()
@@ -17,5 +16,4 @@ newline
 goto func (p *Package) annotateFile
 match newContent := file.edit.Bytes()
 insert_before for _, e := range __xgo_edits { file.edit.Replace(e.Start, e.End, e.New); };
-newline
 </patch>

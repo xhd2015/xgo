@@ -14,5 +14,4 @@ insert_after ;import __xgo_runtime "runtime"
 goto func unsupportedTypeEncoder
 goto opening {
 insert_after if __xgo_runtime.XgoIsLooseJsonMarshaling() { e.WriteString(fmt.Sprintf("{%q:%q}", v.Type().String(), "?")); return; }
-newline
 </patch>

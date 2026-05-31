@@ -35,10 +35,7 @@ func main() {
 			addContent: `// This is added before main`,
 			expected: `package main
 
-/*<begin>*/
-// This is added before main
-/*<end>*/
-func main() {
+/*<begin>*/// This is added before main/*<end>*/func main() {
 	fmt.Println("Hello")
 }`,
 		},
@@ -58,10 +55,7 @@ func main() {
 			expected: `package main
 
 func main() {
-/*<begin>*/
-	// This is added after main declaration
-/*<end>*/
-	fmt.Println("Hello")
+/*<begin>*/	// This is added after main declaration/*<end>*/	fmt.Println("Hello")
 }`,
 		},
 		{
@@ -83,10 +77,7 @@ func main() {
 			expected: `package main
 
 func main() {
-/*<begin>*/
-	// New comment
-/*<end>*/
-
+/*<begin>*/	// New comment/*<end>*/
 	fmt.Println("Hello")
 }`,
 		},

@@ -61,9 +61,9 @@ func instrumentJsonEncoding(goroot string, goMajor int, goMinor int) error {
 	})
 }
 
-const unsupportedTypeIgnore = `if __xgo_runtime.XgoIsLooseJsonMarshaling() {` +
-	`    e.WriteString(fmt.Sprintf("{%q:%q}", v.Type().String(), "?"));` +
-	`    return;` +
+const unsupportedTypeIgnore = `if __xgo_runtime.XgoIsLooseJsonMarshaling() { ` +
+	`e.WriteString(fmt.Sprintf("{%q:%q}", v.Type().String(), "?")); ` +
+	`return; ` +
 	`}`
 
 const cyclicIgnore = `if __xgo_runtime.XgoIsLooseJsonMarshaling() {` +

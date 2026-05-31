@@ -93,6 +93,16 @@ func applyPatch(original string, block PatchBlock) (string, error) {
 			state.lastInsertMode = insertAfter
 			state.addSegment(cmd.EditText)
 
+		case CmdInsertAfterLine:
+			if cmd.EditText == "" {
+				return "", fmt.Errorf("insert_after_line requires text")
+			}
+			if state.cursor.endOffset < len(state.original) && state.original[state.cursor.endOffset] == '\n' {
+				state.cursor.endOffset++
+			}
+			state.lastInsertMode = insertAfter
+			state.addSegment(cmd.EditText)
+
 		case CmdReplace:
 			if cmd.EditText == "" {
 				return "", fmt.Errorf("replace requires text")
@@ -106,6 +116,22 @@ func applyPatch(original string, block PatchBlock) (string, error) {
 
 		case CmdNewline:
 			state.addNewline()
+
+		case CmdCopyFunc:
+			copied, err := evalCopyFunc(state, cmd.CopySource, cmd.CopyTarget)
+			if err != nil {
+				return "", fmt.Errorf("copy_func %q: %w", cmd.CopySource, err)
+			}
+			state.appendContent = strings.TrimSuffix(copied, "\n")
+
+		case CmdReplaceDirective:
+			if cmd.SearchText == "" || cmd.CopyTarget == "" {
+				return "", fmt.Errorf("replace_directive requires old and new text")
+			}
+			state.directiveReplace = &directiveReplacement{
+				oldText: cmd.SearchText,
+				newText: cmd.CopyTarget,
+			}
 		}
 	}
 
@@ -127,7 +153,14 @@ type applyState struct {
 	seq            int
 	lastInsertMode insertMode
 
-	groups map[int]*editGroup
+	groups           map[int]*editGroup
+	appendContent    string
+	directiveReplace *directiveReplacement
+}
+
+type directiveReplacement struct {
+	oldText string
+	newText string
 }
 
 func (s *applyState) getGroup() *editGroup {
@@ -215,19 +248,18 @@ func (s *applyState) applyEdits(blockName string) string {
 		}
 
 		if g.isReplace {
-			oldTag := ""
+			markerBegin := fmt.Sprintf("/*<begin %s>*/", blockName)
 			if g.oldText != "" {
-				oldTag = "<old:" + g.oldText + ">"
+				markerBegin += fmt.Sprintf("/*old:%s*/", g.oldText)
 			}
-			markerBegin := fmt.Sprintf("/*<%s:%d%s>*/", blockName, seq, oldTag)
-			markerEnd := "/*<end>*/"
+			markerEnd := fmt.Sprintf("/*<end %s>*/", blockName)
 			wrapped := markerBegin + insertText + markerEnd
 
 			// Replace old content (from offset to oldEnd) with wrapped text
 			result = result[:g.offset] + wrapped + result[g.offset+len(g.oldText):]
 		} else {
-			markerBegin := fmt.Sprintf("/*<%s:%d>*/", blockName, seq)
-			markerEnd := "/*<end>*/"
+			markerBegin := fmt.Sprintf("/*<begin %s>*/", blockName)
+			markerEnd := fmt.Sprintf("/*<end %s>*/", blockName)
 
 			if s.lastInsertMode == insertBefore || seq < maxSeq {
 				// insert_before: insert at offset
@@ -238,6 +270,24 @@ func (s *applyState) applyEdits(blockName string) string {
 				wrapped := markerBegin + insertText + markerEnd
 				result = result[:g.insertEnd] + wrapped + result[g.insertEnd:]
 			}
+		}
+	}
+
+	if s.appendContent != "" {
+		if !strings.HasSuffix(result, "\n") {
+			result += "\n"
+		}
+		markerBegin := fmt.Sprintf("/*<begin %s>*/", blockName)
+		markerEnd := fmt.Sprintf("/*<end %s>*/", blockName)
+		result += markerBegin + s.appendContent + markerEnd
+	}
+
+	if s.directiveReplace != nil {
+		dr := s.directiveReplace
+		idx := strings.Index(result, dr.oldText)
+		if idx >= 0 {
+			annotation := fmt.Sprintf("/*<next-line-original %s>%s</next-line-original>*/", blockName, dr.oldText)
+			result = result[:idx] + annotation + "\n" + dr.newText + result[idx+len(dr.oldText):]
 		}
 	}
 
@@ -489,4 +539,22 @@ func evalMatch(state *applyState, searchText string, forReplace bool) (cursor, e
 		endOffset: endOffset,
 		isReplace: forReplace,
 	}, nil
+}
+
+func evalCopyFunc(state *applyState, sourceName, targetName string) (string, error) {
+	for _, decl := range state.astFile.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		if fd.Name.Name != sourceName {
+			continue
+		}
+		funcStart := state.fset.Position(fd.Pos()).Offset
+		funcEnd := state.fset.Position(fd.End()).Offset
+		funcSrc := state.original[funcStart:funcEnd]
+		result := strings.Replace(funcSrc, "func "+sourceName+"(", "func "+targetName+"(", 1)
+		return result, nil
+	}
+	return "", fmt.Errorf("function %q not found", sourceName)
 }
