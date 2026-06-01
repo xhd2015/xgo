@@ -32,7 +32,7 @@ func InstrumentGoToolCover(goroot string, goVersion *goinfo.GoVersion) error {
 		return err
 	}
 
-	return build.RebuildGoToolCover(goroot)
+	return build.RebuildGoToolCover(goroot, goVersion)
 }
 
 func copyXgoCover(goroot string) error {

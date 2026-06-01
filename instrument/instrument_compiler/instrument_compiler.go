@@ -14,5 +14,5 @@ func BuildInstrument(origGoroot string, goroot string, goVersion *goinfo.GoVersi
 	if skipRebuildCompiler {
 		return nil
 	}
-	return build.RebuildGoToolCompile(goroot)
+	return build.RebuildGoToolCompile(goroot, goVersion)
 }

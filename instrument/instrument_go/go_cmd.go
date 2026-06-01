@@ -67,7 +67,7 @@ func BuildInstrument(goroot string, goVersion *goinfo.GoVersion, allowDebugCompi
 	if skipRebuildGo {
 		return nil
 	}
-	return build.RebuildGoBinary(goroot)
+	return build.RebuildGoBinary(goroot, goVersion)
 }
 
 func copyXgoMain(goroot string) error {

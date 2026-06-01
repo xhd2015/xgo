@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/xhd2015/xgo/support/cmd"
+	"github.com/xhd2015/xgo/support/goinfo"
 	"github.com/xhd2015/xgo/support/osinfo"
 )
 
@@ -36,18 +38,42 @@ func BuildNativeBinary(goroot string, dir string, flags []string, outputDir stri
 	return outputFile, nil
 }
 
-func RebuildGoBinary(goroot string) error {
-	_, err := BuildGoBinray(goroot, []string{"-a"}, "go")
+// On macOS 26+ (arm64), dyld requires all executables to have an LC_UUID load command.
+// The Go internal linker added LC_UUID emission in Go 1.22.9 / 1.23.3 / 1.24+.
+// For older Go versions on darwin/arm64, we use -linkmode=external to invoke the
+// system linker (clang/ld), which always emits LC_UUID.
+// See: https://github.com/golang/go/issues/68678, #78012
+func needExternalLinker(goVersion *goinfo.GoVersion) bool {
+	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+		return false
+	}
+	if goVersion == nil {
+		return false
+	}
+	return goVersion.Major == 1 && goVersion.Minor < 22
+}
+
+func externalLinkerFlags(goVersion *goinfo.GoVersion) []string {
+	if !needExternalLinker(goVersion) {
+		return nil
+	}
+	return []string{"-ldflags=-linkmode=external"}
+}
+
+func RebuildGoBinary(goroot string, goVersion *goinfo.GoVersion) error {
+	flags := append([]string{"-a"}, externalLinkerFlags(goVersion)...)
+	_, err := BuildGoBinray(goroot, flags, "go")
 	return err
 }
 
-func RebuildGoToolCompile(goroot string) error {
-	_, err := BuildToolBinray(goroot, []string{"-a"}, "./cmd/compile", "compile")
+func RebuildGoToolCompile(goroot string, goVersion *goinfo.GoVersion) error {
+	flags := append([]string{"-a"}, externalLinkerFlags(goVersion)...)
+	_, err := BuildToolBinray(goroot, flags, "./cmd/compile", "compile")
 	return err
 }
 
-func RebuildGoToolCover(goroot string) error {
-	_, err := BuildToolBinray(goroot, nil, "./cmd/cover", "cover")
+func RebuildGoToolCover(goroot string, goVersion *goinfo.GoVersion) error {
+	_, err := BuildToolBinray(goroot, externalLinkerFlags(goVersion), "./cmd/cover", "cover")
 	return err
 }
 
