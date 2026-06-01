@@ -37,6 +37,9 @@ func ResolveVersion(version string) (string, error) {
 		}
 		return "go" + version, nil
 	}
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid Go version: %q", version)
+	}
 
 	allVersions, err := fetchVersionList()
 	if err != nil {

@@ -49,3 +49,18 @@ All patch names now use `xgo_` prefix for consistency:
 - `script/generate` now copies `patches/` into `cmd/xgo/asset/` as part of the `cmd/xgo/asset/patches` generate type
 - Raw `.go` files in embedded patches are renamed to `.go.txt` to prevent compilation in the xgo module; they are restored to `.go` when extracted at runtime
 - `patch/` (compiler patch source) continues to be embedded as `compiler_patch_gen` via `asset.CompilerPatchGenFS`
+
+### GOMODCACHE Overlay Restriction (Go 1.25)
+
+Go 1.25 forbids `-overlay` from replacing files under `GOMODCACHE`. This forced xgo to stop using overlay entries pointing into GOMODCACHE for runtime modifications. Instead, a `needLocalRuntime` gate (`cmd/xgo/main.go:710`, `goVersion.Minor >= 25`) triggers: (1) copy runtime to local dir, (2) modify files on disk, (3) use `replace` directive in `-modfile`, (4) add blank imports to force compilation of all runtime packages.
+
+Known side effect: `registerFuncTab` (`cmd/xgo/instrument.go:348`) lacks the `AllowInstrument` guard present in the main instrument loop, causing functab entries for non-instrumentable runtime packages on go1.25.
+
+| Commit | Description |
+|--------|-------------|
+| `55be783` | Add Go 1.25 support |
+| `3123289` | Avoid GOMODCACHE overlays — introduce `needLocalRuntime` |
+| `c8a8e28` | Fix `forceLoad` parameter to also use `needLocalRuntime` |
+| `58f7584` | Add Go 1.26 support (extends to `>= 25`) |
+
+See: `doc/development/OVERLAY_RESTRICTION_IN_GO_1_25_V.S._GO_1_24.md` for full walkthrough, causal chain, affected tests, and fix suggestions.

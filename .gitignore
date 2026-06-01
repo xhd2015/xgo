@@ -49,3 +49,4 @@ cover.out
 
 /go-patch-diff/
 /*.md
+*.gz

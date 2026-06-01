@@ -152,6 +152,7 @@ func main() {
 	var useFilePatches *bool
 	var flagList bool
 	var flagJSON bool
+	var noGit bool
 	if len(args) > 0 && args[0] == "list" {
 		flagList = true
 		args = args[1:]
@@ -196,7 +197,15 @@ func main() {
 			resetInstrument = true
 			continue
 		}
+		if arg == "--no-git" {
+			noGit = true
+			continue
+		}
 		if arg == "-a" {
+			remainArgs = append(remainArgs, arg)
+			continue
+		}
+		if arg == "-short" {
 			remainArgs = append(remainArgs, arg)
 			continue
 		}
@@ -325,36 +334,39 @@ func main() {
 		return
 	}
 	_ = projectDir
-	topLevel, err := git.ShowTopLevel("")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	same := func(a string, b string) (bool, error) {
-		absA, err := filepath.Abs(a)
+	if !noGit {
+		topLevel, err := git.ShowTopLevel("")
 		if err != nil {
-			return false, err
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
 		}
-		absB, err := filepath.Abs(b)
+		wd, err := os.Getwd()
 		if err != nil {
-			return false, err
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
 		}
-		return absA == absB, nil
+		same := func(a string, b string) (bool, error) {
+			absA, err := filepath.Abs(a)
+			if err != nil {
+				return false, err
+			}
+			absB, err := filepath.Abs(b)
+			if err != nil {
+				return false, err
+			}
+			return absA == absB, nil
+		}
+		atRoot, err := same(topLevel, wd)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if !atRoot {
+			fmt.Fprintf(os.Stderr, "run-test requires executing from project root, current: %s\n", wd)
+			os.Exit(1)
+		}
 	}
-	atRoot, err := same(topLevel, wd)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	if !atRoot {
-		fmt.Fprintf(os.Stderr, "run-test requires executing from project root, current: %s\n", wd)
-		os.Exit(1)
-	}
+	var err error
 	if coverprofile != "" {
 		absProfile, err := filepath.Abs(coverprofile)
 		if err != nil {
