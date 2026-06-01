@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/xhd2015/xgo/support/cmd"
 	"github.com/xhd2015/xgo/support/goinfo"
@@ -38,13 +37,24 @@ func BuildNativeBinary(goroot string, dir string, flags []string, outputDir stri
 	return outputFile, nil
 }
 
-// On macOS 26+ (arm64), dyld requires all executables to have an LC_UUID load command.
-// The Go internal linker added LC_UUID emission in Go 1.22.9 / 1.23.3 / 1.24+.
-// For older Go versions on darwin/arm64, we use -linkmode=external to invoke the
+// NeedExternalLinker reports whether binaries should be built with
+// -linkmode=external on the current host for the current target.
+//
+// On macOS 26+ (arm64), dyld requires all executables to have an LC_UUID load
+// command. The Go internal linker added LC_UUID emission in Go 1.22.9 / 1.23.3
+// / 1.24+. For older Go versions, we use -linkmode=external to invoke the
 // system linker (clang/ld), which always emits LC_UUID.
+//
+// External linking only works when the target OS matches the host OS (both
+// darwin). When cross-compiling to e.g. linux, the macOS system linker cannot
+// produce the target binary, so this returns false.
+//
 // See: https://github.com/golang/go/issues/68678, #78012
-func needExternalLinker(goVersion *goinfo.GoVersion) bool {
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+func NeedExternalLinker(goVersion *goinfo.GoVersion) bool {
+	if GetHostGOOS() != "darwin" || GetHostGOARCH() != "arm64" {
+		return false
+	}
+	if GetTargetGOOS() != "darwin" {
 		return false
 	}
 	if goVersion == nil {
@@ -53,27 +63,27 @@ func needExternalLinker(goVersion *goinfo.GoVersion) bool {
 	return goVersion.Major == 1 && goVersion.Minor < 22
 }
 
-func externalLinkerFlags(goVersion *goinfo.GoVersion) []string {
-	if !needExternalLinker(goVersion) {
+func ExternalLinkerFlags(goVersion *goinfo.GoVersion) []string {
+	if !NeedExternalLinker(goVersion) {
 		return nil
 	}
 	return []string{"-ldflags=-linkmode=external"}
 }
 
 func RebuildGoBinary(goroot string, goVersion *goinfo.GoVersion) error {
-	flags := append([]string{"-a"}, externalLinkerFlags(goVersion)...)
+	flags := append([]string{"-a"}, ExternalLinkerFlags(goVersion)...)
 	_, err := BuildGoBinray(goroot, flags, "go")
 	return err
 }
 
 func RebuildGoToolCompile(goroot string, goVersion *goinfo.GoVersion) error {
-	flags := append([]string{"-a"}, externalLinkerFlags(goVersion)...)
+	flags := append([]string{"-a"}, ExternalLinkerFlags(goVersion)...)
 	_, err := BuildToolBinray(goroot, flags, "./cmd/compile", "compile")
 	return err
 }
 
 func RebuildGoToolCover(goroot string, goVersion *goinfo.GoVersion) error {
-	_, err := BuildToolBinray(goroot, externalLinkerFlags(goVersion), "./cmd/cover", "cover")
+	_, err := BuildToolBinray(goroot, ExternalLinkerFlags(goVersion), "./cmd/cover", "cover")
 	return err
 }
 

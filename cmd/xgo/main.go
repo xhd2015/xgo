@@ -914,6 +914,7 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		if len(buildFlags) > 0 {
 			buildCmdArgs = append(buildCmdArgs, buildFlags...)
 		}
+		buildCmdArgs = append(buildCmdArgs, build.ExternalLinkerFlags(goVersion)...)
 		if len(progFlags) > 0 {
 			runFlagsAfterBuild = append(runFlagsAfterBuild, progFlags...)
 		}
