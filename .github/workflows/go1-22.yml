@@ -1,11 +1,11 @@
-name: Go 1.22
+name: Go 1-22
 
 on:
   push:
     branches: [ "dev-go1.25" ]
 
 jobs:
-  test:
+  test-go1-22:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

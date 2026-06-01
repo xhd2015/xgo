@@ -1,11 +1,11 @@
-name: Go 1.19
+name: Go 1-19
 
 on:
   push:
     branches: [ "dev-go1.25" ]
 
 jobs:
-  test:
+  test-go1-19:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
