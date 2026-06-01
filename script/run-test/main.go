@@ -148,6 +148,7 @@ func main() {
 	var flagRace bool
 	var flagXgoRaceSafe bool
 
+	var useFilePatches *bool
 	var flagList bool
 	var flagJSON bool
 	if len(args) > 0 && args[0] == "list" {
@@ -272,6 +273,19 @@ func main() {
 			installXgo = true
 			continue
 		}
+		if arg == "--use-file-patches" {
+			useFilePatches = ptrBool(true)
+			continue
+		} else if strings.HasPrefix(arg, "--use-file-patches=") {
+			var err error
+			useFilePatches, err = parseUseFilePatchesFlag(arg[len("--use-file-patches="):])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				os.Exit(1)
+			}
+			continue
+		}
+
 		if arg == "--json" {
 			flagJSON = true
 			continue
@@ -423,7 +437,7 @@ func main() {
 	if withSetup || withSetupOnly {
 		setupGoroots = make([]string, len(goroots))
 		for i, goroot := range goroots {
-			setupGoroots[i], err = setupGoroot(goroot, false)
+			setupGoroots[i], err = setupGoroot(goroot, false, useFilePatches)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "setup goroot: %s %v\n", goroot, err)
 				os.Exit(1)
@@ -489,6 +503,13 @@ func main() {
 			}
 			if logDebug {
 				cmdArgs = append(cmdArgs, "--log-debug=stdout")
+			}
+			if useFilePatches != nil {
+				if *useFilePatches {
+					cmdArgs = append(cmdArgs, "--use-file-patches")
+				} else {
+					cmdArgs = append(cmdArgs, "--use-file-patches=false")
+				}
 			}
 			err := cmd.Run("go", cmdArgs...)
 			if err != nil {
@@ -594,6 +615,7 @@ func main() {
 				BuildOnly:       buildOnly,
 				GoBinary:        goExe,
 				DebugGo:         debugGo,
+				UseFilePatches:  useFilePatches,
 				XgoDebugCompile: xgoDebugCompile,
 			}
 			if tags != "" {
@@ -683,12 +705,19 @@ func main() {
 	}
 }
 
-func setupGoroot(goroot string, logDebug bool) (string, error) {
+func setupGoroot(goroot string, logDebug bool, useFilePatches *bool) (string, error) {
 	args := []string{
 		"run", "./cmd/xgo", "setup", "--with-goroot", goroot,
 	}
 	if logDebug {
 		args = append(args, "--log-debug")
+	}
+	if useFilePatches != nil {
+		if *useFilePatches {
+			args = append(args, "--use-file-patches")
+		} else {
+			args = append(args, "--use-file-patches=false")
+		}
 	}
 	fmt.Printf("go %s\n", strings.Join(args, " "))
 	return cmd.Output("go", args...)
@@ -777,6 +806,7 @@ type Opts struct {
 	GoBinary       string
 	DebugXgo       bool
 	DebugGo        bool
+	UseFilePatches *bool
 
 	XgoDebugCompile string
 }
@@ -789,6 +819,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 	var buildOnly bool
 	var goBinary string
 	var debugGo bool
+	var useFilePatches *bool
 	var xgoDebugCompile string
 	if len(opts) > 0 {
 		if len(opts) != 1 {
@@ -802,6 +833,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		buildOnly = opt.BuildOnly
 		goBinary = opt.GoBinary
 		debugGo = opt.DebugGo
+		useFilePatches = opt.UseFilePatches
 		xgoDebugCompile = opt.XgoDebugCompile
 	}
 	goroot, err := filepath.Abs(goroot)
@@ -829,32 +861,51 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 			return err
 		}
 		testArgs = []string{"test"}
+		if useFilePatches != nil {
+			if *useFilePatches {
+				testArgs = append(testArgs, "--use-file-patches")
+			} else {
+				testArgs = append(testArgs, "--use-file-patches=false")
+			}
+		}
+	} else if !debugXgo {
+		testArgs = []string{"run"}
+
+		runTag := tags
+		if tags == "" && xgoDebugCompile != "" {
+			runTag = "dev"
+		}
+		if runTag != "" {
+			testArgs = append(testArgs, "-tags", runTag)
+		}
+		testArgs = append(testArgs, "./cmd/xgo", "test")
+		if useFilePatches != nil {
+			if *useFilePatches {
+				testArgs = append(testArgs, "--use-file-patches")
+			} else {
+				testArgs = append(testArgs, "--use-file-patches=false")
+			}
+		}
+
+		if xgoDebugCompile != "" {
+			var val string
+			if xgoDebugCompile != "true" {
+				val = "=" + xgoDebugCompile
+			}
+			testArgs = append(testArgs, "--debug-compile"+val)
+		}
 	} else {
-		if !debugXgo {
-			testArgs = []string{"run"}
-
-			runTag := tags
-			if tags == "" && xgoDebugCompile != "" {
-				runTag = "dev"
+		testArgs = []string{"run"}
+		if tags != "" {
+			testArgs = append(testArgs, "-tags", tags)
+		}
+		testArgs = append(testArgs, "./cmd/xgo", "test")
+		if useFilePatches != nil {
+			if *useFilePatches {
+				testArgs = append(testArgs, "--use-file-patches")
+			} else {
+				testArgs = append(testArgs, "--use-file-patches=false")
 			}
-			if runTag != "" {
-				testArgs = append(testArgs, "-tags", runTag)
-			}
-			testArgs = append(testArgs, "./cmd/xgo", "test")
-
-			if xgoDebugCompile != "" {
-				var val string
-				if xgoDebugCompile != "true" {
-					val = "=" + xgoDebugCompile
-				}
-				testArgs = append(testArgs, "--debug-compile"+val)
-			}
-		} else {
-			testArgs = []string{"run"}
-			if tags != "" {
-				testArgs = append(testArgs, "-tags", tags)
-			}
-			testArgs = append(testArgs, "./cmd/xgo", "test")
 		}
 	}
 	if buildOnly {
@@ -965,4 +1016,16 @@ func (d *detector) Write(p []byte) (n int, err error) {
 }
 func (d *detector) found() bool {
 	return d.foundMatch
+}
+
+func ptrBool(b bool) *bool { return &b }
+
+func parseUseFilePatchesFlag(val string) (*bool, error) {
+	if val == "" || val == "true" {
+		return ptrBool(true), nil
+	}
+	if val == "false" {
+		return ptrBool(false), nil
+	}
+	return nil, fmt.Errorf("unknown value for --use-file-patches: %s, expects true|false", val)
 }

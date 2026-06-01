@@ -746,24 +746,25 @@ func parseStackTraceFlag(arg string) (string, bool) {
 
 func resolveUseFilePatches(explicit *bool, goVersion *goinfo.GoVersion) (value bool, warning string, err error) {
 	if explicit == nil {
-		if goVersion != nil && goVersion.Major == 1 && goVersion.Minor == 25 {
+		// default: go1.25+ uses file-based patches
+		if goVersion != nil && goVersion.Major == 1 && goVersion.Minor >= 25 {
 			return true, "", nil
 		}
 		return false, "", nil
 	}
 	if *explicit {
-		if goVersion == nil || !(goVersion.Major == 1 && (goVersion.Minor == 24 || goVersion.Minor == 25)) {
+		if goVersion == nil || !(goVersion.Major == 1 && goVersion.Minor >= 24) {
 			ver := "unknown"
 			if goVersion != nil {
 				ver = fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor)
 			}
-			return false, "", fmt.Errorf("--use-file-patches is only supported for go1.24 and go1.25, got %s; use --use-file-patches=false to disable", ver)
+			return false, "", fmt.Errorf("--use-file-patches is only supported for go1.24+, got %s; use --use-file-patches=false to disable", ver)
 		}
 		return true, "", nil
 	}
 	// explicitly false
-	if goVersion != nil && !(goVersion.Major == 1 && (goVersion.Minor == 24 || goVersion.Minor == 25)) {
-		return false, fmt.Sprintf("WARNING: --use-file-patches is only supported for go1.24 and go1.25, got go%d.%d", goVersion.Major, goVersion.Minor), nil
+	if goVersion != nil && goVersion.Major == 1 && goVersion.Minor > 25 {
+		return false, "", fmt.Errorf("--use-file-patches=false is not supported for go%d.%d; after go1.25, file-based patches are always used", goVersion.Major, goVersion.Minor)
 	}
 	return false, "", nil
 }

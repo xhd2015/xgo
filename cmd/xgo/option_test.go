@@ -53,8 +53,9 @@ func TestParseUseFilePatches(t *testing.T) {
 func TestResolveUseFilePatches(t *testing.T) {
 	go124 := &goinfo.GoVersion{Major: 1, Minor: 24}
 	go125 := &goinfo.GoVersion{Major: 1, Minor: 25}
-	go123 := &goinfo.GoVersion{Major: 1, Minor: 23}
 	go126 := &goinfo.GoVersion{Major: 1, Minor: 26}
+	go127 := &goinfo.GoVersion{Major: 1, Minor: 27}
+	go123 := &goinfo.GoVersion{Major: 1, Minor: 23}
 	go217 := &goinfo.GoVersion{Major: 1, Minor: 17}
 
 	pbTrue := ptrBool(true)
@@ -70,23 +71,27 @@ func TestResolveUseFilePatches(t *testing.T) {
 	}{
 		// nil explicit — version-based defaults
 		{name: "go1.25 default", goVersion: go125, want: true},
+		{name: "go1.26 default", goVersion: go126, want: true},
+		{name: "go1.27 default", goVersion: go127, want: true},
 		{name: "go1.24 default", goVersion: go124, want: false},
 		{name: "go1.23 default", goVersion: go123, want: false},
 		{name: "go1.17 default", goVersion: go217, want: false},
 		{name: "nil version default", want: false},
 
-		// explicit true — validated
+		// explicit true — go1.24+ allowed
 		{name: "go1.25 explicit true", explicit: pbTrue, goVersion: go125, want: true},
+		{name: "go1.26 explicit true", explicit: pbTrue, goVersion: go126, want: true},
 		{name: "go1.24 explicit true", explicit: pbTrue, goVersion: go124, want: true},
 		{name: "go1.23 explicit true", explicit: pbTrue, goVersion: go123, wantErr: true},
-		{name: "go1.26 explicit true", explicit: pbTrue, goVersion: go126, wantErr: true},
 		{name: "nil version explicit true", explicit: pbTrue, wantErr: true},
 
-		// explicit false — warning on unsupported, no error
+		// explicit false — only go1.24/go1.25 allow switching
 		{name: "go1.25 explicit false", explicit: pbFalse, goVersion: go125, want: false},
 		{name: "go1.24 explicit false", explicit: pbFalse, goVersion: go124, want: false},
-		{name: "go1.23 explicit false", explicit: pbFalse, goVersion: go123, want: false, wantWarning: true},
-		{name: "go1.26 explicit false", explicit: pbFalse, goVersion: go126, want: false, wantWarning: true},
+		{name: "go1.23 explicit false", explicit: pbFalse, goVersion: go123, want: false},
+		{name: "go1.17 explicit false", explicit: pbFalse, goVersion: go217, want: false},
+		{name: "go1.26 explicit false", explicit: pbFalse, goVersion: go126, wantErr: true},
+		{name: "go1.27 explicit false", explicit: pbFalse, goVersion: go127, wantErr: true},
 		{name: "nil version explicit false", explicit: pbFalse, want: false},
 	}
 	for _, tt := range tests {
