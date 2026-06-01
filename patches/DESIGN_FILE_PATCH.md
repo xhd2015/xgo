@@ -4,7 +4,9 @@
 
 ## Overview
 
-Starting with Go 1.25, xgo's patching system switches from programmatic text-anchor patching to file-based, AST-aware patch files stored in a version-specific directory structure. This makes patches more visible, reviewable, independent per Go version, and idempotent.
+Starting Go 1.25, xgo's patching system switches from programmatic text-anchor patching to file-based, AST-aware patch files stored in a version-specific directory structure. This makes patches more visible, reviewable, independent per Go version, and idempotent.
+
+The file-based patching is also back ported go 1.24.
 
 ## Directory Structure
 
@@ -41,13 +43,24 @@ Rules:
 ```jsonc
 {
   "version": "go1.25+",
-  "copy": {
-    "src/cmd/compile/internal/xgo_rewrite_internal/patch/": "patch/"
-  }
+  "copy": [
+    {"from": "patch/", "to": "src/cmd/compile/internal/xgo_rewrite_internal/patch/", "ignore_files": ["src/cmd/compile/internal/xgo_rewrite_internal/patch/go.mod"]}
+  ],
+  "generate": [
+    {"kind": "rebuild-compiler", "cmd": "...", "outputs": []},
+    {"kind": "rebuild-go", "cmd": "...", "outputs": []}
+  ]
 }
 ```
 
-Key = GOROOT-relative destination. Value = xgo-repo-relative source directory.
+- `copy` is an **array of objects** with fields:
+  - `from`: xgo-repo-relative source directory
+  - `to`: GOROOT-relative destination
+  - `ignore_files` (optional): file paths to remove after copy (relative to GOROOT)
+- `generate` is an array of objects with fields:
+  - `kind` (optional): category for selective skipping (e.g. `"rebuild-compiler"`)
+  - `cmd`: shell command (supports `${VAR}` substitution)
+  - `outputs`: list of output file paths (informational)
 
 ## `.xgo.patch` Format
 
@@ -90,8 +103,11 @@ command
 |---|---|---|
 | `insert_before <text>` | Cursor at a point | Insert text at `cursor.offset` |
 | `insert_after <text>` | Cursor at a point | Insert text at `cursor.endOffset` |
+| `insert_after_line <text>` | Cursor at a point | Like `insert_after`, but skips trailing `\n` so insert lands on next line |
 | `replace <text>` | Cursor from `find_for_replace` | Replace cursor range with text |
+| `replace_directive <old> with <new>` | Cursor from prior goto | Replace a compiler directive (e.g. `//go:linkname`) preserving its positional constraints |
 | `newline` | - | Insert `\n` at current edit position |
+| `copy_func <source> as <target> append to file end` | - | Copy a function body, rename it, and append to the end of the file |
 
 ### Consecutive Editing at Same Position
 
@@ -108,15 +124,21 @@ All edits are wrapped with **inline, line-preserving** markers. Markers NEVER oc
 
 **Insert marker**:
 ```
-/*<patch-name:seq>*/inserted-content/*<end>*/
+/*<begin patch-name>*/inserted-content/*<end patch-name>*/
 ```
 
 **Replace marker** (stores original text for clearing):
 ```
-/*<patch-name:seq><old:original-text>*/replacement-content/*<end>*/
+/*<begin patch-name>*//*old:original-text*/replacement-content/*<end patch-name>*/
 ```
 
-Before applying a named patch, any existing markers with that name are cleared. For replace edits, clearing restores the `/*<old:...>*/` content. For insert edits, the markers and their content are removed.
+**Replace directive marker** (preserves line position of directives like `//go:linkname`):
+```
+/*<next-line-original patch-name>original-directive</next-line-original>*/
+replacement-directive
+```
+
+Before applying a named patch, any existing markers with that name are cleared. For replace edits, clearing restores the `/*old:...*/` content. For `replace_directive` edits, clearing restores the `/*<next-line-original>*/` annotation's original text. For insert edits, the markers and their content are removed.
 
 ### Examples
 
@@ -129,7 +151,7 @@ insert_before __xgo_g __xgo_g;
 newline
 </patch>
 ```
-→ `/*<xgo_g_field:1>*/__xgo_g __xgo_g;/*<end>*/}`
+→ `/*<begin xgo_g_field>*/__xgo_g __xgo_g;/*<end xgo_g_field>*/}`
 
 **Insert at function start (`proc.go`)**:
 ```
@@ -148,7 +170,36 @@ find_for_replace //go:linkname timeSleep time.Sleep
 replace //go:linkname timeSleep time.runtimeSleep
 </patch>
 ```
-→ `/*<xgo_linkname:1><old://go:linkname timeSleep time.Sleep>*///go:linkname timeSleep time.runtimeSleep/*<end>*/`
+→ `/*<begin xgo_linkname>*//*old://go:linkname timeSleep time.Sleep>*///go:linkname timeSleep time.runtimeSleep/*<end xgo_linkname>*/`
+
+**Copy a function (`time.go`)**:
+```
+<patch xgo_real_now>
+copy_func Now as XgoRealNow append to file end
+</patch>
+```
+
+Copies the body of `Now()`, renames it to `XgoRealNow()`, and appends to the end of the file wrapped in markers.
+
+**Replace a directive (`time.go`)**:
+```
+<patch xgo_runtime_linkname>
+goto func timeSleep
+replace_directive //go:linkname timeSleep time.Sleep with //go:linkname timeSleep time.XgoRealSleep
+</patch>
+```
+
+Before:
+```go
+//go:linkname timeSleep time.Sleep
+func timeSleep(...)
+```
+After:
+```go
+/*<next-line-original xgo_runtime_linkname>//go:linkname timeSleep time.Sleep</next-line-original>*/
+//go:linkname timeSleep time.XgoRealSleep
+func timeSleep(...)
+```
 
 ## Engine Architecture
 
@@ -162,13 +213,16 @@ For each block:
    - Parse target with `go/parser.ParseFile`
    - Process commands: positioning → edit collection → marker wrapping
    - Apply edits in reverse offset order (preserves positions)
+   - `replace_directive` uses a separate `/*<next-line-original>*/` annotation flow rather than standard begin/end markers
    - Re-parse for next block
 
-### `ApplyPatches(patchDir, goroot, xgoRepoRoot)`
+### `ApplyPatches(patchDir, goroot, xgoRepoRoot, extraEnv, skipKinds)`
 Walks patch directory:
-1. Load `__config__.json` for directory copy instructions
-2. For each `.xgo.patch` file → apply to corresponding GOROOT file
-3. For each other file → copy one-to-one to GOROOT with directories created
+1. Load `__config__.json` for directory copy and generate instructions
+2. Process copy entries (directory copy with `ignore_files` support)
+3. Process generate entries (run shell commands with `${VAR}` substitution, with `kind`-based skipping)
+4. For each `.xgo.patch` file → apply to corresponding GOROOT file
+5. For each other file → copy one-to-one to GOROOT with directories created
 
 ## Error Cases
 
@@ -176,11 +230,17 @@ Walks patch directory:
 |---|---|
 | `insert_before` with no text | `insert_before requires text` |
 | `insert_after` with no text | `insert_after requires text` |
+| `insert_after_line` with no text | `insert_after_line requires text` |
 | `replace` with no text | `replace requires text` |
 | `replace` without `find_for_replace` | `replace requires prior find_for_replace` |
+| `replace_directive` with no old or new text | `replace_directive requires old and new text` |
+| `replace_directive` missing `with` keyword | `replace_directive requires 'with' keyword: "..."` |
 | Unknown goto target | `unknown goto target: "..."` |
 | `match` not found | `text not found in scope: "..."` |
 | Declaration not found | `declaration not found: ...` |
+| Function not found | `function not found: ...` |
+| `copy_func` missing `as` keyword | `copy_func requires 'as' keyword` |
+| Unknown command | `unknown command: "..."` |
 
 ## Testing Strategy
 
@@ -188,7 +248,7 @@ All tests in `instrument/patch/apply_test.go`:
 
 ### Parser Tests
 - Parse valid `.xgo.patch` with multiple blocks
-- Parse commands: goto, match, find_for_replace, insert_before, insert_after, replace, newline
+- Parse commands: goto, match, find_for_replace, insert_before, insert_after, insert_after_line, replace, replace_directive, newline, copy_func
 - Handle comments and blank lines
 - Error on unknown command
 
@@ -199,8 +259,10 @@ All tests in `instrument/patch/apply_test.go`:
 - `match` / `find_for_replace` finds text within scope
 - `insert_before` inserts at correct offset
 - `insert_before` multiple — reverse stacking
-- `insert_after` multiple — forward stacking
+- `insert_after` / `insert_after_line` — forward stacking; `insert_after_line` skips trailing newline
 - `replace` with old text preservation
+- `replace_directive` produces `/*<next-line-original>*/` annotation
+- `copy_func` copies and renames function body
 - Multiple `<patch>` blocks — second sees first's changes
 
 ### Marker Tests
@@ -224,15 +286,7 @@ go test ./instrument/patch/... -v -count=1
 
 ### `--use-file-patches` flag
 
-Added to `cmd/xgo/main.go`:
-
-```go
-if useFilePatches && goVersion.Minor != 25 {
-    return fmt.Errorf("--use-file-patches is only supported for go1.25, got go%d.%d", goVersion.Major, goVersion.Minor)
-}
-```
-
-When enabled for go1.25+, `patchRuntime()` calls `ApplyPatches()` instead of the programmatic patching functions.
+Added to `cmd/xgo/main.go`. When enabled for go1.24+, `patchRuntime()` calls `ApplyPatches()` instead of the programmatic patching functions.
 
 ### New Go Version Workflow
 
@@ -245,5 +299,6 @@ When Go 1.26 arrives:
 ## Non-Goals
 
 - Does NOT auto-generate patch files (maintainers copy and adjust)
-- Does NOT migrate go1.17-1.24 patches (those remain programmatic)
+- Does NOT migrate go1.17-1.23 patches (those remain programmatic)
 - Does NOT handle merging or conflict resolution between patch versions
+- File-based patches currently support go1.24+

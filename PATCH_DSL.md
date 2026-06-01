@@ -51,13 +51,16 @@ Modify the source at the cursor position.
 |---------|--------|
 | `insert_before <text>` | Insert text at `cursor.offset` (before the cursor) |
 | `insert_after <text>` | Insert text at `cursor.endOffset` (after the cursor) |
+| `insert_after_line <text>` | Like `insert_after`, but skips the trailing `\n` so the insert lands on the next line |
 | `replace <text>` | Replace the range selected by a prior `find_for_replace` |
+| `replace_directive <old> with <new>` | Replace a compiler directive (e.g. `//go:linkname`) while preserving its positional constraints |
 | `newline` | Append `\n` to the current accumulated text segment |
 | `copy_func <source> as <target> append to file end` | Copy a function body, rename it, and append to the end of the file |
 
 **Requirements:**
-- `insert_before`, `insert_after`, `replace` all require non-empty text.
+- `insert_before`, `insert_after`, `insert_after_line`, `replace` all require non-empty text.
 - `replace` requires a prior `find_for_replace` command.
+- `replace_directive` requires a prior `goto` command (it searches the full file).
 - `goto opening/closing/field` requires a prior positioning command (struct, func, or interface).
 
 ## Examples
@@ -83,7 +86,7 @@ After:
 ```go
 type g struct {
     a int
-    /*<begin xgo_add_field:2>*/newField string/*<end xgo_add_field:2>*/}
+    /*<begin xgo_add_field>*/newField string/*<end xgo_add_field>*/}
 ```
 
 ### Insert after a function's opening brace
@@ -105,8 +108,8 @@ func goexit1() {
 ```
 After:
 ```go
-func goexit1() {/*<begin xgo_callback:2>*/
-    notifyCallback();/*<end xgo_callback:2>*/
+func goexit1() {/*<begin xgo_callback>*/
+    notifyCallback();/*<end xgo_callback>*/
     ...
 }
 ```
@@ -148,7 +151,7 @@ func timeSleep(...)
 ```
 After:
 ```go
-/*<begin xgo_linkname:1><old://go:linkname timeSleep time.Sleep>*///go:linkname timeSleep time.runtimeSleep/*<end xgo_linkname:1>*/
+/*<begin xgo_linkname>*//*old://go:linkname timeSleep time.Sleep>*///go:linkname timeSleep time.runtimeSleep/*<end xgo_linkname>*/
 func timeSleep(...)
 ```
 
@@ -160,6 +163,41 @@ find_for_replace func Sleep(d Duration)
 replace func XgoRealSleep(d Duration);func /*xgo_instr*/Sleep(d Duration){ XgoRealSleep(d); }
 </patch>
 ```
+
+### Replace a compiler directive
+
+```
+<patch xgo_runtime_linkname>
+goto func timeSleep
+replace_directive //go:linkname timeSleep time.Sleep with //go:linkname timeSleep time.XgoRealSleep
+</patch>
+```
+
+Before:
+```go
+//go:linkname timeSleep time.Sleep
+func timeSleep(...)
+```
+After:
+```go
+/*<next-line-original xgo_runtime_linkname>//go:linkname timeSleep time.Sleep</next-line-original>*/
+//go:linkname timeSleep time.XgoRealSleep
+func timeSleep(...)
+```
+
+`replace_directive` preserves the directive's positional relationship with the function it annotates, while `find_for_replace` + `replace` does not.
+
+### Insert after a line (skipping trailing newline)
+
+```
+<patch xgo_import_io>
+goto func LoadPackage
+match "lines")
+insert_after_line ;import io "io"
+</patch>
+```
+
+`insert_after_line` is like `insert_after` but skips past the `\n` after the matched position, causing the inserted text to land on the next line. This is useful for adding code after a matched line without creating inline chunks.
 
 ### Copy a function to the end of the file
 
@@ -212,20 +250,30 @@ Markers **never** occupy their own line — they share lines with code to keep `
 ### Insert Marker
 
 ```
-/*<begin patch-name:seq>*/inserted-content/*<end patch-name:seq>*/
+/*<begin patch-name>*/inserted-content/*<end patch-name>*/
 ```
 
 ### Replace Marker
 
 ```
-/*<begin patch-name:seq><old:original-text>*/replacement-content/*<end patch-name:seq>*/
+/*<begin patch-name>*//*old:original-text*/replacement-content/*<end patch-name>*/
 ```
+
+### Replace Directive Marker
+
+```
+/*<next-line-original patch-name>original-directive</next-line-original>*/
+replacement-directive
+```
+
+The `/*<old:...>*/` sub-comment stores the original text so the system can restore it on re-application.
 
 ### Clearing
 
 - Before applying a patch, any existing markers with that patch's name are removed.
 - For **insert** edits: markers and their content are deleted.
-- For **replace** edits: the `/*<old:...>*/` content is restored.
+- For **replace** edits: the `/*old:...*/` content is restored.
+- For **replace_directive** edits: the `/*<next-line-original>*/` annotation's original text is restored and the replacement line is removed.
 - Applying the same patch twice has the same effect as applying it once.
 
 ## `__config__.json`
@@ -236,10 +284,11 @@ Each patch directory (e.g. `patches/go1.25/`) may have a `__config__.json` for d
 {
   "version": "go1.25+",
   "copy": [
-    {"from": "relative/to/xgo_repo", "to": "relative/to/GOROOT"}
+    {"from": "relative/to/xgo_repo", "to": "relative/to/GOROOT", "ignore_files": ["path/to/skip"]}
   ],
   "generate": [
     {
+      "kind": "rebuild-compiler",
       "cmd": "shell command",
       "outputs": ["file/path"]
     }
@@ -247,8 +296,14 @@ Each patch directory (e.g. `patches/go1.25/`) may have a `__config__.json` for d
 }
 ```
 
-- `copy`: copies a directory from the xgo repo into the instrumented GOROOT.
-- `generate`: runs shell commands (supports `${VAR}` substitution from environment).
+- `copy`: copies a directory from the xgo repo into the instrumented GOROOT. Each entry has:
+  - `from`: source path relative to xgo repo root
+  - `to`: destination path relative to GOROOT
+  - `ignore_files` (optional): file paths to remove after copy (relative to GOROOT)
+- `generate`: runs shell commands (supports `${VAR}` substitution from environment). Each entry has:
+  - `kind` (optional): category label for selective skipping (e.g. `"rebuild-compiler"`, `"rebuild-go"`)
+  - `cmd`: the shell command to run
+  - `outputs`: list of output file paths (informational)
 - Non-`.xgo.patch` files (except `__config__.json`) are copied one-to-one into GOROOT.
 
 ## Error Cases
@@ -257,13 +312,17 @@ Each patch directory (e.g. `patches/go1.25/`) may have a `__config__.json` for d
 |-----------|-------|
 | `insert_before` with no text | `insert_before requires text` |
 | `insert_after` with no text | `insert_after requires text` |
+| `insert_after_line` with no text | `insert_after_line requires text` |
 | `replace` with no text | `replace requires text` |
 | `replace` without `find_for_replace` | `replace requires prior find_for_replace` |
+| `replace_directive` with no old or new text | `replace_directive requires old and new text` |
+| `replace_directive` missing `with` keyword | `replace_directive requires 'with' keyword: "..."` |
 | Unknown goto target | `unknown goto target: "..."` |
 | `match` not found in scope | `text not found in scope: "..."` |
 | Struct/function/interface not found | `declaration not found: ...` / `function not found: ...` |
 | Missing `</patch>` tag | `missing </patch> for "..."` |
 | `copy_func` missing `as` keyword | `copy_func requires 'as' keyword` |
+| Unknown command | `unknown command: "..."` |
 
 ## Walkthrough: Adding a New Patch
 

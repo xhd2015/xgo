@@ -29,19 +29,52 @@ const downloadLinkPrefix = "https://go.dev/dl/"
 
 const goReleaseDir = "go-release"
 
+const helpText = `Usage: download-go <command> [options]
+
+Commands:
+  list                    List all available Go versions for download
+  download <version>      Download a specific Go version
+  go<version>             Shorthand for download go<version>
+
+Options:
+  --dir <dir>             Target directory for download (default: go-release)
+  -h, --help              Show this help
+
+Examples:
+  download-go list
+  download-go go1.22.1
+  download-go download 1.22.1
+  download-go download 1.22.1 --dir ./go-sdks
+`
+
 func main() {
 	args := os.Args[1:]
+	if err := run(args); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(args []string) error {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Print(helpText)
+		return nil
+	}
+
 	var cmd string
 	var version string
 	var targetDir string
 	if len(args) > 0 {
 		cmd = args[0]
 		if cmd == "download" {
+			if len(args) > 1 && (args[1] == "-h" || args[1] == "--help") {
+				fmt.Print(helpText)
+				return nil
+			}
 			var err error
 			version, targetDir, err = parseDownloadArgs(args[1:])
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-				os.Exit(1)
+				return err
 			}
 		} else if strings.HasPrefix(cmd, "go") {
 			version = cmd
@@ -49,35 +82,28 @@ func main() {
 		}
 	}
 	if cmd == "" {
-		fmt.Fprintf(os.Stderr, "requires cmd\n")
-		os.Exit(1)
+		return fmt.Errorf("requires cmd")
 	}
 
 	ctx := context.Background()
 	if cmd == "list" {
 		goVersions, err := getDownloadVersions(ctx)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
+			return err
 		}
 		for _, goVersion := range goVersions {
 			fmt.Printf("go%s\n", goVersion)
 		}
-		return
+		return nil
 	}
 	if cmd != "download" {
-		fmt.Fprintf(os.Stderr, "unrecognized cmd: %s\n", cmd)
-		os.Exit(1)
+		return fmt.Errorf("unrecognized cmd: %s", cmd)
 	}
 	if targetDir == "" {
 		targetDir = goReleaseDir
 	}
 
-	err := downloadGo(ctx, version, targetDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+	return downloadGo(ctx, version, targetDir)
 }
 
 func parseDownloadArgs(args []string) (version string, targetDir string, err error) {
