@@ -86,12 +86,12 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 		}
 
 		extraEnv := map[string]string{
-			"XGO_SRC":       xgoSrc,
-			"GOROOT":        goroot,
-			"ORIG_GOROOT":   origGoroot,
-			"GO_VERSION":    fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch),
-			"GOOS":          runtime.GOOS,
-			"GOARCH":        runtime.GOARCH,
+			"XGO_SRC":            xgoSrc,
+			"INSTRUMENT_GOROOT":  goroot,
+			"ORIG_GOROOT":        origGoroot,
+			"GO_VERSION":         fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch),
+			"GOOS":               runtime.GOOS,
+			"GOARCH":             runtime.GOARCH,
 		}
 		var skipKinds []string
 		if skipRebuildCompilerAndGo {
@@ -379,7 +379,7 @@ func mkbuiltinHandler(kind string, extraEnv map[string]string) error {
 		if err != nil {
 			return fmt.Errorf("parse go version: %w", err)
 		}
-		return instrument_compiler.MkBuiltin(extraEnv["ORIG_GOROOT"], extraEnv["GOROOT"], goVersion, instrument_compiler.RuntimeExtraDef)
+		return instrument_compiler.MkBuiltin(extraEnv["ORIG_GOROOT"], extraEnv["INSTRUMENT_GOROOT"], goVersion, instrument_compiler.RuntimeExtraDef)
 	case "rebuild-compiler", "rebuild-go":
 		return fmt.Errorf("internal: %q must be handled via cmd execution, not handler", kind)
 	default:

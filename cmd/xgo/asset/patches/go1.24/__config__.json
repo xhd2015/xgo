@@ -14,13 +14,23 @@
     },
     {
       "kind": "rebuild-compiler",
-      "cmd": "${GOROOT}/bin/go build -C ${GOROOT}/src/cmd -a -o ${GOROOT}/pkg/tool/${GOOS}_${GOARCH}/compile cmd/compile",
-      "outputs": []
+      "cwd": "${INSTRUMENT_GOROOT}/src/cmd",
+      "cmd": "${INSTRUMENT_GOROOT}/bin/go build -a -o ${INSTRUMENT_GOROOT}/pkg/tool/${GOOS}_${GOARCH}/compile cmd/compile",
+      "comment": "rebuild compiler with patched source (gc/main.go now includes xgo_patch.Patch())",
+      "outputs": ["pkg/tool/${GOOS}_${GOARCH}/compile"]
+    },
+    {
+      "kind": "rebuild-stdlib",
+      "cwd": "${INSTRUMENT_GOROOT}/src",
+      "cmd": "${INSTRUMENT_GOROOT}/bin/go install std",
+      "comment": "rebuild all standard library .a files from patched source. Without this, Go reuses pre-compiled pkg/ files from the original GOROOT which lack XgoRegister/XgoTrap.",
+      "outputs": ["pkg/${GOOS}_${GOARCH}/*.a"]
     },
     {
       "kind": "rebuild-go",
-      "cmd": "${GOROOT}/bin/go build -C ${GOROOT}/src/cmd -a -o ${GOROOT}/bin/go cmd/go",
-      "outputs": []
+      "cwd": "${INSTRUMENT_GOROOT}/src/cmd",
+      "cmd": "${INSTRUMENT_GOROOT}/bin/go build -a -o ${INSTRUMENT_GOROOT}/bin/go cmd/go",
+      "outputs": ["bin/go"]
     }
   ]
 }

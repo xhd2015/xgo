@@ -31,6 +31,7 @@ type GenerateHandler func(kind string, extraEnv map[string]string) error
 type GenerateEntry struct {
 	Kind    string   `json:"kind,omitempty"`
 	Cmd     string   `json:"cmd,omitempty"`
+	Cwd     string   `json:"cwd,omitempty"` // working dir relative to goroot
 	Comment string   `json:"comment,omitempty"`
 	Outputs []string `json:"outputs,omitempty"`
 }
@@ -82,6 +83,10 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 		}
 	}
 
+	if err := applyPatchFiles(patchDir, goroot); err != nil {
+		return fmt.Errorf("apply patch files: %w", err)
+	}
+
 	for _, gen := range cfg.Generate {
 		if shouldSkipKind(gen.Kind, skipKinds) {
 			continue
@@ -95,23 +100,23 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 			}
 			continue
 		}
-		cmdStr := gen.Cmd
-		for k, v := range extraEnv {
-			cmdStr = strings.ReplaceAll(cmdStr, "${"+k+"}", v)
-		}
+		cmdStr := substituteEnv(gen.Cmd, extraEnv)
 		parts := strings.Fields(cmdStr)
 		if len(parts) == 0 {
 			continue
 		}
+		cmdDir := resolveCwd(gen.Cwd, goroot, extraEnv)
 		execCmd := exec.Command(parts[0], parts[1:]...)
-		execCmd.Dir = goroot
-		execCmd.Env = os.Environ()
-		for i, e := range execCmd.Env {
+		execCmd.Dir = cmdDir
+		newEnv := make([]string, 0, len(os.Environ())+4)
+		for _, e := range os.Environ() {
 			if strings.HasPrefix(e, "GOROOT=") {
-				execCmd.Env = append(execCmd.Env[:i], execCmd.Env[i+1:]...)
-				break
+				continue
 			}
+			newEnv = append(newEnv, e)
 		}
+		newEnv = append(newEnv, "GOROOT="+goroot, "GOTOOLCHAIN=local", "GOOS=", "GOARCH=")
+		execCmd.Env = newEnv
 		execCmd.Stdout = os.Stdout
 		execCmd.Stderr = os.Stderr
 		if err := execCmd.Run(); err != nil {
@@ -119,6 +124,10 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 		}
 	}
 
+	return nil
+}
+
+func applyPatchFiles(patchDir string, goroot string) error {
 	return filepath.Walk(patchDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -283,6 +292,24 @@ func shouldSkipKind(kind string, skipKinds []string) bool {
 		}
 	}
 	return false
+}
+
+func substituteEnv(s string, extraEnv map[string]string) string {
+	for k, v := range extraEnv {
+		s = strings.ReplaceAll(s, "${"+k+"}", v)
+	}
+	return s
+}
+
+func resolveCwd(cwd string, goroot string, extraEnv map[string]string) string {
+	cwd = substituteEnv(cwd, extraEnv)
+	if cwd == "" {
+		return goroot
+	}
+	if filepath.IsAbs(cwd) {
+		return cwd
+	}
+	return filepath.Join(goroot, cwd)
 }
 
 // LoadConfig reads and parses the __config__.json file from a patch directory.

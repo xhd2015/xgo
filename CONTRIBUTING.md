@@ -113,6 +113,17 @@ go run -tags=dev ./cmd/xgo test --with-goroot go-release/go1.24.2 --debug-compil
 
 # Debug
 
+## Debugging Gotchas
+
+Before diving into debugging, read the gotchas and troubleshooting guides under [`doc/development/`](doc/development/):
+
+| Document | What it covers |
+|---|---|
+| [`GOCHAS.md`](doc/development/GOCHAS.md) | Common pitfalls: ApplyPatches order, stale `.a` files, `GOTOOLCHAIN=local`, `V1_0_0` guard, asset syncing |
+| [`HOW_TO_DEBUG_COMPILER_ISSUE.md`](doc/development/HOW_TO_DEBUG_COMPILER_ISSUE.md) | Step-by-step: verify patches applied, add debug prints, compare binary sizes, check if compiler is invoked |
+| [`HOW_TO_DEBUG_ERR_NOT_INSTRUMENTED.md`](doc/development/HOW_TO_DEBUG_ERR_NOT_INSTRUMENTED.md) | Functab/trap pipeline: confirm link rewrite works, check runtime has `XgoRegister`, verify init ordering |
+| [`HOW_I_SPOT_THE_DOT_A_ISSUE.md`](doc/development/HOW_I_SPOT_THE_DOT_A_ISSUE.md) | Specific symptom: link rewriting works but functab is empty — stale pre-compiled `runtime.a` |
+
 ## Native setup
 
 Debug `xgo`

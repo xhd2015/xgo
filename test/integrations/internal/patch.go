@@ -29,12 +29,12 @@ func ApplyFileBased(rootDir, goroot string, goVersion *goinfo.GoVersion) error {
 	os.WriteFile(filepath.Join(tmpPatchDir, "__config__.json"), configBytes, 0644)
 
 	extraEnv := map[string]string{
-		"XGO_SRC":     rootDir,
-		"GOROOT":      goroot,
-		"ORIG_GOROOT": goroot,
-		"GO_VERSION":  fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch),
-		"GOOS":        runtime.GOOS,
-		"GOARCH":      runtime.GOARCH,
+		"XGO_SRC":            rootDir,
+		"INSTRUMENT_GOROOT":  goroot,
+		"ORIG_GOROOT":        goroot,
+		"GO_VERSION":         fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch),
+		"GOOS":               runtime.GOOS,
+		"GOARCH":             runtime.GOARCH,
 	}
 	return patches.ApplyPatches(tmpPatchDir, goroot, rootDir, extraEnv, nil, nil)
 }

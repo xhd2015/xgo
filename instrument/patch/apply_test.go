@@ -991,3 +991,83 @@ func TestApplyPatches_IgnoreFiles(t *testing.T) {
 		t.Errorf("go.mod should be removed by ignore_files, got err=%v", err)
 	}
 }
+
+func TestGenerateEntry_CwdField(t *testing.T) {
+	configJSON := `{
+		"version": "test",
+		"generate": [
+			{"kind": "rebuild-compiler", "cwd": "src/cmd", "cmd": "go build cmd/compile", "outputs": []},
+			{"kind": "rebuild-go", "cmd": "go build cmd/go", "outputs": []}
+		]
+	}`
+	tmpDir := t.TempDir()
+	writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
+
+	cfg, err := LoadConfig(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Generate) != 2 {
+		t.Fatalf("expected 2 generate entries, got %d", len(cfg.Generate))
+	}
+	if cfg.Generate[0].Cwd != "src/cmd" {
+		t.Errorf("expected cwd=src/cmd, got %q", cfg.Generate[0].Cwd)
+	}
+	if cfg.Generate[1].Cwd != "" {
+		t.Errorf("expected empty cwd (not set), got %q", cfg.Generate[1].Cwd)
+	}
+}
+
+func TestSubstituteEnv(t *testing.T) {
+	extraEnv := map[string]string{
+		"TARGET_GOROOT": "/path/to/goroot",
+		"ORIG_GOROOT":   "/path/to/orig",
+		"GOOS":          "darwin",
+		"GOARCH":        "arm64",
+	}
+	result := substituteEnv("${ORIG_GOROOT}/bin/go build -o ${TARGET_GOROOT}/out", extraEnv)
+	expected := "/path/to/orig/bin/go build -o /path/to/goroot/out"
+	if result != expected {
+		t.Errorf("expected %q, got %q", expected, result)
+	}
+}
+
+func TestSubstituteEnv_NoMatch(t *testing.T) {
+	result := substituteEnv("no variables here", map[string]string{"A": "1"})
+	if result != "no variables here" {
+		t.Errorf("expected no change, got %q", result)
+	}
+}
+
+func TestResolveCwd_AbsoluteFromEnv(t *testing.T) {
+	extraEnv := map[string]string{
+		"TARGET_GOROOT": "/path/to/goroot",
+	}
+	got := resolveCwd("${TARGET_GOROOT}/src/cmd", "/other/fallback", extraEnv)
+	expected := "/path/to/goroot/src/cmd"
+	if got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestResolveCwd_Relative(t *testing.T) {
+	got := resolveCwd("src/cmd", "/path/to/goroot", nil)
+	expected := "/path/to/goroot/src/cmd"
+	if got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestResolveCwd_Empty(t *testing.T) {
+	got := resolveCwd("", "/path/to/goroot", nil)
+	if got != "/path/to/goroot" {
+		t.Errorf("expected fallback goroot, got %q", got)
+	}
+}
+
+func TestResolveCwd_AbsoluteLiteral(t *testing.T) {
+	got := resolveCwd("/absolute/path", "/goroot", nil)
+	if got != "/absolute/path" {
+		t.Errorf("expected absolute path unchanged, got %q", got)
+	}
+}
