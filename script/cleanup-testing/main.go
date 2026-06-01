@@ -5,6 +5,16 @@ import (
 )
 
 func main() {
+	lib.Logf("cleaning git-versioned GOROOTs...")
+	gitResults := lib.CleanGitGoroots()
+	for _, r := range gitResults {
+		if r.Err != nil {
+			lib.Logf("ERROR: %s: %v", r.Dir, r.Err)
+		} else {
+			lib.Logf("OK: %s", r.Dir)
+		}
+	}
+
 	before := lib.ListXgoTempDirs()
 	if len(before) == 0 {
 		lib.Logf("no xgo temp dirs found")
@@ -16,8 +26,8 @@ func main() {
 	for _, e := range before {
 		bSize += e.Size
 	}
-	lib.Logf("found %d dirs (%s)", bCount, lib.FormatSize(bSize))
+	lib.Logf("found %d temp dirs (%s)", bCount, lib.FormatSize(bSize))
 
-	removed, freedBytes := lib.CleanupXgoTempDirs()
-	lib.Logf("removed %d dirs, freed %s", removed, lib.FormatSize(freedBytes))
+	removed, _ := lib.CleanupXgoTempDirs()
+	lib.Logf("removed %d temp dirs", removed)
 }

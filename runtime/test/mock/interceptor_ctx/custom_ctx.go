@@ -30,7 +30,7 @@ func (c *CustomContext) Err() error {
 	return c.innerCtx.Err()
 }
 
-func (c *CustomContext) Value(key interface{}) any {
+func (c *CustomContext) Value(key interface{}) interface{} {
 	if c.innerCtx == nil {
 		return nil
 	}
