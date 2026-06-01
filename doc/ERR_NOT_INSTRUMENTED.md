@@ -17,7 +17,7 @@ With the following msg:
 func not instrumented by xgo,...
 ```
 
-It means there is not trap point inserted by xgo, either because the package is not in main module, or there is some inherent limitation.
+It means there is no trap point inserted by xgo, either because the package is not in main module, or there is some inherent limitation.
 
 # When will this error happen?
 `xgo` scans the main module to find all `fn` such that they are provided to the following calls:

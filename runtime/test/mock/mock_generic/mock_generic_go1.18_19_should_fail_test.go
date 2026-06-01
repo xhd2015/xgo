@@ -28,7 +28,7 @@ func TestMockGenericFuncGo11819ShouldError(t *testing.T) {
 	}
 
 	msg := fmt.Sprint(panicErr)
-	expectMsg := "func not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md: github.com/xhd2015/xgo/runtime/test/mock/mock_generic.TestMockGenericFuncGo11819ShouldError.func1.3"
+	expectMsg := "func not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md : github.com/xhd2015/xgo/runtime/test/mock/mock_generic.TestMockGenericFuncGo11819ShouldError.func1.3"
 	if msg != expectMsg {
 		t.Fatalf("expect panic message %q, actual %q", expectMsg, msg)
 	}
@@ -51,7 +51,7 @@ func TestMockGenericMethodGo11819ShouldError(t *testing.T) {
 	}
 
 	msg := fmt.Sprint(panicErr)
-	expectMsg := "func not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md: github.com/xhd2015/xgo/runtime/test/mock/mock_generic.TestMockGenericMethodGo11819ShouldError.func1.3"
+	expectMsg := "func not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md : github.com/xhd2015/xgo/runtime/test/mock/mock_generic.TestMockGenericMethodGo11819ShouldError.func1.3"
 	if msg != expectMsg {
 		t.Fatalf("expect panic message %q, actual %q", expectMsg, msg)
 	}

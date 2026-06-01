@@ -28,7 +28,7 @@ import (
 //	SomeVar.String() // bad: xgo cannot determine if it is a pointer receiver
 //
 // check https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md for more details
-var ErrNotInstrumented = errors.New("not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md")
+var ErrNotInstrumented = errors.New("not instrumented by xgo, see https://github.com/xhd2015/xgo/tree/master/doc/ERR_NOT_INSTRUMENTED.md ")
 
 type mockHolder struct {
 	wantRecvPtr interface{}
