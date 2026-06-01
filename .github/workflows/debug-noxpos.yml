@@ -17,24 +17,5 @@ jobs:
       with:
         go-version: '1.25'
 
-    - name: Debug environment
-      run: |
-        echo "GOROOT: $(go env GOROOT)"
-        echo "GOPATH: $(go env GOPATH)"
-        echo "PATH: $PATH"
-        echo "go version: $(go version)"
-        echo "uname: $(uname -m)"
-
-    - name: Install xgo to PATH
-      run: go install ./cmd/xgo
-
-    - name: Verify xgo in PATH
-      run: |
-        echo "xgo location: $(which xgo)"
-        xgo revision
-
-    - name: Run xgo setup (reproduces error)
-      run: |
-        GOROOT=$(go env GOROOT)
-        echo "Running: xgo setup --reset-instrument --with-goroot ${GOROOT} --log-debug=stdout"
-        xgo setup --reset-instrument --with-goroot "${GOROOT}" --log-debug=stdout
+    - name: Run run-test
+      run: go run ./script/run-test --install-xgo --reset-instrument --log-debug -v

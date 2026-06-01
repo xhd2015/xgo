@@ -7,8 +7,8 @@ import "fmt"
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
 const VERSION = "1.1.14"
-const REVISION = "545dd43e91e3f5c39e555860555966f49b50ecd1+1"
-const NUMBER = 476
+const REVISION = "7e739b537c21c3d9b0019dd9ba6937850a78476d+1"
+const NUMBER = 477
 
 // Rationale: xgo consists of these modules:
 //
