@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -59,6 +60,9 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 				return err
 			}
 			defer os.RemoveAll(patchDir)
+			if _, err := fs.ReadDir(asset.PatchesFS, "."); err != nil {
+				return fmt.Errorf("file-based patches not embedded (binary built with Go < 1.24)")
+			}
 			if err := embedutil.CopyDir(asset.PatchesFS, asset.Patches, patchDir, embedutil.CopyOptions{}); err != nil {
 				return fmt.Errorf("extract patches: %w", err)
 			}
