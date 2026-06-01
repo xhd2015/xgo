@@ -1,0 +1,17 @@
+<patch xgo_encoding_json_import>
+# Description: Add runtime import to encoding/json package for loose JSON marshaling support.
+# Inserts: ;import __xgo_runtime "runtime" after package declaration.
+# This import is needed by the unsupportedTypeEncoder patch below.
+match package json
+insert_after ;import __xgo_runtime "runtime"
+</patch>
+
+<patch xgo_encoding_json_encoder>
+# Description: Add loose JSON marshaling fallback to unsupportedTypeEncoder.
+# When xgo's loose JSON marshaling mode is enabled,
+# unknown types are marshaled as {"TypeName":"?"} instead of panicking.
+# Inserted at the top of: func unsupportedTypeEncoder(...)
+goto func unsupportedTypeEncoder
+goto opening {
+insert_after if __xgo_runtime.XgoIsLooseJsonMarshaling() { e.WriteString(fmt.Sprintf("{%q:%q}", v.Type().String(), "?")); return; }
+</patch>

@@ -11,8 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xhd2015/xgo/cmd/xgo/asset"
 	"github.com/xhd2015/xgo/instrument/build"
 	"github.com/xhd2015/xgo/instrument/constants"
+	embedutil "github.com/xhd2015/xgo/instrument/embed"
 	"github.com/xhd2015/xgo/instrument/instrument_compiler"
 	"github.com/xhd2015/xgo/instrument/instrument_go"
 	"github.com/xhd2015/xgo/instrument/instrument_runtime"
@@ -47,7 +49,38 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 	}
 
 	if useFilePatches && goVersion.Minor >= 24 {
-		patchDir := filepath.Join(xgoSrc, "patches", fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor))
+		var patchDir string
+		if isDevelopment {
+			patchDir = filepath.Join(xgoSrc, "patches", fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor))
+		} else {
+			var err error
+			patchDir, err = os.MkdirTemp("", "xgo-patches-*")
+			if err != nil {
+				return err
+			}
+			defer os.RemoveAll(patchDir)
+			if err := embedutil.CopyDir(asset.PatchesFS, asset.Patches, patchDir, embedutil.CopyOptions{}); err != nil {
+				return fmt.Errorf("extract patches: %w", err)
+			}
+			patchDir = filepath.Join(patchDir, fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor))
+			filepath.WalkDir(patchDir, func(path string, d os.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if !d.IsDir() && strings.HasSuffix(path, ".go.txt") {
+					return os.Rename(path, strings.TrimSuffix(path, ".txt"))
+				}
+				return nil
+			})
+			xgoSrc, err = os.MkdirTemp("", "xgo-src-*")
+			if err != nil {
+				return err
+			}
+			defer os.RemoveAll(xgoSrc)
+			if err := embedutil.CopyDir(asset.CompilerPatchGenFS, asset.CompilerPatchGen, filepath.Join(xgoSrc, "patch"), embedutil.CopyOptions{}); err != nil {
+				return fmt.Errorf("extract compiler patch: %w", err)
+			}
+		}
 		if _, err := os.Stat(patchDir); os.IsNotExist(err) {
 			return fmt.Errorf("file-based patch directory not found: %s", patchDir)
 		}
@@ -64,7 +97,7 @@ func patchRuntime(origGoroot string, goroot string, xgoSrc string, goVersion *go
 		if skipRebuildCompilerAndGo {
 			skipKinds = []string{"rebuild-compiler", "rebuild-go"}
 		}
-		return patch.ApplyPatches(patchDir, goroot, xgoSrc, extraEnv, skipKinds)
+		return patch.ApplyPatches(patchDir, goroot, xgoSrc, extraEnv, skipKinds, mkbuiltinHandler)
 	}
 
 	// instrument go
@@ -337,4 +370,19 @@ func getBuildID(file string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSuffix(string(data), "\n"), nil
+}
+
+func mkbuiltinHandler(kind string, extraEnv map[string]string) error {
+	switch kind {
+	case "mkbuiltin":
+		goVersion, err := goinfo.ParseGoVersion("go version " + extraEnv["GO_VERSION"] + " darwin/amd64")
+		if err != nil {
+			return fmt.Errorf("parse go version: %w", err)
+		}
+		return instrument_compiler.MkBuiltin(extraEnv["ORIG_GOROOT"], extraEnv["GOROOT"], goVersion, instrument_compiler.RuntimeExtraDef)
+	case "rebuild-compiler", "rebuild-go":
+		return fmt.Errorf("internal: %q must be handled via cmd execution, not handler", kind)
+	default:
+		return fmt.Errorf("unknown generate kind: %q", kind)
+	}
 }

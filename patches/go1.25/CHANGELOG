@@ -1,0 +1,51 @@
+# go1.25 Patch CHANGELOG
+
+## Patch adjustments from go1.24 to go1.25
+
+### Patch naming convention unified
+All patch names now use `xgo_` prefix for consistency:
+- `import_xgo_syntax` + `import_io` → `xgo_noder_import_syntax` (merged)
+- `file_autogen` → `xgo_noder_syntax_call`
+- `expose_trim_filename` → `xgo_noder_expose_trim`
+- `get_xgo_edits` → `xgo_cover_edits`
+- `apply_xgo_edits` → `xgo_cover_apply_edits`
+- `declare_XgoAfterGenerateTestMain` → `xgo_load_test_declare`
+- `call_XgoAfterGenerateTestMain` → `xgo_load_test_call`
+- `export_XgoLoadTestFuncs` → `xgo_load_test_exports`
+- `defer_xgoCleanup` → `xgo_test_unify_defer`
+- `call_xgoUnifyTestPackages` → `xgo_test_unify_pkgs`
+- `set pkg dir` → `xgo_test_unify_cmd_dir`
+- `fix_cover_overlay_var_declare` + `fix_cover_overlay_var_replace` → `xgo_exec_cover_infiles` (merged)
+- `modify_infiles` → `xgo_exec_cover_infiles`
+- `add_xgo_trap_sum` → `xgo_exec_trap_sum`
+- `declare_XgoGetTestName` → `xgo_test2json_declare`
+- `writeEvent_replace_pkg` → `xgo_test2json_call`
+- `instrument_json_encoding_import_runtime` → `xgo_encoding_json_import`
+- `instrument_json_encoding_unsupported_type_encoder` → `xgo_encoding_json_encoder`
+- `declare_xgo_curg` → `xgo_proc_newproc`
+- `add_go_newproc_callback_v2` → `xgo_proc_newproc_callback`
+- `add_go_exit1_callback` → `xgo_proc_goexit1`
+- `set_init_finished_mark` → `xgo_proc_init_finished`
+- `declare_XgoTestNameToDir` → `xgo_testing_runTests`
+- `check_XgoTestNameToDir` → `xgo_testing_chdir`
+
+### Patches merged
+- `cmd/go/internal/work/shell.go.xgo.patch`: Removed (content merged into exec.go.xgo.patch as xgo_exec_cover_infiles)
+- `cmd/go/internal/work/exec.go.xgo.patch`: Merged fix_cover_overlay_var_declare + fix_cover_overlay_var_replace + modify_infiles → xgo_exec_cover_infiles (due to Go 1.25 CoverageRedesign making overlay-aware source file tracking unnecessary)
+
+### DSL refinements
+- `insert_after_line` → `insert_after` (simplified, now handles self)
+- Multi-line inserts consolidated into single-line `insert_after` where possible
+- Removed redundant multi-line `insert_before`/`newline` chains in `xgo_proc_newproc`: split `__xgo_curg` and `__xgo_newg` into separate `insert_before` commands
+
+### Generate step redesign
+- `__config__.json` mkbuiltin entry now uses `kind: "mkbuiltin"` with `comment` field instead of `go run -C ${XGO_SRC} ./script/generate-mkbuiltin/main.go`
+- The `kind`-based generate dispatch is handled by a new `GenerateHandler` callback in `ApplyPatches`
+- This eliminates the `${XGO_SRC}` dependency, enabling release builds (non-dev) to work without access to the xgo source directory
+- `rebuild-compiler` and `rebuild-go` continue to use `cmd`-based shell execution (always uses `${GOROOT}` which is available in all modes)
+
+### Build system changes
+- `patches/` directory is now embedded into the xgo binary via `cmd/xgo/asset/patches/` (go:embed)
+- `script/generate` now copies `patches/` into `cmd/xgo/asset/` as part of the `cmd/xgo/asset/patches` generate type
+- Raw `.go` files in embedded patches are renamed to `.go.txt` to prevent compilation in the xgo module; they are restored to `.go` when extracted at runtime
+- `patch/` (compiler patch source) continues to be embedded as `compiler_patch_gen` via `asset.CompilerPatchGenFS`

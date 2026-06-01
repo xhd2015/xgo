@@ -67,6 +67,9 @@ type TestConfig struct {
 }
 
 func init() {
+}
+
+func initDefaultTestArgs() {
 	// go list -e ./... | grep -Ev 'asset|internal/vendir'
 	rootTestsOutput, err := cmd.Output("go", "list", "-e", "./...")
 	if err != nil {
@@ -79,12 +82,11 @@ func init() {
 		if s == "" {
 			continue
 		}
-		if strings.Contains(s, "asset") || strings.Contains(s, "internal/vendir") {
+		if strings.Contains(s, "asset") || strings.Contains(s, "internal/vendir") || strings.Contains(s, "/patches/") {
 			continue
 		}
 		defaultTestArgs = append(defaultTestArgs, s)
 	}
-	// fmt.Printf("DEBUG defaultTestArgs: %v\n", defaultTestArgs)
 
 	defaultTest.Args = defaultTestArgs
 }
@@ -456,6 +458,15 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	// Ensure stub go.mod files exist in ignored directories to prevent
+	// `go list -e ./...` (called by initDefaultTestArgs below) from picking them up.
+	if err := cmd.Run("go", "run", "./script/setup-dev/ensure-stub-go-mod-for-ignored-projects"); err != nil {
+		fmt.Fprintf(os.Stderr, "ensure stub go.mod: %v\n", err)
+		os.Exit(1)
+	}
+
+	initDefaultTestArgs()
 
 	for _, goroot := range goroots {
 		var isSetupGoroot bool

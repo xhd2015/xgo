@@ -1,0 +1,14 @@
+<patch declare_XgoGetTestName>
+# Description: Declare XgoGetTestName callback for test2json event hook.
+# Allows xgo to intercept and modify test event package/name fields.
+goto func (c *Converter) writeEvent
+insert_before var XgoGetTestName func(testPkgPath string, name string) (pkgPath string, testName string);
+</patch>
+
+<patch writeEvent_replace_pkg>
+# Description: Call XgoGetTestName before marshaling the event.
+# Modifies Package and Test fields for unified test name mapping.
+goto func (c *Converter) writeEvent
+match js, err := json.Marshal(e)
+insert_before if XgoGetTestName != nil && e.Test != "" {  tpkg, tname := XgoGetTestName(e.Package, e.Test);  if tpkg != "" {    e.Package = tpkg;  };  if tname != "" {    e.Test = tname;  };};
+</patch>

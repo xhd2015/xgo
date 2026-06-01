@@ -194,10 +194,10 @@ newline
 	if !strings.Contains(result, "__xgo_g __xgo_g;") {
 		t.Errorf("expected __xgo_g field: %s", result)
 	}
-	if !strings.Contains(result, "/*<test:2>*/") {
+	if !strings.Contains(result, "/*<begin test>*/") {
 		t.Errorf("expected begin marker: %s", result)
 	}
-	if !strings.Contains(result, "/*<end>*/") {
+	if !strings.Contains(result, "/*<end test>*/") {
 		t.Errorf("expected end marker: %s", result)
 	}
 	// Verify struct is still valid
@@ -238,7 +238,7 @@ newline
 	if !strings.Contains(result, "extraCode()") {
 		t.Errorf("expected extraCode() in result: %s", result)
 	}
-	if !strings.Contains(result, "{/*<test:2>*/extraCode()") {
+	if !strings.Contains(result, "{/*<begin test>*/extraCode()") {
 		t.Errorf("expected inline marker after {: %s", result)
 	}
 }
@@ -313,7 +313,7 @@ newline
 	if !strings.Contains(result, "Baz()") {
 		t.Errorf("expected Baz() in result: %s", result)
 	}
-	if !strings.Contains(result, "/*<test:2>*/") {
+	if !strings.Contains(result, "/*<begin test>*/") {
 		t.Errorf("expected begin marker: %s", result)
 	}
 }
@@ -391,7 +391,7 @@ replace time.runtimeSleep
 	if strings.Contains(result, "time.Sleep") && strings.Count(result, "time.Sleep") == 1 {
 		// the old text should be in the old tag, not in the replaced position
 	}
-	if !strings.Contains(result, "<old:time.Sleep>") {
+	if !strings.Contains(result, "/*old:time.Sleep*/") {
 		t.Errorf("expected old tag with time.Sleep: %s", result)
 	}
 }
@@ -499,14 +499,14 @@ newline
 	}
 
 	// Verify markers exist
-	if !strings.Contains(result, "/*<marker_test:2>*/") {
+	if !strings.Contains(result, "/*<begin marker_test>*/") {
 		t.Errorf("missing begin marker: %s", result)
 	}
-	if !strings.Contains(result, "/*<end>*/") {
+	if !strings.Contains(result, "/*<end marker_test>*/") {
 		t.Errorf("missing end marker: %s", result)
 	}
 	// After the end marker, the closing } should be in the result
-	if !strings.Contains(result, "/*<end>*/}") {
+	if !strings.Contains(result, "/*<end marker_test>*/}") {
 		t.Errorf("end marker should share line with closing }: %s", result)
 	}
 }
@@ -533,13 +533,20 @@ newline
 		t.Fatal(err)
 	}
 
-	// goto func f → seq 1, goto opening { → seq 2, match b() → seq 3
-	// First edit position → seq 2, second → seq 3
-	if !strings.Contains(result, "/*<seq_test:2>*/") {
-		t.Errorf("expected seq 2 for first edit position: %s", result)
+	// Two edit positions, both use marker with block name "seq_test"
+	beginCount := strings.Count(result, "/*<begin seq_test>*/")
+	if beginCount != 2 {
+		t.Errorf("expected 2 begin markers, got %d: %s", beginCount, result)
 	}
-	if !strings.Contains(result, "/*<seq_test:3>*/") {
-		t.Errorf("expected seq 3 for second edit position: %s", result)
+	endCount := strings.Count(result, "/*<end seq_test>*/")
+	if endCount != 2 {
+		t.Errorf("expected 2 end markers, got %d: %s", endCount, result)
+	}
+	if !strings.Contains(result, "preA()") {
+		t.Errorf("expected preA(): %s", result)
+	}
+	if !strings.Contains(result, "preB()") {
+		t.Errorf("expected preB(): %s", result)
 	}
 }
 
@@ -549,7 +556,7 @@ func TestClearPatch_Insert(t *testing.T) {
 	patched := `package p
 type g struct {
 	a int
-	/*<test:1>*/newField int;/*<end>*/}`
+	/*<begin test>*/newField int;/*<end test>*/}`
 
 	result := clearPatch(patched, "test")
 
@@ -563,7 +570,7 @@ type g struct {
 }
 
 func TestClearPatch_Replace(t *testing.T) {
-	patched := `/*<test:1><old:time.Sleep>*/time.runtimeSleep/*<end>*/ var x int`
+	patched := `/*<begin test>*//*old:time.Sleep*/time.runtimeSleep/*<end test>*/ var x int`
 
 	result := clearPatch(patched, "test")
 
@@ -575,9 +582,9 @@ func TestClearPatch_Replace(t *testing.T) {
 
 func TestClearPatch_MultipleEdits(t *testing.T) {
 	patched := `start
-/*<test:1>*/insert1/*<end>*/
+/*<begin test>*/insert1/*<end test>*/
 middle
-/*<test:2>*/insert2/*<end>*/
+/*<begin test>*/insert2/*<end test>*/
 end`
 
 	result := clearPatch(patched, "test")
@@ -859,7 +866,7 @@ func TestApplyPatches_GenerateVariableSubstitution(t *testing.T) {
 
 	err := ApplyPatches(tmpDir, goroot, xgoSrc, map[string]string{
 		"NAME": "world",
-	}, nil)
+	}, nil, nil)
 	// This will try to run "echo hello world" and succeed
 	if err != nil {
 		// If echo isn't found, skip (Windows might not have it)
@@ -927,7 +934,7 @@ func TestApplyPatches_SkipKinds(t *testing.T) {
 	writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
 
 	skipKinds := []string{"rebuild-compiler", "rebuild-go"}
-	err := ApplyPatches(tmpDir, goroot, xgoSrc, nil, skipKinds)
+	err := ApplyPatches(tmpDir, goroot, xgoSrc, nil, skipKinds, nil)
 	if err != nil {
 		t.Fatalf("ApplyPatches failed: %v", err)
 	}
@@ -948,7 +955,7 @@ func TestApplyPatches_SkipKinds_NoSkipWithoutKinds(t *testing.T) {
 	writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
 
 	skipKinds := []string{"rebuild-go"}
-	err := ApplyPatches(tmpDir, goroot, xgoSrc, nil, skipKinds)
+	err := ApplyPatches(tmpDir, goroot, xgoSrc, nil, skipKinds, nil)
 	if err != nil {
 		t.Fatalf("ApplyPatches failed: %v", err)
 	}
@@ -972,7 +979,7 @@ func TestApplyPatches_IgnoreFiles(t *testing.T) {
 	}`
 	writeTestFile(t, filepath.Join(patchDir, "__config__.json"), configJSON)
 
-	err := ApplyPatches(patchDir, goroot, xgoSrc, nil, nil)
+	err := ApplyPatches(patchDir, goroot, xgoSrc, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("ApplyPatches failed: %v", err)
 	}

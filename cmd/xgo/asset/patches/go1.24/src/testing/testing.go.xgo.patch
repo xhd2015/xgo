@@ -1,0 +1,18 @@
+<patch declare_XgoTestNameToDir>
+# Description: Declare XgoTestNameToDir map variable before the runTests function.
+# Used by xgo test to map test names to their working directories.
+# Inserted before: func runTests(
+# After: var XgoTestNameToDir map[string]string;\nfunc runTests(
+goto func runTests
+insert_before var XgoTestNameToDir map[string]string;
+</patch>
+
+<patch check_XgoTestNameToDir>
+# Description: Change directory before running each test if a mapping exists.
+# Checks XgoTestNameToDir map and calls os.Chdir before t.Run.
+# Inserted before: t.Run(test.Name, test.F)
+# After: if xgoDir := XgoTestNameToDir[test.Name]; xgoDir != "" { os.Chdir(xgoDir); };\nt.Run(test.Name, test.F)
+goto func runTests
+match t.Run(test.Name,
+insert_before if xgoDir := XgoTestNameToDir[test.Name]; xgoDir != "" { os.Chdir(xgoDir); };
+</patch>

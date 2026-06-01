@@ -24,6 +24,9 @@ const (
 	// copy from runtime/core/func_template.go to runtime/core/func.go
 	GenernateType_RuntimeCoreFunc GenernateType = "runtime/core/func.go"
 
+	// copy from patches to cmd/xgo/asset/patches
+	GenernateType_XgoPatches GenernateType = "cmd/xgo/asset/patches"
+
 	// copy from runtime/internal/runtime/xgo_trap_template.go to runtime/internal/runtime/xgo_trap_template.go
 	GenernateType_RuntimeXgoTrapTemplate GenernateType = "runtime/internal/runtime/xgo_trap_template.go"
 

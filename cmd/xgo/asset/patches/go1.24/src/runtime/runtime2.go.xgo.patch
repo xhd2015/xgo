@@ -1,0 +1,10 @@
+<patch instrument_runtime2_xgo_g>
+# Description: Add __xgo_g instrumentation field to the goroutine struct (g).
+# This field is used by xgo runtime to track instrumentation state per goroutine.
+# Located at the end of struct g, just before the closing brace.
+# Before: type g struct { ... _panic *_panic ... }
+# After:  type g struct { ... _panic *_panic ... __xgo_g __xgo_g; }
+goto struct g
+goto closing }
+insert_before __xgo_g __xgo_g;
+</patch>

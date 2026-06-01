@@ -20,11 +20,19 @@ type CopyEntry struct {
 	IgnoreFiles []string `json:"ignore_files,omitempty"`
 }
 
-// GenerateEntry represents a shell command to run during patching.
+// GenerateHandler is called for generate entries with non-empty Kind.
+// extraEnv provides the same variable map used for ${VAR} substitution.
+// Return a nil error if the handler handled the kind; a non-nil error aborts.
+// The handler should return an error if the kind is unrecognized.
+type GenerateHandler func(kind string, extraEnv map[string]string) error
+
+// GenerateEntry represents a shell command to run during patching,
+// or a kind-based operation handled by a GenerateHandler callback.
 type GenerateEntry struct {
 	Kind    string   `json:"kind,omitempty"`
-	Cmd     string   `json:"cmd"`
-	Outputs []string `json:"outputs"`
+	Cmd     string   `json:"cmd,omitempty"`
+	Comment string   `json:"comment,omitempty"`
+	Outputs []string `json:"outputs,omitempty"`
 }
 
 // Config represents the __config__.json file in a patch directory.
@@ -42,7 +50,9 @@ type Config struct {
 //
 // extraEnv provides variable substitution for ${VAR} in generate commands.
 // skipKinds, if non-empty, skips generate entries whose Kind field matches any value.
-func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]string, skipKinds []string) error {
+// generateHandler is called for generate entries with non-empty Kind;
+// it should return nil for known kinds and an error for unrecognized ones.
+func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]string, skipKinds []string, generateHandler GenerateHandler) error {
 	cfg, err := LoadConfig(patchDir)
 	if err != nil {
 		return fmt.Errorf("load __config__.json: %w", err)
@@ -76,11 +86,19 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 		if shouldSkipKind(gen.Kind, skipKinds) {
 			continue
 		}
+		if gen.Kind != "" && gen.Cmd == "" {
+			if generateHandler == nil {
+				return fmt.Errorf("generate kind %q requires a GenerateHandler", gen.Kind)
+			}
+			if err := generateHandler(gen.Kind, extraEnv); err != nil {
+				return fmt.Errorf("generate kind %q: %w", gen.Kind, err)
+			}
+			continue
+		}
 		cmdStr := gen.Cmd
 		for k, v := range extraEnv {
 			cmdStr = strings.ReplaceAll(cmdStr, "${"+k+"}", v)
 		}
-		// simple shell execution: split on spaces for command and args
 		parts := strings.Fields(cmdStr)
 		if len(parts) == 0 {
 			continue

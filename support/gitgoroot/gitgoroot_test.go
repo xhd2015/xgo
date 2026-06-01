@@ -127,11 +127,11 @@ func TestIsGitGorootValid_ExtraCommit(t *testing.T) {
 func TestIsGitGorootValid_WrongCommitMessage(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(dir, 0755)
-	runGit(t, dir, "git", "init", "-q")
+	gitRunHelper(t, dir, "git", "init", "-q")
 	os.WriteFile(filepath.Join(dir, "test.txt"), []byte("test\n"), 0644)
-	runGit(t, dir, "git", "add", "test.txt")
-	runGit(t, dir, "git", "-c", "user.name=test", "-c", "user.email=test@test", "commit", "-q", "-m", "different message")
-	runGit(t, dir, "git", "branch", "-m", "go1.24.2")
+	gitRunHelper(t, dir, "git", "add", "test.txt")
+	gitRunHelper(t, dir, "git", "-c", "user.name=test", "-c", "user.email=test@test", "commit", "-q", "-m", "different message")
+	gitRunHelper(t, dir, "git", "branch", "-m", "go1.24.2")
 
 	valid, err := IsGitGorootValid(dir, "go1.24.2")
 	if err != nil {
@@ -229,17 +229,17 @@ func TestSpawnWorktree_Cleanup(t *testing.T) {
 func initTestGitRepo(t *testing.T, dir, versionName string) {
 	t.Helper()
 	os.MkdirAll(dir, 0755)
-	runGit(t, dir, "git", "init", "-q")
+	gitRunHelper(t, dir, "git", "init", "-q")
 	os.WriteFile(filepath.Join(dir, "test.txt"), []byte("test\n"), 0644)
-	runGit(t, dir, "git", "add", "test.txt")
-	runGit(t, dir,
+	gitRunHelper(t, dir, "git", "add", "test.txt")
+	gitRunHelper(t, dir,
 		"git", "-c", "user.name=test", "-c", "user.email=test@test",
 		"commit", "-q", "-m", "init "+versionName,
 	)
-	runGit(t, dir, "git", "branch", "-m", versionName)
+	gitRunHelper(t, dir, "git", "branch", "-m", versionName)
 }
 
-func runGit(t *testing.T, dir string, args ...string) {
+func gitRunHelper(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = dir

@@ -36,7 +36,7 @@ func ApplyFileBased(rootDir, goroot string, goVersion *goinfo.GoVersion) error {
 		"GOOS":        runtime.GOOS,
 		"GOARCH":      runtime.GOARCH,
 	}
-	return patches.ApplyPatches(tmpPatchDir, goroot, rootDir, extraEnv, nil)
+	return patches.ApplyPatches(tmpPatchDir, goroot, rootDir, extraEnv, nil, nil)
 }
 
 func JsonCopyEntries(srcDir string) interface{} {

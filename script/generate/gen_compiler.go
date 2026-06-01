@@ -102,6 +102,55 @@ func genXgoCompilerPatch(rootDir string) error {
 	return copyGoModule(patchDir, genPatchDir, []string{".xgo", "test", "legacy"})
 }
 
+func genXgoPatches(rootDir string) error {
+	patchesDir := filepath.Join(rootDir, "patches")
+	genPatchesDir := filepath.Join(rootDir, "cmd", "xgo", "asset", "patches")
+
+	// copy only versioned directories (go1.xx/) and __config__.json-like files,
+	// excluding documentation and changelogs
+	entries, err := os.ReadDir(patchesDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() {
+			if !strings.HasPrefix(name, "go") {
+				continue
+			}
+			if err := filecopy.CopyReplaceDir(filepath.Join(patchesDir, name), filepath.Join(genPatchesDir, name), false); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := renameGoFiles(genPatchesDir); err != nil {
+		return err
+	}
+	// remove CHANGELOG files
+	return filepath.WalkDir(genPatchesDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasPrefix(d.Name(), "CHANGELOG") {
+			return os.Remove(path)
+		}
+		return nil
+	})
+}
+
+func renameGoFiles(dir string) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
+			return os.Rename(path, path+".txt")
+		}
+		return nil
+	})
+}
+
 func generateCompilerPatch(rootDir string) error {
 	if true {
 		return nil

@@ -1,0 +1,32 @@
+<patch defer_xgoCleanup>
+# Description: Add deferred xgoCleanup call at start of runTest function.
+# Ensures xgo test state is cleaned up after each test run.
+# After: func runTest(...) { defer xgoCleanup();
+goto func runTest
+goto opening {
+insert_after defer xgoCleanup();
+</patch>
+
+<patch call_xgoUnifyTestPackages>
+# Description: Unify test packages after loading, before running tests.
+# Wraps load.PackagesAndErrors result with xgoUnifyTestPackages.
+# Inserted after the complete function call: pkgArgs)
+# After: ;pkgs = xgoUnifyTestPackages(ctx, pkgs)
+goto func runTest
+match pkgArgs)
+insert_after ;pkgs = xgoUnifyTestPackages(ctx, pkgs)
+</patch>
+
+<patch set pkg dir>
+# Description: Set command working directory from xgo test mapping.
+# Checks xgoGetCmdDir for a package-specific directory override.
+# Inserted after: cmd.Dir = a.Package.Dir
+# Inserts a multi-line if block
+goto func (r *runTestActor) Act
+match cmd.Dir = a.Package.Dir
+insert_after ;if xgoCmdDir:=xgoGetCmdDir(a.Package); xgoCmdDir != "" {
+newline
+insert_after cmd.Dir = xgoCmdDir;
+newline
+insert_after }
+</patch>

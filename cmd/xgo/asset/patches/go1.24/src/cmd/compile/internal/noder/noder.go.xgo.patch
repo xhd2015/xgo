@@ -1,0 +1,83 @@
+<patch import_xgo_syntax>
+# Description: Import xgo_syntax package into the noder.
+# Used by the auto-gen block in xgo_noder_syntax_call.
+match package noder
+insert_after ;import xgo_syntax "cmd/compile/internal/xgo_rewrite_internal/patch/syntax"
+</patch>
+
+<patch import_io>
+# Description: Import io package into the noder.
+# Used by the auto-gen block in xgo_noder_syntax_call.
+match package noder
+insert_after ;import xgo_io "io"
+</patch>
+
+<patch file_autogen>
+# Description: Insert auto-gen block after loading packages.
+# Creates n-parsers and calls AfterFilesParsed with callback for syntax rewriting.
+# Inserted after: base.Timer.AddEvent(int64(lines), "lines")
+goto func LoadPackage
+match base.Timer.AddEvent(int64(lines), "lines")
+insert_after_line // auto gen
+newline
+insert_after if os.Getenv("XGO_COMPILER_SYNTAX_REWRITE_ENABLE")=="true" {
+newline
+insert_after 	files := make([]*syntax.File, 0, len(noders))
+newline
+insert_after 	for _, n := range noders {
+newline
+insert_after 		files = append(files, n.file)
+newline
+insert_after 	}
+newline
+insert_after 	xgo_syntax.AfterFilesParsed(files, func(name string, r xgo_io.Reader) *syntax.File {
+newline
+insert_after 		p := &noder{}
+newline
+insert_after 		fbase := syntax.NewFileBase(name)
+newline
+insert_after 		file, err := syntax.Parse(fbase, r, nil, p.pragma, syntax.CheckBranches)
+newline
+insert_after 		if err != nil {
+newline
+insert_after 			e := err.(syntax.Error)
+newline
+insert_after 			base.ErrorfAt(m.makeXPos(e.Pos), 0,"%s", e.Msg)
+newline
+insert_after 			return nil
+newline
+insert_after 		}
+newline
+insert_after 		p.file = file
+newline
+insert_after 		noders = append(noders, p)
+newline
+newline
+insert_after 		// move to head
+newline
+insert_after 		n := len(noders)
+newline
+insert_after 		for i:=n-1;i>0;i--{
+newline
+insert_after 			noders[i]=noders[i-1]
+newline
+insert_after 		}
+newline
+insert_after 		noders[0]=p
+newline
+newline
+insert_after 		return file
+newline
+insert_after 	})
+newline
+insert_after }
+newline
+</patch>
+
+<patch expose_trim_filename>
+# Description: Expose trimFilename function to xgo_syntax package.
+# Registers the compiler's filename trimming function for use in rewriting.
+# Inserted before: func trimFilename(
+goto func trimFilename
+insert_before func init(){ xgo_syntax.TrimFilename = trimFilename;};
+</patch>
