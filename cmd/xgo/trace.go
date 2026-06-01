@@ -678,12 +678,17 @@ func addBlankImport(content string) (string, bool) {
 		base += rIdx
 		subContent = subContent[rIdx+1:]
 	}
-	q := fmt.Sprintf(";import _ %q", constants.RUNTIME_TRACE_PKG)
 	nIdx := strings.Index(subContent, "\n")
 	if nIdx < 0 {
+		q := fmt.Sprintf(";import _ %q", constants.RUNTIME_TRACE_PKG)
 		return content + q, true
 	}
 	base += nIdx
+	sep := ";"
+	if base > 0 && content[base-1] == ';' {
+		sep = ""
+	}
+	q := fmt.Sprintf("%simport _ %q", sep, constants.RUNTIME_TRACE_PKG)
 	return content[:base] + q + content[base:], true
 }
 

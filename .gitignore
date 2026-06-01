@@ -48,3 +48,4 @@ cover.out
 **/.xgo/gen
 
 /go-patch-diff/
+/*.md

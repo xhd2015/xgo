@@ -43,6 +43,7 @@ func TestFuncTab(t *testing.T) {
 		WantArgs         []string
 		WantPC           uintptr
 		WantVar          interface{}
+		SkipPCCheck      bool
 	}
 	expectFullNames := []TestCase{
 		{
@@ -89,6 +90,18 @@ func TestFuncTab(t *testing.T) {
 			WantPC:           getPC(TestFuncTab),
 		},
 	}
+	// On Go 1.25+, runtime/trace.Trace is registered in functab
+	// because addBlankImports forces its compilation into the binary,
+	// and the rebuilt stdlib puts trace's init before the test package's init.
+	if IS_GO_25_OR_LATER {
+		expectFullNames = append([]TestCase{{
+			WantKind:         core.Kind_Func,
+			WantFullName:     "github.com/xhd2015/xgo/runtime/trace.Trace",
+			WantName:         "Trace",
+			WantIdentityName: "Trace",
+			SkipPCCheck:      true,
+		}}, expectFullNames...)
+	}
 	allFuncInfos := functab.GetFuncs()
 	funcInfos := make([]*core.FuncInfo, 0, len(allFuncInfos))
 	for _, fnInfo := range allFuncInfos {
@@ -110,6 +123,7 @@ func TestFuncTab(t *testing.T) {
 		var expectPC uintptr
 		var expectVar interface{}
 		var expectArgs []string
+		var skipPCCheck bool
 		if i < len(expectFullNames) {
 			expectKind = expectFullNames[i].WantKind
 			expectFullName = expectFullNames[i].WantFullName
@@ -118,6 +132,7 @@ func TestFuncTab(t *testing.T) {
 			expectPC = expectFullNames[i].WantPC
 			expectVar = expectFullNames[i].WantVar
 			expectArgs = expectFullNames[i].WantArgs
+			skipPCCheck = expectFullNames[i].SkipPCCheck
 		}
 		if funcInfo.Kind != expectKind {
 			t.Errorf("funcInfo[%d] kind mismatch, want %s, got %s", i, expectKind, funcInfo.Kind)
@@ -131,7 +146,11 @@ func TestFuncTab(t *testing.T) {
 		if funcInfo.IdentityName != expectIdentityName {
 			t.Errorf("funcInfo[%d] identityName mismatch, want %s, got %s", i, expectIdentityName, funcInfo.IdentityName)
 		}
-		if funcInfo.PC != expectPC {
+		if skipPCCheck {
+			if funcInfo.PC == 0 {
+				t.Errorf("funcInfo[%d] pc should not be zero", i)
+			}
+		} else if funcInfo.PC != expectPC {
 			t.Errorf("funcInfo[%d] pc mismatch, want %d, got %d", i, expectPC, funcInfo.PC)
 		}
 		if expectVar != nil && funcInfo.Var != expectVar {

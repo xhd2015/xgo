@@ -57,3 +57,36 @@ go run ./script/generate cmd/xgo/asset/patches cmd/xgo/asset/compiler_patch_gen
 ```
 
 Note: In development mode (`IS_DEV`), patches are loaded from the live source tree, so generate is only needed when building the release binary or running tests via `go run ./cmd/xgo` (which recompiles xgo).
+
+## Go Version Differences
+
+### Go 1.25+ forbids overlay for files under GOMODCACHE
+
+Go 1.25 introduced a restriction: the `-overlay` flag can no longer replace files located under `GOMODCACHE`. When an overlay contains such replacements, `go` exits with:
+
+```
+go: overlay contains a replacement for <file>. Files beneath GOMODCACHE (<path>) must not be replaced.
+```
+
+The check is in `src/cmd/go/internal/work/init.go:68-69`:
+```go
+if from, replaced := fsys.DirContainsReplacement(cfg.GOMODCACHE); replaced {
+    base.Fatalf("go: overlay contains a replacement for %s. Files beneath GOMODCACHE (%s) must not be replaced.", from, cfg.GOMODCACHE)
+}
+```
+
+`DirContainsReplacement` (`fsys/fsys.go:529`) checks if any overlay entry's path is within GOMODCACHE.
+
+**Impact on xgo:** Since xgo runtime packages (like `runtime/trace`, `runtime/functab`) are Go module dependencies, they may reside in GOMODCACHE when resolved by `go test`. On go1.24, xgo modifies these files via overlay. On go1.25+, this is rejected.
+
+**xgo's workaround** (`cmd/xgo/main.go:710`, commit `3123289`):
+```go
+needLocalRuntime := goVersion.Minor >= 25
+```
+When true, xgo:
+1. Copies the xgo runtime to a local directory (`.xgo/gen/modules/`) outside GOMODCACHE
+2. Modifies files directly on disk (not via overlay)
+3. Uses a `replace` directive in a modified `go.mod` (`-modfile`) to resolve runtime from the local dir
+4. Adds blank imports (`import _ "runtime/trace"`) to ensure runtime packages are compiled
+
+**Side effect:** Step 4 forces `runtime/trace` into the test binary, where its instrumented code registers tracing functions in the functab. Tests that assert on exact functab contents need to account for this extra entry on go1.25+ (see `runtime/test/functab/` — uses `go_1_25.go`/`go_1_24.go` build-tag files with `IS_GO_25_OR_LATER` constant).

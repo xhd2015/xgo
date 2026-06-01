@@ -36,6 +36,19 @@ func TestGoModNonOverlayFirstShouldNotError(t *testing.T) {
 	// does not import package anymore.
 	var errOut bytes.Buffer
 	afterErr := cmd.Debug().Stdout(&errOut).Stderr(&errOut).Env([]string{"GOCACHE=" + gocache, "GO_BYPASS_XGO=true"}).Run("go", "test", "-v", "-overlay", overlayFile, "./overlay_test_with_gomod")
+
+	if IS_GO_25_OR_LATER {
+		if afterErr == nil {
+			t.Errorf("expect overlay error on go1.25+, actual nil")
+			return
+		}
+		expectContains := "Files beneath GOMODCACHE"
+		if !strings.Contains(errOut.String(), expectContains) {
+			t.Errorf("expect containing %q, actual:\n%s", expectContains, errOut.String())
+		}
+		return
+	}
+
 	// 17, 18 passes, only after go1.19 this issue happens
 	goMinor, err := getGo1MinorVersion()
 	if err != nil {
@@ -81,6 +94,25 @@ func TestGoModNonOverlayLaterShouldSucceed(t *testing.T) {
 
 	var overlayOut bytes.Buffer
 	err = cmd.Debug().Stdout(&overlayOut).Stderr(&overlayOut).Env([]string{"GOCACHE=" + gocache, "GO_BYPASS_XGO=true"}).Run("go", "test", "-v", "-overlay", overlayFile, "./overlay_test_with_gomod")
+
+	if IS_GO_25_OR_LATER {
+		if err == nil {
+			t.Errorf("expect overlay error on go1.25+, actual nil")
+			return
+		}
+		expectContains := "Files beneath GOMODCACHE"
+		if !strings.Contains(overlayOut.String(), expectContains) {
+			t.Errorf("expect containing %q, actual:\n%s", expectContains, overlayOut.String())
+		}
+		var normOut bytes.Buffer
+		err = cmd.Debug().Stdout(&normOut).Stderr(&normOut).Env([]string{"GOCACHE=" + gocache, "GO_BYPASS_XGO=true"}).Run("go", "test", "-v", "./overlay_test_with_gomod")
+		if err != nil {
+			t.Errorf("failed to run test: %v", err)
+			t.Log(normOut.String())
+		}
+		return
+	}
+
 	if err != nil {
 		t.Log(overlayOut.String())
 		t.Fatalf("failed to run test: %v", err)
