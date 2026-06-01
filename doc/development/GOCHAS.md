@@ -20,6 +20,17 @@ Go uses pre-compiled `pkg/$GOOS_$GOARCH/*.a` files without checking source fresh
 
 **Note:** The old programmatic path (`V1_0_0`) avoids this because it passes `-a` to `go test`, forcing recompilation from source at test time.
 
+### Stale Go build cache survives source cleanup
+
+After removing debug prints or other code from `patch/`, the old compiled objects may persist in Go's build cache (`$GOCACHE`, default `~/Library/Caches/go-build` on macOS). Even `go build -a` may not fully bypass it for all packages. The result: freshly built binaries still contain old (removed) code.
+
+**Fix:** Clear the cache or use a fresh `GOCACHE` directory:
+```sh
+go clean -cache
+# or
+GOCACHE=/tmp/fresh-cache go build ...
+```
+
 ## xgo Patch Syncing
 
 ### ApplyPatches order: `.xgo.patch` files must be applied BEFORE `generate` steps

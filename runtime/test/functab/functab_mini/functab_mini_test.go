@@ -1,4 +1,4 @@
-package functab
+package functab_mini
 
 import (
 	"fmt"

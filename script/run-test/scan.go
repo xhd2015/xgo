@@ -104,6 +104,9 @@ func amedTestWithConfig(test *TestConfig, includePredefinedArgs bool) error {
 		{prefix: "go:", f: func(content string) {
 			test.Go = content
 		}},
+		{prefix: "go-max:", f: func(content string) {
+			test.GoMax = content
+		}},
 		{prefix: "skip:", f: func(content string) {
 			test.Skip = content
 		}},

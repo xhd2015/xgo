@@ -80,6 +80,10 @@ Each test module under `runtime/test/`:
 - Test files (in same package) provide the functions being tested
 - Interceptors/mocks are set up in test functions via `trap.AddInterceptor` etc.
 
+## Debugging
+
+When encountering hard bugs, read `GOCHAS.md` for inspiration.
+
 ## Code Organization
 
 | Directory | Purpose |

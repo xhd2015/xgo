@@ -1,9 +1,27 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
+
+func TestAmedTestWithConfigGoMax(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, testConfigFile), []byte("go-max: 1.24\n"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	test := &TestConfig{Dir: dir}
+	err = amedTestWithConfig(test, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if test.GoMax != "1.24" {
+		t.Fatalf("expected GoMax=1.24, got %q", test.GoMax)
+	}
+}
 
 func TestSplitList(t *testing.T) {
 	tests := []struct {
