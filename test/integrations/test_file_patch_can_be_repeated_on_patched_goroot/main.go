@@ -53,7 +53,7 @@ func main() {
 	if err := internal.RunLogged(workGoroot, nil, "git", "add", "-A", "src/"); err != nil {
 		internal.Fatalf("stage pass 1: %v", err)
 	}
-	if err := internal.RunLogged(workGoroot, nil, "git", "commit", "--no-verify", "-m", "pass 1 [xgo]"); err != nil {
+	if err := internal.RunLogged(workGoroot, nil, "git", "-c", "user.name=xgo-by-xhd2015", "-c", "user.email=xhd2015@gmail.com", "commit", "--no-verify", "-m", "pass 1 [xgo]"); err != nil {
 		internal.Fatalf("commit pass 1: %v", err)
 	}
 
