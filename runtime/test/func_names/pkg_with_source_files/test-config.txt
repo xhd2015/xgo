@@ -1,0 +1,3 @@
+# vet does not resolve variables declared in overlay files,
+# causing "undefined" errors for stub variables (__xgo_register_0 etc.)
+flags: -vet=off

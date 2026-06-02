@@ -14,7 +14,22 @@ Please always keep them clean.
 
 ## Testing
 
-Tests are located under `runtime/test/` and are organized as standalone Go modules (each with its own `go.mod`, replacing `github.com/xhd2015/xgo/runtime` with the local `../../..`). They require the xgo instrumentation to work, so they must be run via the xgo test driver.
+### Test Suites
+
+xgo has four test suites, each with its own driver. The `script/run-test/` orchestrator runs them all.
+
+| Suite | Location | Driver | Instrumentation | Purpose |
+|-------|----------|--------|----------------|---------|
+| **Default tests** | Project root (`./...`) | plain `go test` | None | Unit tests for xgo tooling (`cmd/xgo`, `instrument/`, `support/`) |
+| **Runtime tests** | `runtime/` (`./core/...`) | plain `go test` | None | Core runtime package tests |
+| **Integration tests** | `runtime/test/` (standalone `go.mod` modules) | `xgo test` via `go run ./cmd/xgo test` | Full (trap/mock/trace/patch) | Feature integration tests |
+| **xgo_test tests** | `test/xgo_test/` (plain package, no `go.mod`) | plain `go test` (via `defaultTest` fallback) | None (run by `go test`, not `xgo test`) | Verify xgo generates correct function names, method receiver behavior, reflection type info |
+
+Tests under `runtime/test/` are discovered by `scanGoMods` which finds every directory containing a `go.mod`. Each becomes a separate `TestConfig` run via `xgo test --project-dir <module>`.
+
+Tests under `test/xgo_test/` are part of the root `go.mod` project. They are run via the `defaultTest` config (plain `go test`). To run them with xgo instrumentation, use `go run ./cmd/xgo test ./test/xgo_test/...` manually.
+
+Packages passed as arguments that don't match any discovered/predefined test fall back to `defaultTest` (plain `go test` from project root).
 
 ### Test Driver
 
