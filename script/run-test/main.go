@@ -534,14 +534,21 @@ func main() {
 
 		begin := time.Now()
 		fmt.Fprintf(os.Stdout, "TEST %s\n", goroot)
+		goVersion, err := goinfo.GetGorootVersion(goroot)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "get go version: %v\n", err)
+			os.Exit(1)
+		}
 		if resetInstrument {
 			// reset-instrument: reset goroot, but not caches
 			if logDebug {
 				fmt.Printf("resetting instrument\n")
 			}
 			cmdArgs := []string{
-				"run", "./cmd/xgo", "setup", "--reset-instrument", "--with-goroot", goroot,
+				"run",
 			}
+			cmdArgs = append(cmdArgs, build.ExternalLinkerFlags(goVersion)...)
+			cmdArgs = append(cmdArgs, "./cmd/xgo", "setup", "--reset-instrument", "--with-goroot", goroot)
 			if logDebug {
 				cmdArgs = append(cmdArgs, "--log-debug=stdout")
 			}
@@ -561,11 +568,6 @@ func main() {
 				}
 				os.Exit(1)
 			}
-		}
-		goVersion, err := goinfo.GetGorootVersion(goroot)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "get go version: %v\n", err)
-			os.Exit(1)
 		}
 
 		if projectDir != "" {
@@ -668,6 +670,7 @@ func main() {
 				GoBinary:        goExe,
 				DebugGo:         debugGo,
 				UseFilePatches:  useFilePatches,
+				GoVersion:       goVersion,
 				XgoDebugCompile: xgoDebugCompile,
 			}
 			if tags != "" {
@@ -758,9 +761,15 @@ func main() {
 }
 
 func setupGoroot(goroot string, logDebug bool, useFilePatches *bool) (string, error) {
-	args := []string{
-		"run", "./cmd/xgo", "setup", "--with-goroot", goroot,
+	goVersion, err := goinfo.GetGorootVersion(goroot)
+	if err != nil {
+		return "", err
 	}
+	args := []string{
+		"run",
+	}
+	args = append(args, build.ExternalLinkerFlags(goVersion)...)
+	args = append(args, "./cmd/xgo", "setup", "--with-goroot", goroot)
 	if logDebug {
 		args = append(args, "--log-debug")
 	}
@@ -860,6 +869,8 @@ type Opts struct {
 	DebugGo        bool
 	UseFilePatches *bool
 
+	GoVersion *goinfo.GoVersion
+
 	XgoDebugCompile string
 }
 
@@ -873,6 +884,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 	var debugGo bool
 	var useFilePatches *bool
 	var xgoDebugCompile string
+	var externalLinkerFlags []string
 	if len(opts) > 0 {
 		if len(opts) != 1 {
 			panic("only one opts is allowed")
@@ -887,6 +899,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		debugGo = opt.DebugGo
 		useFilePatches = opt.UseFilePatches
 		xgoDebugCompile = opt.XgoDebugCompile
+		externalLinkerFlags = build.ExternalLinkerFlags(opt.GoVersion)
 	}
 	goroot, err := filepath.Abs(goroot)
 	if err != nil {
@@ -898,6 +911,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		testArgs = []string{"test"}
 	} else if useBuiltXgo {
 		buildArgs := []string{"build"}
+		buildArgs = append(buildArgs, externalLinkerFlags...)
 		if tags != "" {
 			buildArgs = append(buildArgs, "-tags", tags)
 		}
@@ -922,6 +936,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		}
 	} else if !debugXgo {
 		testArgs = []string{"run"}
+		testArgs = append(testArgs, externalLinkerFlags...)
 
 		runTag := tags
 		if tags == "" && xgoDebugCompile != "" {
@@ -948,6 +963,7 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		}
 	} else {
 		testArgs = []string{"run"}
+		testArgs = append(testArgs, externalLinkerFlags...)
 		if tags != "" {
 			testArgs = append(testArgs, "-tags", tags)
 		}

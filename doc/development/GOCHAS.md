@@ -110,3 +110,9 @@ When true, xgo:
 4. Adds blank imports (`import _ "runtime/trace"`) to ensure runtime packages are compiled
 
 **Side effect:** Step 4 forces `runtime/trace` into the test binary, where its instrumented code registers tracing functions in the functab. Tests that assert on exact functab contents need to account for this extra entry on go1.25+ (see `runtime/test/functab/` — uses `go_1_25.go`/`go_1_24.go` build-tag files with `IS_GO_25_OR_LATER` constant).
+
+## macOS / Darwin
+
+### Missing LC_UUID causes dyld abort on macOS 26+ with Go < 1.23
+
+macOS 26+ (arm64) requires `LC_UUID` load command in executables. Go < 1.23 (and empirically go1.22.12) does not emit it, causing `dyld: missing LC_UUID load command ... signal: abort trap`. Fix: use `-ldflags=-linkmode=external` to invoke the system linker. See `instrument/build/build.go` (`NeedExternalLinker`/`ExternalLinkerFlags`) and `doc/development/LC_UUID_ERROR.md`.

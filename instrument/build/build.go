@@ -45,6 +45,10 @@ func BuildNativeBinary(goroot string, dir string, flags []string, outputDir stri
 // / 1.24+. For older Go versions, we use -linkmode=external to invoke the
 // system linker (clang/ld), which always emits LC_UUID.
 //
+// Empirically, go1.22.12 (which should include the 1.22.9 backport) still
+// produces binaries without LC_UUID on some systems. To be safe, we apply
+// external linking for all Go versions below 1.23.
+//
 // External linking only works when the target OS matches the host OS (both
 // darwin). When cross-compiling to e.g. linux, the macOS system linker cannot
 // produce the target binary, so this returns false.
@@ -60,7 +64,7 @@ func NeedExternalLinker(goVersion *goinfo.GoVersion) bool {
 	if goVersion == nil {
 		return false
 	}
-	return goVersion.Major == 1 && goVersion.Minor < 22
+	return goVersion.Major == 1 && goVersion.Minor < 23
 }
 
 func ExternalLinkerFlags(goVersion *goinfo.GoVersion) []string {
