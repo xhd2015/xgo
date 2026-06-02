@@ -172,7 +172,7 @@ func main() {
 
 	var logDebug bool
 	var withSetup bool
-	var withSetupOnly bool
+	var withInstrumentedGorootOnly bool
 	var tags string
 	var flagRace bool
 	var flagXgoRaceSafe bool
@@ -251,7 +251,7 @@ func main() {
 			continue
 		}
 		if arg == "--with-setup-only" {
-			withSetupOnly = true
+			withInstrumentedGorootOnly = true
 			continue
 		}
 		if arg == "-cover" {
@@ -482,20 +482,20 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	var setupGoroots []string
-	if withSetup || withSetupOnly {
-		setupGoroots = make([]string, len(goroots))
+	var instrumentedGoroots []string
+	if withSetup || withInstrumentedGorootOnly {
+		instrumentedGoroots = make([]string, len(goroots))
 		for i, goroot := range goroots {
-			setupGoroots[i], err = setupGoroot(goroot, false, useFilePatches)
+			instrumentedGoroots[i], err = instrumentGoroot(goroot, false, useFilePatches)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "setup goroot: %s %v\n", goroot, err)
 				os.Exit(1)
 			}
 		}
-		if withSetupOnly {
-			goroots = setupGoroots
+		if withInstrumentedGorootOnly {
+			goroots = instrumentedGoroots
 		} else {
-			goroots = append(goroots, setupGoroots...)
+			goroots = append(goroots, instrumentedGoroots...)
 		}
 	}
 	var debugNum int
@@ -532,10 +532,10 @@ func main() {
 	initDefaultTestArgs()
 
 	for _, goroot := range goroots {
-		var isSetupGoroot bool
-		for _, setupGoroot := range setupGoroots {
+		var isInstrumentedGoroot bool
+		for _, setupGoroot := range instrumentedGoroots {
 			if setupGoroot == goroot {
-				isSetupGoroot = true
+				isInstrumentedGoroot = true
 				break
 			}
 		}
@@ -671,7 +671,8 @@ func main() {
 			// projectDir
 			runArgs := make([]string, 0, len(remainArgs)+1)
 			itTags := tags
-			if !usePlainGo || isSetupGoroot {
+			goInvokedAsXgo := !usePlainGo || isInstrumentedGoroot
+			if goInvokedAsXgo {
 				if itTags == "" {
 					itTags = "test_driver_is_xgo"
 				} else {
@@ -680,7 +681,7 @@ func main() {
 			}
 			opts := Opts{
 				Tags:            itTags,
-				IsSetupGoroot:   isSetupGoroot,
+				IsSetupGoroot:   isInstrumentedGoroot,
 				UsePrebuiltXgo:  useBuiltXgo,
 				BuildOnly:       buildOnly,
 				GoBinary:        goExe,
@@ -776,7 +777,7 @@ func main() {
 	}
 }
 
-func setupGoroot(goroot string, logDebug bool, useFilePatches *bool) (string, error) {
+func instrumentGoroot(goroot string, logDebug bool, useFilePatches *bool) (string, error) {
 	goVersion, err := goinfo.GetGorootVersion(goroot)
 	if err != nil {
 		return "", err
