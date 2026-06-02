@@ -35,14 +35,39 @@ go mod edit
 
 ## Fix
 
-In `loadDependency()`, if the main module being built **is** `github.com/xhd2015/xgo/runtime`, skip the `require` + `replace` because the runtime code is already the project itself.
+Two bypasses are needed when the main module IS `github.com/xhd2015/xgo/runtime`:
+
+### 1. Skip self-require (modfile)
+
+In `loadDependency()`, skip the `require` + `replace` because the runtime code is already the project itself.
 
 ```go
-// cmd/xgo/trace.go — before the go mod edit call at line 383
-// When building xgo/runtime itself, don't add self-require.
-// See patches/go1.25/issues/RUNTIME_LIB_SELF_REQUIRE.md
+// cmd/xgo/trace.go:386
 if mainModule != constants.RUNTIME_MODULE {
     go mod edit -require=RUNTIME_MODULE@VERSION -replace=RUNTIME_MODULE=<local_copy>
+}
+```
+
+### 2. Skip blank import injection (import cycle)
+
+`addBlankImports()` copies `core/func.go` and injects `import _ "github.com/xhd2015/xgo/runtime/trace"` to auto-load tracing. For xgo/runtime itself, this creates an import cycle:
+
+```
+core/func.go  ──(overlay: import _ "runtime/trace")──→  trace/trace.go
+                                                                │
+                                                        imports internal/trap
+                                                                │
+                                                        internal/trap imports core
+                                                                │
+                                                    ←──── cycle ←────
+```
+
+Fix: skip `addBlankImports` entirely when building the runtime module.
+
+```go
+// cmd/xgo/trace.go:142
+if mainModule != constants.RUNTIME_MODULE {
+    fileReplace, err = addBlankImports(...)
 }
 ```
 

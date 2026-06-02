@@ -139,9 +139,16 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 	}
 
 	pkgArgs := getPkgArgs(args)
-	fileReplace, err := addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, overlayDir)
-	if err != nil {
-		return nil, err
+	var fileReplace map[string]string
+	if mainModule != constants.RUNTIME_MODULE {
+		// When building xgo/runtime itself, skip blank import injection.
+		// The runtime module already compiles all its packages; injecting
+		// import _ "runtime/trace" creates a cycle: core → trace → internal/trap → core.
+		// See patches/go1.25/issues/RUNTIME_LIB_SELF_REQUIRE.md
+		fileReplace, err = addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, overlayDir)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	absFileReplace := make(map[overlay.AbsFile]overlay.AbsFile, len(fileReplace))
