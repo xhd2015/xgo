@@ -19,4 +19,4 @@ jobs:
         go-version: '1.25'
 
     - name: Test
-      run: go run ./script/run-test --log-debug -v -fast
+      run: go run ./script/run-test --log-debug -v --fast
