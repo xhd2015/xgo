@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/xhd2015/xgo/runtime/types"
+	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
 	"github.com/xhd2015/xgo/runtime/internal/generic"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
@@ -17,7 +17,7 @@ const methodSuffix = "-fm"
 // Inspect inspects the function and returns the receiver pointer, function PC and trapping PC.
 // for ordinary function, `funcPC` is the same with `trappingPC`
 // for method,`funcPC` and `trappingPC` are different, `funcPC` is the PC of the method, which binds a special pointer to its receiver, and `trappingPC` is the PC of the general type method
-func Inspect(f interface{}) (recvPtr interface{}, funcInfo *types.FuncInfo, funcPC uintptr, trappingPC uintptr) {
+func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
 	fn := reflect.ValueOf(f)
 	if fn.Kind() == reflect.Ptr {
 		// a variable
@@ -80,7 +80,7 @@ func Inspect(f interface{}) (recvPtr interface{}, funcInfo *types.FuncInfo, func
 	// retrieve receive ptr
 	callFn := func() {
 		stack := getOrAttachStackData()
-		stack.inspecting = func(pc uintptr, f *types.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) {
+		stack.inspecting = func(pc uintptr, f *core.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) {
 			trappingPC = runtime.FuncForPC(pc).Entry()
 			funcInfo = f
 			if needRecv || closureMightBeGeneric {

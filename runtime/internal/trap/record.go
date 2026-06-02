@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/xhd2015/xgo/runtime/types"
+	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
 	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
@@ -31,8 +31,8 @@ func pushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
 		}
 
 		// variable
-		var preHandler func(fnInfo *types.FuncInfo, res interface{}) (interface{}, bool)
-		var postHandler func(fnInfo *types.FuncInfo, res interface{}, data interface{})
+		var preHandler func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool)
+		var postHandler func(fnInfo *core.FuncInfo, res interface{}, data interface{})
 
 		var preIsPtr bool
 		var postIsPtr bool
@@ -41,7 +41,7 @@ func pushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
 			preV := reflect.ValueOf(pre)
 			var preRecordArgTypes []ptrType
 			preRecordArgTypes, preIsPtr = checkVarRecorderType(fnv.Type(), preV.Type(), true)
-			preHandler = func(fnInfo *types.FuncInfo, res interface{}) (interface{}, bool) {
+			preHandler = func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool) {
 				arg := preRecordArgTypes[0].get(reflect.ValueOf(res))
 				preV.Call([]reflect.Value{arg})
 				return nil, false
@@ -51,7 +51,7 @@ func pushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
 			postV := reflect.ValueOf(post)
 			var postRecordArgTypes []ptrType
 			postRecordArgTypes, postIsPtr = checkVarRecorderType(fnv.Type(), postV.Type(), true)
-			postHandler = func(fnInfo *types.FuncInfo, res interface{}, data interface{}) {
+			postHandler = func(fnInfo *core.FuncInfo, res interface{}, data interface{}) {
 				arg := postRecordArgTypes[0].get(reflect.ValueOf(res))
 				postV.Call([]reflect.Value{arg})
 			}
@@ -87,11 +87,11 @@ func pushRecorderInterceptor(fn interface{}, preInterceptor PreInterceptor, post
 		if funcInfo == nil {
 			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
 		}
-		var preHandler func(fnInfo *types.FuncInfo, res interface{}) (interface{}, bool)
-		var postHandler func(fnInfo *types.FuncInfo, res interface{}, data interface{})
+		var preHandler func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool)
+		var postHandler func(fnInfo *core.FuncInfo, res interface{}, data interface{})
 
 		if preInterceptor != nil {
-			preHandler = func(fnInfo *types.FuncInfo, res interface{}) (interface{}, bool) {
+			preHandler = func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool) {
 				var argObj object
 				resObject := object{
 					{
@@ -111,7 +111,7 @@ func pushRecorderInterceptor(fn interface{}, preInterceptor PreInterceptor, post
 			}
 		}
 		if postInterceptor != nil {
-			postHandler = func(fnInfo *types.FuncInfo, res interface{}, data interface{}) {
+			postHandler = func(fnInfo *core.FuncInfo, res interface{}, data interface{}) {
 				var argObj object
 				resObject := object{
 					{
@@ -137,7 +137,7 @@ func pushRecorderInterceptor(fn interface{}, preInterceptor PreInterceptor, post
 	return PushRecordHandler(trappingPC, recvPtr, pre, post)
 }
 
-func PushRecordHandler(pc uintptr, recvPtr interface{}, pre func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool), post func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})) func() {
+func PushRecordHandler(pc uintptr, recvPtr interface{}, pre func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool), post func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})) func() {
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stack := getOrAttachStackData()
@@ -169,7 +169,7 @@ func PushRecordHandler(pc uintptr, recvPtr interface{}, pre func(fnInfo *types.F
 	}
 }
 
-func PushVarRecordHandler(varAddr uintptr, pre func(fnInfo *types.FuncInfo, res interface{}) (interface{}, bool), post func(fnInfo *types.FuncInfo, res interface{}, data interface{})) func() {
+func PushVarRecordHandler(varAddr uintptr, pre func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool), post func(fnInfo *core.FuncInfo, res interface{}, data interface{})) func() {
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stack := getOrAttachStackData()
@@ -201,7 +201,7 @@ func PushVarRecordHandler(varAddr uintptr, pre func(fnInfo *types.FuncInfo, res 
 	}
 }
 
-func PushVarPtrRecordHandler(varAddr uintptr, pre func(fnInfo *types.FuncInfo, res interface{}) (interface{}, bool), post func(fnInfo *types.FuncInfo, res interface{}, data interface{})) func() {
+func PushVarPtrRecordHandler(varAddr uintptr, pre func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool), post func(fnInfo *core.FuncInfo, res interface{}, data interface{})) func() {
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stack := getOrAttachStackData()

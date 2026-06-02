@@ -12,7 +12,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/xhd2015/xgo/runtime/types"
+	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/internal/constants"
 	"github.com/xhd2015/xgo/runtime/internal/flags"
 	xgo_runtime "github.com/xhd2015/xgo/runtime/internal/runtime"
@@ -32,7 +32,7 @@ const SKIP = 2
 // this avoids the infinite trap problem
 func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, results []interface{}) (func(), bool) {
 	// === start init ===
-	funcInfo := (*types.FuncInfo)(infoPtr)
+	funcInfo := (*core.FuncInfo)(infoPtr)
 	recvName := funcInfo.RecvName
 	argNames := funcInfo.ArgNames
 	resultNames := funcInfo.ResNames
@@ -48,7 +48,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 	pkg := funcInfo.Pkg
 	name := funcInfo.IdentityName
 
-	var mock func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool
+	var mock func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool
 
 	var isTesting bool
 	var testName string
@@ -265,7 +265,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 	if isStartTracing && !isTesting {
 		var onFinish func(stack stack_model.IStack)
 		var outputFile string
-		var filterTrace func(funcInfo *types.FuncInfo) bool
+		var filterTrace func(funcInfo *core.FuncInfo) bool
 		var config interface{}
 		for i, arg := range args {
 			if argNames[i] == "config" {
@@ -295,7 +295,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 				}
 				filterTraceField := rvalue.FieldByName("FilterTrace")
 				if filterTraceField.IsValid() {
-					f, ok := filterTraceField.Interface().(func(funcInfo *types.FuncInfo) bool)
+					f, ok := filterTraceField.Interface().(func(funcInfo *core.FuncInfo) bool)
 					if ok {
 						filterTrace = f
 					}
