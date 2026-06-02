@@ -72,6 +72,12 @@ The `xgoPrecheck` hook (`instrument/instrument_go/xgo_main_template.go:19`) chec
 
 See also: `doc/development/WHY_DOUBLE_SETUP_EVER_FAILED.md`.
 
+### `TestFuncNames` expects `init.func5` on go1.25 (not `init.func1`)
+
+On go1.25, `needLocalRuntime=true` forces full xgo instrumentation (overlay + compiler rewrite + `compiler_extra.json`). The overlay injects 4 synthetic `func init()` blocks before user code, consuming `init.func1-4` and shifting user top-level closures by 4. The 4 stub template variables (`__xgo_register_1`, `__xgo_trap_1`, etc.) reference runtime dispatch functions (`runtime.XgoRegister`, `runtime.XgoTrapVar`, etc.) and are NOT themselves init closures. The test uses version-gated constants: `closure_name_go1.22_test.go` (go1.22–1.24: `init.func1`), `closure_name_go1.25_test.go` (go1.25+: `init.func5`).
+
+See `doc/development/WHY_GO_1_25_FAIL_ON_TestFuncNames.md`.
+
 ## Go Version Differences
 
 ### Go 1.25+ forbids overlay for files under GOMODCACHE

@@ -1,5 +1,5 @@
-//go:build go1.22
-// +build go1.22
+//go:build go1.22 && !go1.25
+// +build go1.22,!go1.25
 
 package func_names
 

@@ -239,8 +239,16 @@ func initTestGitRepo(t *testing.T, dir, versionName string) {
 	gitRunHelper(t, dir, "git", "branch", "-m", versionName)
 }
 
+func skipIfNoGit(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+}
+
 func gitRunHelper(t *testing.T, dir string, args ...string) {
 	t.Helper()
+	skipIfNoGit(t)
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()

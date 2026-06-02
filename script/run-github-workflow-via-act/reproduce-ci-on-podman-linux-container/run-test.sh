@@ -33,7 +33,6 @@ go run ./script/run-test/ \
     --reset-instrument \
     --log-debug \
     -v \
-    -short \
     --with-goroot /usr/local/go
 
 EXIT_CODE=$?

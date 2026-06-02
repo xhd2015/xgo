@@ -63,4 +63,10 @@ Known side effect: `registerFuncTab` (`cmd/xgo/instrument.go:348`) lacks the `Al
 | `c8a8e28` | Fix `forceLoad` parameter to also use `needLocalRuntime` |
 | `58f7584` | Add Go 1.26 support (extends to `>= 25`) |
 
+### TestFuncNames init closure shift (go1.25)
+
+On go1.25, `needLocalRuntime` forces full instrumentation (overlay + `compiler_extra.json` + `XGO_COMPILER_SYNTAX_REWRITE_ENABLE`), which generates `__xgo_autogen_register_func_info.go` with 4 package-level closure stubs. These consume `init.func1-4`, shifting user top-level closures from `init.func1` to `init.func5`. Fixed via version-gated constant in `test/xgo_test/func_names/closure_name_go1.25_test.go`.
+
+See: `doc/development/WHY_GO_1_25_FAIL_ON_TestFuncNames.md`.
+
 See: `doc/development/OVERLAY_RESTRICTION_IN_GO_1_25_V.S._GO_1_24.md` for full walkthrough, causal chain, affected tests, and fix suggestions.
