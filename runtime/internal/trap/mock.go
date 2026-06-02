@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/types"
 	"github.com/xhd2015/xgo/runtime/functab"
 	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
@@ -32,11 +32,11 @@ var ErrNotInstrumented = errors.New("not instrumented by xgo, see https://github
 
 type mockHolder struct {
 	wantRecvPtr interface{}
-	mock        func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool
+	mock        func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool
 }
 
 type varMockHolder struct {
-	mock func(fnInfo *core.FuncInfo, res interface{})
+	mock func(fnInfo *types.FuncInfo, res interface{})
 }
 
 func PushMockInterceptor(fn interface{}, interceptor Interceptor) func() {
@@ -57,10 +57,10 @@ func PushMockReplacerMethodByName(instance interface{}, method string, replacer 
 
 func PushMockByName(pkgPath string, funcName string, interceptor Interceptor) func() {
 	recvPtr, funcInfo, _, trappingPC := getFuncByName(pkgPath, funcName)
-	if funcInfo.Kind == core.Kind_Var || funcInfo.Kind == core.Kind_VarPtr || funcInfo.Kind == core.Kind_Const {
+	if funcInfo.Kind == types.Kind_Var || funcInfo.Kind == types.Kind_VarPtr || funcInfo.Kind == types.Kind_Const {
 		if strings.HasPrefix(funcName, "*") {
 			// type: fun() *T
-			handler := func(fnInfo *core.FuncInfo, res interface{}) {
+			handler := func(fnInfo *types.FuncInfo, res interface{}) {
 				var argObj object
 				resObject := object{
 					{
@@ -93,7 +93,7 @@ func pushMockInterceptor(fn interface{}, interceptor Interceptor) func() {
 			panic(fmt.Errorf("variable %w: %v", ErrNotInstrumented, varPtr))
 		}
 		// variable
-		handler := func(fnInfo *core.FuncInfo, res interface{}) {
+		handler := func(fnInfo *types.FuncInfo, res interface{}) {
 			var argObj object
 			resObject := object{
 				{
@@ -132,7 +132,7 @@ func pushMockReplacer(fn interface{}, replacer interface{}) func() {
 		// variable
 		replacerVal := reflect.ValueOf(replacer)
 		isPtr := checkVarType(fnv.Type(), replacerVal.Type(), true)
-		handler := func(fnInfo *core.FuncInfo, res interface{}) {
+		handler := func(fnInfo *types.FuncInfo, res interface{}) {
 			mockRes := replacerVal.Call([]reflect.Value{})
 			reflect.ValueOf(res).Elem().Set(mockRes[0])
 		}
@@ -167,7 +167,7 @@ func pushMockReplacer(fn interface{}, replacer interface{}) func() {
 // If the mock is not popped, it will affect even after
 // the caller returned.
 // `mock` returns `false` if the original function should be called.
-func pushMockHandler(pc uintptr, recvPtr interface{}, handler func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool) func() {
+func pushMockHandler(pc uintptr, recvPtr interface{}, handler func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool) func() {
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stackData := getOrAttachStackData()
@@ -199,7 +199,7 @@ func pushMockHandler(pc uintptr, recvPtr interface{}, handler func(fnInfo *core.
 	}
 }
 
-func pushVarMockHandler(varAddr uintptr, mock func(fnInfo *core.FuncInfo, res interface{})) func() {
+func pushVarMockHandler(varAddr uintptr, mock func(fnInfo *types.FuncInfo, res interface{})) func() {
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stackData := getOrAttachStackData()
@@ -231,7 +231,7 @@ func pushVarMockHandler(varAddr uintptr, mock func(fnInfo *core.FuncInfo, res in
 	}
 }
 
-func pushVarPtrMockHandler(varAddr uintptr, mock func(fnInfo *core.FuncInfo, res interface{})) func() {
+func pushVarPtrMockHandler(varAddr uintptr, mock func(fnInfo *types.FuncInfo, res interface{})) func() {
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stackData := getOrAttachStackData()
@@ -272,17 +272,17 @@ func pushMockReplacerByName(pkgPath string, funcName string, replacer interface{
 		panic(fmt.Errorf("replacer should be func, actual: %T", replacer))
 	}
 
-	var funcInfo *core.FuncInfo
+	var funcInfo *types.FuncInfo
 	// check type
 	recvPtr, funcInfo, _, trappingPC := getFuncByName(pkgPath, funcName)
-	if funcInfo.Kind == core.Kind_Func {
+	if funcInfo.Kind == types.Kind_Func {
 		if funcInfo.Func != nil {
 			calledType, replacerType, match := checkFuncTypeMatch(reflect.TypeOf(funcInfo.Func), t, recvPtr != nil)
 			if !match {
 				panic(fmt.Errorf("replacer should have type: `%s`, actual: `%s`", calledType, replacerType))
 			}
 		}
-	} else if funcInfo.Kind == core.Kind_Var || funcInfo.Kind == core.Kind_VarPtr || funcInfo.Kind == core.Kind_Const {
+	} else if funcInfo.Kind == types.Kind_Var || funcInfo.Kind == types.Kind_VarPtr || funcInfo.Kind == types.Kind_Const {
 		if strings.HasPrefix(funcName, "*") {
 			// be func() *T'
 			vr := funcInfo.Var
@@ -290,7 +290,7 @@ func pushMockReplacerByName(pkgPath string, funcName string, replacer interface{
 			if t != wantPtrType {
 				panic(fmt.Errorf("replacer to value ptr should have type: `%s`, actual: `%s`", wantPtrType, t))
 			}
-			handler := func(fnInfo *core.FuncInfo, res interface{}) {
+			handler := func(fnInfo *types.FuncInfo, res interface{}) {
 				fnRes := reflect.ValueOf(replacer).Call([]reflect.Value{})
 				reflect.ValueOf(res).Elem().Set(fnRes[0])
 			}
@@ -326,10 +326,10 @@ func pushMockReplacerMethodByName(instance interface{}, method string, replacer 
 	return pushMockHandler(trappingPC, recvPtr, handler)
 }
 
-func getFuncByName(pkgPath string, funcName string) (recvPtr interface{}, fn *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
+func getFuncByName(pkgPath string, funcName string) (recvPtr interface{}, fn *types.FuncInfo, funcPC uintptr, trappingPC uintptr) {
 	if strings.HasPrefix(funcName, "*") {
 		ptrFn := functab.GetFuncByPkg(pkgPath, funcName[1:])
-		if ptrFn.Kind == core.Kind_Var {
+		if ptrFn.Kind == types.Kind_Var {
 			return ptrFn.Var, ptrFn, ptrFn.PC, ptrFn.PC
 		}
 	}
@@ -340,7 +340,7 @@ func getFuncByName(pkgPath string, funcName string) (recvPtr interface{}, fn *co
 	return nil, fn, fn.PC, fn.PC
 }
 
-func getMethodByName(instance interface{}, method string) (recvPtr interface{}, fn *core.FuncInfo, funcPC uintptr, trappingPC uintptr) {
+func getMethodByName(instance interface{}, method string) (recvPtr interface{}, fn *types.FuncInfo, funcPC uintptr, trappingPC uintptr) {
 	// extract instance's reflect.Type
 	// use that type to query for reflect mapping in functab:
 	//    reflectTypeMapping map[reflect.Type]map[string]*funcInfo

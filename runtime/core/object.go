@@ -1,20 +1,9 @@
 package core
 
-type Object interface {
-	GetField(name string) Field
-	GetFieldIndex(i int) Field
-	NumField() int
-}
+import "github.com/xhd2015/xgo/runtime/types"
 
-type ObjectWithErr interface {
-	Object
+type Object = types.Object
 
-	GetErr() Field
-}
+type ObjectWithErr = types.ObjectWithErr
 
-type Field interface {
-	Name() string
-	Value() interface{}
-	Ptr() interface{}
-	Set(val interface{})
-}
+type Field = types.Field

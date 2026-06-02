@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/types"
 )
 
-func buildMockHandler(recvPtr interface{}, funcInfo *core.FuncInfo, replacer interface{}) func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool {
+func buildMockHandler(recvPtr interface{}, funcInfo *types.FuncInfo, replacer interface{}) func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool {
 	v := reflect.ValueOf(replacer)
 	t := v.Type()
 	if t.Kind() != reflect.Func {
@@ -21,7 +21,7 @@ func buildMockHandler(recvPtr interface{}, funcInfo *core.FuncInfo, replacer int
 
 	// first arg ctx: true => [recv,args[1:]...]
 	// first arg ctx: false => [recv, args[0:]...]
-	return func(fnInfo *core.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) bool {
+	return func(fnInfo *types.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) bool {
 		// assemble arguments
 		callArgs := make([]reflect.Value, nIn)
 		callIdx := 0
@@ -80,7 +80,7 @@ func buildMockHandler(recvPtr interface{}, funcInfo *core.FuncInfo, replacer int
 // pre and post must have the same signature, as:
 //
 //	fn(args ..., results...)
-func buildRecorderHandler(recvPtr interface{}, fn interface{}, pre interface{}, post interface{}) (func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool), func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})) {
+func buildRecorderHandler(recvPtr interface{}, fn interface{}, pre interface{}, post interface{}) (func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool), func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})) {
 	if pre == nil && post == nil {
 		panic("pre and post are nil")
 	}
@@ -135,7 +135,7 @@ func buildRecorderHandler(recvPtr interface{}, fn interface{}, pre interface{}, 
 
 	// first arg ctx: true => [recv,args[1:]...]
 	// first arg ctx: false => [recv, args[0:]...]
-	callHandlerHandler := func(fnInfo *core.FuncInfo, fnV reflect.Value, fnType reflect.Type, argTypes []ptrType, actRecvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool) {
+	callHandlerHandler := func(fnInfo *types.FuncInfo, fnV reflect.Value, fnType reflect.Type, argTypes []ptrType, actRecvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool) {
 		// assemble arguments
 		callArgs := make([]reflect.Value, nIn)
 		callIdx := 0
@@ -185,30 +185,30 @@ func buildRecorderHandler(recvPtr interface{}, fn interface{}, pre interface{}, 
 		}
 		return nil, false
 	}
-	var preHandler func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool)
-	var postHandler func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})
+	var preHandler func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool)
+	var postHandler func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})
 
 	if pre != nil {
-		preHandler = func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool) {
+		preHandler = func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool) {
 			return callHandlerHandler(fnInfo, preV, preType, preArgTypes, recvPtr, args, results)
 		}
 	}
 	if post != nil {
-		postHandler = func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{}) {
+		postHandler = func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{}) {
 			callHandlerHandler(fnInfo, postV, postType, postArgTypes, recvPtr, args, results)
 		}
 	}
 	return preHandler, postHandler
 }
 
-func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func(funcInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool {
+func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func(funcInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool {
 	if interceptor == nil {
 		panic("interceptor is nil")
 	}
 
 	// first arg ctx: true => [recv,args[1:]...]
 	// first arg ctx: false => [recv, args[0:]...]
-	return func(funcInfo *core.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) bool {
+	return func(funcInfo *types.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) bool {
 		if recvPtr != nil {
 			if actRecvPtr == nil {
 				panic("receiver mismatch")
@@ -265,17 +265,17 @@ func buildMockFromInterceptor(recvPtr interface{}, interceptor Interceptor) func
 	}
 }
 
-func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterceptor, postInterceptor PostInterceptor) (func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool), func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})) {
+func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterceptor, postInterceptor PostInterceptor) (func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool), func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})) {
 	if preInterceptor == nil && postInterceptor == nil {
 		panic("pre and post interceptor are nil")
 	}
-	var pre func(funcInfo *core.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool)
-	var post func(funcInfo *core.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}, data interface{})
+	var pre func(funcInfo *types.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool)
+	var post func(funcInfo *types.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}, data interface{})
 
 	// first arg ctx: true => [recv,args[1:]...]
 	// first arg ctx: false => [recv, args[0:]...]
 	if preInterceptor != nil {
-		pre = func(funcInfo *core.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool) {
+		pre = func(funcInfo *types.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool) {
 			if recvPtr != nil {
 				if actRecvPtr == nil {
 					panic("receiver mismatch")
@@ -327,7 +327,7 @@ func buildRecorderFromInterceptor(recvPtr interface{}, preInterceptor PreInterce
 		}
 	}
 	if postInterceptor != nil {
-		post = func(funcInfo *core.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}, data interface{}) {
+		post = func(funcInfo *types.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}, data interface{}) {
 			if recvPtr != nil {
 				if actRecvPtr == nil {
 					panic("receiver mismatch")

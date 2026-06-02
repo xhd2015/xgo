@@ -70,3 +70,24 @@ On go1.25, `needLocalRuntime` forces full instrumentation (overlay + `compiler_e
 See: `doc/development/WHY_GO_1_25_FAIL_ON_TestFuncNames.md`.
 
 See: `doc/development/OVERLAY_RESTRICTION_IN_GO_1_25_V.S._GO_1_24.md` for full walkthrough, causal chain, affected tests, and fix suggestions.
+
+### Runtime types refactoring: break import cycle (go1.25)
+
+Go 1.25's `needLocalRuntime` code path injects `import _ "github.com/xhd2015/xgo/runtime/trace"` into `runtime/core/func.go` via overlay. This triggered compilation of `trace/trace.go` → `internal/trap` → `core`, creating an import cycle that Go 1.25 rejects:
+
+- `core` (overlay imports trace) → `trace/trace.go` (imports internal/trap) → `internal/trap` (imports core) → cycle
+
+Go 1.24 tolerated this cycle silently; Go 1.25's stricter module validation fails with `go: updates to go.mod needed; to update it: go mod tidy`.
+
+**Fix**: Extract shared types (`FuncInfo`, `Kind`, `Object`, `Field`, `ObjectWithErr`) from `runtime/core/` into a new leaf package `runtime/types/`. `core/` re-exports via type aliases for backward compat. `trace/` and `internal/trap/` import `runtime/types/` directly, removing the last link in the cycle.
+
+| File | Change |
+|------|--------|
+| `runtime/types/types.go` | New — type definitions |
+| `runtime/core/func.go` | Type aliases from `types` |
+| `runtime/core/object.go` | Type aliases from `types` |
+| `runtime/trace/trace.go` | Import `runtime/types` instead of `runtime/core` |
+| `runtime/internal/trap/*.go` (9 files) | Import `runtime/types` instead of `runtime/core` |
+| `cmd/xgo/asset/runtime_gen/` | Mirror updates (embedded assets in xgo binary) |
+
+**Verified**: `xgo test ./core/...` with Go 1.25 passes after rebuilding xgo with updated embedded assets.

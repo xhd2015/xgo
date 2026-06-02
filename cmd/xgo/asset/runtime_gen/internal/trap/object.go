@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/types"
 	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
 
@@ -20,10 +20,10 @@ type field struct {
 	valPtr interface{}
 }
 
-var _ core.Object = (object)(nil)
-var _ core.Field = field{}
+var _ types.Object = (object)(nil)
+var _ types.Field = field{}
 
-func (c object) GetField(name string) core.Field {
+func (c object) GetField(name string) types.Field {
 	for _, field := range c {
 		if field.name == name {
 			return field
@@ -32,7 +32,7 @@ func (c object) GetField(name string) core.Field {
 	panic(fmt.Errorf("no field: %s", name))
 }
 
-func (c object) GetFieldIndex(i int) core.Field {
+func (c object) GetFieldIndex(i int) types.Field {
 	return c[i]
 }
 

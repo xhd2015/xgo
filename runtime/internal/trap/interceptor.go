@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/types"
 	"github.com/xhd2015/xgo/runtime/internal/runtime"
 )
 
@@ -21,11 +21,11 @@ import (
 // ErrMocked indicates the target function is mocked
 var ErrMocked = errors.New("func mocked by xgo")
 
-type Interceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) error
+type Interceptor func(ctx context.Context, fn *types.FuncInfo, args types.Object, results types.Object) error
 
-type PreInterceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object) (interface{}, error)
+type PreInterceptor func(ctx context.Context, fn *types.FuncInfo, args types.Object, results types.Object) (interface{}, error)
 
-type PostInterceptor func(ctx context.Context, fn *core.FuncInfo, args core.Object, results core.Object, data interface{}) error
+type PostInterceptor func(ctx context.Context, fn *types.FuncInfo, args types.Object, results types.Object, data interface{}) error
 
 func PushInterceptor(pre PreInterceptor, post PostInterceptor) func() {
 	return pushInterceptor(pre, post)

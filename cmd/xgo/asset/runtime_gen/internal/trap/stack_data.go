@@ -1,7 +1,7 @@
 package trap
 
 import (
-	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/types"
 	"github.com/xhd2015/xgo/runtime/internal/stack"
 	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
@@ -15,11 +15,11 @@ var globalInterceptorHolder interceptorHolders
 type StackData struct {
 	hasStartedTracing bool
 
-	filterTrace     func(funcInfo *core.FuncInfo) bool
+	filterTrace     func(funcInfo *types.FuncInfo) bool
 	onFinish        func(stack stack_model.IStack)
 	stackOutputFile string
 
-	inspecting func(pc uintptr, funcInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{})
+	inspecting func(pc uintptr, funcInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{})
 
 	interceptors interceptorHolders
 }
@@ -69,16 +69,16 @@ func getOrAttachStackDataOf(stk *stack.Stack) *StackData {
 
 type recorderHolder struct {
 	wantRecvPtr interface{}
-	pre         func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool)
-	post        func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})
+	pre         func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool)
+	post        func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})
 }
 
 type varRecordHolder struct {
-	pre  func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool)
-	post func(fnInfo *core.FuncInfo, res interface{}, data interface{})
+	pre  func(fnInfo *types.FuncInfo, res interface{}) (interface{}, bool)
+	post func(fnInfo *types.FuncInfo, res interface{}, data interface{})
 }
 
-func (c *StackData) getLastMock(pc uintptr) (recvPtr interface{}, mock func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool) {
+func (c *StackData) getLastMock(pc uintptr) (recvPtr interface{}, mock func(fnInfo *types.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool) {
 	var mockList []*mockHolder
 	if c != nil {
 		mockList = c.interceptors.mock[pc]
@@ -93,7 +93,7 @@ func (c *StackData) getLastMock(pc uintptr) (recvPtr interface{}, mock func(fnIn
 	return m.wantRecvPtr, m.mock
 }
 
-func (c *StackData) getLastVarMock(varAddr uintptr) (mock func(fnInfo *core.FuncInfo, res interface{})) {
+func (c *StackData) getLastVarMock(varAddr uintptr) (mock func(fnInfo *types.FuncInfo, res interface{})) {
 	var mockList []*varMockHolder
 	if c != nil {
 		mockList = c.interceptors.varMock[varAddr]
@@ -108,7 +108,7 @@ func (c *StackData) getLastVarMock(varAddr uintptr) (mock func(fnInfo *core.Func
 	return m.mock
 }
 
-func (c *StackData) getLastVarPtrMock(varAddr uintptr) (mock func(fnInfo *core.FuncInfo, res interface{})) {
+func (c *StackData) getLastVarPtrMock(varAddr uintptr) (mock func(fnInfo *types.FuncInfo, res interface{})) {
 	var mockList []*varMockHolder
 	if c != nil {
 		mockList = c.interceptors.varPtrMock[varAddr]
