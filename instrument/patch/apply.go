@@ -311,7 +311,7 @@ func resolveCwd(cwd string, goroot string, extraEnv map[string]string) string {
 		return goroot
 	}
 	if filepath.IsAbs(cwd) {
-		return cwd
+		return filepath.Clean(cwd)
 	}
 	return filepath.Join(goroot, cwd)
 }
