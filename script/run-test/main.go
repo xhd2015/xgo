@@ -671,7 +671,7 @@ func main() {
 			// projectDir
 			runArgs := make([]string, 0, len(remainArgs)+1)
 			itTags := tags
-			if !usePlainGo {
+			if !usePlainGo || isSetupGoroot {
 				if itTags == "" {
 					itTags = "test_driver_is_xgo"
 				} else {

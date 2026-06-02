@@ -258,16 +258,20 @@ func TestUnzipFilePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat failed: %v", err)
 	}
-	if fi.Mode().Perm() != 0755 {
-		t.Errorf("expected 0755, got %04o", fi.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		if fi.Mode().Perm() != 0755 {
+			t.Errorf("expected 0755, got %04o", fi.Mode().Perm())
+		}
 	}
 
 	fi2, err := os.Stat(filepath.Join(extractDir, "go", "readme"))
 	if err != nil {
 		t.Fatalf("stat failed: %v", err)
 	}
-	if fi2.Mode().Perm() != 0644 {
-		t.Errorf("expected 0644, got %04o", fi2.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		if fi2.Mode().Perm() != 0644 {
+			t.Errorf("expected 0644, got %04o", fi2.Mode().Perm())
+		}
 	}
 }
 

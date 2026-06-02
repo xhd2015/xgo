@@ -178,8 +178,8 @@ func TestSpawnWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read test.txt: %v", err)
 	}
-	if string(data) != "test\n" {
-		t.Fatalf("test.txt content = %q, want %q", string(data), "test\n")
+	if s := string(data); s != "test\n" && s != "test\r\n" {
+		t.Fatalf("test.txt content = %q, want %q or %q", s, "test\n", "test\r\n")
 	}
 }
 

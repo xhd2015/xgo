@@ -3,6 +3,7 @@ package patch
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -1040,34 +1041,45 @@ func TestSubstituteEnv_NoMatch(t *testing.T) {
 }
 
 func TestResolveCwd_AbsoluteFromEnv(t *testing.T) {
+	goroot := absGoroot()
 	extraEnv := map[string]string{
-		"TARGET_GOROOT": "/path/to/goroot",
+		"TARGET_GOROOT": goroot,
 	}
-	got := resolveCwd("${TARGET_GOROOT}/src/cmd", "/other/fallback", extraEnv)
-	expected := "/path/to/goroot/src/cmd"
+	got := resolveCwd("${TARGET_GOROOT}/src/cmd", filepath.Join("other", "fallback"), extraEnv)
+	expected := filepath.Join(goroot, "src", "cmd")
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}
 }
 
 func TestResolveCwd_Relative(t *testing.T) {
-	got := resolveCwd("src/cmd", "/path/to/goroot", nil)
-	expected := "/path/to/goroot/src/cmd"
+	goroot := absGoroot()
+	got := resolveCwd(filepath.Join("src", "cmd"), goroot, nil)
+	expected := filepath.Join(goroot, "src", "cmd")
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}
 }
 
 func TestResolveCwd_Empty(t *testing.T) {
-	got := resolveCwd("", "/path/to/goroot", nil)
-	if got != "/path/to/goroot" {
+	goroot := absGoroot()
+	got := resolveCwd("", goroot, nil)
+	if got != goroot {
 		t.Errorf("expected fallback goroot, got %q", got)
 	}
 }
 
 func TestResolveCwd_AbsoluteLiteral(t *testing.T) {
-	got := resolveCwd("/absolute/path", "/goroot", nil)
-	if got != "/absolute/path" {
+	goroot := absGoroot()
+	got := resolveCwd(goroot, filepath.Join("other", "goroot"), nil)
+	if got != goroot {
 		t.Errorf("expected absolute path unchanged, got %q", got)
 	}
+}
+
+func absGoroot() string {
+	if runtime.GOOS == "windows" {
+		return `C:\xgo\goroot`
+	}
+	return "/path/to/goroot"
 }
