@@ -18,7 +18,7 @@ func main() {
 	keepWorktrees := fs.Bool("keep-worktrees", false, "always keep worktrees and temp dirs, even on success")
 	includeRebuildCompilerAndGo := fs.Bool("include-rebuild-compiler-and-go", false, "include compiler and go rebuilds (skipped by default)")
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: go run ./test/integrations/test-file-patch-generated-same-diffs-as-programatic-patch --go-version 1.24 [--goroot /path/to/goroot]\n\n")
+		fmt.Fprintf(fs.Output(), "Usage: go run ./test/integrations/test-file-patch-generated-same-diffs-as-programmatic-patch --go-version 1.24 [--goroot /path/to/goroot]\n\n")
 		fmt.Fprintf(fs.Output(), "Compares file-based vs programmatic patching via xgo CLI.\n")
 		fmt.Fprintf(fs.Output(), "Runs `xgo setup --use-file-patches=true` and `xgo setup --use-file-patches=false`\n")
 		fmt.Fprintf(fs.Output(), "with separate --xgo-home dirs, then diffs the resulting GOROOTs.\n")

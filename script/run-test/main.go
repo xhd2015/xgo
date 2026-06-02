@@ -670,15 +670,16 @@ func main() {
 			}
 			// projectDir
 			runArgs := make([]string, 0, len(remainArgs)+1)
+			itTags := tags
 			if !usePlainGo {
-				if tags == "" {
-					tags = "test_driver_is_xgo"
+				if itTags == "" {
+					itTags = "test_driver_is_xgo"
 				} else {
-					tags = tags + ",test_driver_is_xgo"
+					itTags = itTags + ",test_driver_is_xgo"
 				}
 			}
 			opts := Opts{
-				Tags:            tags,
+				Tags:            itTags,
 				IsSetupGoroot:   isSetupGoroot,
 				UsePrebuiltXgo:  useBuiltXgo,
 				BuildOnly:       buildOnly,
@@ -688,8 +689,8 @@ func main() {
 				GoVersion:       goVersion,
 				XgoDebugCompile: xgoDebugCompile,
 			}
-			if tags != "" {
-				runArgs = append(runArgs, "-tags", tags)
+			if itTags != "" {
+				runArgs = append(runArgs, "-tags", itTags)
 			}
 			if !usePlainGo {
 				if logDebug {

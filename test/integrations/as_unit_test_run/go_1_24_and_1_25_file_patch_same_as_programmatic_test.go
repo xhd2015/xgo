@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestFilePatchGeneratedSameDiffsAsProgramaticPatch(t *testing.T) {
+func TestFilePatchGeneratedSameDiffsAsProgrammaticPatch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
 	}
@@ -24,11 +24,11 @@ func TestFilePatchGeneratedSameDiffsAsProgramaticPatch(t *testing.T) {
 		t.Skipf("test only runs on go1.24 and go1.25, got %s", runtime.Version())
 	}
 	if minor == "25" {
-		t.Skipf("go1.25 progmatic patch should still be re-aligned with file-based patch, but the function behaves normally.")
+		t.Skipf("go1.25 programmatic patch should still be re-aligned with file-based patch, but the function behaves normally.")
 	}
 	goVersion := major + "." + minor
 
-	err := RunCommandInResolvedRootDir("go", "run", "./test/integrations/test_file_patch_generated_same_diffs_as_programatic_patch", "--go-version", goVersion)
+	err := RunCommandInResolvedRootDir("go", "run", "./test/integrations/test_file_patch_generated_same_diffs_as_programmatic_patch", "--go-version", goVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

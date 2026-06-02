@@ -37,7 +37,7 @@ To avoid regression, run final test
 
 ```sh
 # NOTE these two integration tests only available for go1.24 and go1.25, they're run as regression baseline
-go run ./test/integrations/test-file-patch-generated-same-diffs-as-programatic-patch/ --go-version 1.24
+go run ./test/integrations/test-file-patch-generated-same-diffs-as-programmatic-patch/ --go-version 1.24
 go run ./test/integrations/test-file-patch-can-be-repeated-on-patched-goroot --go-version 1.24
 ```
 
