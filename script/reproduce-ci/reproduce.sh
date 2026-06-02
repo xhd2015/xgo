@@ -2,6 +2,8 @@
 set -euo pipefail
 
 # Reproduce the CI error in a podman container
+# The error: src.NoXPos_xgo_get undefined during xgo setup for go1.25.10
+#
 # Usage:
 #   bash script/reproduce-ci/reproduce.sh
 

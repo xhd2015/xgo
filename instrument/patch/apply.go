@@ -29,11 +29,12 @@ type GenerateHandler func(kind string, extraEnv map[string]string) error
 // GenerateEntry represents a shell command to run during patching,
 // or a kind-based operation handled by a GenerateHandler callback.
 type GenerateEntry struct {
-	Kind    string   `json:"kind,omitempty"`
-	Cmd     string   `json:"cmd,omitempty"`
-	Cwd     string   `json:"cwd,omitempty"` // working dir relative to goroot
-	Comment string   `json:"comment,omitempty"`
-	Outputs []string `json:"outputs,omitempty"`
+	Kind     string            `json:"kind,omitempty"`
+	Cmd      string            `json:"cmd,omitempty"`
+	Cwd      string            `json:"cwd,omitempty"` // working dir relative to goroot
+	Comments []string          `json:"comments,omitempty"`
+	Env      map[string]string `json:"env,omitempty"`
+	Outputs  []string          `json:"outputs,omitempty"`
 }
 
 // Config represents the __config__.json file in a patch directory.
@@ -116,6 +117,9 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 			newEnv = append(newEnv, e)
 		}
 		newEnv = append(newEnv, "GOROOT="+goroot, "GOTOOLCHAIN=local", "GOOS=", "GOARCH=")
+		for k, v := range gen.Env {
+			newEnv = append(newEnv, k+"="+v)
+		}
 		execCmd.Env = newEnv
 		execCmd.Stdout = os.Stdout
 		execCmd.Stderr = os.Stderr

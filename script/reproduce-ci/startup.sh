@@ -22,13 +22,14 @@ echo ""
 echo "========================================="
 echo "=== Step 2: Running run-test ==="
 echo "========================================="
-echo "Command: go run ./script/run-test/ --no-git --install-xgo --reset-instrument --log-debug -v -short --with-goroot /usr/local/go"
+echo "Command: go run ./script/run-test/ --no-git --install-xgo --with-setup --reset-instrument --log-debug -v --with-goroot /usr/local/go"
 echo ""
 
 cd /xgo
 go run ./script/run-test/ \
     --no-git \
     --install-xgo \
+    --with-setup \
     --reset-instrument \
     --log-debug \
     -v \

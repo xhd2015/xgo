@@ -58,6 +58,20 @@ go run ./script/generate cmd/xgo/asset/patches cmd/xgo/asset/compiler_patch_gen
 
 Note: In development mode (`IS_DEV`), patches are loaded from the live source tree, so generate is only needed when building the release binary or running tests via `go run ./cmd/xgo` (which recompiles xgo).
 
+## xgo Patch Generate Env
+
+### Rebuild steps must set `GO_BYPASS_XGO=true` to prevent recursive interception
+
+During GOROOT instrumentation, `apply.go` runs generate commands like `${INSTRUMENT_GOROOT}/bin/go build -a ... cmd/compile`. The go binary at `${INSTRUMENT_GOROOT}/bin/go` is the **instrumented** go binary — it has an `xgoPrecheck` hook that intercepts `build`/`test`/`run` and delegates to `xgo` in PATH.
+
+Without `GO_BYPASS_XGO=true`, this creates a recursive loop: xgo runs `go build cmd/compile` → instrumented go delegates to xgo → xgo tries to re-instrument toolchain packages → variable trapping generates unresolved getter references (`undefined: src.NoXPos_xgo_get`).
+
+**Fix:** Add `"env": {"GO_BYPASS_XGO": "true"}` to `rebuild-compiler`, `rebuild-stdlib`, and `rebuild-go` entries in `patches/go*/__config__.json`. Then run `go run ./script/generate cmd/xgo/asset/patches` to sync embedded assets.
+
+The `xgoPrecheck` hook (`instrument/instrument_go/xgo_main_template.go:19`) checks `os.Getenv("GO_BYPASS_XGO") == "true"` and returns `false` (no interception) when set.
+
+See also: `doc/development/WHY_DOUBLE_SETUP_EVER_FAILED.md`.
+
 ## Go Version Differences
 
 ### Go 1.25+ forbids overlay for files under GOMODCACHE
