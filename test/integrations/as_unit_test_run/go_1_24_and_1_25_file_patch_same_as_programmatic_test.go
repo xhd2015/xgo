@@ -12,6 +12,9 @@ func TestFilePatchGeneratedSameDiffsAsProgrammaticPatch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: requires bash (make.bash)")
+	}
 	v := runtime.Version()
 	v = strings.TrimPrefix(v, "go")
 	parts := strings.Split(v, ".")

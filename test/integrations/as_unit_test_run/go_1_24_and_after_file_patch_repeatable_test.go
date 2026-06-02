@@ -3,12 +3,16 @@
 package as_unit_test_run
 
 import (
+	"runtime"
 	"testing"
 )
 
 func TestFilePatchCanBeRepeatedOnPatchedGoroot(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: requires bash (make.bash)")
 	}
 	goVersion, err := goMinorVersion()
 	if err != nil {
