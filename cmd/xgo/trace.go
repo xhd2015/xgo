@@ -125,7 +125,7 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 			return nil, err
 		}
 
-		overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, vendorDir, overlayDir, runtimeModuleDir, forceCopyRuntime)
+			overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, mainModule, vendorDir, overlayDir, runtimeModuleDir, forceCopyRuntime)
 		if err != nil {
 			return nil, err
 		}
@@ -222,7 +222,7 @@ type dependencyInfo struct {
 	modfile string // alternative go.mod
 }
 
-func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion, modfileOption string, xgoSrc string, projectRoot string, vendorDir string, tmpOverlayDir string, tmpRuntime string, forceCopyRuntime bool) (*dependencyInfo, error) {
+func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion, modfileOption string, xgoSrc string, projectRoot string, mainModule string, vendorDir string, tmpOverlayDir string, tmpRuntime string, forceCopyRuntime bool) (*dependencyInfo, error) {
 	if isDevelopment {
 		err := filecopy.NewOptions().Ignore(".xgo", "test").CopyReplaceDir(filepath.Join(xgoSrc, "runtime"), tmpRuntime)
 		if err != nil {
@@ -380,17 +380,21 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 		modfile = tmpGoMod
 	}
 
-	logDebug("require %s v%s, replaced: %s", constants.RUNTIME_MODULE, VERSION, tmpRuntime)
-	err = cmd.Env([]string{
-		"GOROOT=" + goroot,
-	}).Run(goBinary, "mod", "edit",
-		fmt.Sprintf("-require=%s@v%s", constants.RUNTIME_MODULE, VERSION),
-		fmt.Sprintf("-replace=%s=%s", constants.RUNTIME_MODULE, tmpRuntime),
-		tmpGoMod,
-	)
-	logDebug("copy and edit go.mod: %s", tmpGoMod)
-	if err != nil {
-		return nil, err
+	// When building xgo/runtime itself, don't add self-require.
+	// require+replace here causes a module to require itself,
+	// which Go 1.25 rejects. See patches/go1.25/issues/RUNTIME_LIB_SELF_REQUIRE.md
+	if mainModule != constants.RUNTIME_MODULE {
+		logDebug("require %s v%s, replaced: %s", constants.RUNTIME_MODULE, VERSION, tmpRuntime)
+		err = cmd.Env([]string{
+			"GOROOT=" + goroot,
+		}).Run(goBinary, "mod", "edit",
+			fmt.Sprintf("-require=%s@v%s", constants.RUNTIME_MODULE, VERSION),
+			fmt.Sprintf("-replace=%s=%s", constants.RUNTIME_MODULE, tmpRuntime),
+			tmpGoMod,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if modfile == "" {
 		goModReplace[overlay.AbsFile(goMod)] = overlay.AbsFile(tmpGoMod)
