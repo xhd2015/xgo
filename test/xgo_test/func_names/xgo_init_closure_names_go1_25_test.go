@@ -1,5 +1,5 @@
-//go:build go1.25
-// +build go1.25
+//go:build go1.25 && only_when_run_with_xgo
+// +build go1.25,only_when_run_with_xgo
 
 package func_names
 

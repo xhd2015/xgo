@@ -14,8 +14,6 @@ var topClosure = func() {}
 // the test file stubs use file index 1, while the compiler autogen
 // stubs use index 0. Both sets are present.
 func TestStubNames(t *testing.T) {
-	pkgPrefix := "github.com/xhd2015/xgo/runtime/test/func_names/pkg_with_source_files"
-
 	// Compiler autogen stubs (index 0)
 	assertName(t, __xgo_register_0, "runtime.XgoRegister")
 	assertName(t, __xgo_trap_0, "runtime.XgoTrap")
@@ -28,7 +26,7 @@ func TestStubNames(t *testing.T) {
 	assertName(t, __xgo_trap_var_1, "runtime.XgoTrapVar")
 	assertName(t, __xgo_trap_varptr_1, "runtime.XgoTrapVarPtr")
 
-	assertName(t, topClosure, pkgPrefix+".init.func5")
+	assertName(t, topClosure, expectTopLevelClosure)
 }
 
 func assertName(t *testing.T, fn interface{}, expected string) {
