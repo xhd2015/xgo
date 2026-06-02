@@ -34,6 +34,10 @@ func ParseReceiverType(typeExpr ast.Expr) (ptr bool, generic bool, recvType *ast
 			typeExpr = x
 		}
 	}
+	selExpr, ok := typeExpr.(*ast.SelectorExpr)
+	if ok {
+		return ptr, generic, selExpr.Sel
+	}
 	idt, ok := typeExpr.(*ast.Ident)
 	if !ok {
 		panic(fmt.Errorf("expect receiver to be ident, actual: %T(from %T)", typeExpr, orig))
