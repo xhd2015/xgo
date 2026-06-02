@@ -30,7 +30,7 @@ func CreateUnifiedWorktree(baseGoroot, progGoroot, fbGoroot string) (wt string, 
 	if err := gitRun(wtObj, "add", "-A", "src/"); err != nil {
 		return "", "", "", nil, fmt.Errorf("stage prog src: %w", err)
 	}
-	if err := gitRun(wtObj, "commit", "--no-verify", "-m", "programmatic patch [xgo]"); err != nil {
+	if err := gitRun(wtObj, "-c", "user.name=xgo-by-xhd2015", "-c", "user.email=xhd2015@gmail.com", "commit", "--no-verify", "-m", "programmatic patch [xgo]"); err != nil {
 		return "", "", "", nil, fmt.Errorf("commit prog: %w", err)
 	}
 	commitProg, err = gitOutput(wtObj, "rev-parse", "HEAD")
@@ -46,7 +46,7 @@ func CreateUnifiedWorktree(baseGoroot, progGoroot, fbGoroot string) (wt string, 
 	if err := gitRun(wtObj, "add", "-A", "src/"); err != nil {
 		return "", "", "", nil, fmt.Errorf("stage fb src: %w", err)
 	}
-	if err := gitRun(wtObj, "commit", "--no-verify", "-m", "file-based patch [xgo]"); err != nil {
+	if err := gitRun(wtObj, "-c", "user.name=xgo-by-xhd2015", "-c", "user.email=xhd2015@gmail.com", "commit", "--no-verify", "-m", "file-based patch [xgo]"); err != nil {
 		return "", "", "", nil, fmt.Errorf("commit fb: %w", err)
 	}
 	commitFB, err = gitOutput(wtObj, "rev-parse", "HEAD")
