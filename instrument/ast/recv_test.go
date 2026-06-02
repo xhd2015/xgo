@@ -1,3 +1,21 @@
+// Tests for ParseReceiverType and ParseReceiverInfo covering all receiver
+// forms, including *ast.SelectorExpr which caused a panic before the fix.
+//
+// Bug: ParseReceiverType only handled *ast.Ident as the leaf type name after
+// unwrapping *ast.StarExpr (pointer) and *ast.IndexExpr/*ast.IndexListExpr
+// (generic). When a method receiver referenced a type from another package
+// (e.g., *otherpkg.Type), the inner type after unwrapping is *ast.SelectorExpr,
+// not *ast.Ident, causing a panic.
+//
+// Fix: Added *ast.SelectorExpr handling before the *ast.Ident check. When a
+// SelectorExpr is encountered, selExpr.Sel (the type name *ast.Ident) is
+// returned. This is consistent with how getEmbedFieldName in resolve.go
+// already handles SelectorExpr for embedded field names.
+//
+// The tests marked [fix: selector] cover the new cases that would have
+// panicked before the fix.
+//
+// Generic test cases (IndexExpr, IndexListExpr) are in recv_test_go1.18.go.
 package ast
 
 import (
@@ -28,33 +46,9 @@ func TestParseReceiverType(t *testing.T) {
 			wantTypeID: "T",
 		},
 		{
-			name: "generic index expr",
-			typeExpr: &ast.IndexExpr{
-				X: ast.NewIdent("T"),
-			},
-			wantPtr:    false,
-			wantGen:    true,
-			wantTypeID: "T",
-		},
-		{
-			name: "pointer to generic index expr",
-			typeExpr: &ast.StarExpr{
-				X: &ast.IndexExpr{X: ast.NewIdent("T")},
-			},
-			wantPtr:    true,
-			wantGen:    true,
-			wantTypeID: "T",
-		},
-		{
-			name: "generic index list expr",
-			typeExpr: &ast.IndexListExpr{
-				X: ast.NewIdent("T"),
-			},
-			wantPtr:    false,
-			wantGen:    true,
-			wantTypeID: "T",
-		},
-		{
+			// [fix: selector] *pkg.Type — pointer-to-type-from-other-package.
+			// AST: *ast.StarExpr{X: *ast.SelectorExpr{X: pkg, Sel: Type}}
+			// Before fix: panicked at "expect receiver to be ident".
 			name: "pointer selector expr (*pkg.Type)",
 			typeExpr: &ast.StarExpr{
 				X: &ast.SelectorExpr{
@@ -67,6 +61,9 @@ func TestParseReceiverType(t *testing.T) {
 			wantTypeID: "Type",
 		},
 		{
+			// [fix: selector] pkg.Type — type-from-other-package without pointer.
+			// AST: *ast.SelectorExpr{X: pkg, Sel: Type}
+			// Before fix: panicked at "expect receiver to be ident".
 			name: "selector expr without pointer (pkg.Type)",
 			typeExpr: &ast.SelectorExpr{
 				X:   ast.NewIdent("pkg"),
@@ -74,20 +71,6 @@ func TestParseReceiverType(t *testing.T) {
 			},
 			wantPtr:    false,
 			wantGen:    false,
-			wantTypeID: "Type",
-		},
-		{
-			name: "pointer to generic selector expr (*pkg.Type[T])",
-			typeExpr: &ast.StarExpr{
-				X: &ast.IndexExpr{
-					X: &ast.SelectorExpr{
-						X:   ast.NewIdent("pkg"),
-						Sel: ast.NewIdent("Type"),
-					},
-				},
-			},
-			wantPtr:    true,
-			wantGen:    true,
 			wantTypeID: "Type",
 		},
 	}
@@ -111,8 +94,10 @@ func TestParseReceiverType(t *testing.T) {
 	}
 }
 
+// TestParseReceiverInfo verifies the identity name construction for a method
+// with a *pkg.Type receiver. The expected identity is "(*Type).Method" — using
+// only the type name portion of the selector, not the package prefix.
 func TestParseReceiverInfo(t *testing.T) {
-	// *pkg.Type method named "Method" -> identity "(*Type).Method"
 	typeExpr := &ast.StarExpr{
 		X: &ast.SelectorExpr{
 			X:   ast.NewIdent("pkg"),
@@ -134,8 +119,9 @@ func TestParseReceiverInfo(t *testing.T) {
 	}
 }
 
+// TestParseReceiverInfo_NoSelector verifies identity name for the common case
+// of a simple pointer receiver *T, serving as a baseline regression check.
 func TestParseReceiverInfo_NoSelector(t *testing.T) {
-	// *T method named "Method" -> identity "(*T).Method"
 	typeExpr := &ast.StarExpr{X: ast.NewIdent("T")}
 	name, ptr, gen, idt := ParseReceiverInfo("Method", typeExpr)
 	if name != "(*T).Method" {
@@ -152,10 +138,10 @@ func TestParseReceiverInfo_NoSelector(t *testing.T) {
 	}
 }
 
+// TestParseReceiverTypeNilNotPanic documents the current behavior that
+// passing nil to ParseReceiverType panics (due to type assertion on nil).
+// This is a defensive characterization test, not an endorsement of nil input.
 func TestParseReceiverTypeNilNotPanic(t *testing.T) {
-	// ensure nil doesn't panic (tested with recover)
-	// This is a defensive test; currently this calls StarExpr.(nil) etc.
-	// which will panic. We just note the current behavior.
 	defer func() {
 		if r := recover(); r == nil {
 			t.Log("ParseReceiverType(nil) expected to panic (current behavior)")
@@ -164,10 +150,10 @@ func TestParseReceiverTypeNilNotPanic(t *testing.T) {
 	ParseReceiverType(nil)
 }
 
+// TestParseReceiverTypeNoFileSet verifies that ParseReceiverType works with
+// *ast.Ident nodes created without a token.FileSet (NamePos = 0). This ensures
+// the parsing logic does not depend on position information from a FileSet.
 func TestParseReceiverTypeNoFileSet(t *testing.T) {
-	// NewIdent without fileSet might cause position issues
-	// but should not affect the parsing logic.
-	// This is a complement test.
 	typeExpr := &ast.StarExpr{
 		X: &ast.SelectorExpr{
 			X:   &ast.Ident{Name: "net"},
@@ -185,5 +171,3 @@ func TestParseReceiverTypeNoFileSet(t *testing.T) {
 		t.Errorf("type name = %q, want %q", idt.Name, "Conn")
 	}
 }
-
-
