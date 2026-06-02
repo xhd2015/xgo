@@ -9,6 +9,9 @@ import (
 )
 
 func TestFilePatchGeneratedSameDiffsAsProgramaticPatch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
 	v := runtime.Version()
 	v = strings.TrimPrefix(v, "go")
 	parts := strings.Split(v, ".")

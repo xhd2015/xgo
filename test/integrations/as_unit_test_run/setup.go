@@ -55,3 +55,13 @@ func RunCommandInResolvedRootDir(name string, args ...string) error {
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
+
+func goMinorVersion() (string, error) {
+	v := runtime.Version()
+	v = strings.TrimPrefix(v, "go")
+	parts := strings.Split(v, ".")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("unexpected version format: %s", runtime.Version())
+	}
+	return parts[0] + "." + parts[1], nil
+}

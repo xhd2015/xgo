@@ -181,6 +181,7 @@ func main() {
 	var flagList bool
 	var flagJSON bool
 	var noGit bool
+	var flagFast bool
 	if len(args) > 0 && args[0] == "list" {
 		flagList = true
 		args = args[1:]
@@ -340,6 +341,10 @@ func main() {
 			continue
 		}
 
+		if arg == "--fast" {
+			flagFast = true
+			continue
+		}
 		if arg == "-race" {
 			flagRace = true
 			continue
@@ -356,6 +361,9 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
 		os.Exit(1)
+	}
+	if flagFast {
+		remainArgs = appendShortIfFast(remainArgs)
 	}
 	if flagList {
 		list(remainTests, flagJSON, predefinedTests)
@@ -1087,6 +1095,15 @@ func (d *detector) found() bool {
 }
 
 func ptrBool(b bool) *bool { return &b }
+
+func appendShortIfFast(remainArgs []string) []string {
+	for _, a := range remainArgs {
+		if a == "-short" {
+			return remainArgs
+		}
+	}
+	return append(remainArgs, "-short")
+}
 
 func parseUseFilePatchesFlag(val string) (*bool, error) {
 	if val == "" || val == "true" {

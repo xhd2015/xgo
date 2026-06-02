@@ -24,17 +24,20 @@ import (
 //   go run ./test/integrations/xgo-with-setup-repro/ --goroot go-release/go1.25.10
 
 func main() {
-	gorootFlag := flag.String("goroot", "", "path to ORIGINAL GOROOT (default: go-release/go1.25.10)")
+	goVersionFlag := flag.String("go-version", "", "go version to download if --goroot not set (e.g. 1.25)")
+	gorootFlag := flag.String("goroot", "", "path to ORIGINAL GOROOT (downloads if not set)")
 	flag.Parse()
 
 	repoRoot := internal.FindRepoRoot()
 	internal.Logf("xgo repo: %s", repoRoot)
 
-	origGoroot := *gorootFlag
-	if origGoroot == "" {
-		origGoroot = "go-release/go1.25.10"
+	if *goVersionFlag == "" && *gorootFlag == "" {
+		fmt.Fprintf(os.Stderr, "error: --go-version or --goroot is required\n")
+		os.Exit(1)
 	}
-	internal.Logf("original goroot: %s", origGoroot)
+
+	goroot, _ := internal.EnsureGoroot(repoRoot, *goVersionFlag, *gorootFlag)
+	internal.Logf("original goroot: %s", goroot)
 
 	xgoHome, err := os.MkdirTemp("", "xgo-repro-*")
 	if err != nil {
@@ -51,7 +54,7 @@ func main() {
 
 	// first setup — creates instrumented GOROOT
 	internal.Logf("=== first setup (fresh) ===")
-	instrumentGoroot, err := runXgoSetup(repoRoot, xgoHome, origGoroot, false)
+	instrumentGoroot, err := runXgoSetup(repoRoot, xgoHome, goroot, false)
 	if err != nil {
 		internal.Fatalf("first setup failed: %v", err)
 	}

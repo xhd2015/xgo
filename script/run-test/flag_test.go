@@ -1,6 +1,29 @@
 package main
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
+
+func TestAppendShortIfFast(t *testing.T) {
+	tests := []struct {
+		name       string
+		remainArgs []string
+		want       []string
+	}{
+		{name: "no existing -short", remainArgs: []string{"-v"}, want: []string{"-v", "-short"}},
+		{name: "with existing -short", remainArgs: []string{"-v", "-short"}, want: []string{"-v", "-short"}},
+		{name: "empty remain args", remainArgs: nil, want: []string{"-short"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := appendShortIfFast(tt.remainArgs)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("expected %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
 
 func TestParseUseFilePatchesFlag(t *testing.T) {
 	tests := []struct {
@@ -32,3 +55,4 @@ func TestParseUseFilePatchesFlag(t *testing.T) {
 		})
 	}
 }
+
