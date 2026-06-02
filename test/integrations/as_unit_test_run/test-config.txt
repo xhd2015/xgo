@@ -1,0 +1,3 @@
+# test-config.txt for test/integrations/as_unit_test_run
+# Tests here spawn git worktrees and run xgo setup, so they need extra time
+flags: -timeout=600s

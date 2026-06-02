@@ -288,9 +288,16 @@ func resolveTestConfig(tests []*TestConfig, fullArg string) (path string, test *
 	} else if listEquals(parts, xgoModule) {
 		xgoPath = parts[len(xgoModule):]
 	} else {
+		if t := findTest(tests, fullArg); t != nil {
+			return "", t
+		}
 		return fullArg, rootTest
 	}
+	relPath := strings.Join(xgoPath, "/")
 	if len(xgoPath) == 0 || xgoPath[0] != "runtime" {
+		if t := findTest(tests, relPath); t != nil {
+			return "", t
+		}
 		return fullArg, rootTest
 	}
 

@@ -71,11 +71,11 @@ func init() {
 }
 
 func initDefaultTestArgs() {
-	// go list -e ./... | grep -Ev 'asset|internal/vendir'
 	rootTestsOutput, err := cmd.Output("go", "list", "-e", "./...")
 	if err != nil {
 		panic(err)
 	}
+	dedicatedDirs := getDedicatedDirs()
 	list := strings.Split(rootTestsOutput, "\n")
 	var defaultTestArgs []string
 	for _, s := range list {
@@ -86,10 +86,32 @@ func initDefaultTestArgs() {
 		if strings.Contains(s, "asset") || strings.Contains(s, "internal/vendir") || strings.Contains(s, "/patches/") {
 			continue
 		}
+		if isCoveredByDedicatedDir(s, dedicatedDirs) {
+			continue
+		}
 		defaultTestArgs = append(defaultTestArgs, s)
 	}
 
 	defaultTest.Args = defaultTestArgs
+}
+
+func getDedicatedDirs() []string {
+	var dirs []string
+	for _, t := range predefinedTests {
+		if t.Dir != "" {
+			dirs = append(dirs, t.Dir)
+		}
+	}
+	return dirs
+}
+
+func isCoveredByDedicatedDir(pkg string, dedicatedDirs []string) bool {
+	for _, d := range dedicatedDirs {
+		if pkg == d || strings.HasSuffix(pkg, "/"+d) || strings.Contains(pkg, "/"+d+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 var defaultTest = &TestConfig{
@@ -112,9 +134,15 @@ var runtimeTest = &TestConfig{
 // these tests are predefined because
 // I don't want to add a test-config.txt
 // to them
+var integrationUnitTestRunTest = &TestConfig{
+	Dir:        "test/integrations/as_unit_test_run",
+	UsePlainGo: true,
+}
+
 var predefinedTests = []*TestConfig{
 	defaultTest,
 	runtimeTest,
+	integrationUnitTestRunTest,
 	// TODO: check extraSubTests for remaining tests
 }
 
