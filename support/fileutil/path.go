@@ -45,6 +45,9 @@ func RebaseAbsPath(root string, absPath string) string {
 	if idx < 0 {
 		return filepath.Join(root, absPath)
 	}
-	// join two parts before and after :
-	return filepath.Join(root, absPath[:idx], absPath[idx+1:])
+	rest := absPath[idx+1:]
+	if len(rest) > 0 && (rest[0] == '/' || rest[0] == '\\') {
+		rest = rest[1:]
+	}
+	return filepath.Join(root, rest)
 }

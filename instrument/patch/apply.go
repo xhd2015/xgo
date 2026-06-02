@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/xhd2015/xgo/instrument/config"
@@ -55,6 +56,10 @@ type Config struct {
 // generateHandler is called for generate entries with non-empty Kind;
 // it should return nil for known kinds and an error for unrecognized ones.
 func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]string, skipKinds []string, generateHandler GenerateHandler) error {
+	fmt.Fprintf(os.Stderr, "ApplyPatches: patchDir=%s goroot=%s xgoRepoRoot=%s\n", patchDir, goroot, xgoRepoRoot)
+	for k, v := range extraEnv {
+		fmt.Fprintf(os.Stderr, "ApplyPatches: extraEnv[%s]=%s\n", k, v)
+	}
 	cfg, err := LoadConfig(patchDir)
 	if err != nil {
 		return fmt.Errorf("load __config__.json: %w", err)
@@ -102,23 +107,32 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 			continue
 		}
 		cmdStr := substituteEnv(gen.Cmd, extraEnv)
+		cmdStr = normalizeCmdPath(cmdStr)
+		fmt.Fprintf(os.Stderr, "ApplyPatches: gen.Cmd raw=%q\n", gen.Cmd)
+		fmt.Fprintf(os.Stderr, "ApplyPatches: gen.Cmd substituted=%q\n", cmdStr)
 		parts := strings.Fields(cmdStr)
+		fmt.Fprintf(os.Stderr, "ApplyPatches: parts=%v (len=%d)\n", parts, len(parts))
 		if len(parts) == 0 {
 			continue
 		}
 		cmdDir := resolveCwd(gen.Cwd, goroot, extraEnv)
+		fmt.Fprintf(os.Stderr, "ApplyPatches: cmdDir=%s\n", cmdDir)
+		fmt.Fprintf(os.Stderr, "ApplyPatches: binary=%s args=%v\n", parts[0], parts[1:])
+		parts[0] = ensureExeSuffixOnWindows(parts[0])
 		execCmd := exec.Command(parts[0], parts[1:]...)
 		execCmd.Dir = cmdDir
 		newEnv := make([]string, 0, len(os.Environ())+4)
 		for _, e := range os.Environ() {
-			if strings.HasPrefix(e, "GOROOT=") {
+			if strings.HasPrefix(e, "GOROOT=") || strings.HasPrefix(e, "GOCACHE=") || strings.HasPrefix(e, "GOPATH=") {
 				continue
 			}
 			newEnv = append(newEnv, e)
 		}
-		newEnv = append(newEnv, "GOROOT="+goroot, "GOTOOLCHAIN=local", "GOOS=", "GOARCH=")
+		newEnv = append(newEnv, "GOROOT="+goroot, "GOTOOLCHAIN=local", "GOOS=", "GOARCH=", "GOPATH=", "GOCACHE=")
+		fmt.Fprintf(os.Stderr, "ApplyPatches: env GOROOT=%s GOOS= GOARCH= GOPATH= GOCACHE=\n", goroot)
 		for k, v := range gen.Env {
 			newEnv = append(newEnv, k+"="+v)
+			fmt.Fprintf(os.Stderr, "ApplyPatches: env %s=%s\n", k, v)
 		}
 		execCmd.Env = newEnv
 		execCmd.Stdout = os.Stdout
@@ -303,6 +317,23 @@ func substituteEnv(s string, extraEnv map[string]string) string {
 		s = strings.ReplaceAll(s, "${"+k+"}", v)
 	}
 	return s
+}
+
+func normalizeCmdPath(s string) string {
+	if runtime.GOOS != "windows" {
+		return s
+	}
+	return strings.ReplaceAll(s, "/", string(filepath.Separator))
+}
+
+func ensureExeSuffixOnWindows(path string) string {
+	if runtime.GOOS != "windows" {
+		return path
+	}
+	if filepath.Ext(path) == "" {
+		path += ".exe"
+	}
+	return path
 }
 
 func resolveCwd(cwd string, goroot string, extraEnv map[string]string) string {

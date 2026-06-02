@@ -114,16 +114,19 @@ type PathMapping struct {
 
 func getPathMapping(path string, mappings []PathMapping) string {
 	for _, mapping := range mappings {
-		if !strings.HasPrefix(path, mapping.From) {
+		// normalize to forward slashes for cross-platform matching
+		normPath := filepath.ToSlash(path)
+		normFrom := filepath.ToSlash(mapping.From)
+		if !strings.HasPrefix(normPath, normFrom) {
 			continue
 		}
-		if len(path) == len(mapping.From) {
+		if len(normPath) == len(normFrom) {
 			return mapping.To
 		}
-		if path[len(mapping.From)] != filepath.Separator {
+		if normPath[len(normFrom)] != '/' {
 			continue
 		}
-		return mapping.To + path[len(mapping.From):]
+		return mapping.To + normPath[len(normFrom):]
 	}
 	return path
 }
@@ -153,13 +156,13 @@ func (o Overlay) MakeGoOverlay(overlayDir string, opts Options) (*GoOverlay, err
 			if err != nil {
 				return nil, err
 			}
-			replace[absFile] = AbsFile(writeFile)
+			replace[AbsFile(filepath.ToSlash(string(absFile)))] = AbsFile(filepath.ToSlash(writeFile))
 			continue
 		}
 		if fileOverlay.AbsFile == "" {
 			continue
 		}
-		replace[absFile] = fileOverlay.AbsFile
+		replace[AbsFile(filepath.ToSlash(string(absFile)))] = AbsFile(filepath.ToSlash(string(fileOverlay.AbsFile)))
 	}
 	return &GoOverlay{Replace: replace}, nil
 }

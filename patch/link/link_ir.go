@@ -3,6 +3,9 @@ package link
 import (
 	"cmd/compile/internal/ir"
 	"cmd/compile/internal/typecheck"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -16,22 +19,18 @@ type Link struct {
 
 var links = []*Link{
 	{
-		// From: "__xgo_trap_var_",
 		From: "trap_var_",
 		To:   "XgoTrapVar",
 	},
 	{
-		// From: "__xgo_trap_varptr_",
 		From: "trap_varptr_",
 		To:   "XgoTrapVarPtr",
 	},
 	{
-		// From: "__xgo_trap_",
 		From: "trap_",
 		To:   "XgoTrap",
 	},
 	{
-		// From: "__xgo_register_",
 		From: "register_",
 		To:   "XgoRegister",
 	},
@@ -46,23 +45,8 @@ func findLink(name string) string {
 	return ""
 }
 
-// LinkXgoInit links function defined in
-// runtime
-// the function template:
-//
-//	  var __xgo_trap_0 = func() {}
-//
-//	  func init() {
-//		  __xgo_init_0()
-//	  }
-//
-//	  //go:noinline
-//	  func __xgo_init_0() {
-//	  	__xgo_trap_0 = __xgo_trap_0
-//	  }
 func LinkXgoInit(fn *ir.Func) {
 	if fn.Body == nil {
-		// in go, function can have name without body
 		return
 	}
 
@@ -70,6 +54,7 @@ func LinkXgoInit(fn *ir.Func) {
 	if !strings.HasPrefix(fnName, "__xgo_init_") {
 		return
 	}
+	appendDebug("LINK_INIT fn=%s body_stmts=%d", fnName, len(fn.Body))
 	linkStmts(fn.Body, fnName == "__xgo_init_legacy_v1_1_0")
 }
 
@@ -102,11 +87,24 @@ func linkStmts(stmts ir.Nodes, legacy bool) {
 		if link == "" {
 			continue
 		}
+		appendDebug("LINK_STMT sym=%s link=%s", symName, link)
 		sym := typecheck.LookupRuntime(link)
 		if sym == nil {
+			appendDebug("LINK_STMT LookupRuntime(%s) returned NIL", link)
 			continue
 		}
 		typecheckLinkedName(sym)
 		assign.Y = sym
 	}
+}
+
+func appendDebug(format string, args ...interface{}) {
+	logPath := filepath.Join(os.TempDir(), "xgo_link_init_debug.log")
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "XGO_LOG_ERROR: cannot open %s: %v\n", logPath, err)
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, format+"\n", args...)
 }

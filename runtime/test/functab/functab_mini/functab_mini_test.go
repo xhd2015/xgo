@@ -1,10 +1,13 @@
 package functab_mini
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	"github.com/xhd2015/xgo/runtime/core"
 	"github.com/xhd2015/xgo/runtime/functab"
+	"github.com/xhd2015/xgo/runtime/trap"
 )
 
 func Hello(s string) string {
@@ -12,6 +15,23 @@ func Hello(s string) string {
 }
 
 func TestFunctabMini(t *testing.T) {
+	// Theory C verification: if overlay is applied, trap interceptor will fire
+	var intercepted bool
+	trap.AddInterceptor(&trap.Interceptor{
+		Pre: func(ctx context.Context, f *core.FuncInfo, args, result core.Object) (data interface{}, err error) {
+			if f.IdentityName == "Hello" {
+				intercepted = true
+			}
+			return nil, nil
+		},
+	})
+	_ = Hello("test")
+	if intercepted {
+		t.Logf("TRAP_CHECK: interceptor fired for Hello — overlay IS applied")
+	} else {
+		t.Errorf("TRAP_CHECK: interceptor did NOT fire for Hello — overlay may NOT be applied (source compiled without __xgo_trap_0)")
+	}
+
 	funcs := functab.GetFuncs()
 
 	t.Logf("functab.GetFuncs() returned %d entries", len(funcs))

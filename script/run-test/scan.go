@@ -334,7 +334,8 @@ func findMostInnerTest(tests []*TestConfig, prefixDir string, path []string) (di
 	n := len(path)
 	for i := n - 1; i >= 0; i-- {
 		testPath := path[:i+1]
-		test := findTest(tests, filepath.Join(prefixDir, filepath.Join(testPath...)))
+		dir := filepath.ToSlash(filepath.Join(prefixDir, filepath.Join(testPath...)))
+		test := findTest(tests, dir)
 		if test != nil {
 			return testPath, path[i+1:], test
 		}
