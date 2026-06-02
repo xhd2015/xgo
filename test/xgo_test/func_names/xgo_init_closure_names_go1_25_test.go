@@ -1,5 +1,5 @@
-//go:build go1.25 && only_when_run_with_xgo
-// +build go1.25,only_when_run_with_xgo
+//go:build go1.25 && test_driver_is_xgo
+// +build go1.25,test_driver_is_xgo
 
 package func_names
 
