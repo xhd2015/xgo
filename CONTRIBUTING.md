@@ -55,6 +55,16 @@ go run ./script/generate
 go run ./script/generate cmd/xgo/runtime_gen
 ```
 
+# Build Tags for Tests
+
+Some tests use the `test_driver_is_xgo` build tag to differentiate between running under `go test` (plain Go) and `xgo test` (instrumented Go compiler).
+
+- `//go:build test_driver_is_xgo` — This file is included only when the test is driven by xgo. The xgo-instrumented Go compiler injects synthetic init function closures (`__xgo_register_0`, `__xgo_trap_0`, etc.) that shift package-level closure numbering. For example, on Go 1.25, a user's top-level closure `var c = func(){}` becomes `init.func5` instead of `init.func1`.
+
+- `//go:build !test_driver_is_xgo` — This file is included only when running plain `go test`.
+
+The `script/run-test` driver automatically appends `test_driver_is_xgo` to build tags when running tests via xgo (i.e., when `UsePlainGo` is false). Test files should use `expectTopLevelFunc` or similar constants with the appropriate build tags to handle both modes.
+
 # Adding Tests Before Adding Feature
 Xgo prefers TDD to bring new features. 
 
