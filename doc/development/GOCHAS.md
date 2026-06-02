@@ -80,6 +80,12 @@ See `doc/development/WHY_GO_1_25_FAIL_ON_TestFuncNames.md`.
 
 ## Go Version Differences
 
+### Overlay stub indices (`__xgo_register_N`) shift with file count and declarations
+
+xgo's overlay assigns a file index (the `N` in `__xgo_register_N`) based on zero-based position in `GoFiles + TestGoFiles + XTestGoFiles`. Every source file occupies a position, even build-tagged or declaration-free files. A package-level `const`/`var` in a `_test.go` file triggers var-trap instrumentation, injecting additional closures that shift the top-level closure numbering.
+
+See `runtime/test/func_names/README.md` for a comparison table and validated points across 4 test packages.
+
 ### Go 1.25+ forbids overlay for files under GOMODCACHE
 
 Go 1.25 introduced a restriction: the `-overlay` flag can no longer replace files located under `GOMODCACHE`. When an overlay contains such replacements, `go` exits with:
