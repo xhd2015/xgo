@@ -1,4 +1,4 @@
-module github.com/xhd2015/xgo/runtime/test/func_names/pkg_with_source_files
+module github.com/xhd2015/xgo/runtime/test/func_names/pkg_with_source_files_with_4_files_with_5_decls
 
 go 1.17
 
