@@ -1,0 +1,42 @@
+# debug-exe-suffix-linux.yml
+# Copy to .github/workflows/ to verify go build -o does NOT append .exe on Linux.
+#
+# Expected: exit 0 (success) — output matches -o exactly, no .exe appended.
+#
+# Compare with debug-exe-suffix-windows.yml where .exe IS appended.
+
+name: Debug EXE Suffix (Linux)
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: "Show Go environment"
+        run: go env GOOS GOARCH
+
+      - name: "Run exe-suffix reproduction"
+        run: |
+          cd patches/go1.25/issues/windows-compile-exe-suffix-confusing-resolution/repro
+          go run main.go
+
+      - name: "Report verdict"
+        run: |
+          echo
+          echo "================================================================"
+          echo "On Linux, 'go build -o ./binary' produces exactly 'binary'."
+          echo "No .exe suffix is silently appended."
+          echo "================================================================"

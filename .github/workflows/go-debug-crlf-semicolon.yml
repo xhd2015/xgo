@@ -1,7 +1,5 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
-name: Go Windows
+# Debug: prove ; separator causes syntax error at package level
+name: Go Debug CRLF Semicolon
 
 on:
   push:
@@ -11,7 +9,7 @@ on:
 
 jobs:
 
-  tests:
+  test-semicolon-syntax:
     strategy:
       matrix:
         os: [ windows-latest ]
@@ -25,5 +23,6 @@ jobs:
       with:
         go-version: '${{ matrix.go }}'
 
-    - name: Test
-      run: go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v
+    - name: Run semicolon syntax test
+      shell: cmd
+      run: go run ./test/integrations/test_semicolon_syntax

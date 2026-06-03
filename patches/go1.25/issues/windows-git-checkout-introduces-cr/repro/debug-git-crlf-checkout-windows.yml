@@ -1,0 +1,51 @@
+# debug-git-crlf-checkout-windows.yml
+# Copy to .github/workflows/ to verify that git core.autocrlf=true on Windows
+# injects \r into raw string literals on git clone.
+#
+# Expected: exit 1 (fails) — \r bytes ARE found due to autocrlf conversion.
+# The step uses continue-on-error: true so the job doesn't fail.
+#
+# Compare with debug-git-crlf-checkout-linux.yml where no \r is introduced.
+
+name: Debug Git CRLF Checkout (Windows)
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  repro:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: "Show git default config before reproduction"
+        shell: cmd
+        run: git config --list --show-origin
+
+      - name: "Run CRLF checkout reproduction"
+        shell: cmd
+        # continue-on-error: on Windows autocrlf=true by default,
+        # so git-clone will inject \r and exit code 1 (expected).
+        continue-on-error: true
+        run: |
+          cd patches\go1.25\issues\windows-git-checkout-introduces-cr\repro
+          go run main.go
+
+      - name: "Report verdict"
+        shell: cmd
+        run: |
+          echo.
+          echo ================================================================
+          echo "On Windows, git core.autocrlf=true (Git for Windows default)"
+          echo "causes LF -^> CRLF conversion on clone, injecting \r bytes"
+          echo "INSIDE raw string literals in Go source files."
+          echo ================================================================

@@ -60,7 +60,7 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 		config_debug.OnRewriteVarDefAndRefs(pkgPath, file, decl)
 	}
 	fileEdit := file.Edit
-	end := decl.Decl.End()
+	end := safeGenDeclEnd(file, decl)
 	// TODO: check if the end is a semicolon
 	// `;;` causes error
 	// endOffset := fset.Position(end).Offset
@@ -107,8 +107,12 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 		Decl:    decl,
 	})
 
-	fileEdit.Insert(end, ";")
-	fileEdit.Insert(end, code)
+	if os.Getenv("XGO_DEBUG_USE_SEMICOLON") == "true" {
+		fileEdit.Insert(end, ";")
+		fileEdit.Insert(end, code)
+	} else {
+		fileEdit.Insert(end, "\n"+code+"\n")
+	}
 
 	// apply edits for all refs
 	// from main module
@@ -116,6 +120,16 @@ func rewriteVarDefAndRefs(fset *token.FileSet, pkgPath string, file *edit.File, 
 		applyRewrite(varPrefix, varRef)
 	}
 	return true
+}
+
+func safeGenDeclEnd(file *edit.File, decl *edit.Decl) token.Pos {
+	syntaxFile := file.File.Syntax
+	for i, d := range syntaxFile.Decls {
+		if d == decl.Decl {
+			return patch.GenDeclSafeEnd(syntaxFile, i)
+		}
+	}
+	return decl.Decl.End()
 }
 
 func applyRewrite(prefix string, varRef *edit.VarRef) {

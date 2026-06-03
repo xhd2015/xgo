@@ -147,6 +147,12 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 		return err
 	}
 
+	// validate all YAML workflow files
+	err = validateWorkflowYAML(rootDir)
+	if err != nil {
+		return err
+	}
+
 	if !noCommit {
 		err = cmd.Run("git", append([]string{"add"}, affectedFiles...)...)
 		if err != nil {
@@ -242,5 +248,38 @@ func installHook(hookFile string, head string, cmd string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func validateWorkflowYAML(rootDir string) error {
+	workflowsDir := filepath.Join(rootDir, ".github", "workflows")
+	entries, err := os.ReadDir(workflowsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	validated := 0
+	var warns []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if !strings.HasSuffix(entry.Name(), ".yml") && !strings.HasSuffix(entry.Name(), ".yaml") {
+			continue
+		}
+		workflowFile := filepath.Join(".github", "workflows", entry.Name())
+		err := cmd.Dir(rootDir).Run("github-fetch", "yaml", "validate", workflowFile)
+		if err != nil {
+			warns = append(warns, entry.Name())
+			continue
+		}
+		validated++
+	}
+	if len(warns) > 0 {
+		fmt.Fprintf(os.Stderr, "pre-commit: YAML warnings in: %s\n", strings.Join(warns, ", "))
+	}
+	fmt.Fprintf(os.Stderr, "pre-commit: validated %d/%d workflow YAML(s)\n", validated, len(entries))
 	return nil
 }

@@ -1,0 +1,32 @@
+# Debug: verify xgo handles \r bytes in raw string literals (git core.autocrlf)
+name: Go Debug CRLF
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  test-crlf:
+    strategy:
+      matrix:
+        os: [ windows-latest ]
+        go: [ '1.25' ]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '${{ matrix.go }}'
+
+    - name: Run CR rewrite edit-primitive test
+      shell: cmd
+      run: go run ./test/integrations/test_file_rewrite_with_cr
+
+    - name: Run xgo test CR instrumentation
+      shell: cmd
+      run: go run ./test/integrations/test_xgo_run_with_cr

@@ -365,6 +365,23 @@ func main() {
 	if flagFast {
 		remainArgs = appendShortIfFast(remainArgs)
 	}
+	rf := reproduceFlags{
+		installXgo:    installXgo,
+		withSetup:     withSetup,
+		resetInstr:    resetInstrument,
+		logDebug:      logDebug,
+		debug:         debug,
+		debugXgo:      debugXgo,
+		debugGo:       debugGo,
+		debugCompile:  debugCompile,
+		tags:          tags,
+		race:          flagRace,
+		xgoRaceSafe:   flagXgoRaceSafe,
+		fast:          flagFast,
+		useFilePatches: useFilePatches,
+		setupOnly:     withInstrumentedGorootOnly,
+		remainArgs:    remainArgs,
+	}
 	if flagList {
 		list(remainTests, flagJSON, predefinedTests)
 		return
@@ -769,6 +786,7 @@ func main() {
 			err := doRunTest(goroot, usePlainGo, dir, runArgs, testArg.Args, env, opts)
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "FAIL %s: %v(%v)\n", goroot, err, time.Since(begin))
+				fmt.Fprintf(os.Stdout, "  Reproduce: %s\n", buildReproduceCmd(goVersion, testArg.Args, rf))
 				os.Exit(1)
 			}
 		}
@@ -1081,6 +1099,80 @@ type commandError struct {
 
 func (c *commandError) Error() string {
 	return c.err.Error()
+}
+
+type reproduceFlags struct {
+	installXgo    bool
+	withSetup     bool
+	resetInstr    bool
+	logDebug      bool
+	debug         bool
+	debugXgo      bool
+	debugGo       bool
+	debugCompile  string
+	tags          string
+	race          bool
+	xgoRaceSafe   bool
+	fast          bool
+	useFilePatches *bool
+	setupOnly     bool
+	remainArgs    []string
+}
+
+func buildReproduceCmd(goVersion *goinfo.GoVersion, testPackages []string, rf reproduceFlags) string {
+	var parts []string
+	parts = append(parts, "go", "run", "./script/run-test",
+		"--include", fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch))
+
+	if rf.installXgo {
+		parts = append(parts, "--install-xgo")
+	}
+	if rf.withSetup {
+		parts = append(parts, "--with-setup")
+	}
+	if rf.resetInstr {
+		parts = append(parts, "--reset-instrument")
+	}
+	if rf.logDebug {
+		parts = append(parts, "--log-debug")
+	}
+	if rf.debug {
+		parts = append(parts, "--debug")
+	}
+	if rf.debugXgo {
+		parts = append(parts, "--debug-xgo")
+	}
+	if rf.debugGo {
+		parts = append(parts, "--debug-go")
+	}
+	if rf.debugCompile != "" {
+		parts = append(parts, "--debug-compile="+rf.debugCompile)
+	}
+	if rf.tags != "" {
+		parts = append(parts, "-tags="+rf.tags)
+	}
+	if rf.race {
+		parts = append(parts, "-race")
+	}
+	if rf.xgoRaceSafe {
+		parts = append(parts, "--xgo-race-safe")
+	}
+	if rf.fast {
+		parts = append(parts, "--fast")
+	}
+	if rf.setupOnly {
+		parts = append(parts, "--with-setup-only")
+	}
+	if rf.useFilePatches != nil {
+		if *rf.useFilePatches {
+			parts = append(parts, "--use-file-patches")
+		} else {
+			parts = append(parts, "--use-file-patches=false")
+		}
+	}
+	parts = append(parts, rf.remainArgs...)
+	parts = append(parts, testPackages...)
+	return strings.Join(parts, " ")
 }
 
 type detector struct {

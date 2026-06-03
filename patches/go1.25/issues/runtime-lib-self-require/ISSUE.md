@@ -1,3 +1,8 @@
+---
+os: all
+version: go1.25
+---
+
 # Self-Require Issue: Runtime Module Requiring Itself
 
 ## Summary
@@ -23,7 +28,7 @@ go mod edit
 ```
 
 - For a **user project** (`github.com/my/app`): the `require` is a legitimate external dependency → Go accepts it.
-- For **xgo/runtime itself**: it's a self-require → Go 1.25 rejects it.
+- For **xgo/runtime itself**: it's a self-require → Go 1.25(actually all go versions) rejects it.
 
 ## Scope
 

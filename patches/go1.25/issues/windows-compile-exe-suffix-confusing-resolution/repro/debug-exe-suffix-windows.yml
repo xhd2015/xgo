@@ -1,0 +1,40 @@
+# debug-exe-suffix-windows.yml
+# Copy to .github/workflows/ to verify go build -o uses path literally.
+#
+# Expected: exit 0 — -o ./mybinary produces exactly 'mybinary' on all platforms.
+# The DEFAULT name (no -o) gets .exe on Windows, but -o paths are literal.
+#
+# This caused xgo's GOROOT rebuild to output 'compile' instead of 'compile.exe'.
+
+name: Debug EXE Suffix (Windows)
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  repro:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: "Show Go environment"
+        shell: cmd
+        run: go env GOOS GOARCH
+
+      - name: "Run exe shadow reproduction"
+        shell: cmd
+        # continue-on-error: on Windows, a stale .exe shadows a new binary
+        # with the same base name, so exit code 1 (expected).
+        continue-on-error: true
+        run: |
+          cd patches\go1.25\issues\windows-compile-exe-suffix-confusing-resolution\repro
+          go run main.go

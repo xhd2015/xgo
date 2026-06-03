@@ -1,0 +1,44 @@
+# debug-git-crlf-checkout-linux.yml
+# Copy to .github/workflows/ to verify that git (without core.autocrlf)
+# does NOT inject \r on clone on Linux.
+#
+# Expected: exit 0 (success) — no \r bytes found.
+#
+# Compare with debug-git-crlf-checkout-windows.yml where \r is introduced
+# by the Windows default core.autocrlf=true.
+
+name: Debug Git CRLF Checkout (Linux)
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: "Show git default config before reproduction"
+        run: git config --list --show-origin
+
+      - name: "Run CRLF checkout reproduction"
+        run: |
+          cd patches/go1.25/issues/windows-git-checkout-introduces-cr/repro
+          go run main.go
+
+      - name: "Report verdict"
+        run: |
+          echo
+          echo "================================================================"
+          echo "On Linux, git does NOT autocrlf by default."
+          echo "No \r bytes introduced — file remains pure LF."
+          echo "================================================================"

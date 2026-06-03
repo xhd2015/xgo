@@ -12,17 +12,15 @@ on:
 jobs:
 
   tests-with-go-next:
-    # go1.26 to be released 2026-08
-    # see https://tip.golang.org/doc/go1.26
-    # skip this job until go1.26 is released
-    if: false  
+    # go1.26 to be released 2026-08; see https://tip.golang.org/doc/go1.26
+    if: false
     strategy:
       matrix:
         os: [ ubuntu-latest ]
         go: [ '1.26' ]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Go
       run: |
