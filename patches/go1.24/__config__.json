@@ -15,7 +15,8 @@
     {
       "kind": "rebuild-compiler",
       "cwd": "${INSTRUMENT_GOROOT}/src/cmd",
-      "cmd": "${INSTRUMENT_GOROOT}/bin/go build -a -o ${INSTRUMENT_GOROOT}/pkg/tool/${GOOS}_${GOARCH}/compile cmd/compile",
+      "cmd": ["${INSTRUMENT_GOROOT}/bin/go", "build", "-a", "-o", "${INSTRUMENT_GOROOT}/pkg/tool/${GOOS}_${GOARCH}/compile", "cmd/compile"],
+      "cmd_windows": ["${INSTRUMENT_GOROOT}/bin/go", "build", "-a", "-o", "${INSTRUMENT_GOROOT}/pkg/tool/${GOOS}_${GOARCH}/compile.exe", "cmd/compile"],
       "comments": [
         "rebuild compiler with patched source (gc/main.go now includes xgo_patch.Patch())",
         "GO_BYPASS_XGO prevents the instrumented go binary's xgoPrecheck hook from delegating back to xgo, which would cause recursive instrumentation failures (e.g. undefined src.NoXPos_xgo_get on Linux or GOTOOLCHAIN version mismatch). See doc/development/WHY_DOUBLE_SETUP_EVER_FAILED.md."
@@ -26,7 +27,7 @@
     {
       "kind": "rebuild-stdlib",
       "cwd": "${INSTRUMENT_GOROOT}/src",
-      "cmd": "${INSTRUMENT_GOROOT}/bin/go install std",
+      "cmd": ["${INSTRUMENT_GOROOT}/bin/go", "install", "std"],
       "comments": [
         "rebuild all standard library .a files from patched source. Without this, Go reuses pre-compiled pkg/ files from the original GOROOT which lack XgoRegister/XgoTrap. The old programmatic path (V1_0_0) avoids this by passing -a to go test, forcing recompilation at test time.",
         "GO_BYPASS_XGO prevents the instrumented go binary's xgoPrecheck hook from delegating back to xgo."
@@ -37,7 +38,8 @@
     {
       "kind": "rebuild-go",
       "cwd": "${INSTRUMENT_GOROOT}/src/cmd",
-      "cmd": "${INSTRUMENT_GOROOT}/bin/go build -a -o ${INSTRUMENT_GOROOT}/bin/go cmd/go",
+      "cmd": ["${INSTRUMENT_GOROOT}/bin/go", "build", "-a", "-o", "${INSTRUMENT_GOROOT}/bin/go", "cmd/go"],
+      "cmd_windows": ["${INSTRUMENT_GOROOT}/bin/go", "build", "-a", "-o", "${INSTRUMENT_GOROOT}/bin/go.exe", "cmd/go"],
       "comments": [
         "rebuild the go command with the xgoPrecheck hook (xgo_main.go)",
         "GO_BYPASS_XGO prevents the instrumented go binary's xgoPrecheck hook from delegating back to xgo."

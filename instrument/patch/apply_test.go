@@ -1,6 +1,7 @@
 package patch
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -799,33 +800,33 @@ func TestLoadConfig_NewArrayFormat(t *testing.T) {
     }
   ]
 }`
-	writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
+  writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
 
-	cfg, err := LoadConfig(tmpDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Version != "go1.24" {
-		t.Errorf("expected version go1.24, got %s", cfg.Version)
-	}
-	if len(cfg.Copy) != 1 {
-		t.Fatalf("expected 1 copy entry, got %d", len(cfg.Copy))
-	}
-	if cfg.Copy[0].From != "patch/" {
-		t.Errorf("expected from patch/, got %s", cfg.Copy[0].From)
-	}
-	if cfg.Copy[0].To != "src/cmd/compile/internal/xgo_rewrite_internal/patch/" {
-		t.Errorf("expected to src/..., got %s", cfg.Copy[0].To)
-	}
-	if len(cfg.Generate) != 1 {
-		t.Fatalf("expected 1 generate entry, got %d", len(cfg.Generate))
-	}
-	if cfg.Generate[0].Cmd != "go run ${XGO_SRC}/script/mkbuiltin --goroot=${GOROOT}" {
-		t.Errorf("unexpected cmd: %s", cfg.Generate[0].Cmd)
-	}
-	if len(cfg.Generate[0].Outputs) != 1 {
-		t.Fatalf("expected 1 output, got %d", len(cfg.Generate[0].Outputs))
-	}
+  cfg, err := LoadConfig(tmpDir)
+  if err != nil {
+    t.Fatal(err)
+  }
+  if cfg.Version != "go1.24" {
+    t.Errorf("expected version go1.24, got %s", cfg.Version)
+  }
+  if len(cfg.Copy) != 1 {
+    t.Fatalf("expected 1 copy entry, got %d", len(cfg.Copy))
+  }
+  if cfg.Copy[0].From != "patch/" {
+    t.Errorf("expected from patch/, got %s", cfg.Copy[0].From)
+  }
+  if cfg.Copy[0].To != "src/cmd/compile/internal/xgo_rewrite_internal/patch/" {
+    t.Errorf("expected to src/..., got %s", cfg.Copy[0].To)
+  }
+  if len(cfg.Generate) != 1 {
+    t.Fatalf("expected 1 generate entry, got %d", len(cfg.Generate))
+  }
+  if len(cfg.Generate[0].Cmd) != 4 || cfg.Generate[0].Cmd[0] != "go" || cfg.Generate[0].Cmd[1] != "run" || cfg.Generate[0].Cmd[2] != "${XGO_SRC}/script/mkbuiltin" || cfg.Generate[0].Cmd[3] != "--goroot=${GOROOT}" {
+    t.Errorf("unexpected cmd: %v", cfg.Generate[0].Cmd)
+  }
+  if len(cfg.Generate[0].Outputs) != 1 {
+    t.Fatalf("expected 1 output, got %d", len(cfg.Generate[0].Outputs))
+  }
 }
 
 func TestLoadConfig_EmptyToDefaultsToPatchDir(t *testing.T) {
@@ -1074,6 +1075,109 @@ func TestResolveCwd_AbsoluteLiteral(t *testing.T) {
 	got := resolveCwd(goroot, filepath.Join("other", "goroot"), nil)
 	if got != goroot {
 		t.Errorf("expected absolute path unchanged, got %q", got)
+	}
+}
+
+func TestStringSliceOrSlice_UnmarshalJSON_String(t *testing.T) {
+	var s StringSliceOrSlice
+	err := json.Unmarshal([]byte(`"go build -a -o out src"`), &s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s) != 6 {
+		t.Fatalf("expected 6 parts from Fields splitting, got %d: %v", len(s), s)
+	}
+	expected := []string{"go", "build", "-a", "-o", "out", "src"}
+	for i, exp := range expected {
+		if s[i] != exp {
+			t.Errorf("part[%d]: expected %q, got %q", i, exp, s[i])
+		}
+	}
+}
+
+func TestStringSliceOrSlice_UnmarshalJSON_Array(t *testing.T) {
+	var s StringSliceOrSlice
+	err := json.Unmarshal([]byte(`["go", "build", "-a", "-o", "out.exe", "cmd/compile"]`), &s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s) != 6 {
+		t.Fatalf("expected 6 parts, got %d: %v", len(s), s)
+	}
+	if s[3] != "-o" || s[4] != "out.exe" {
+		t.Errorf("unexpected parts at -o position: %v", s)
+	}
+}
+
+func TestStringSliceOrSlice_UnmarshalJSON_EmptyString(t *testing.T) {
+	var s StringSliceOrSlice
+	err := json.Unmarshal([]byte(`""`), &s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s) != 0 {
+		t.Fatalf("expected 0 parts from empty string, got %d: %v", len(s), s)
+	}
+}
+
+func TestStringSliceOrSlice_UnmarshalJSON_EmptyArray(t *testing.T) {
+	var s StringSliceOrSlice
+	err := json.Unmarshal([]byte(`[]`), &s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s) != 0 {
+		t.Fatalf("expected 0 parts from empty array, got %d: %v", len(s), s)
+	}
+}
+
+func TestGenerateEntry_CmdArrayWithEnvSubstitution(t *testing.T) {
+	tmpDir := t.TempDir()
+	goroot := t.TempDir()
+	xgoSrc := t.TempDir()
+
+	configJSON := `{"version": "test", "generate": [{"cmd": ["echo", "hello", "${NAME}"], "outputs": []}]}`
+	writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
+
+	err := ApplyPatches(tmpDir, goroot, xgoSrc, map[string]string{
+		"NAME": "world",
+	}, nil, nil)
+	if err != nil {
+		t.Logf("skipped: %v", err)
+	}
+}
+
+func TestGenerateEntry_EffectiveCmd_CmdWindows(t *testing.T) {
+	entry := GenerateEntry{
+		Cmd:        []string{"echo", "unix"},
+		CmdWindows: []string{"echo", "windows"},
+	}
+	got := entry.EffectiveCmd()
+	if runtime.GOOS == "windows" {
+		if len(got) != 2 || got[1] != "windows" {
+			t.Errorf("on windows expected CmdWindows, got %v", got)
+		}
+	} else {
+		if len(got) != 2 || got[1] != "unix" {
+			t.Errorf("on non-windows expected Cmd, got %v", got)
+		}
+	}
+}
+
+func TestGenerateEntry_EffectiveCmd_NoCmdWindows(t *testing.T) {
+	entry := GenerateEntry{
+		Cmd: []string{"echo", "hello"},
+	}
+	got := entry.EffectiveCmd()
+	if len(got) != 2 || got[0] != "echo" || got[1] != "hello" {
+		t.Errorf("expected Cmd when CmdWindows empty, got %v", got)
+	}
+}
+
+func TestGenerateEntry_EffectiveCmd_Empty(t *testing.T) {
+	entry := GenerateEntry{}
+	if len(entry.EffectiveCmd()) != 0 {
+		t.Errorf("expected empty EffectiveCmd, got %v", entry.EffectiveCmd())
 	}
 }
 

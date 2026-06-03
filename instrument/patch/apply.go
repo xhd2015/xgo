@@ -14,6 +14,20 @@ import (
 	"github.com/xhd2015/xgo/support/filecopy"
 )
 
+type StringSliceOrSlice []string
+
+func (s *StringSliceOrSlice) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '[' {
+		return json.Unmarshal(data, (*[]string)(s))
+	}
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	*s = strings.Fields(str)
+	return nil
+}
+
 // CopyEntry represents a directory copy instruction in __config__.json.
 type CopyEntry struct {
 	From        string   `json:"from"` // source relative to xgo repo root
@@ -27,15 +41,23 @@ type CopyEntry struct {
 // The handler should return an error if the kind is unrecognized.
 type GenerateHandler func(kind string, extraEnv map[string]string) error
 
-// GenerateEntry represents a shell command to run during patching,
+// GenerateEntry represents a command to run during patching,
 // or a kind-based operation handled by a GenerateHandler callback.
 type GenerateEntry struct {
-	Kind     string            `json:"kind,omitempty"`
-	Cmd      string            `json:"cmd,omitempty"`
-	Cwd      string            `json:"cwd,omitempty"` // working dir relative to goroot
-	Comments []string          `json:"comments,omitempty"`
-	Env      map[string]string `json:"env,omitempty"`
-	Outputs  []string          `json:"outputs,omitempty"`
+	Kind       string             `json:"kind,omitempty"`
+	Cmd        StringSliceOrSlice `json:"cmd,omitempty"`
+	CmdWindows StringSliceOrSlice `json:"cmd_windows,omitempty"`
+	Cwd        string             `json:"cwd,omitempty"` // working dir relative to goroot
+	Comments   []string           `json:"comments,omitempty"`
+	Env        map[string]string  `json:"env,omitempty"`
+	Outputs    []string           `json:"outputs,omitempty"`
+}
+
+func (g *GenerateEntry) EffectiveCmd() []string {
+	if runtime.GOOS == "windows" && len(g.CmdWindows) > 0 {
+		return g.CmdWindows
+	}
+	return g.Cmd
 }
 
 // Config represents the __config__.json file in a patch directory.
@@ -97,7 +119,7 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 		if shouldSkipKind(gen.Kind, skipKinds) {
 			continue
 		}
-		if gen.Kind != "" && gen.Cmd == "" {
+		if gen.Kind != "" && len(gen.Cmd) == 0 && len(gen.CmdWindows) == 0 {
 			if generateHandler == nil {
 				return fmt.Errorf("generate kind %q requires a GenerateHandler", gen.Kind)
 			}
@@ -106,21 +128,16 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 			}
 			continue
 		}
-		cmdStr := substituteEnv(gen.Cmd, extraEnv)
-		cmdStr = normalizeCmdPath(cmdStr)
-		fmt.Fprintf(os.Stderr, "ApplyPatches: gen.Cmd raw=%q\n", gen.Cmd)
-		fmt.Fprintf(os.Stderr, "ApplyPatches: gen.Cmd substituted=%q\n", cmdStr)
-		parts := strings.Fields(cmdStr)
-		fmt.Fprintf(os.Stderr, "ApplyPatches: parts=%v (len=%d)\n", parts, len(parts))
-		if len(parts) == 0 {
+		args := gen.EffectiveCmd()
+		args = substituteEnvSlice(args, extraEnv)
+		fmt.Fprintf(os.Stderr, "ApplyPatches: effective args=%v (len=%d)\n", args, len(args))
+		if len(args) == 0 {
 			continue
 		}
 		cmdDir := resolveCwd(gen.Cwd, goroot, extraEnv)
 		fmt.Fprintf(os.Stderr, "ApplyPatches: cmdDir=%s\n", cmdDir)
-		fmt.Fprintf(os.Stderr, "ApplyPatches: binary=%s args=%v\n", parts[0], parts[1:])
-		parts[0] = ensureExeSuffixOnWindows(parts[0])
-		ensureOutputExeSuffixOnWindows(parts)
-		execCmd := exec.Command(parts[0], parts[1:]...)
+		fmt.Fprintf(os.Stderr, "ApplyPatches: binary=%s args=%v\n", args[0], args[1:])
+		execCmd := exec.Command(args[0], args[1:]...)
 		execCmd.Dir = cmdDir
 		newEnv := make([]string, 0, len(os.Environ())+4)
 		for _, e := range os.Environ() {
@@ -139,7 +156,7 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 		execCmd.Stdout = os.Stdout
 		execCmd.Stderr = os.Stderr
 		if err := execCmd.Run(); err != nil {
-			return fmt.Errorf("generate %q: %w", gen.Cmd, err)
+			return fmt.Errorf("generate %q: %w", args, err)
 		}
 	}
 
@@ -313,41 +330,22 @@ func shouldSkipKind(kind string, skipKinds []string) bool {
 	return false
 }
 
+func substituteEnvSlice(args []string, extraEnv map[string]string) []string {
+	result := make([]string, len(args))
+	for i, arg := range args {
+		result[i] = arg
+		for k, v := range extraEnv {
+			result[i] = strings.ReplaceAll(result[i], "${"+k+"}", v)
+		}
+	}
+	return result
+}
+
 func substituteEnv(s string, extraEnv map[string]string) string {
 	for k, v := range extraEnv {
 		s = strings.ReplaceAll(s, "${"+k+"}", v)
 	}
 	return s
-}
-
-func normalizeCmdPath(s string) string {
-	if runtime.GOOS != "windows" {
-		return s
-	}
-	return strings.ReplaceAll(s, "/", string(filepath.Separator))
-}
-
-func ensureExeSuffixOnWindows(path string) string {
-	if runtime.GOOS != "windows" {
-		return path
-	}
-	if filepath.Ext(path) == "" {
-		path += ".exe"
-	}
-	return path
-}
-
-func ensureOutputExeSuffixOnWindows(parts []string) {
-	if runtime.GOOS != "windows" {
-		return
-	}
-	for i := 0; i < len(parts)-1; i++ {
-		if parts[i] == "-o" {
-			if filepath.Ext(parts[i+1]) == "" {
-				parts[i+1] = parts[i+1] + ".exe"
-			}
-		}
-	}
 }
 
 func resolveCwd(cwd string, goroot string, extraEnv map[string]string) string {
