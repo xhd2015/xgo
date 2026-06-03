@@ -119,6 +119,7 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 		fmt.Fprintf(os.Stderr, "ApplyPatches: cmdDir=%s\n", cmdDir)
 		fmt.Fprintf(os.Stderr, "ApplyPatches: binary=%s args=%v\n", parts[0], parts[1:])
 		parts[0] = ensureExeSuffixOnWindows(parts[0])
+		ensureOutputExeSuffixOnWindows(parts)
 		execCmd := exec.Command(parts[0], parts[1:]...)
 		execCmd.Dir = cmdDir
 		newEnv := make([]string, 0, len(os.Environ())+4)
@@ -334,6 +335,19 @@ func ensureExeSuffixOnWindows(path string) string {
 		path += ".exe"
 	}
 	return path
+}
+
+func ensureOutputExeSuffixOnWindows(parts []string) {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	for i := 0; i < len(parts)-1; i++ {
+		if parts[i] == "-o" {
+			if filepath.Ext(parts[i+1]) == "" {
+				parts[i+1] = parts[i+1] + ".exe"
+			}
+		}
+	}
 }
 
 func resolveCwd(cwd string, goroot string, extraEnv map[string]string) string {
