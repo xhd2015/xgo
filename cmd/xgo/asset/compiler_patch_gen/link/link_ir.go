@@ -3,9 +3,6 @@ package link
 import (
 	"cmd/compile/internal/ir"
 	"cmd/compile/internal/typecheck"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -54,7 +51,6 @@ func LinkXgoInit(fn *ir.Func) {
 	if !strings.HasPrefix(fnName, "__xgo_init_") {
 		return
 	}
-	appendDebug("LINK_INIT fn=%s body_stmts=%d", fnName, len(fn.Body))
 	linkStmts(fn.Body, fnName == "__xgo_init_legacy_v1_1_0")
 }
 
@@ -87,24 +83,11 @@ func linkStmts(stmts ir.Nodes, legacy bool) {
 		if link == "" {
 			continue
 		}
-		appendDebug("LINK_STMT sym=%s link=%s", symName, link)
 		sym := typecheck.LookupRuntime(link)
 		if sym == nil {
-			appendDebug("LINK_STMT LookupRuntime(%s) returned NIL", link)
 			continue
 		}
 		typecheckLinkedName(sym)
 		assign.Y = sym
 	}
-}
-
-func appendDebug(format string, args ...interface{}) {
-	logPath := filepath.Join(os.TempDir(), "xgo_link_init_debug.log")
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "XGO_LOG_ERROR: cannot open %s: %v\n", logPath, err)
-		return
-	}
-	defer f.Close()
-	fmt.Fprintf(f, format+"\n", args...)
 }

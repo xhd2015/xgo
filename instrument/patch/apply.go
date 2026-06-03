@@ -78,10 +78,6 @@ type Config struct {
 // generateHandler is called for generate entries with non-empty Kind;
 // it should return nil for known kinds and an error for unrecognized ones.
 func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]string, skipKinds []string, generateHandler GenerateHandler) error {
-	fmt.Fprintf(os.Stderr, "ApplyPatches: patchDir=%s goroot=%s xgoRepoRoot=%s\n", patchDir, goroot, xgoRepoRoot)
-	for k, v := range extraEnv {
-		fmt.Fprintf(os.Stderr, "ApplyPatches: extraEnv[%s]=%s\n", k, v)
-	}
 	cfg, err := LoadConfig(patchDir)
 	if err != nil {
 		return fmt.Errorf("load __config__.json: %w", err)
@@ -130,13 +126,10 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 		}
 		args := gen.EffectiveCmd()
 		args = substituteEnvSlice(args, extraEnv)
-		fmt.Fprintf(os.Stderr, "ApplyPatches: effective args=%v (len=%d)\n", args, len(args))
 		if len(args) == 0 {
 			continue
 		}
 		cmdDir := resolveCwd(gen.Cwd, goroot, extraEnv)
-		fmt.Fprintf(os.Stderr, "ApplyPatches: cmdDir=%s\n", cmdDir)
-		fmt.Fprintf(os.Stderr, "ApplyPatches: binary=%s args=%v\n", args[0], args[1:])
 		execCmd := exec.Command(args[0], args[1:]...)
 		execCmd.Dir = cmdDir
 		newEnv := make([]string, 0, len(os.Environ())+4)
@@ -147,10 +140,8 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 			newEnv = append(newEnv, e)
 		}
 		newEnv = append(newEnv, "GOROOT="+goroot, "GOTOOLCHAIN=local", "GOOS=", "GOARCH=", "GOPATH=", "GOCACHE=")
-		fmt.Fprintf(os.Stderr, "ApplyPatches: env GOROOT=%s GOOS= GOARCH= GOPATH= GOCACHE=\n", goroot)
 		for k, v := range gen.Env {
 			newEnv = append(newEnv, k+"="+v)
-			fmt.Fprintf(os.Stderr, "ApplyPatches: env %s=%s\n", k, v)
 		}
 		execCmd.Env = newEnv
 		execCmd.Stdout = os.Stdout
