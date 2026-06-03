@@ -244,11 +244,8 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		var extraFiles []*compiler_extra.File
 		pkgExtraQuota := config.MAX_EXTRA_FUNCS_PER_PKG
 		for _, file := range pkg.Files {
-			logDebug("instrumentFuncTrap: checking file=%s pkg=%s main=%v isTest=%v mode=%d",
-				file.File.AbsPath, pkgPath, main, strings.HasSuffix(file.File.Name, "_test.go"), mode)
 			if !pkg.Main && strings.HasSuffix(file.File.Name, "_test.go") {
 				// skip test files outside main package
-				logDebug("instrumentFuncTrap: SKIP test file outside main: %s", file.File.AbsPath)
 				continue
 			}
 			funcs, extraFuncs := instrument_func.TrapFuncs(file.Edit, pkgPath, file.File.Syntax, file.Index, instrument_func.Options{
@@ -258,7 +255,6 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 				InstrumentMode: mode,
 				PkgExtraQuota:  &pkgExtraQuota,
 			})
-			logDebug("instrumentFuncTrap: file=%s trapped=%d extra=%d", file.File.AbsPath, len(funcs), len(extraFuncs))
 			file.TrapFuncs = append(file.TrapFuncs, funcs...)
 
 			// interface types
@@ -351,13 +347,6 @@ func md5sumTraps(files []*compiler_extra.File, hasVarTrap bool) string {
 
 func registerFuncTab(packages *edit.Packages) {
 	fset := packages.Fset
-	totalFiles := 0
-	for _, pkg := range packages.Packages {
-		for range pkg.Files {
-			totalFiles++
-		}
-	}
-	logDebug("registerFuncTab: total packages=%d total files=%d", len(packages.Packages), totalFiles)
 	for _, pkg := range packages.Packages {
 		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
 		stdlib := pkg.LoadPackage.GoPackage.Standard

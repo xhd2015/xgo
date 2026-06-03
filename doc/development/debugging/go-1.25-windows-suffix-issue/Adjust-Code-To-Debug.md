@@ -10,23 +10,90 @@ See [Go-1.25-Windows-Suffix-Issue.md](./Go-1.25-Windows-Suffix-Issue.md) for the
 |---|---|---|---|
 | GOROOT patching not executing | Layer 2 | stderr tracing | `instrument/patch/apply.go` |
 | Compiler link rewrite not running | Layer 3 | file-based tracing | `patch/patch.go`, `patch/link/link_ir.go` |
-| Functab/instrument tracing | Layer 1 | `--log-debug` flag | (CLI flag, no code change) |
+| Functab/instrument tracing | Layer 1 | `logDebug` calls + `--log-debug` flag | `cmd/xgo/instrument.go`, `instrument/instrument_reg/instrument_reg.go` |
 | Build output unclear | Layer 4 | `-v` flag | `patches/go*/__config__.json` |
 | Cross-platform CI issue | Layer 5 | Debug workflow | `.github/workflows/` + CI steps |
 
-**After diagnosing:** revert all changes except Layer 1 (the `--log-debug` calls in `instrument_reg.go` and `cmd/xgo/instrument.go` remain in the codebase as opt-in diagnostics).
+**After diagnosing:** revert all changes. The debug code below describes what to add for each layer; none of it is permanently in the codebase.
 
 ---
 
-## Layer 1: `--log-debug` Flag (Built-in, Already Available)
+## Layer 1: `--log-debug` Flag + Instrumentation Tracing
 
-**No code changes needed.** The codebase already has extensive `config.LogDebug` / `logDebug` calls behind the `--log-debug` flag. Pass it when running xgo:
+**File:** `cmd/xgo/instrument.go`, `instrument/instrument_reg/instrument_reg.go`
+
+The `--log-debug` flag is already wired up (pass it when running xgo). But the codebase has only general-purpose `logDebug` calls. For targeted functab/trap-registration diagnosis, you need to add a few specific calls in two files.
+
+### Step 1: Trace `instrumentFuncTrap` (`cmd/xgo/instrument.go`)
+
+In the `instrumentUserCode` function, add `logDebug` calls inside the `for _, file := range pkg.Files` loop:
+
+```go
+for _, file := range pkg.Files {
+    logDebug("instrumentFuncTrap: checking file=%s pkg=%s main=%v isTest=%v mode=%d",
+        file.File.AbsPath, pkgPath, main, strings.HasSuffix(file.File.Name, "_test.go"), mode)
+    if !pkg.Main && strings.HasSuffix(file.File.Name, "_test.go") {
+        logDebug("instrumentFuncTrap: SKIP test file outside main: %s", file.File.AbsPath)
+        continue
+    }
+    funcs, extraFuncs := instrument_func.TrapFuncs(...)
+    logDebug("instrumentFuncTrap: file=%s trapped=%d extra=%d", file.File.AbsPath, len(funcs), len(extraFuncs))
+    file.TrapFuncs = append(file.TrapFuncs, funcs...)
+    ...
+```
+
+### Step 2: Trace `registerFuncTab` (`cmd/xgo/instrument.go`)
+
+Add file-counting and a log call at the start of `registerFuncTab`:
+
+```go
+func registerFuncTab(packages *edit.Packages) {
+    fset := packages.Fset
+    totalFiles := 0
+    for _, pkg := range packages.Packages {
+        for range pkg.Files {
+            totalFiles++
+        }
+    }
+    logDebug("registerFuncTab: total packages=%d total files=%d", len(packages.Packages), totalFiles)
+    for _, pkg := range packages.Packages {
+        ...
+```
+
+### Step 3: Trace `RegisterFuncTab` (`instrument/instrument_reg/instrument_reg.go`)
+
+Add `config.LogDebug` calls after building `fileDecls` and around the `GetFileRegStmts` call:
+
+```go
+import (
+    ...
+    "github.com/xhd2015/xgo/instrument/config"
+)
+
+...
+    fileDecls := buildCompilerExtra(fset, file)
+
+    config.LogDebug("RegisterFuncTab: file=%s pkg=%s stdlib=%v fileIndex=%d trapFuncs=%d trapVars=%d",
+        absFile, pkgPath, stdlib, fileIndex, len(fileDecls.TrapFuncs), len(fileDecls.TrapVars))
+
+    res := compiler_extra.GetFileRegStmts(fileDecls, stdlib, FILE_VAR, FILE_VAR_FOR_VAR, perFilePkgNames)
+    if len(res.VarDefStmts) == 0 {
+        config.LogDebug("RegisterFuncTab: SKIP file=%s (VarDefStmts empty, %d trapFuncs, %d trapVars)",
+            absFile, len(fileDecls.TrapFuncs), len(fileDecls.TrapVars))
+        return
+    }
+
+    config.LogDebug("RegisterFuncTab: GENERATE file=%s VarDefStmts=%d VarRegStmts=%d",
+        absFile, len(res.VarDefStmts), len(res.VarRegStmts))
+```
+
+### Using it
 
 ```bash
 xgo test --log-debug -v ./runtime/test/functab/functab_mini
 ```
 
-Or set the env var:
+Or via env var:
 
 ```bash
 XGO_LOG_DEBUG=stderr xgo test ./your/test
@@ -35,8 +102,6 @@ XGO_LOG_DEBUG=stderr xgo test ./your/test
 `--log-debug` accepts values: `stderr` (default), `stdout`, or a file path.
 
 ### What this reveals
-
-The existing log calls trace:
 
 | File | Key log lines |
 |------|--------------|
@@ -49,7 +114,7 @@ The existing log calls trace:
 
 ### When to use
 
-First pass for any functab, instrumentation, or trap-registration issue. If this already reveals the problem, you don't need the layers below.
+First pass for any functab, instrumentation, or trap-registration issue. Shows whether each source file is being processed, how many funcs get trapped, whether `RegisterFuncTab` generates or skips registration code. If this already reveals the problem, you don't need the layers below.
 
 ---
 

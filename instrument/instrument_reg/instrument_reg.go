@@ -5,7 +5,6 @@ import (
 
 	astutil "github.com/xhd2015/xgo/instrument/ast"
 	"github.com/xhd2015/xgo/instrument/compiler_extra"
-	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/constants"
 	"github.com/xhd2015/xgo/instrument/edit"
 	"github.com/xhd2015/xgo/instrument/patch"
@@ -29,18 +28,10 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 	absFile := file.File.AbsPath
 	fileDecls := buildCompilerExtra(fset, file)
 
-	config.LogDebug("RegisterFuncTab: file=%s pkg=%s stdlib=%v fileIndex=%d trapFuncs=%d trapVars=%d",
-		absFile, pkgPath, stdlib, fileIndex, len(fileDecls.TrapFuncs), len(fileDecls.TrapVars))
-
 	res := compiler_extra.GetFileRegStmts(fileDecls, stdlib, FILE_VAR, FILE_VAR_FOR_VAR, perFilePkgNames)
 	if len(res.VarDefStmts) == 0 {
-		config.LogDebug("RegisterFuncTab: SKIP file=%s (VarDefStmts empty, %d trapFuncs, %d trapVars)",
-			absFile, len(fileDecls.TrapFuncs), len(fileDecls.TrapVars))
 		return
 	}
-
-	config.LogDebug("RegisterFuncTab: GENERATE file=%s VarDefStmts=%d VarRegStmts=%d",
-		absFile, len(res.VarDefStmts), len(res.VarRegStmts))
 
 	regCode := compiler_extra.GenerateRegCode(perFilePkgNames.XGO_INIT, res.VarDefStmts, res.VarRegStmts, res.DelayInitStmts)
 	initFunc := compiler_extra.DeclareInitFunc(perFilePkgNames)
