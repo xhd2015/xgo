@@ -122,3 +122,29 @@ When true, xgo:
 ### Missing LC_UUID causes dyld abort on macOS 26+ with Go < 1.23
 
 macOS 26+ (arm64) requires `LC_UUID` load command in executables. Go < 1.23 (and empirically go1.22.12) does not emit it, causing `dyld: missing LC_UUID load command ... signal: abort trap`. Fix: use `-ldflags=-linkmode=external` to invoke the system linker. See `instrument/build/build.go` (`NeedExternalLinker`/`ExternalLinkerFlags`) and `doc/development/LC_UUID_ERROR.md`.
+
+## Windows
+
+### `go build -o` does NOT append `.exe` on Windows — output file must specify it
+
+When the `-o` flag is given to `go build` on Windows, Go writes the output to **exactly** the path specified in the argument. If the path is `.../pkg/tool/windows_amd64/compile` (no `.exe`), a file named `compile` is created WITHOUT the `.exe` extension. The existing `compile.exe` in the same directory is NOT overwritten.
+
+The Go toolchain looks for `compile.exe` (with extension) when invoking the compiler during `go test` / `go build`. If `compile.exe` is the old unpatched binary — as it was merely copied from the original GOROOT by `syncGoroot` — the xgo link rewrite (`__xgo_trap` → `XgoTrap`) never runs, and `functab.GetFuncs()` returns 0 entries.
+
+**Symptoms:**
+- `functab.GetFuncs()` returns 0 on Windows, 600+ on Linux
+- `TRAP_CHECK: interceptor did NOT fire`
+- md5 of `compile.exe` in instrumented GOROOT matches the original
+- File listing reveals two files: `compile` (correct/new) and `compile.exe` (old/original)
+
+**Fix:** `instrument/patch/apply.go` — on Windows, after building the command args slice from the config, scan for `-o <path>` and append `.exe` if the path has no extension. Use `cmd_windows` (`CmdWindows` field) in `__config__.json` to provide a platform-specific args array with proper `.exe` extensions.
+
+See `DEBUGGING.md` for the full investigation.
+
+### Path separators in JSON config strings produce mixed `\` and `/` on Windows
+
+`__config__.json` `cmd` fields use string format like `${INSTRUMENT_GOROOT}/bin/go`. The `${INSTRUMENT_GOROOT}` variable resolves to a path built by `filepath.Join` — which uses `\` on Windows. The literal `/bin/go` remains. The resulting path has mixed separators: `C:\Users\...\go1.25.10/bin/go`.
+
+While Go's `os/exec` and filesystem handle this in many places, it creates fragile paths that can break in edge cases (e.g., `go build -o` may write to an unexpected location).
+
+**Fix:** Use `cmd_windows` in `__config__.json` to specify a `[]string` args array with `\` separators and `.exe` extensions. Or ensure `substituteEnvSlice` performs `strings.ReplaceAll(arg, "/", string(filepath.Separator))` on each substituted arg when `runtime.GOOS == "windows"`.

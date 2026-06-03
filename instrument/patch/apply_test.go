@@ -1187,3 +1187,107 @@ func absGoroot() string {
 	}
 	return "/path/to/goroot"
 }
+
+func TestSubstituteEnvSlice_basic(t *testing.T) {
+	args := []string{"echo", "${HELLO}", "${WORLD}"}
+	result := substituteEnvSlice(args, map[string]string{
+		"HELLO": "hello",
+		"WORLD": "world",
+	})
+	if len(result) != 3 {
+		t.Fatalf("expected 3 args, got %d", len(result))
+	}
+	if result[0] != "echo" {
+		t.Errorf("expected 'echo', got %q", result[0])
+	}
+	if result[1] != "hello" {
+		t.Errorf("expected 'hello', got %q", result[1])
+	}
+	if result[2] != "world" {
+		t.Errorf("expected 'world', got %q", result[2])
+	}
+}
+
+func TestSubstituteEnvSlice_noMatch(t *testing.T) {
+	args := []string{"echo", "hello"}
+	result := substituteEnvSlice(args, nil)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(result))
+	}
+	if result[0] != "echo" || result[1] != "hello" {
+		t.Errorf("expected original args, got %v", result)
+	}
+}
+
+func TestSubstituteEnvSlice_multipleInOneArg(t *testing.T) {
+	args := []string{"${INSTRUMENT_GOROOT}/bin/go"}
+	if runtime.GOOS == "windows" {
+		args = []string{`${INSTRUMENT_GOROOT}\bin\go.exe`}
+	}
+	result := substituteEnvSlice(args, map[string]string{
+		"INSTRUMENT_GOROOT": absGoroot(),
+	})
+	expected := absGoroot() + "/bin/go"
+	if runtime.GOOS == "windows" {
+		expected = absGoroot() + `\bin\go.exe`
+	}
+	if result[0] != expected {
+		t.Errorf("expected %q, got %q", expected, result[0])
+	}
+}
+
+func TestStringSliceOrSlice_fromString(t *testing.T) {
+	data := `"go build -a -o /path cmd/compile"`
+	var s StringSliceOrSlice
+	if err := json.Unmarshal([]byte(data), &s); err != nil {
+		t.Fatal(err)
+	}
+	if len(s) != 6 {
+		t.Fatalf("expected 6 args, got %d: %v", len(s), s)
+	}
+	expected := []string{"go", "build", "-a", "-o", "/path", "cmd/compile"}
+	for i, want := range expected {
+		if s[i] != want {
+			t.Errorf("arg[%d]: expected %q, got %q", i, want, s[i])
+		}
+	}
+}
+
+func TestStringSliceOrSlice_fromArray(t *testing.T) {
+	data := `["echo", "hello", "world"]`
+	var s StringSliceOrSlice
+	if err := json.Unmarshal([]byte(data), &s); err != nil {
+		t.Fatal(err)
+	}
+	if len(s) != 3 {
+		t.Fatalf("expected 3 args, got %d: %v", len(s), s)
+	}
+	expected := []string{"echo", "hello", "world"}
+	for i, want := range expected {
+		if s[i] != want {
+			t.Errorf("arg[%d]: expected %q, got %q", i, want, s[i])
+		}
+	}
+}
+
+func TestStringSliceOrSlice_emptyString(t *testing.T) {
+	data := `""`
+	var s StringSliceOrSlice
+	if err := json.Unmarshal([]byte(data), &s); err != nil {
+		t.Fatal(err)
+	}
+	if len(s) != 0 {
+		t.Fatalf("expected 0 args from empty string, got %d: %v", len(s), s)
+	}
+}
+
+func TestStringSliceOrSlice_emptyArray(t *testing.T) {
+	data := `[]`
+	var s StringSliceOrSlice
+	if err := json.Unmarshal([]byte(data), &s); err != nil {
+		t.Fatal(err)
+	}
+	if len(s) != 0 {
+		t.Fatalf("expected 0 args from empty array, got %d: %v", len(s), s)
+	}
+}
