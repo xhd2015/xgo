@@ -112,13 +112,14 @@ func genXgoPatches(rootDir string) error {
 	if err != nil {
 		return err
 	}
+	copyOpts := filecopy.NewOptions().Ignore("issues")
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() {
 			if !strings.HasPrefix(name, "go") {
 				continue
 			}
-			if err := filecopy.CopyReplaceDir(filepath.Join(patchesDir, name), filepath.Join(genPatchesDir, name), false); err != nil {
+			if err := copyOpts.CopyReplaceDir(filepath.Join(patchesDir, name), filepath.Join(genPatchesDir, name)); err != nil {
 				return err
 			}
 		}
