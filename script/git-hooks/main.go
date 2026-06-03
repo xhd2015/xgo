@@ -128,6 +128,7 @@ func preCommitCheck(noCommit bool, amend bool, noUpdateVersion bool) error {
 	genDirs := [][]string{
 		{"cmd", "xgo", "asset", "runtime_gen"},
 		{"cmd", "xgo", "asset", "compiler_patch_gen"},
+		{"cmd", "xgo", "asset", "patches"},
 	}
 	args := []string{"run", "./script/generate"}
 	for _, genDir := range genDirs {
