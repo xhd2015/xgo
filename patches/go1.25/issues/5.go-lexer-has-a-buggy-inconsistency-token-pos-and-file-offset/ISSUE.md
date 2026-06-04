@@ -117,7 +117,7 @@ computed from `GenDecl.End()`. When the file has `\r` bytes inside raw strings:
 cd <go-repo>
 git log --oneline --all -S 'stripCR' -- src/go/scanner/scanner.go
 # fb6ffd8f78 go/scanner: strip CRs from raw literals
-# 7b9a6d8dda go/scanner: strip carriage returns from commments
+# 7b9a6d8dda go/scanner: strip carriage returns from comments
 ```
 
 Commit `fb6ffd8f787f` (Dec 15, 2011, Robert Griesemer) is the introduction point.
