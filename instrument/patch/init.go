@@ -4,59 +4,46 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"os"
-	"strings"
 
 	"github.com/xhd2015/xgo/support/edit/goedit"
 )
 
+// NOTE: new func is always inserted after a position
+// because a function or variable may have some
+// special directive like go:embed, go:linkname...
+// we cannot add anything before them.
 func GetFuncInsertPosition(file *ast.File) token.Pos {
-	for i, decl := range file.Decls {
+	// find first non-import declaration
+	for _, decl := range file.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok {
 			return decl.End()
 		}
 		if genDecl.Tok != token.IMPORT {
-			return GenDeclSafeEnd(file, i)
+			return genDecl.End()
 		}
 	}
 
 	fileEnd := file.End()
 	packageEnd := file.Name.End()
 	if fileEnd == packageEnd {
+		// packageEnd is usually used to import instrumented packages
+		// if there are other imports, it is not safe to declare
+		// a new function.
+		// so always insert a new line to begin the function.
+		//
+		// however, in reality if there is only one import,
+		// there is nothing to instrument actually.
+		// so we panic here
 		panic("nothing to instrument with empty file")
 	}
 	return fileEnd
 }
 
-func GenDeclSafeEnd(file *ast.File, declIndex int) token.Pos {
-	if declIndex+1 < len(file.Decls) && !HasGoDirective(file.Decls[declIndex+1]) {
-		return file.Decls[declIndex+1].Pos()
-	}
-	return file.Decls[declIndex].End()
-}
-
-func HasGoDirective(decl ast.Decl) bool {
-	var doc *ast.CommentGroup
-	switch d := decl.(type) {
-	case *ast.GenDecl:
-		doc = d.Doc
-	case *ast.FuncDecl:
-		doc = d.Doc
-	}
-	if doc == nil {
-		return false
-	}
-	for _, c := range doc.List {
-		if strings.HasPrefix(c.Text, "//go:") {
-			return true
-		}
-	}
-	return false
-}
-
+// Append inserts s at the end of the buffer using its length,
+// NOTE: when the source file has \r\n the file.End() isn't correct
 func Append(edit *goedit.Edit, file *ast.File, s string) {
-	edit.Buffer().Insert(len(edit.Buffer().Old()), s)
+	edit.Insert(file.End(), s)
 }
 
 func AddImport(edit *goedit.Edit, file *ast.File, name string, pkgPath string) {
@@ -64,9 +51,5 @@ func AddImport(edit *goedit.Edit, file *ast.File, name string, pkgPath string) {
 }
 
 func AddCode(edit *goedit.Edit, pos token.Pos, code string) {
-	if os.Getenv("XGO_DEBUG_USE_SEMICOLON") == "true" {
-		edit.Insert(pos, ";"+code)
-	} else {
-		edit.Insert(pos, "\n"+code+"\n")
-	}
+	edit.Insert(pos, ";"+code)
 }

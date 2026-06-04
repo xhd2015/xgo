@@ -1,6 +1,7 @@
 package load
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -233,6 +234,13 @@ func readFile(overlayFS overlay.Overlay, absFilePath string, maxFileSize int64) 
 		}
 	}
 	_, content, err := overlayFS.ReadBytes(overlay.AbsFile(absFilePath))
+	// Normalize CRLF to LF: git core.autocrlf on Windows injects \r
+	// into all files including raw string literals inside backticks.
+	// The Go scanner strips \r from BasicLit.Value but token.FileSet
+	// byte offsets include them, causing BasicLit.End() and thus
+	// GenDecl.End() to be short by the \r count. Normalizing before
+	// parsing eliminates this discrepancy entirely.
+	content = bytes.ReplaceAll(content, []byte("\r\n"), []byte("\n"))
 	return content, err
 }
 

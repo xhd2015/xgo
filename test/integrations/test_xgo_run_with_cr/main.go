@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -25,85 +24,56 @@ func main() {
 	fmt.Printf("proof.go has %d \\r bytes\n", strings.Count(proofSrc, "\r"))
 	fmt.Printf("proof_test.go has %d \\r bytes\n", strings.Count(proofTestSrc, "\r"))
 
-	// Run with \n separator
-	nlContent, nlDir := runXgoTest(repoRoot, xgoBin, proofSrc, proofTestSrc, nil, "\\n")
-	// Run with ; separator
-	semiContent, semiDir := runXgoTest(repoRoot, xgoBin, proofSrc, proofTestSrc,
-		[]string{"XGO_DEBUG_USE_SEMICOLON=true"}, ";")
-
-	// Diff
-	fmt.Println("\n=== DIFF (\\n vs ;) ===")
-	fmt.Println(diffStrings(nlContent, semiContent))
-
-	fmt.Println("\n=== OVERLAY FILES ===")
-	fmt.Printf("\\n version: %s\n", filepath.Join(nlDir, ".xgo", "gen", "overlay", "PROJECT", "proof.go"))
-	fmt.Printf(";  version: %s\n", filepath.Join(semiDir, ".xgo", "gen", "overlay", "PROJECT", "proof.go"))
-
-	fmt.Println("=== DONE ===")
-}
-
-func runXgoTest(repoRoot, xgoBin, proofSrc, proofTestSrc string, env []string, label string) (string, string) {
 	tmpDir, err := os.MkdirTemp("", "xgo-cr-*")
 	if err != nil {
-		fatalf("[%s] create temp dir: %v", label, err)
+		fatalf("create temp dir: %v", err)
 	}
 	// Keep dir for inspection
-	fmt.Printf("[%s] test dir: %s\n", label, tmpDir)
+	fmt.Printf("test dir: %s\n", tmpDir)
 
 	goModContent := fmt.Sprintf("module test\n\ngo 1.21\n\nrequire github.com/xhd2015/xgo/runtime v0.0.0\n\nreplace github.com/xhd2015/xgo/runtime => %s/runtime\n", repoRoot)
 	os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goModContent), 0644)
 	os.WriteFile(filepath.Join(tmpDir, "proof.go"), []byte(proofSrc), 0644)
 	os.WriteFile(filepath.Join(tmpDir, "proof_test.go"), []byte(proofTestSrc), 0644)
 
-	if out, err := runCmdEnv(tmpDir, nil, "go", "mod", "tidy"); err != nil {
-		fatalf("[%s] go mod tidy: %v\n%s", label, err, out)
+	if out, err := runCmd(tmpDir, "go", "mod", "tidy"); err != nil {
+		fatalf("go mod tidy: %v\n%s", err, out)
 	}
 
-	fmt.Printf("[%s] Running xgo test...\n", label)
-	out, err := runCmdEnv(tmpDir, env, xgoBin, "test", "--trap-all", "-a", "-v", ".")
+	fmt.Println("Running xgo test --trap-all ...")
+	out, err := runCmd(tmpDir, xgoBin, "test", "--trap-all", "-a", "-v", ".")
 	if err != nil {
-		fmt.Printf("[%s] xgo test output:\n%s\n", label, out)
+		fmt.Printf("xgo test output:\n%s\n", out)
 	}
 	// Don't fatal on error — we want to collect the overlay even if build fails
 
-	// Read instrumented proof.go from overlay
-	overlayProofPath := filepath.Join(tmpDir, ".xgo", "gen", "overlay", "PROJECT", "proof.go")
-	content, err := os.ReadFile(overlayProofPath)
+	overlayPath := filepath.Join(tmpDir, ".xgo", "gen", "overlay", "PROJECT", "proof.go")
+	content, err := os.ReadFile(overlayPath)
 	if err != nil {
-		fmt.Printf("[%s] WARNING: no overlay proof.go: %v\n", label, err)
-		return fmt.Sprintf("(no overlay: %v)", err), tmpDir
-	}
-
-	crCount := strings.Count(string(content), "\r")
-	fmt.Printf("[%s] instrumented proof.go, %d \\r bytes, %d lines\n", label, crCount, strings.Count(string(content), "\n"))
-	return string(content), tmpDir
-}
-
-func diffStrings(a, b string) string {
-	fileA, _ := os.CreateTemp("", "xgo-diff-a-*")
-	fileB, _ := os.CreateTemp("", "xgo-diff-b-*")
-	defer os.Remove(fileA.Name())
-	defer os.Remove(fileB.Name())
-	os.WriteFile(fileA.Name(), []byte(a), 0644)
-	os.WriteFile(fileB.Name(), []byte(b), 0644)
-
-	cmd := exec.Command("diff", "-u", fileA.Name(), fileB.Name())
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err != nil {
-		// diff returns non-zero when files differ
-		if stdout.Len() > 0 {
-			return stdout.String()
+		fmt.Printf("WARNING: no overlay proof.go: %v\n", err)
+	} else {
+		crCount := strings.Count(string(content), "\r")
+		fmt.Printf("instrumented proof.go, %d \\r bytes, %d lines\n", crCount, strings.Count(string(content), "\n"))
+		// Print a snippet around the inserted trap/stub area
+		idx := strings.Index(string(content), "func help_xgo_get")
+		if idx >= 0 {
+			start := idx - 50
+			if start < 0 {
+				start = 0
+			}
+			end := idx + 200
+			if end > len(content) {
+				end = len(content)
+			}
+			fmt.Printf("snippet around insertion:\n---\n%s\n---\n", string(content[start:end]))
 		}
-		return stderr.String()
 	}
-	return "(no differences)"
+
+	fmt.Printf("overlay proof.go: %s\n", overlayPath)
+	fmt.Println("=== DONE ===")
 }
 
 func ensureXgo(repoRoot string) (binPath string, cleanup func()) {
-	// Always build fresh to pick up latest instrument/ changes
 	tmpDir, err := os.MkdirTemp("", "xgo-build-*")
 	if err != nil {
 		fatalf("create build dir: %v", err)
@@ -141,13 +111,10 @@ func findRepoRoot() string {
 	}
 }
 
-func runCmdEnv(dir string, env []string, name string, args ...string) (string, error) {
+func runCmd(dir, name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
-	if env != nil {
-		cmd.Env = append(os.Environ(), env...)
-	}
-	var stderr, stdout bytes.Buffer
+	var stderr, stdout strings.Builder
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
 	err := cmd.Run()
