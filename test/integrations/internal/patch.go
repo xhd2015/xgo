@@ -24,7 +24,10 @@ func ApplyFileBased(rootDir, goroot string, goVersion *goinfo.GoVersion) error {
 	if err := os.MkdirAll(patchDir, 0755); err != nil {
 		return err
 	}
-	if err := RunLogged("", nil, "cp", "-R", srcDir+"/", patchDir+"/"); err != nil {
+	// Use srcDir/. so cp copies directory contents, not the directory name.
+	// Without the trailing /., GNU cp may create patchDir/go1.25/ when dest
+	// is already named go1.25, which breaks patch rel paths on Linux CI.
+	if err := RunLogged("", nil, "cp", "-R", srcDir+"/.", patchDir+"/"); err != nil {
 		return err
 	}
 
