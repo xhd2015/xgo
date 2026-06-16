@@ -1,0 +1,20 @@
+<patch xgo_test2json_declare>
+# Description: Declare XgoOnTestEvent callback variable for test2json event hook.
+# Allows xgo to intercept test output events before they're written.
+# Inserted before: func writeEvent(
+# After: var XgoOnTestEvent func(b *bytes.Buffer);\nfunc writeEvent(
+goto func (*Converter) writeEvent
+insert_before var XgoGetTestName func(testPkgPath string, name string) (pkgPath string, testName string);
+newline
+</patch>
+
+<patch xgo_test2json_call>
+# Description: Call XgoGetTestName to rename test events before marshalling.
+# Triggers the callback to modify the test event.
+# Inserted before: js, err := json.Marshal(e)
+# After: if XgoGetTestName != nil && e.Test != "" { ... };
+goto func (*Converter) writeEvent
+match js, err := json.Marshal(e)
+insert_before if XgoGetTestName != nil && e.Test != "" {  tpkg, tname := XgoGetTestName(e.Package, e.Test);  if tpkg != "" {    e.Package = tpkg;  };  if tname != "" {    e.Test = tname;  };};
+newline
+</patch>

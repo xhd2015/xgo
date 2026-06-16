@@ -37,7 +37,7 @@ func ApplyFileBased(rootDir, goroot string, goVersion *goinfo.GoVersion) error {
 		"GOOS":               runtime.GOOS,
 		"GOARCH":             runtime.GOARCH,
 	}
-	patchDir := filepath.Join(tmpPatchDir, fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor))
+	patchDir := tmpPatchDir
 	skipKinds := skipNonMkbuiltinKinds(JsonGenerateKinds(srcDir))
 	return patches.ApplyPatches(patchDir, goroot, rootDir, extraEnv, skipKinds, generateHandler)
 }

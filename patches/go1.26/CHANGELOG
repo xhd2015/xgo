@@ -1,0 +1,24 @@
+# go1.26 Patch CHANGELOG
+
+## Patch adjustments from go1.25 to go1.26
+
+Seeded from `patches/go1.25`. Compared upstream source in `go-release-git-versioned/go1.25.10` vs `go-release-git-versioned/go1.26.4`.
+
+### Patches adjusted
+
+- `src/cmd/go/internal/work/exec.go.xgo.patch` (`xgo_exec_cover_infiles`): coverage overlay fix anchor moved from `func (b *Builder) build` to `func (b *Builder) runCover` because Go 1.26 moved coverage file handling out of `build()`.
+- `src/cmd/go/internal/test/test.go.xgo.patch` (`xgo_test_unify_pkgs`): after `load.PackagesAndErrors(moduleLoaderState, ctx, pkgOpts, pkgArgs)`, also assign `xgoModuleLoaderState = moduleLoaderState` before calling `xgoUnifyTestPackages`.
+- `src/cmd/go/internal/test/xgo_testunified.go`: import `cmd/go/internal/modload`, add package-level `xgoModuleLoaderState`, and pass it to `load.PackagesAndErrors` when resolving missing imports.
+
+### Patches unchanged (upstream diff did not break anchors)
+
+- `src/runtime/*`, `src/time/*`, `src/testing/testing.go`, `src/encoding/json/encode.go`
+- `src/cmd/compile/internal/gc/main.go`, `src/cmd/compile/internal/noder/noder.go`
+- `src/cmd/go/main.go`, `src/cmd/cover/cover.go`, `src/cmd/internal/test2json/test2json.go`
+- `src/cmd/go/internal/load/test.go` (function name anchor still matches)
+
+### Other repo updates
+
+- `patch/legacy/adapter_go1.26.go` added for compiler patch adapter selection.
+- `instrument/instrument_runtime/template/defs.go` comment updated: `FuncForPC(pc).Name()` wrapping confirmed for go1.21~go1.26.
+- `__config__.json` version bumped to `go1.26+`.

@@ -1,0 +1,6 @@
+<patch add_xgo_real_time_now>
+# Description: Keep Now() and append XgoRealNow() copy at end of file.
+# The runtime linkname redirect points to XgoRealNow for interception.
+# Copies Now() function body, renames to XgoRealNow(), and appends to file end.
+copy_func Now as XgoRealNow append to file end
+</patch>

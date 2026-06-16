@@ -868,7 +868,7 @@ func splitPath(path string) []string {
 // TODO: use slices.Contains()
 func listContains(list []string, s string) bool {
 	for _, e := range list {
-		if s == e {
+		if s == e || strings.HasPrefix(s, e) {
 			return true
 		}
 	}
@@ -1083,6 +1083,11 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		execCmd.Env = append(execCmd.Env, "XGO_IS_SETUP_GOROOT=true")
 	}
 	execCmd.Env = append(execCmd.Env, "PATH="+filepath.Join(goroot, "bin")+string(filepath.ListSeparator)+os.Getenv("PATH"))
+	if !usePlainGo {
+		if xgoTestCmd := buildXgoTestCommand(useBuiltXgo, prebuiltXgo, debugXgo, tags, xgoDebugCompile); xgoTestCmd != "" {
+			execCmd.Env = append(execCmd.Env, "XGO_TEST_COMMAND="+xgoTestCmd)
+		}
+	}
 	execCmd.Env = append(execCmd.Env, env...)
 
 	cmdErr := execCmd.Run()
@@ -1090,6 +1095,25 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 		return &commandError{err: cmdErr, timeoutDetector: &dt}
 	}
 	return nil
+}
+
+func buildXgoTestCommand(useBuiltXgo bool, prebuiltXgo string, debugXgo bool, tags string, xgoDebugCompile string) string {
+	if debugXgo {
+		return "xgo"
+	}
+	if useBuiltXgo {
+		return prebuiltXgo
+	}
+	parts := []string{"go", "run"}
+	runTag := tags
+	if tags == "" && xgoDebugCompile != "" {
+		runTag = "dev"
+	}
+	if runTag != "" {
+		parts = append(parts, "-tags", runTag)
+	}
+	parts = append(parts, "./cmd/xgo")
+	return strings.Join(parts, " ")
 }
 
 type commandError struct {
