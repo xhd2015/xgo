@@ -1,0 +1,22 @@
+name: Go 1-26
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  test-go1-26:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.26'
+
+    - name: Test
+      run: go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v

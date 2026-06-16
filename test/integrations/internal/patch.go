@@ -19,7 +19,14 @@ func ApplyFileBased(rootDir, goroot string, goVersion *goinfo.GoVersion) error {
 		return err
 	}
 	defer os.RemoveAll(tmpPatchDir)
-	RunLogged("", nil, "cp", "-R", srcDir+"/", tmpPatchDir+"/")
+
+	patchDir := filepath.Join(tmpPatchDir, fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor))
+	if err := os.MkdirAll(patchDir, 0755); err != nil {
+		return err
+	}
+	if err := RunLogged("", nil, "cp", "-R", srcDir+"/", patchDir+"/"); err != nil {
+		return err
+	}
 
 	config := map[string]interface{}{
 		"version":  fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor),
@@ -27,7 +34,7 @@ func ApplyFileBased(rootDir, goroot string, goVersion *goinfo.GoVersion) error {
 		"generate": JsonGenerateEntries(srcDir),
 	}
 	configBytes, _ := json.MarshalIndent(config, "", "  ")
-	os.WriteFile(filepath.Join(tmpPatchDir, "__config__.json"), configBytes, 0644)
+	os.WriteFile(filepath.Join(patchDir, "__config__.json"), configBytes, 0644)
 
 	extraEnv := map[string]string{
 		"XGO_SRC":            rootDir,
@@ -37,7 +44,6 @@ func ApplyFileBased(rootDir, goroot string, goVersion *goinfo.GoVersion) error {
 		"GOOS":               runtime.GOOS,
 		"GOARCH":             runtime.GOARCH,
 	}
-	patchDir := tmpPatchDir
 	skipKinds := skipNonMkbuiltinKinds(JsonGenerateKinds(srcDir))
 	return patches.ApplyPatches(patchDir, goroot, rootDir, extraEnv, skipKinds, generateHandler)
 }
