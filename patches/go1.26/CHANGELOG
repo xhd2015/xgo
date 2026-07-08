@@ -1,5 +1,13 @@
 # go1.26 Patch CHANGELOG
 
+## Attribution
+
+Go 1.26 support incorporates work from [@Peyton-Spencer](https://github.com/Peyton-Spencer)'s
+[omniaura/go1.26-support](https://github.com/omniaura/xgo/tree/go1.26-support) branch
+(commit `58f7584`). Legacy `instrument_go` go1.26 handlers coexist with these file-based
+patches. **go1.26 is the last Go version with legacy instrument support; go1.27+ uses
+file-based patches only.**
+
 ## Patch adjustments from go1.25 to go1.26
 
 Seeded from `patches/go1.25`. Compared upstream source in `go-release-git-versioned/go1.25.10` vs `go-release-git-versioned/go1.26.4`.
