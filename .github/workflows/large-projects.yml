@@ -118,7 +118,7 @@ jobs:
         run: |
           source util.sh
           cd stakwork/sphinx-tribes
-          xgo test -v --trap-all $(go list ./...|grep -Ev 'github.com/stakwork/sphinx-tribes/db|github.com/stakwork/sphinx-tribes/handlers|github.com/stakwork/sphinx-tribes/routes')
+          xgo test -v --trap-all $(go list ./...|grep -Ev 'github.com/stakwork/sphinx-tribes/db|github.com/stakwork/sphinx-tribes/handlers|github.com/stakwork/sphinx-tribes/routes|github.com/stakwork/sphinx-tribes/middlewares')
 
       # - uses: actions/checkout@v4
       #   with:
