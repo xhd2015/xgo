@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const prNumber = "387"
+const prNumber = "389"
 
 func outDir() string {
 	_, file, _, ok := runtime.Caller(0)
@@ -73,6 +73,13 @@ func main() {
 		strings.TrimSpace(firstLine(fetchOut)),
 		"expected go1.26 in PR summary")
 
+	// CHECK 2b: PR description credits omniaura contribution
+	inspect("PR mentions omniaura/peyton attribution",
+		strings.Contains(strings.ToLower(fetchOut), "omniaura") ||
+			strings.Contains(strings.ToLower(fetchOut), "peyton"),
+		fetchPath,
+		"expected omniaura attribution in PR")
+
 	// CHECK 3: gh pr view returns status checks
 	ghOut, ghErr := run("gh", "pr", "view", prNumber, "--json", "state,title,statusCheckRollup")
 	ghPath := filepath.Join(outDir(), "gh-pr-view.json")
@@ -128,7 +135,7 @@ func main() {
 		summaryPath,
 		strings.Join(failed, ", "))
 
-	fmt.Println("ALL CHECKS PASSED — PR #387 ready")
+	fmt.Println("ALL CHECKS PASSED — PR #" + prNumber + " ready")
 }
 
 func firstLine(s string) string {
