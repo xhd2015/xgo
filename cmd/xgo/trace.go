@@ -392,13 +392,19 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 	// which Go 1.25 rejects. See patches/go1.25/issues/RUNTIME_LIB_SELF_REQUIRE.md
 	if mainModule != constants.RUNTIME_MODULE {
 		logDebug("require %s v%s, replaced: %s", constants.RUNTIME_MODULE, VERSION, tmpRuntime)
-		err = cmd.Env([]string{
-			"GOROOT=" + goroot,
-		}).Run(goBinary, "mod", "edit",
+		modEditArgs := []string{"mod", "edit",
 			fmt.Sprintf("-require=%s@v%s", constants.RUNTIME_MODULE, VERSION),
 			fmt.Sprintf("-replace=%s=%s", constants.RUNTIME_MODULE, tmpRuntime),
-			tmpGoMod,
-		)
+		}
+		// In Go 1.26+, 'go mod tidy' is required when using old go directives (e.g. go 1.14)
+		// with require/replace. Bump the go directive to at least 1.18 to avoid this.
+		if goVersion.Minor >= 26 {
+			modEditArgs = append(modEditArgs, fmt.Sprintf("-go=%d.%d", goVersion.Major, goVersion.Minor))
+		}
+		modEditArgs = append(modEditArgs, tmpGoMod)
+		err = cmd.Env([]string{
+			"GOROOT=" + goroot,
+		}).Run(goBinary, modEditArgs...)
 		if err != nil {
 			return nil, err
 		}

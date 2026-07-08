@@ -9,9 +9,9 @@ import (
 var runtime2Path = patch.FilePath{"src", "runtime", "runtime2.go"}
 
 func instrumentRuntime2(goroot string, goMajor int, goMinor int) error {
-	if goMajor != 1 || (goMinor < 17 || goMinor > 25) {
+	if goMajor != 1 || (goMinor < 17 || goMinor > 26) {
 		// src/runtime/runtime2.go
-		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.25", runtime2Path.JoinPrefix(""), goMajor, goMinor)
+		return fmt.Errorf("%s unsupported version: go%d.%d, available: go1.17~go1.26", runtime2Path.JoinPrefix(""), goMajor, goMinor)
 	}
 	runtime2File := runtime2Path.JoinPrefix(goroot)
 
