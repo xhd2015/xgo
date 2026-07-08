@@ -6,11 +6,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const prNumber = "389"
+
+var (
+	ciSuccessRe = regexp.MustCompile(`(?m)^\s*✓\s+\S+\s+success\b`)
+	ciSkippedRe = regexp.MustCompile(`(?m)^\s*○\s+\S+\s+skipped\b`)
+	ciFailedRe  = regexp.MustCompile(`(?m)^\s*[✗×]\s+\S+\s+(failure|cancelled|timed_out)\b`)
+	ciPendingRe = regexp.MustCompile(`(?m)^\s*\S+\s+\S+\s+(in_progress|queued|pending)\b`)
+)
 
 func outDir() string {
 	_, file, _, ok := runtime.Caller(0)
@@ -25,6 +34,21 @@ func run(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+func runWithRetry(name string, retries int, delay time.Duration, args ...string) (string, error) {
+	var out string
+	var err error
+	for attempt := 0; attempt <= retries; attempt++ {
+		out, err = run(name, args...)
+		if err == nil || !strings.Contains(out, "rate limit") {
+			return out, err
+		}
+		if attempt < retries {
+			time.Sleep(delay)
+		}
+	}
+	return out, err
 }
 
 func inspect(check string, pass bool, evidence, reason string) {
@@ -55,6 +79,26 @@ type prView struct {
 	} `json:"statusCheckRollup"`
 }
 
+func parseCIRuns(out string) (failed, pending, succeeded, skipped []string) {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "Workflow Runs") {
+			continue
+		}
+		switch {
+		case ciFailedRe.MatchString(line):
+			failed = append(failed, line)
+		case ciPendingRe.MatchString(line):
+			pending = append(pending, line)
+		case ciSuccessRe.MatchString(line):
+			succeeded = append(succeeded, line)
+		case ciSkippedRe.MatchString(line):
+			skipped = append(skipped, line)
+		}
+	}
+	return failed, pending, succeeded, skipped
+}
+
 func main() {
 	_ = os.MkdirAll(outDir(), 0o755)
 
@@ -80,60 +124,50 @@ func main() {
 		fetchPath,
 		"expected omniaura attribution in PR")
 
-	// CHECK 3: gh pr view returns status checks
-	ghOut, ghErr := run("gh", "pr", "view", prNumber, "--json", "state,title,statusCheckRollup")
-	ghPath := filepath.Join(outDir(), "gh-pr-view.json")
-	_ = os.WriteFile(ghPath, []byte(ghOut), 0o644)
-	inspect("gh pr view returns status checks",
-		ghErr == nil && strings.Contains(ghOut, "statusCheckRollup"),
-		ghPath,
-		strings.TrimSpace(ghOut))
+	// CHECK 3: github-fetch ci reports workflow status (primary; no gh auth required)
+	ciOut, ciErr := runWithRetry("github-fetch", 3, 30*time.Second, "ci", prNumber)
+	ciPath := filepath.Join(outDir(), "github-fetch-ci.txt")
+	_ = os.WriteFile(ciPath, []byte(ciOut), 0o644)
+	inspect("github-fetch ci returns workflow runs",
+		ciErr == nil && strings.Contains(ciOut, "Workflow Runs"),
+		ciPath,
+		strings.TrimSpace(ciOut))
 
-	var pr prView
-	if err := json.Unmarshal([]byte(ghOut), &pr); err != nil {
-		inspect("parse gh pr view JSON", false, ghPath, err.Error())
-	}
-
-	inspect("PR state is OPEN",
-		strings.EqualFold(pr.State, "OPEN"),
-		pr.State,
-		"PR is not open")
-
-	// CHECK 4: all completed checks are success or skipped (none failed)
-	var failed []string
-	var pending []string
-	for _, c := range pr.Status {
-		switch strings.ToUpper(c.Conclusion) {
-		case "SUCCESS", "SKIPPED", "NEUTRAL":
-			// ok
-		case "FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED":
-			failed = append(failed, c.Name+"="+c.Conclusion)
-		case "":
-			if strings.ToUpper(c.Status) == "IN_PROGRESS" || strings.ToUpper(c.Status) == "QUEUED" {
-				pending = append(pending, c.Name+"="+c.Status)
-			}
-		default:
-			if c.Conclusion != "" {
-				failed = append(failed, c.Name+"="+c.Conclusion)
-			}
-		}
-	}
-
+	failed, pending, succeeded, skipped := parseCIRuns(ciOut)
 	summaryPath := filepath.Join(outDir(), "check-summary.txt")
-	summary := fmt.Sprintf("failed: %v\npending: %v\n", failed, pending)
+	summary := fmt.Sprintf("succeeded: %d\nskipped: %d\nfailed: %v\npending: %v\n", len(succeeded), len(skipped), failed, pending)
 	_ = os.WriteFile(summaryPath, []byte(summary), 0o644)
 
 	if len(pending) > 0 {
 		inspect("no CI checks still running",
 			false,
 			summaryPath,
-			strings.Join(pending, ", "))
+			strings.Join(pending, "; "))
 	}
 
 	inspect("all PR CI checks pass (no failures)",
-		len(failed) == 0,
+		len(failed) == 0 && len(succeeded) > 0,
 		summaryPath,
-		strings.Join(failed, ", "))
+		strings.Join(failed, "; "))
+
+	// CHECK 4 (optional): gh pr view when authenticated
+	ghOut, ghErr := run("gh", "pr", "view", prNumber, "--json", "state,title,statusCheckRollup")
+	ghPath := filepath.Join(outDir(), "gh-pr-view.json")
+	_ = os.WriteFile(ghPath, []byte(ghOut), 0o644)
+	if ghErr != nil || strings.Contains(ghOut, "HTTP 401") {
+		fmt.Printf("CHECK: gh pr view (optional)\n")
+		fmt.Printf("EVIDENCE: %s\n", ghPath)
+		fmt.Printf("RESULT: SKIP\n")
+		fmt.Printf("REASON: gh not authenticated; github-fetch ci used instead\n")
+	} else {
+		var pr prView
+		if err := json.Unmarshal([]byte(ghOut), &pr); err == nil {
+			inspect("PR state is OPEN (gh)",
+				strings.EqualFold(pr.State, "OPEN"),
+				pr.State,
+				"PR is not open")
+		}
+	}
 
 	fmt.Println("ALL CHECKS PASSED — PR #" + prNumber + " ready")
 }

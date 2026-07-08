@@ -85,12 +85,12 @@ func TestResolveUseFilePatches(t *testing.T) {
 		{name: "go1.23 explicit true", explicit: pbTrue, goVersion: go123, wantErr: true},
 		{name: "nil version explicit true", explicit: pbTrue, wantErr: true},
 
-		// explicit false — only go1.24/go1.25 allow switching
+		// explicit false — go1.24–go1.26 allow switching to legacy instrument_go
 		{name: "go1.25 explicit false", explicit: pbFalse, goVersion: go125, want: false},
 		{name: "go1.24 explicit false", explicit: pbFalse, goVersion: go124, want: false},
+		{name: "go1.26 explicit false", explicit: pbFalse, goVersion: go126, want: false},
 		{name: "go1.23 explicit false", explicit: pbFalse, goVersion: go123, want: false},
 		{name: "go1.17 explicit false", explicit: pbFalse, goVersion: go217, want: false},
-		{name: "go1.26 explicit false", explicit: pbFalse, goVersion: go126, wantErr: true},
 		{name: "go1.27 explicit false", explicit: pbFalse, goVersion: go127, wantErr: true},
 		{name: "nil version explicit false", explicit: pbFalse, want: false},
 	}

@@ -762,9 +762,9 @@ func resolveUseFilePatches(explicit *bool, goVersion *goinfo.GoVersion) (value b
 		}
 		return true, "", nil
 	}
-	// explicitly false
-	if goVersion != nil && goVersion.Major == 1 && goVersion.Minor > 25 {
-		return false, "", fmt.Errorf("--use-file-patches=false is not supported for go%d.%d; after go1.25, file-based patches are always used", goVersion.Major, goVersion.Minor)
+	// explicitly false — go1.26 is the last version that supports legacy instrument_go
+	if goVersion != nil && goVersion.Major == 1 && goVersion.Minor > 26 {
+		return false, "", fmt.Errorf("--use-file-patches=false is not supported for go%d.%d; from go1.27 onward, file-based patches are always used", goVersion.Major, goVersion.Minor)
 	}
 	return false, "", nil
 }
