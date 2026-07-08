@@ -15,10 +15,11 @@ import (
 const prNumber = "389"
 
 var (
-	ciSuccessRe = regexp.MustCompile(`(?m)^\s*✓\s+\S+\s+success\b`)
-	ciSkippedRe = regexp.MustCompile(`(?m)^\s*○\s+\S+\s+skipped\b`)
-	ciFailedRe  = regexp.MustCompile(`(?m)^\s*[✗×]\s+\S+\s+(failure|cancelled|timed_out)\b`)
-	ciPendingRe = regexp.MustCompile(`(?m)^\s*\S+\s+\S+\s+(in_progress|queued|pending)\b`)
+	ansiRe      = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	ciSuccessRe = regexp.MustCompile(`\s+success\s*https?://`)
+	ciSkippedRe = regexp.MustCompile(`\s+skipped\s*https?://`)
+	ciFailedRe  = regexp.MustCompile(`\s+(failure|cancelled|timed_out)\s*https?://`)
+	ciPendingRe = regexp.MustCompile(`\s+(in_progress|queued|pending)\s*https?://`)
 )
 
 func outDir() string {
@@ -79,9 +80,13 @@ type prView struct {
 	} `json:"statusCheckRollup"`
 }
 
+func stripANSI(s string) string {
+	return ansiRe.ReplaceAllString(s, "")
+}
+
 func parseCIRuns(out string) (failed, pending, succeeded, skipped []string) {
 	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
+		line = strings.TrimSpace(stripANSI(line))
 		if line == "" || strings.HasPrefix(line, "Workflow Runs") {
 			continue
 		}
