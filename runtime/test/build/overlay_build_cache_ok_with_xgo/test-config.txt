@@ -1,0 +1,3 @@
+# Each test spawns multiple nested `go test` runs; on Windows CI the
+# package can exceed the default 60s limit.
+flags: -timeout=120s
