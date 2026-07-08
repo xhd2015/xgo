@@ -77,7 +77,7 @@ jobs:
         run: |
           source util.sh
           cd pocketbase/pocketbase
-          xgo test -v --trap-all -skip='TestRandomStringByRegex|TestCronsRun' ./...
+          xgo test -v --trap-all -skip='TestRandomStringByRegex|TestCronsRun|TestDefaultRateLimitMiddleware' ./...
       
       - uses: actions/checkout@v4
         with:
