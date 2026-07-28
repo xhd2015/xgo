@@ -2,7 +2,7 @@
 
 Use this template when bumping xgo to the next stable Go release.
 
-**Current status (as of go1.26 upgrade):** xgo supports `go1.17` ~ `go1.26`. File-based patches live under `patches/go1.24+`. The next target is **go1.27**.
+**Current status (as of go1.27rc2 experiment):** xgo supports `go1.17` ~ `go1.27` (preview). File-based patches live under `patches/go1.24+`. Re-verify against stable **go1.27.0** when released; next target after that is **go1.28**.
 
 Check whether the next version is available:
 

@@ -1,0 +1,40 @@
+# go1.27 Patch CHANGELOG
+
+## Status
+
+Experiment target: **go1.27rc2** (stable go1.27 not yet released). File-based patches only;
+legacy `instrument_go` is not used for go1.27+.
+
+Seeded from `patches/go1.26`. Compared anchors against `go-release/go1.27rc2`.
+
+## Patch adjustments from go1.26 to go1.27
+
+### Patches adjusted
+
+- `src/runtime/proc.go.xgo.patch` (`xgo_proc_init_finished`):
+  `close(main_init_done)` → `close(mainInitDoneChan)` (go1.27 renames the channel and
+  adds `mainInitDone atomic.Bool`).
+- `src/cmd/go/internal/test/test.go.xgo.patch` (`xgo_test_unify_pkgs`):
+  `moduleLoaderState` → `moduleLoader` (`*modload.Loader` replaces `*modload.State`).
+- `src/cmd/go/internal/test/xgo_testunified.go`:
+  `xgoModuleLoaderState *modload.State` → `xgoModuleLoader *modload.Loader`;
+  `PackagesAndErrors` call updated accordingly.
+
+### Patches unchanged (anchors still match go1.27rc2)
+
+- `src/runtime/{runtime2.go,time.go,xgo_trap.go}`, `src/time/*`, `src/testing/testing.go`
+- `src/cmd/compile/internal/{gc/main.go,noder/noder.go}`
+- `src/cmd/go/main.go`, `src/cmd/go/internal/work/exec.go`, `src/cmd/go/internal/load/test.go`
+- `src/cmd/cover/*`, `src/cmd/internal/test2json/*`
+- `src/encoding/json/encode.go` (still present under `//go:build !goexperiment.jsonv2`;
+  default builds use json v2 — loose-JSON patch may need a follow-up for the v2 path)
+
+### Other repo updates
+
+- `support/goinfo/constants.go`: `GO_VERSION_27`
+- `instrument/instrument_compiler/patch_noders.go`: upper bound through go1.27
+- `instrument/instrument_runtime/template/{func_name.go,defs.go}`: confirmed
+  `funcNameForPrint` wrap still present through go1.27
+- `patch/legacy/adapter_go1.27.go` added; shared adapter extended to go1.24–go1.27
+  (`adapter_go1.24_25_26_27.go`)
+- `__config__.json` version bumped to `go1.27+`

@@ -1,0 +1,10 @@
+<patch call_xgo_precheck>
+# Description: Add xgoPrecheck call at the top of cmd/go's main().
+# This allows xgo to intercept Go command invocations before standard logic runs.
+# Inserted before: if args[0] ==
+# After: if xgoPrecheck(args[0], args[1:]) { return; };\nif args[0] ==
+goto func main
+match if args[0] ==
+insert_before if xgoPrecheck(args[0], args[1:]) { return; };
+newline
+</patch>
