@@ -16,6 +16,8 @@ func TestResolveVersion_Exact(t *testing.T) {
 		{"go1.24.2", "go1.24.2"},
 		{"1.24.2", "go1.24.2"},
 		{"go1.22.0", "go1.22.0"},
+		{"go1.27rc2", "go1.27rc2"},
+		{"1.27rc2", "go1.27rc2"},
 	}
 
 	for _, tt := range tests {
@@ -47,6 +49,23 @@ func TestResolveVersion_Minor(t *testing.T) {
 	parts := strings.Split(got, ".")
 	if len(parts) != 3 {
 		t.Fatalf("ResolveVersion(\"go1.24\") = %q, want three components", got)
+	}
+}
+
+// While go1.27 is RC-only, ResolveVersion("1.27") should pick the highest RC
+// (e.g. go1.27rc2) rather than failing with "no patch version found".
+func TestResolveVersion_MinorPrefersRCWhenNoStable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test that requires network in short mode")
+	}
+
+	got, err := ResolveVersion("1.27")
+	if err != nil {
+		// If stable go1.27.x already exists, also accept that.
+		t.Fatalf("ResolveVersion(\"1.27\") error: %v", err)
+	}
+	if !strings.HasPrefix(got, "go1.27") {
+		t.Fatalf("ResolveVersion(\"1.27\") = %q, want go1.27…", got)
 	}
 }
 

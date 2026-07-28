@@ -27,6 +27,16 @@ func ResolveVersion(version string) (string, error) {
 	}
 	version = strings.TrimPrefix(version, "go")
 
+	// Exact version, including prerelease tags (1.27rc2, 1.21.0, …).
+	if goinfo.IsValidVersion(version) {
+		// Bare major.minor (e.g. "1.27") is valid but should resolve to latest
+		// patch/prerelease below rather than being returned as-is.
+		parts := strings.Split(version, ".")
+		if len(parts) >= 3 || hasPrereleaseSuffix(parts[len(parts)-1]) {
+			return "go" + version, nil
+		}
+	}
+
 	parts := strings.Split(version, ".")
 	if len(parts) < 2 {
 		return "", fmt.Errorf("invalid Go version: %q", version)
@@ -46,19 +56,53 @@ func ResolveVersion(version string) (string, error) {
 		return "", fmt.Errorf("fetch version list: %w", err)
 	}
 
+	// Prefer latest stable patch: 1.27.0, 1.27.1, …
 	prefix := version + "."
 	var latest string
 	for _, v := range allVersions {
 		if strings.HasPrefix(v, prefix) {
-			if latest == "" || goinfo.CompareVersion(v[len(prefix):], latest[len(prefix):]) > 0 {
+			if latest == "" || goinfo.CompareVersion(v, latest) > 0 {
 				latest = v
 			}
+		}
+	}
+	if latest != "" {
+		return "go" + latest, nil
+	}
+
+	// No stable patch yet (e.g. only go1.27rc2 published). Pick the highest
+	// prerelease for this minor: 1.27rc2 > 1.27rc1 > 1.27beta1.
+	for _, v := range allVersions {
+		if !strings.HasPrefix(v, version) {
+			continue
+		}
+		rest := v[len(version):]
+		if rest == "" || (rest[0] >= '0' && rest[0] <= '9') {
+			// "1.27" must not match "1.270", only "1.27rc…"/ "1.27beta…"/ "1.27alpha…".
+			continue
+		}
+		if !goinfo.IsValidVersion(v) {
+			continue
+		}
+		if latest == "" || goinfo.CompareVersion(v, latest) > 0 {
+			latest = v
 		}
 	}
 	if latest == "" {
 		return "", fmt.Errorf("no patch version found for %q", version)
 	}
 	return "go" + latest, nil
+}
+
+// hasPrereleaseSuffix reports whether s ends a version component with a
+// prerelease tag, e.g. "27rc2" or "21beta1" (not pure digits like "27").
+func hasPrereleaseSuffix(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return true
+		}
+	}
+	return false
 }
 
 func fetchVersionList() ([]string, error) {
