@@ -26,13 +26,18 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Go
+      # Install under $RUNNER_TEMP so GOROOT is outside the module tree.
       run: |
-        curl -fsSL -o go.tar.gz "https://go.dev/dl/go${{matrix.go}}.linux-amd64.tar.gz"
-        mkdir setup
-        mkdir setup/gopath
-        tar -C setup -xzf go.tar.gz
-        ls setup
-        GOROOT=$PWD/setup/go PATH=$PWD/setup/go/bin:$PATH go version
-    
+        set -euo pipefail
+        dest="${RUNNER_TEMP}/go-next"
+        curl -fsSL -o "${RUNNER_TEMP}/go.tar.gz" "https://go.dev/dl/go${{matrix.go}}.linux-amd64.tar.gz"
+        mkdir -p "$dest" "${RUNNER_TEMP}/gopath"
+        tar -C "$dest" -xzf "${RUNNER_TEMP}/go.tar.gz"
+        echo "GOROOT=${dest}/go" >> "$GITHUB_ENV"
+        echo "GOPATH=${RUNNER_TEMP}/gopath" >> "$GITHUB_ENV"
+        echo "${dest}/go/bin" >> "$GITHUB_PATH"
+        echo "${RUNNER_TEMP}/gopath/bin" >> "$GITHUB_PATH"
+        "${dest}/go/bin/go" version
+
     - name: Test
-      run: GOROOT=$PWD/setup/go GOPATH=$PWD/setup/gopath PATH=$PWD/setup/go/bin:$PWD/setup/gopath/bin:$PATH go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v
+      run: go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v
