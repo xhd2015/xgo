@@ -265,6 +265,8 @@ Each new release will have two tags, for example: `v1.0.49` and `runtime/v1.0.49
 
 The general rule is to make these two tags remain the same with each other, and with the one in [cmd/xgo/version.go](cmd/xgo/version.go).
 
+Full runbook (draft GitHub release, binaries, pitfalls): [doc/development/release-xgo/TOPIC.md](doc/development/release-xgo/TOPIC.md).
+
 Here is a guide on how to make a new release:
 - update `VERSION` in [cmd/xgo/version.go](cmd/xgo/version.go).
 - update `CORE_VERSION` to match `VERSION` if there is a change in this version that makes `cmd/xgo` depends on the newest runtime, otherwise, keep it untouched.
