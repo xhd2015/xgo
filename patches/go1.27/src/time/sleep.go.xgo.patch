@@ -1,0 +1,8 @@
+<patch xgo_time_sleep>
+# Description: Wrap time.Sleep to call through XgoRealSleep for interception.
+# Replaces: func Sleep(d Duration)
+# With:     func XgoRealSleep(d Duration);func /*xgo_instrumented*/Sleep(d Duration){ XgoRealSleep(d); }
+# This creates a wrapper so Sleep() can be mocked/intercepted by xgo.
+find_for_replace func Sleep(d Duration)
+replace func XgoRealSleep(d Duration);func /*xgo_instrumented*/Sleep(d Duration){ XgoRealSleep(d); }
+</patch>

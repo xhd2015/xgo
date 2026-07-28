@@ -1,0 +1,34 @@
+name: Go 1-27
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  test-go1-27:
+    # Go 1.27 is not yet stable; test against the latest published RC.
+    # Switch to actions/setup-go with go-version: '1.27' once go1.27.0 ships.
+    # Install under $RUNNER_TEMP (not the workspace) so GOROOT/src/test is not
+    # picked up by go list ./... as github.com/xhd2015/xgo/... packages.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go 1.27rc2
+      run: |
+        set -euo pipefail
+        dest="${RUNNER_TEMP}/go1.27rc2"
+        curl -fsSL -o "${RUNNER_TEMP}/go.tar.gz" "https://go.dev/dl/go1.27rc2.linux-amd64.tar.gz"
+        mkdir -p "$dest" "${RUNNER_TEMP}/gopath"
+        tar -C "$dest" -xzf "${RUNNER_TEMP}/go.tar.gz"
+        echo "GOROOT=${dest}/go" >> "$GITHUB_ENV"
+        echo "GOPATH=${RUNNER_TEMP}/gopath" >> "$GITHUB_ENV"
+        echo "${dest}/go/bin" >> "$GITHUB_PATH"
+        echo "${RUNNER_TEMP}/gopath/bin" >> "$GITHUB_PATH"
+        "${dest}/go/bin/go" version
+
+    - name: Test
+      run: go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v

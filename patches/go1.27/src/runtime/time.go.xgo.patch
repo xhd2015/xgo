@@ -1,0 +1,6 @@
+<patch xgo_runtime_time_linkname>
+# Description: Redirect the go:linkname from time.Sleep to time.XgoRealSleep.
+# Uses replace_directive to avoid misplaced compiler directive error since
+# //go:linkname must appear at the start of a line with no preceding tokens.
+replace_directive //go:linkname timeSleep time.Sleep with //go:linkname timeSleep time.XgoRealSleep
+</patch>

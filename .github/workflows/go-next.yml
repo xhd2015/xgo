@@ -12,25 +12,32 @@ on:
 jobs:
 
   tests-with-go-next:
-    # go1.27 preview; enable when a stable release candidate is available
-    # see https://tip.golang.org/doc/devel/release#go1.27
+    # go1.28 preview placeholder; enable when a release candidate is available.
+    # go1.27rc2 is covered by go1-27.yml / go1-27-fast.yml.
+    # see https://tip.golang.org/doc/devel/release#go1.28
     if: false
     strategy:
       matrix:
         os: [ ubuntu-latest ]
-        go: [ '1.27' ]
+        # Use the full RC tag once published, e.g. '1.28rc1'
+        go: [ '1.28' ]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Go
+      # Install under $RUNNER_TEMP so GOROOT is outside the module tree.
       run: |
-        curl -fsSL -o go.tar.gz "https://go.dev/dl/go${{matrix.go}}.linux-amd64.tar.gz"
-        mkdir setup
-        mkdir setup/gopath
-        tar -C setup -xzf go.tar.gz
-        ls setup
-        GOROOT=$PWD/setup/go PATH=$PWD/setup/go/bin:$PATH go version
-    
+        set -euo pipefail
+        dest="${RUNNER_TEMP}/go-next"
+        curl -fsSL -o "${RUNNER_TEMP}/go.tar.gz" "https://go.dev/dl/go${{matrix.go}}.linux-amd64.tar.gz"
+        mkdir -p "$dest" "${RUNNER_TEMP}/gopath"
+        tar -C "$dest" -xzf "${RUNNER_TEMP}/go.tar.gz"
+        echo "GOROOT=${dest}/go" >> "$GITHUB_ENV"
+        echo "GOPATH=${RUNNER_TEMP}/gopath" >> "$GITHUB_ENV"
+        echo "${dest}/go/bin" >> "$GITHUB_PATH"
+        echo "${RUNNER_TEMP}/gopath/bin" >> "$GITHUB_PATH"
+        "${dest}/go/bin/go" version
+
     - name: Test
-      run: GOROOT=$PWD/setup/go GOPATH=$PWD/setup/gopath PATH=$PWD/setup/go/bin:$PWD/setup/gopath/bin:$PATH go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v
+      run: go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v

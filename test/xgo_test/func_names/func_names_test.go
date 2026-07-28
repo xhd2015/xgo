@@ -67,14 +67,18 @@ func TestFuncNames(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Nested closure naming changed across Go versions:
+	// - go1.17–1.20: TestFuncNames.func2
+	// - go1.21–1.26: TestFuncNames.TestFuncNames.func1.func2 (inlining elongated names)
+	// - go1.27+:     TestFuncNames.func1.func1 (compiler uses stable names regardless of inlining;
+	//                see go1.27 release notes "simpler names for function literals")
 	c3Name := "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.TestFuncNames.func1.func2"
 	if goVersion.Major == 1 {
 		if goVersion.Minor <= 20 {
 			c3Name = "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.func2"
+		} else if goVersion.Minor >= 27 {
+			c3Name = "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.func1.func1"
 		}
-		//  else if goVersion.Minor <= 21 {
-		// 	c3Name = "github.com/xhd2015/xgo/test/xgo_test/func_names.TestFuncNames.func1.1"
-		// }
 	}
 
 	var s S

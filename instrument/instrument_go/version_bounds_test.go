@@ -19,3 +19,9 @@ func TestGO_VERSION_26Constant(t *testing.T) {
 		t.Fatalf("GO_VERSION_26 = %d, want 26", goinfo.GO_VERSION_26)
 	}
 }
+
+func TestGO_VERSION_27Constant(t *testing.T) {
+	if goinfo.GO_VERSION_27 != 27 {
+		t.Fatalf("GO_VERSION_27 = %d, want 27", goinfo.GO_VERSION_27)
+	}
+}

@@ -63,5 +63,10 @@ func goMinorVersion() (string, error) {
 	if len(parts) < 2 {
 		return "", fmt.Errorf("unexpected version format: %s", runtime.Version())
 	}
-	return parts[0] + "." + parts[1], nil
+	// Strip prerelease suffix from minor: "27rc2" -> "27" so ResolveVersion("1.27") works.
+	minor := parts[1]
+	if i := strings.IndexFunc(minor, func(r rune) bool { return r < '0' || r > '9' }); i > 0 {
+		minor = minor[:i]
+	}
+	return parts[0] + "." + minor, nil
 }

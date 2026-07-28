@@ -54,9 +54,12 @@ func TestMarshalCyclic(t *testing.T) {
 			t.Errorf("expect 1 root, but got %d", n)
 		}
 	} else {
-		expectContains := `unsupported value: encountered a cycle via []*cyclic.Ref`
-		if !strings.Contains(dataStr, expectContains) {
-			t.Errorf("expect contains %q, but not found", expectContains)
+		// encoding/json cycle errors changed wording across versions / json v2:
+		// - older: "encountered a cycle via []*cyclic.Ref"
+		// - go1.27+ (and json v2): "encountered a cycle via *cyclic.Ref"
+		if !strings.Contains(dataStr, "unsupported value: encountered a cycle via") ||
+			!strings.Contains(dataStr, "cyclic.Ref") {
+			t.Errorf("expect cycle unsupported-value error mentioning cyclic.Ref, got %q", dataStr)
 		}
 	}
 }
