@@ -1,0 +1,31 @@
+name: Go 1-27 Fast
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  test-go1-27-fast:
+    # Go 1.27 is not yet stable; test against the latest published RC.
+    # Switch go-version to '1.27' (or setup-go) once go1.27.0 is released.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go 1.27rc2
+      run: |
+        set -euo pipefail
+        curl -fsSL -o go.tar.gz "https://go.dev/dl/go1.27rc2.linux-amd64.tar.gz"
+        mkdir -p setup/gopath
+        tar -C setup -xzf go.tar.gz
+        echo "GOROOT=$PWD/setup/go" >> "$GITHUB_ENV"
+        echo "GOPATH=$PWD/setup/gopath" >> "$GITHUB_ENV"
+        echo "$PWD/setup/go/bin" >> "$GITHUB_PATH"
+        echo "$PWD/setup/gopath/bin" >> "$GITHUB_PATH"
+        "$PWD/setup/go/bin/go" version
+
+    - name: Test
+      run: go run ./script/run-test --log-debug -v --fast

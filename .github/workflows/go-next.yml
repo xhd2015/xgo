@@ -12,13 +12,15 @@ on:
 jobs:
 
   tests-with-go-next:
-    # go1.27 preview; enable when a stable release candidate is available
-    # see https://tip.golang.org/doc/devel/release#go1.27
+    # go1.28 preview placeholder; enable when a release candidate is available.
+    # go1.27rc2 is covered by go1-27.yml / go1-27-fast.yml.
+    # see https://tip.golang.org/doc/devel/release#go1.28
     if: false
     strategy:
       matrix:
         os: [ ubuntu-latest ]
-        go: [ '1.27' ]
+        # Use the full RC tag once published, e.g. '1.28rc1'
+        go: [ '1.28' ]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4

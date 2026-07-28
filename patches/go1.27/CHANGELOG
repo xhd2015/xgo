@@ -38,3 +38,5 @@ Seeded from `patches/go1.26`. Compared anchors against `go-release/go1.27rc2`.
 - `patch/legacy/adapter_go1.27.go` added; shared adapter extended to go1.24–go1.27
   (`adapter_go1.24_25_26_27.go`)
 - `__config__.json` version bumped to `go1.27+`
+- CI: `.github/workflows/go1-27.yml` and `go1-27-fast.yml` (install go1.27rc2 from
+  go.dev/dl until stable ships); `go-next.yml` retargeted to go1.28 placeholder
