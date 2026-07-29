@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/xhd2015/xgo/support/flag"
@@ -43,6 +44,11 @@ type options struct {
 	// amend the --options-from-file.
 	// it will take higher priority
 	mockRules []string
+	// --mock-rule-include-as-main-module / XGO_MOCK_RULE_INCLUDE_AS_MAIN_MODULE:
+	// effective comma-separated module paths (flag wins over env) that count as
+	// main for mock_rules main_module matching / related instrumentation only
+	// (additive to the real process main module). Empty = real main only.
+	mockRuleIncludeAsMainModule string
 	// dev only
 	debugWithDlv bool
 	xgoHome      string
@@ -145,6 +151,7 @@ func parseOptions(cmd string, args []string) (*options, error) {
 
 	var optionsFromFile string
 	var mockRules []string
+	var mockRuleIncludeAsMainModule string
 
 	var debugWithDlv bool
 	var xgoHome string
@@ -238,6 +245,10 @@ func parseOptions(cmd string, args []string) (*options, error) {
 			Set: func(v string) {
 				mockRules = append(mockRules, v)
 			},
+		},
+		{
+			Flags: []string{"--mock-rule-include-as-main-module"},
+			Value: &mockRuleIncludeAsMainModule,
 		},
 		{
 			Flags: []string{"--dump-ir"},
@@ -611,6 +622,8 @@ func parseOptions(cmd string, args []string) (*options, error) {
 
 		optionsFromFile: optionsFromFile,
 		mockRules:       mockRules,
+		// Effective list: flag replaces env (whole string); empty flag falls back to env.
+		mockRuleIncludeAsMainModule: firstNonEmpty(mockRuleIncludeAsMainModule, os.Getenv("XGO_MOCK_RULE_INCLUDE_AS_MAIN_MODULE")),
 
 		debugWithDlv: debugWithDlv,
 		xgoHome:      xgoHome,
@@ -647,6 +660,15 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		patchGorootInPlace:  patchGorootInPlace,
 		skipRebuildCompilerAndGo: skipRebuildCompilerAndGo,
 	}, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // parse: --opt=x, --opt x, --opt, but not --opt -x

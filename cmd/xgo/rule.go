@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/xhd2015/xgo/support/fileutil"
 )
@@ -24,12 +25,36 @@ type Rule struct {
 	Action     string  `json:"action"` // include,exclude or empty
 }
 
+// FileOptions is written to options-from-file.json for the instrumented compiler
+// (XGO_COMPILER_OPTIONS_FILE). Keep in sync with patch/legacy/ctxt.Options.
 type FileOptions struct {
 	FilterRules []Rule `json:"filter_rules"`
+	// MockRuleIncludeAsMainModule is additive module paths treated as main for
+	// mock_rules main_module matching only (not process XGO_MAIN_MODULE).
+	MockRuleIncludeAsMainModule []string `json:"mock_rule_include_as_main_module,omitempty"`
 }
 
-func mergeOptionFiles(tmpDir string, optionFromFile string, mockRules []string) (newFile string, content []byte, err error) {
-	if len(mockRules) == 0 {
+// parseModuleList splits a comma-separated module list (CLI/env form).
+func parseModuleList(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]bool, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return out
+}
+
+func mergeOptionFiles(tmpDir string, optionFromFile string, mockRules []string, includeAsMainModules []string) (newFile string, content []byte, err error) {
+	if len(mockRules) == 0 && len(includeAsMainModules) == 0 {
 		if optionFromFile != "" {
 			content, err = fileutil.ReadFile(optionFromFile)
 		}
@@ -65,8 +90,12 @@ func mergeOptionFiles(tmpDir string, optionFromFile string, mockRules []string) 
 	}
 
 	mergedRules = append(mergedRules, rulesFromFiles...)
+	opts.FilterRules = mergedRules
+	if len(includeAsMainModules) > 0 {
+		opts.MockRuleIncludeAsMainModule = includeAsMainModules
+	}
 
-	newOptionFile, err := json.Marshal(FileOptions{FilterRules: mergedRules})
+	newOptionFile, err := json.Marshal(opts)
 	if err != nil {
 		return "", nil, err
 	}

@@ -1,0 +1,2 @@
+# Hero case: flag includes app as main for mock_rules only.
+flags: --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"} --mock-rule-include-as-main-module=github.com/xhd2015/xgo/runtime/test/mock/mock_rule_include_as_main_module/app

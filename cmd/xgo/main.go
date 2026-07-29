@@ -430,7 +430,8 @@ func handleBuild(cmd string, args []string) error {
 		instrumentedGorootNeedRecreate = false
 	}
 
-	optionsFromFile, optionsFromFileContent, err := mergeOptionFiles(sessionTmpDir, opts.optionsFromFile, opts.mockRules)
+	includeAsMainModules := parseModuleList(opts.mockRuleIncludeAsMainModule)
+	optionsFromFile, optionsFromFileContent, err := mergeOptionFiles(sessionTmpDir, opts.optionsFromFile, opts.mockRules, includeAsMainModules)
 	if err != nil {
 		return err
 	}
@@ -773,7 +774,12 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			collectTestTrace = true
 			collectTestTraceDir = stackTraceDir
 		}
-		instrumentUserCodeResult, err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, xgoRaceSafe, goFlag, needUpgrade)
+		// Prefer CLI/env effective list; fall back to list already in options file if any.
+		instrumentIncludeAsMain := includeAsMainModules
+		if len(instrumentIncludeAsMain) == 0 {
+			instrumentIncludeAsMain = opts.MockRuleIncludeAsMainModule
+		}
+		instrumentUserCodeResult, err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, instrumentIncludeAsMain, xgoRuntimeModuleDir, mayHaveCover, overlayFS, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, xgoRaceSafe, goFlag, needUpgrade)
 		if err != nil {
 			return err
 		}

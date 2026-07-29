@@ -48,8 +48,10 @@ type instrumentResult struct {
 }
 
 // goroot is critical for stdlib
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, trapAll string, collectTestTrace bool, collectTestTraceDir string, xgoRaceSafe bool, goFlag bool, triedUpgrade bool) (*instrumentResult, error) {
-	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace)
+// includeAsMainModules: extra module paths treated as main for mock/trap (option B:
+// reclassify packages already on the load graph; do not bulk-load module/...).
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, includeAsMainModules []string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, includeTest bool, rules []Rule, trapPkgs []string, trapAll string, collectTestTrace bool, collectTestTraceDir string, xgoRaceSafe bool, goFlag bool, triedUpgrade bool) (*instrumentResult, error) {
+	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v, includeAsMainModules=%v", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace, includeAsMainModules)
 	if mod == "" {
 		// check vendor dir
 		vendorDir, err := getVendorDir(projectRoot)
@@ -168,7 +170,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	var mainCnt int
 	for _, pkg := range pkgs.Packages {
 		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
-		_, isMain := goinfo.PkgWithinModule(pkgPath, mainModule)
+		isMain := pkgWithinAnyModule(pkgPath, mainModule, includeAsMainModules)
 		if isMain {
 			pkg.Main = true
 			mainCnt++
@@ -211,6 +213,35 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 		return nil, err
 	}
 	logDebug("traverse: cost=%v", time.Since(traverseBegin))
+
+	// Option B: reclassify packages loaded during traverse (deps pulled by
+	// imports/mock-refs) as main when they fall under include-as modules.
+	// Initial load often does not yet include those packages.
+	if len(includeAsMainModules) > 0 {
+		var extraMain int
+		for _, pkg := range pkgs.Packages {
+			if pkg.Main {
+				continue
+			}
+			pkgPath := pkg.LoadPackage.GoPackage.ImportPath
+			if pkgWithinAnyModule(pkgPath, "", includeAsMainModules) {
+				pkg.Main = true
+				extraMain++
+				logDebug("instrument: post-traverse include-as-main pkg=%s", pkgPath)
+			}
+		}
+		if extraMain > 0 {
+			logDebug("instrument: post-traverse extra main pkgs=%d", extraMain)
+			// Collect decls on newly main packages so var trap / resolve stay consistent.
+			newMainPkgs := pkgs.Filter(func(pkg *edit.Package) bool {
+				return pkg.Main && pkg.AllowInstrument
+			})
+			for _, pkg := range newMainPkgs {
+				resolve.CollectDecls(pkg)
+			}
+			mainPkgs = newMainPkgs
+		}
+	}
 
 	logDebug("start instrumentVarTrap: len(mainPkgs)=%d", len(mainPkgs))
 	err = instrument_var.TrapVariables(pkgs, &recorder)
@@ -479,6 +510,25 @@ func splitCommaList(s string) []string {
 		trimmedList = append(trimmedList, item)
 	}
 	return trimmedList
+}
+
+// pkgWithinAnyModule reports whether pkgPath is under realMain or any extra
+// module path (mock-rule include-as-main-module, additive).
+func pkgWithinAnyModule(pkgPath string, realMain string, extras []string) bool {
+	if realMain != "" {
+		if _, ok := goinfo.PkgWithinModule(pkgPath, realMain); ok {
+			return true
+		}
+	}
+	for _, m := range extras {
+		if m == "" || m == realMain {
+			continue
+		}
+		if _, ok := goinfo.PkgWithinModule(pkgPath, m); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func setupLocalXgoGenDir(xgoGenDir string) error {

@@ -1,0 +1,3 @@
+# Env-only include-as-main-module (no flag).
+flags: --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"}
+env: XGO_MOCK_RULE_INCLUDE_AS_MAIN_MODULE=github.com/xhd2015/xgo/runtime/test/mock/mock_rule_include_as_main_module/app

@@ -1,0 +1,2 @@
+# Two extra main modules via comma-separated flag value.
+flags: --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"} --mock-rule-include-as-main-module=github.com/xhd2015/xgo/runtime/test/mock/mock_rule_include_as_main_module/app,github.com/xhd2015/xgo/runtime/test/mock/mock_rule_include_as_main_module/lib

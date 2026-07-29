@@ -1,0 +1,3 @@
+# Pricing-like mock rules: only main_module funcs, then exclude all else.
+# No --mock-rule-include-as-main-module: app must stay unmockable.
+flags: --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"}
