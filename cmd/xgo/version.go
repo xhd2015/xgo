@@ -6,9 +6,9 @@ import "fmt"
 // they correspond to a unique commit.
 // VERSION is manually updated when needed a new tag
 // if you did not install git hooks, you can manually update them
-const VERSION = "1.2.2"
-const REVISION = "f0770f832ab8752ad9c58648349fef1a0baa9cb5+1"
-const NUMBER = 645
+const VERSION = "1.2.3"
+const REVISION = "abeee37caf9b64d33f4b7f3f574a1745f0a09805+1"
+const NUMBER = 646
 
 // Rationale: xgo consists of these modules:
 //

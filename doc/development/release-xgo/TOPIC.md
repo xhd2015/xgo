@@ -1,11 +1,11 @@
 # Release xgo (tag + draft GitHub release)
 
-Operational runbook for cutting a new xgo version: dual tags, draft GitHub release, multi-arch binaries. For the short checklist only, see [CONTRIBUTING.md](../../../CONTRIBUTING.md#release-xgo).
+Operational runbook for cutting a new xgo version: tag `vX.Y.Z`, optional `runtime/vX.Y.Z`, a **draft** GitHub release, and multi-arch binaries. For the short checklist only, see [CONTRIBUTING.md](../../../CONTRIBUTING.md#release-xgo).
 
 ## When to use
 
-- Features/fixes are on (or about to land on) `master` and you need a versioned ship
-- You need tags `vX.Y.Z` + `runtime/vX.Y.Z`, a **draft** GitHub release, and `xgo-release/` tarballs
+- Features/fixes are on (or about to land on) `master` and you need a versioned ship of the **xgo tool** (and sometimes the **runtime module**)
+- You need tag `vX.Y.Z`, a **draft** GitHub release, and `xgo-release/` tarballs (plus `runtime/vX.Y.Z` when the runtime module is part of the ship)
 
 ## When not to use
 
@@ -25,23 +25,39 @@ Operational runbook for cutting a new xgo version: dual tags, draft GitHub relea
 | Artifact | Role |
 |----------|------|
 | `cmd/xgo/version.go` | `VERSION`, `REVISION`, `NUMBER`, `CORE_VERSION`, `CORE_REVISION`, `CORE_NUMBER` |
-| `runtime/core/version.go` | Runtime module version; kept in sync via generate / commit hooks |
+| `runtime/core/version.go` | Runtime module version; kept in sync via generate / commit hooks when core fields change |
 | `cmd/xgo/asset/runtime_gen/core/version.go` | Generated mirror of runtime version constants |
-| Tags `vX.Y.Z` and `runtime/vX.Y.Z` | Toolchain tag + Go module tag (same version string) |
+| Tag `vX.Y.Z` | Toolchain / root module tag (`go install …/cmd/xgo@v…`, GitHub release) |
+| Tag `runtime/vX.Y.Z` | Go module tag for `github.com/xhd2015/xgo/runtime` — **only when that module ships** |
 | `xgo-release/X.Y.Z/*.tar.gz` + `SHASUMS256.txt` | Build output (not committed) |
 | GitHub **draft** release on `vX.Y.Z` | Human review before Publish |
 
-**`CORE_VERSION` rule**
+### Release modes
+
+Pick a mode before bumping versions. Dual-tag is **not** automatic for every ship.
+
+| Situation | Bump `VERSION` | Bump `CORE_VERSION`? | Tag `vX.Y.Z` | Tag `runtime/vX.Y.Z` |
+|-----------|----------------|----------------------|--------------|----------------------|
+| **Tool-only** — `cmd/xgo`, patches, docs, or `runtime/test` only; published runtime lib unchanged; xgo does **not** need a newer runtime | Yes | **No** — leave previous | **Yes** | **No** |
+| **Full (dual-tag)** — published runtime lib changed, and/or xgo depends on matching runtime / core identity users couple | Yes | **Yes** — set equal to `VERSION` | **Yes** | **Yes** |
+
+**Published runtime** (counts toward full mode): packages users import under `runtime/` (`core`, `mock`, `trap`, …) and version constants when `CORE_*` is bumped.
+
+**Does not force full mode by itself:** `runtime/test/…`, docs, CI, tooling-only paths. Those are still **tool-only** if the installable runtime module is unchanged.
+
+Same conditional rule as [CONTRIBUTING.md — Release xgo](../../../CONTRIBUTING.md#release-xgo): tag `runtime/v…` **if there is a runtime update** (or a core sync that needs a new module version).
+
+### `CORE_VERSION` rule
 
 - Always bump `VERSION` for a release tag.
-- Set `CORE_VERSION = VERSION` when the release changes **cmd/xgo and/or runtime** behavior users depend on (e.g. new Go minor support). That is the usual case.
-- Leave `CORE_VERSION` unchanged only for rare non-core packaging bumps.
+- Set `CORE_VERSION = VERSION` when this release changes **core** behavior that couples tool and runtime (runtime lib change, or xgo that requires a matching runtime / core identity — e.g. new Go minor support that needs both). That is the **full** mode case.
+- Leave `CORE_VERSION` unchanged for **tool-only** ships (new flags, instrumentation UX, packaging that does not need a newer runtime). Leaving `CORE_VERSION` behind `VERSION` is intentional; the runtime compatibility check treats equal version strings as compatible.
 
 When `CORE_VERSION == VERSION`, set `CORE_REVISION` / `CORE_NUMBER` to match `REVISION` / `NUMBER`, then run generate so runtime copies stay aligned.
 
 ## Procedure
 
-Replace `X.Y.Z` with the next version (e.g. `1.2.2`).
+Replace `X.Y.Z` with the next version (e.g. `1.2.3`). Choose **tool-only** or **full** first (see [Release modes](#release-modes)).
 
 ### 1. Land work on master
 
@@ -63,8 +79,9 @@ git checkout -B release-vX.Y.Z origin/master
 
 Edit `cmd/xgo/version.go`:
 
-- Set `VERSION = "X.Y.Z"`
-- Usually set `CORE_VERSION = "X.Y.Z"` as well
+- Always set `VERSION = "X.Y.Z"`
+- **Full mode:** also set `CORE_VERSION = "X.Y.Z"`
+- **Tool-only:** leave `CORE_VERSION` / `CORE_REVISION` / `CORE_NUMBER` at the previous core values
 
 ### 4. Generate
 
@@ -72,12 +89,14 @@ Edit `cmd/xgo/version.go`:
 go run ./script/generate
 ```
 
-If `CORE_VERSION == VERSION`, ensure `CORE_REVISION` / `CORE_NUMBER` match `REVISION` / `NUMBER`. Fix manually and re-run generate if needed. Confirm:
+If `CORE_VERSION == VERSION` (full mode), ensure `CORE_REVISION` / `CORE_NUMBER` match `REVISION` / `NUMBER`. Fix manually and re-run generate if needed. Confirm:
 
 ```sh
 rg 'const (VERSION|REVISION|NUMBER|CORE_)' cmd/xgo/version.go
 rg 'const (VERSION|REVISION|NUMBER)' runtime/core/version.go
 ```
+
+In tool-only mode, runtime core constants should still match the **previous** core version, not the new `VERSION`.
 
 ### 5. Release commit
 
@@ -86,26 +105,37 @@ git add -A
 git commit -m "release vX.Y.Z"
 ```
 
-Commit hooks update `REVISION` / `NUMBER` and copy core fields into `runtime/core/version.go`.  
+Commit hooks update `REVISION` / `NUMBER` and, when core fields change, copy them into `runtime/core/version.go`.  
 `REVISION` typically points at the **pre-release tip** with a `+1` suffix (same pattern as historical tags), not necessarily the release commit SHA itself.
 
 ### 6. Tag
 
-For normal releases, create **both** tags:
+Always create the toolchain tag:
 
 ```sh
 git tag vX.Y.Z
+```
+
+**Full mode only** — also create the runtime module tag:
+
+```sh
 git tag runtime/vX.Y.Z
 ```
+
+**Tool-only:** do **not** create `runtime/vX.Y.Z`.
 
 ### 7. Push commit and tags
 
 ```sh
 git push origin HEAD:master   # or open a PR if branch protection requires it
-git push origin vX.Y.Z runtime/vX.Y.Z
+git push origin vX.Y.Z
+# full mode only:
+git push origin runtime/vX.Y.Z
 ```
 
 ### 8. Draft GitHub release
+
+**Full mode** notes (include runtime upgrade):
 
 ```sh
 gh release create vX.Y.Z \
@@ -126,6 +156,36 @@ go install github.com/xhd2015/xgo/cmd/xgo@vX.Y.Z
 # update runtime
 go get github.com/xhd2015/xgo/runtime@vX.Y.Z
 ```
+
+For documentation, see https://github.com/xhd2015/xgo.
+
+## What's Changed
+
+* …
+
+**Full Changelog**: https://github.com/xhd2015/xgo/compare/vPREV...vX.Y.Z
+EOF
+```
+
+**Tool-only** notes (no runtime tag / no `go get` of a new runtime version):
+
+```sh
+gh release create vX.Y.Z \
+  --draft \
+  --title "Xgo vX.Y.Z" \
+  --notes-file - <<'EOF'
+This release upgrades `xgo` from vPREV to **vX.Y.Z**
+
+Major feature:
+- …
+
+To install `xgo` vX.Y.Z:
+
+```sh
+go install github.com/xhd2015/xgo/cmd/xgo@vX.Y.Z
+```
+
+Runtime need not be upgraded for this release (existing `github.com/xhd2015/xgo/runtime` at the previous core version remains compatible).
 
 For documentation, see https://github.com/xhd2015/xgo.
 
@@ -173,32 +233,40 @@ Edit notes on GitHub if needed, then **Publish release**. Agents should stop at 
 
 ```sh
 # constants
-rg 'const VERSION' cmd/xgo/version.go runtime/core/version.go
+rg 'const (VERSION|CORE_VERSION)' cmd/xgo/version.go
+rg 'const VERSION' runtime/core/version.go
 
-# tags on the release commit
-git show-ref vX.Y.Z runtime/vX.Y.Z
+# toolchain tag (always)
+git show-ref vX.Y.Z
 git log -1 --oneline vX.Y.Z
+
+# full mode only — runtime module tag
+git show-ref runtime/vX.Y.Z
 
 # draft + assets
 gh release view vX.Y.Z --json isDraft,url,assets
 ```
 
-Expect `isDraft: true` until someone publishes; assets should list all tarballs plus `SHASUMS256.txt`.
+Expect `isDraft: true` until someone publishes; assets should list all tarballs plus `SHASUMS256.txt`.  
+In tool-only mode, `runtime/vX.Y.Z` must **not** exist.
 
 ## Pitfalls
 
 | Wrong | Correct |
 |-------|---------|
-| Tag without bumping `VERSION` | Bump `VERSION` (and usually `CORE_VERSION`), generate, then commit + tag |
+| Tag without bumping `VERSION` | Bump `VERSION`, generate, then commit + tag |
+| Always dual-tag even with no runtime / core change | **Tool-only:** `vX.Y.Z` only; dual-tag only in **full** mode |
+| Skip `runtime/v…` after bumping `CORE_VERSION` and syncing `runtime/core/version.go` | **Full** mode: dual-tag so `go get …/runtime@v…` stays aligned |
+| Tag `runtime/v…` without a real runtime/core ship | Prefer tool-only; do not invent a runtime module version |
 | `CORE_VERSION == VERSION` but stale `CORE_REVISION` | Sync `CORE_REVISION` / `CORE_NUMBER` to `REVISION` / `NUMBER`, re-generate |
 | Push tags only | Push the **release commit** to `master` (or via PR) **and** tags |
 | Publish empty release then scramble for binaries | **Draft** → `build-release` → `gh release upload` → human publish |
-| Only one of `vX.Y.Z` / `runtime/vX.Y.Z` | Dual-tag for normal releases so `go install` and `go get …/runtime@v…` stay aligned |
+| Tool-only notes that tell users to `go get runtime@vX.Y.Z` | Omit that line when there is no `runtime/vX.Y.Z` tag |
 | Building in a dirty feature worktree | Use clean `origin/master` / `release-vX.Y.Z` worktree |
 
 ## Related
 
-- [CONTRIBUTING.md — Release xgo](../../../CONTRIBUTING.md#release-xgo)
+- [CONTRIBUTING.md — Release xgo](../../../CONTRIBUTING.md#release-xgo) — short checklist; same conditional runtime-tag rule
 - [`script/build-release`](../../../script/build-release)
 - [`script/generate`](../../../script/generate) (`cmd/xgo/version.go`, `runtime/core/version.go`)
 - [patches/PROMPT_TEMPLATE.md](../../../patches/PROMPT_TEMPLATE.md) — add Go minor support **before** a release that advertises it
