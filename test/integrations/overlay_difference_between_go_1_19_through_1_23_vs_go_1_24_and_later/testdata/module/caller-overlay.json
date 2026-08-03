@@ -1,0 +1,5 @@
+{
+  "Replace": {
+    "subject.go": "replacement/subject.go"
+  }
+}
