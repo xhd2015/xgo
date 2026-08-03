@@ -172,6 +172,19 @@ func handleBuild(cmd string, args []string) error {
 	progFlags := opts.progFlags
 	flagA := opts.flagA
 	projectDir := opts.projectDir
+	overlayBaseDir := projectDir
+	if overlayBaseDir == "" {
+		overlayBaseDir, err = os.Getwd()
+		if err != nil {
+			return fmt.Errorf("resolve overlay base directory: %w", err)
+		}
+	} else {
+		overlayBaseDir, err = filepath.Abs(overlayBaseDir)
+		if err != nil {
+			return fmt.Errorf("resolve overlay base directory: %w", err)
+		}
+	}
+	overlayPathOpts := overlay.PathOptions{BaseDir: overlayBaseDir}
 	output := opts.output
 	flagV := opts.flagV
 	flagX := opts.flagX
@@ -672,12 +685,19 @@ func handleBuild(cmd string, args []string) error {
 			logDebug("debug compile package: %s", debugCompilePkg)
 		}
 		overlayFS := overlay.MakeOverlay()
+		var callerGoOverlay *overlay.GoOverlay
+		var callerGoOverlayRaw *overlay.GoOverlay
 		if overlayFile != "" {
 			goOverlay, err := overlay.ReadGoOverlay(overlayFile)
 			if err != nil {
 				return err
 			}
-			for k, v := range goOverlay.Replace {
+			callerGoOverlayRaw = overlay.ResolveGoOverlayPaths(goOverlay, overlayPathOpts)
+			callerGoOverlay = overlay.CanonicalizeGoOverlay(goOverlay, overlayPathOpts)
+			for k, v := range callerGoOverlayRaw.Replace {
+				overlayFS.OverrideFile(k, v)
+			}
+			for k, v := range callerGoOverlay.Replace {
 				overlayFS.OverrideFile(k, v)
 			}
 		}
@@ -747,6 +767,19 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 				xgoRuntimeModuleDir = impResult.runtimeModuleDir
 			}
 		}
+		// Runtime preparation may create source replacements (for example, to
+		// add its trace import). Caller overlays describe the source the user
+		// asked xgo to build, so restore them before package loading and
+		// instrumentation. The final overlay composition below retains xgo's
+		// instrumentation of those replacements.
+		if callerGoOverlayRaw != nil {
+			for source, target := range callerGoOverlayRaw.Replace {
+				overlayFS.OverrideFile(source, target)
+			}
+			for source, target := range callerGoOverlay.Replace {
+				overlayFS.OverrideFile(source, target)
+			}
+		}
 
 		var opts FileOptions
 		if len(optionsFromFileContent) > 0 {
@@ -802,12 +835,26 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		}
 
 		if len(overlayFS) > 0 {
-			goOverlay, err := overlayFS.MakeGoOverlay(filepath.Join(localXgoGenDir, "overlay"), overlay.Options{
+			generatedGoOverlay, err := overlayFS.MakeGoOverlay(filepath.Join(localXgoGenDir, "overlay"), overlay.Options{
 				NoLineDirective: noLineDirective,
 				PathMappings:    getPathMappings(instrumentGoroot, projectRoot),
 			})
 			if err != nil {
 				return err
+			}
+			goOverlay, err := overlay.ComposeGoOverlays(callerGoOverlay, generatedGoOverlay, overlayPathOpts)
+			if err != nil {
+				return fmt.Errorf("compose go overlays: %w", err)
+			}
+			// Go uses caller-supplied paths literally. Restore those source keys
+			// after composing with the canonical identities used by xgo's loader.
+			if callerGoOverlayRaw != nil {
+				for source := range callerGoOverlayRaw.Replace {
+					canonicalSource := overlay.CanonicalizeAbsFile(source, overlayPathOpts)
+					if target, ok := goOverlay.Replace[canonicalSource]; ok {
+						goOverlay.Replace[source] = target
+					}
+				}
 			}
 			if len(goOverlay.Replace) > 0 {
 				overlayFile = filepath.Join(localXgoGenDir, "overlay.json")
