@@ -1,4 +1,4 @@
-# Go 1.24 is the first version whose vet applies caller overlays. Older
-# toolchains are covered by the compatibility boundary documented in this test.
+# This fixture needs Go 1.24+; the pre-1.24 native vet overlay boundary is
+# documented in test/integrations/overlay_difference_between_go_1_19_through_1_23_vs_go_1_24_and_later.
 go: 1.24
 flags: -overlay=caller-overlay.json --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"} -timeout=120s

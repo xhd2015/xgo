@@ -185,6 +185,9 @@ func handleBuild(cmd string, args []string) error {
 		}
 	}
 	overlayPathOpts := overlay.PathOptions{BaseDir: overlayBaseDir}
+	if overlayFile := opts.overlay; overlayFile != "" {
+		opts.overlay = string(overlay.ResolveAbsFile(overlay.AbsFile(overlayFile), overlayPathOpts))
+	}
 	output := opts.output
 	flagV := opts.flagV
 	flagX := opts.flagX
