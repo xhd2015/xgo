@@ -1,7 +1,7 @@
 package overlay_difference_between_go_1_19_through_1_23_vs_go_1_24_and_later
 
 import (
-	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,42 +21,8 @@ func runNativeGoVetOverlayFixture(t *testing.T) ([]byte, error) {
 	t.Helper()
 
 	fixture := t.TempDir()
-	writeFile(t, fixture, "go.mod", "module example.com/native-overlay-vet\n\ngo 1.19\n")
-	writeFile(t, fixture, "subject.go", `package target
-
-import _ "example.com/native-overlay-vet/not_present"
-
-func Value() string {
-	return "original"
-}
-`)
-	writeFile(t, fixture, filepath.Join("replacement", "subject.go"), `package target
-
-func Value() string { return "caller replacement" }
-`)
-	writeFile(t, fixture, "subject_test.go", `package target
-
-import "testing"
-
-func TestValue(t *testing.T) {
-	if got, want := Value(), "caller replacement"; got != want {
-		t.Fatalf("Value() = %q, want %q", got, want)
-	}
-}
-`)
-
+	copyTree(t, "testdata/module", fixture)
 	overlayFile := filepath.Join(fixture, "caller-overlay.json")
-	overlayData, err := json.Marshal(struct {
-		Replace map[string]string
-	}{Replace: map[string]string{
-		"subject.go": "replacement/subject.go",
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(overlayFile, overlayData, 0o644); err != nil {
-		t.Fatal(err)
-	}
 
 	cmd := exec.Command("go", "test", "-count=1", "-overlay", overlayFile, ".")
 	cmd.Dir = fixture
@@ -64,13 +30,36 @@ func TestValue(t *testing.T) {
 	return cmd.CombinedOutput()
 }
 
-func writeFile(t *testing.T, root, name, content string) {
+func copyTree(t *testing.T, source, destination string) {
 	t.Helper()
-	path := filepath.Join(root, name)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(destination, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		in, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(out, in)
+		closeErr := out.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
+	}); err != nil {
 		t.Fatal(err)
 	}
 }
