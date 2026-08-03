@@ -1,4 +1,4 @@
-//go:build go1.19 && !go1.25
+//go:build go1.19 && !go1.24
 
 package external_overlay_composition
 
@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-// Go 1.19 through 1.24 vet the original source instead of the caller's
+// Go 1.19 through 1.23 vet the original source instead of the caller's
 // overlay replacement. Keep this known toolchain behavior explicit so a
 // future xgo change does not mistake it for an overlay-composition failure.
-func TestVetDoesNotApplyCallerOverlayBeforeGo125(t *testing.T) {
+func TestVetDoesNotApplyCallerOverlayBeforeGo124(t *testing.T) {
 	t.Parallel()
 
 	output, err := runExternalOverlayFixture(t, "vet_module")

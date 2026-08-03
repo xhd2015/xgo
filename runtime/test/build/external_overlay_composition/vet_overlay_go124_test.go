@@ -1,11 +1,11 @@
-//go:build go1.25
+//go:build go1.24
 
 package external_overlay_composition
 
 import "testing"
 
-// Go 1.25 and newer apply the caller overlay while vetting this fixture.
-func TestVetAppliesCallerOverlayAtGo125(t *testing.T) {
+// Go 1.24 and newer apply the caller overlay while vetting this fixture.
+func TestVetAppliesCallerOverlayAtGo124(t *testing.T) {
 	t.Parallel()
 
 	output, err := runExternalOverlayFixture(t, "vet_module")
