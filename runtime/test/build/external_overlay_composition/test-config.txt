@@ -1,7 +1,4 @@
-# The nested fixture command inherits this environment. Keeping mock selection
-# here makes this a normal per-test runner configuration rather than test-code
-# command construction.
-env: XGO_FLAGS=--mock-rule\ {"main_module":true,"kind":"func","action":"include"}\ --mock-rule\ {"any":true,"action":"exclude"}
-
-# The fixture runs xgo once per assertion and can be slower on Windows.
-flags: -timeout=120s
+# Go 1.24 is the first version whose vet applies caller overlays. Older
+# toolchains are covered by the compatibility boundary documented in this test.
+go: 1.24
+flags: -overlay=caller-overlay.json --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"} -timeout=120s
