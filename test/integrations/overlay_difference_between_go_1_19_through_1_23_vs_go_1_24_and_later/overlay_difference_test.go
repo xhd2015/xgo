@@ -5,22 +5,28 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-// Native Go does not apply this caller overlay while vetting. This is kept as
-// a separate integration check from xgo's composition behavior: all supported
-// Go versions must reject the vet error in the original source.
-func TestNativeGoVetUsesOriginalSourceDespiteCallerOverlay(t *testing.T) {
+// TestNativeGoVetOverlayImportResolution documents the Go 1.24 compatibility
+// boundary for vet's package loading: Go 1.19 through 1.23 resolve imports
+// from the original source, while Go 1.24 and later resolve them through the
+// caller overlay. Version-specific assertions live in build-tagged files.
+func TestNativeGoVetOverlayImportResolution(t *testing.T) {
+	output, err := runNativeGoVetOverlayFixture(t)
+	assertNativeGoVetOverlayOutcome(t, output, err)
+}
+
+func runNativeGoVetOverlayFixture(t *testing.T) ([]byte, error) {
+	t.Helper()
+
 	fixture := t.TempDir()
 	writeFile(t, fixture, "go.mod", "module example.com/native-overlay-vet\n\ngo 1.19\n")
 	writeFile(t, fixture, "subject.go", `package target
 
-import "fmt"
+import _ "example.com/native-overlay-vet/not_present"
 
 func Value() string {
-	fmt.Printf("%d", "not a number")
 	return "original"
 }
 `)
@@ -43,7 +49,7 @@ func TestValue(t *testing.T) {
 	overlayData, err := json.Marshal(struct {
 		Replace map[string]string
 	}{Replace: map[string]string{
-		filepath.Join(fixture, "subject.go"): filepath.Join(fixture, "replacement", "subject.go"),
+		"subject.go": "replacement/subject.go",
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -55,13 +61,7 @@ func TestValue(t *testing.T) {
 	cmd := exec.Command("go", "test", "-count=1", "-overlay", overlayFile, ".")
 	cmd.Dir = fixture
 	cmd.Env = append(os.Environ(), "GOCACHE="+filepath.Join(fixture, "go-cache"), "GOFLAGS=", "GOWORK=off")
-	output, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("native go test unexpectedly accepted caller overlay:\n%s", output)
-	}
-	if !strings.Contains(string(output), "fmt.Printf format %d") {
-		t.Fatalf("want vet error from original source, got:\n%s", output)
-	}
+	return cmd.CombinedOutput()
 }
 
 func writeFile(t *testing.T, root, name, content string) {
