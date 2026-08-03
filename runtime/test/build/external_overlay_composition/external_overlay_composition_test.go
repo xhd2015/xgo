@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -38,18 +37,15 @@ func runExternalOverlayFixture(t *testing.T, fixture string) ([]byte, error) {
 	overlayFile := filepath.Join(fixtureDir, "caller-overlay.json")
 	writeOverlay(t, overlayFile, original, replacement)
 
-	command, args := xgoTestCommand(t)
-	args = append(args,
-		"test",
+	args := []string{
+		"run", "./cmd/xgo", "test",
 		"--project-dir", fixtureDir,
 		"-count=1",
 		"-overlay", overlayFile,
-		"--mock-rule", `{"main_module":true,"kind":"func","action":"include"}`,
-		"--mock-rule", `{"any":true,"action":"exclude"}`,
 		".",
-	)
+	}
 
-	cmd := exec.Command(command, args...)
+	cmd := exec.Command("go", args...)
 	cmd.Dir = xgoRepoRoot(t)
 	cmd.Env = append(os.Environ(),
 		"GOCACHE="+filepath.Join(t.TempDir(), "go-cache"),
@@ -57,17 +53,6 @@ func runExternalOverlayFixture(t *testing.T, fixture string) ([]byte, error) {
 		"GOWORK=off",
 	)
 	return cmd.CombinedOutput()
-}
-
-func xgoTestCommand(t *testing.T) (string, []string) {
-	t.Helper()
-
-	parts := strings.Fields(os.Getenv("XGO_TEST_COMMAND"))
-	if len(parts) == 0 {
-		return "xgo", nil
-	}
-
-	return parts[0], parts[1:]
 }
 
 func xgoRepoRoot(t *testing.T) string {

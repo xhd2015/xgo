@@ -1,0 +1,7 @@
+# The nested fixture command inherits this environment. Keeping mock selection
+# here makes this a normal per-test runner configuration rather than test-code
+# command construction.
+env: XGO_FLAGS=--mock-rule\ {"main_module":true,"kind":"func","action":"include"}\ --mock-rule\ {"any":true,"action":"exclude"}
+
+# The fixture runs xgo once per assertion and can be slower on Windows.
+flags: -timeout=120s
