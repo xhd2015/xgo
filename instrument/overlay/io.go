@@ -21,6 +21,25 @@ type PathOptions struct {
 	BaseDir string
 }
 
+// OverlayEntry is one caller Replace pair after a single normalize pass.
+// Resolved paths are abs+clean (no EvalSymlinks). Canonical paths add
+// EvalSymlinks so they match the filesystem identity used by package load.
+type OverlayEntry struct {
+	// SourceInput is the Replace key as provided in the overlay JSON.
+	SourceInput AbsFile
+
+	SourceResolved  AbsFile
+	SourceCanonical AbsFile
+	TargetResolved  AbsFile
+	TargetCanonical AbsFile
+}
+
+// ParsedOverlay is the in-memory form of a Go -overlay after one parse pass.
+// Callers apply dual path spellings via methods instead of keeping two maps.
+type ParsedOverlay struct {
+	Entries []OverlayEntry
+}
+
 func (c *GoOverlay) Write(file string) error {
 	overlayData, err := json.Marshal(c)
 	if err != nil {
@@ -42,20 +61,74 @@ func ReadGoOverlay(file string) (*GoOverlay, error) {
 	return &overlay, nil
 }
 
-// CanonicalizeGoOverlay returns an in-memory copy with paths normalized to the
-// filesystem identity used by the Go loader. In particular, macOS callers may
-// supply /var/... while package loading reports /private/var/... for the same
-// file. Keeping one identity lets xgo replace and later compose that file.
-// The caller's JSON file is never modified.
-func ResolveGoOverlayPaths(input *GoOverlay, opts PathOptions) *GoOverlay {
+// ParseGoOverlay walks input.Replace once and records both resolved and
+// canonical spellings for each mapping. The caller's JSON is never modified.
+func ParseGoOverlay(input *GoOverlay, opts PathOptions) *ParsedOverlay {
 	if input == nil {
 		return nil
 	}
-	result := &GoOverlay{Replace: make(Replace, len(input.Replace))}
+	out := &ParsedOverlay{Entries: make([]OverlayEntry, 0, len(input.Replace))}
 	for source, target := range input.Replace {
-		result.Replace[ResolveAbsFile(source, opts)] = ResolveAbsFile(target, opts)
+		srcRes := ResolveAbsFile(source, opts)
+		tgtRes := ResolveAbsFile(target, opts)
+		out.Entries = append(out.Entries, OverlayEntry{
+			SourceInput:     source,
+			SourceResolved:  srcRes,
+			SourceCanonical: evalSymlinksAbs(srcRes),
+			TargetResolved:  tgtRes,
+			TargetCanonical: evalSymlinksAbs(tgtRes),
+		})
+	}
+	return out
+}
+
+// ApplyFileRedirects registers file redirects into overlayFS.
+// When resolved and canonical source spellings differ (e.g. /var vs
+// /private/var on macOS), both keys are registered so either lookup hits.
+func (p *ParsedOverlay) ApplyFileRedirects(fs Overlay) {
+	if p == nil {
+		return
+	}
+	for _, e := range p.Entries {
+		fs.OverrideFile(e.SourceResolved, e.TargetResolved)
+		if e.SourceCanonical != e.SourceResolved {
+			fs.OverrideFile(e.SourceCanonical, e.TargetCanonical)
+		}
+	}
+}
+
+// CanonicalReplace returns the map used for compose and loader identity.
+// When multiple entries collapse to the same canonical source, prefer a
+// mapping whose input key is already the canonical spelling (so an explicit
+// /private/var key supersedes a /var alias, matching prior behavior).
+func (p *ParsedOverlay) CanonicalReplace() Replace {
+	if p == nil {
+		return nil
+	}
+	result := make(Replace, len(p.Entries))
+	for _, e := range p.Entries {
+		prefer := e.SourceInput == e.SourceCanonical
+		if _, exists := result[e.SourceCanonical]; !exists || prefer {
+			result[e.SourceCanonical] = e.TargetCanonical
+		}
 	}
 	return result
+}
+
+// ProjectOntoCallerSources copies composed targets onto the resolved source
+// spellings that Go's -overlay may see literally.
+func (p *ParsedOverlay) ProjectOntoCallerSources(composed *GoOverlay) {
+	if p == nil || composed == nil {
+		return
+	}
+	if composed.Replace == nil {
+		composed.Replace = make(Replace)
+	}
+	for _, e := range p.Entries {
+		if target, ok := composed.Replace[e.SourceCanonical]; ok {
+			composed.Replace[e.SourceResolved] = target
+		}
+	}
 }
 
 func ResolveAbsFile(file AbsFile, opts PathOptions) AbsFile {
@@ -66,25 +139,15 @@ func ResolveAbsFile(file AbsFile, opts PathOptions) AbsFile {
 	return AbsFile(filepath.ToSlash(filepath.Clean(path)))
 }
 
-func CanonicalizeGoOverlay(input *GoOverlay, opts PathOptions) *GoOverlay {
-	if input == nil {
-		return nil
-	}
-	result := &GoOverlay{Replace: make(Replace, len(input.Replace))}
-	for source, target := range input.Replace {
-		canonicalSource := CanonicalizeAbsFile(source, opts)
-		// Prefer a mapping already expressed using the canonical source path.
-		// This lets an instrumented mapping supersede an alias retained from a
-		// caller overlay (for example /private/var over /var on macOS).
-		if _, exists := result.Replace[canonicalSource]; !exists || source == canonicalSource {
-			result.Replace[canonicalSource] = CanonicalizeAbsFile(target, opts)
-		}
-	}
-	return result
+// CanonicalizeAbsFile resolves and symlink-canonicalizes a single path.
+// Prefer ParseGoOverlay when normalizing a full overlay so each path is
+// resolved only once.
+func CanonicalizeAbsFile(file AbsFile, opts PathOptions) AbsFile {
+	return evalSymlinksAbs(ResolveAbsFile(file, opts))
 }
 
-func CanonicalizeAbsFile(file AbsFile, opts PathOptions) AbsFile {
-	path := filepath.FromSlash(string(ResolveAbsFile(file, opts)))
+func evalSymlinksAbs(file AbsFile) AbsFile {
+	path := filepath.FromSlash(string(file))
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		path = resolved
 	}
@@ -99,17 +162,19 @@ func CanonicalizeAbsFile(file AbsFile, opts PathOptions) AbsFile {
 // The returned overlay also retains generated mappings that have no caller
 // origin. Cyclic mappings are rejected because they cannot be represented by
 // a usable Go overlay.
-func ComposeGoOverlays(caller, generated *GoOverlay, opts PathOptions) (*GoOverlay, error) {
-	caller = CanonicalizeGoOverlay(caller, opts)
-	generated = CanonicalizeGoOverlay(generated, opts)
+//
+// caller may be nil. generated is parsed in one pass when non-nil.
+func ComposeGoOverlays(caller *ParsedOverlay, generated *GoOverlay, opts PathOptions) (*GoOverlay, error) {
 	combined := make(Replace)
 	if caller != nil {
-		for source, target := range caller.Replace {
+		for source, target := range caller.CanonicalReplace() {
 			combined[source] = target
 		}
 	}
 	if generated != nil {
-		for source, target := range generated.Replace {
+		// Generated paths (from MakeGoOverlay) are already abs; parse once so
+		// relative keys and symlink aliases still share loader identity.
+		for source, target := range ParseGoOverlay(generated, opts).CanonicalReplace() {
 			// A generated mapping is xgo's instrumented version of the
 			// effective source and must take precedence over the caller input.
 			combined[source] = target

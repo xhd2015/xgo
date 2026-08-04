@@ -48,9 +48,9 @@ func TestComposeGoOverlays(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			var caller *GoOverlay
+			var caller *ParsedOverlay
 			if tt.caller != nil {
-				caller = &GoOverlay{Replace: tt.caller}
+				caller = ParseGoOverlay(&GoOverlay{Replace: tt.caller}, PathOptions{})
 			}
 			var generated *GoOverlay
 			if tt.generated != nil {
@@ -72,7 +72,7 @@ func TestComposeGoOverlays(t *testing.T) {
 	}
 }
 
-func TestCanonicalizeGoOverlay(t *testing.T) {
+func TestParseGoOverlayCanonical(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -93,7 +93,8 @@ func TestCanonicalizeGoOverlay(t *testing.T) {
 		AbsFile(filepath.Join(linkDir, "source.go")): AbsFile(filepath.Join(linkDir, "target.go")),
 	}}
 
-	got := CanonicalizeGoOverlay(input, PathOptions{})
+	parsed := ParseGoOverlay(input, PathOptions{})
+	got := parsed.CanonicalReplace()
 	wantSourcePath, err := filepath.EvalSymlinks(filepath.Join(realDir, "source.go"))
 	if err != nil {
 		t.Fatal(err)
@@ -104,12 +105,27 @@ func TestCanonicalizeGoOverlay(t *testing.T) {
 	}
 	wantSource := AbsFile(filepath.ToSlash(wantSourcePath))
 	wantTarget := AbsFile(filepath.ToSlash(wantTargetPath))
-	if got.Replace[wantSource] != wantTarget {
-		t.Fatalf("canonical mapping = %#v, want %q -> %q", got.Replace, wantSource, wantTarget)
+	if got[wantSource] != wantTarget {
+		t.Fatalf("canonical mapping = %#v, want %q -> %q", got, wantSource, wantTarget)
+	}
+	if len(parsed.Entries) != 1 {
+		t.Fatalf("Entries length = %d, want 1", len(parsed.Entries))
+	}
+	e := parsed.Entries[0]
+	if e.SourceResolved == e.SourceCanonical {
+		// On some platforms the link path already equals the real path.
+		return
+	}
+	// One pass records both spellings without a second overlay walk.
+	if e.SourceCanonical != wantSource {
+		t.Fatalf("SourceCanonical = %q, want %q", e.SourceCanonical, wantSource)
+	}
+	if e.TargetCanonical != wantTarget {
+		t.Fatalf("TargetCanonical = %q, want %q", e.TargetCanonical, wantTarget)
 	}
 }
 
-func TestCanonicalizeGoOverlayPrefersCanonicalSource(t *testing.T) {
+func TestParseGoOverlayPrefersCanonicalSource(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -119,12 +135,13 @@ func TestCanonicalizeGoOverlayPrefersCanonicalSource(t *testing.T) {
 	}
 	canonical := CanonicalizeAbsFile(AbsFile(file), PathOptions{})
 	alias := AbsFile(filepath.Join(filepath.Dir(file), "..", filepath.Base(filepath.Dir(file)), filepath.Base(file)))
-	got := CanonicalizeGoOverlay(&GoOverlay{Replace: Replace{
+	parsed := ParseGoOverlay(&GoOverlay{Replace: Replace{
 		alias:     "caller.go",
 		canonical: "generated.go",
 	}}, PathOptions{})
-	if got.Replace[canonical] != "generated.go" {
-		t.Fatalf("canonical source mapping = %q, want generated.go", got.Replace[canonical])
+	got := parsed.CanonicalReplace()
+	if got[canonical] != "generated.go" {
+		t.Fatalf("canonical source mapping = %q, want generated.go", got[canonical])
 	}
 }
 
@@ -146,7 +163,7 @@ func TestComposeGoOverlaysResolvesRelativePathsFromBaseDir(t *testing.T) {
 		}
 	}
 	opts := PathOptions{BaseDir: baseDir}
-	caller := &GoOverlay{Replace: Replace{"subject.go": "replacement/subject.go"}}
+	caller := ParseGoOverlay(&GoOverlay{Replace: Replace{"subject.go": "replacement/subject.go"}}, opts)
 	generated := &GoOverlay{Replace: Replace{"./replacement/subject.go": ".xgo/gen/subject.go"}}
 
 	got, err := ComposeGoOverlays(caller, generated, opts)
@@ -159,10 +176,76 @@ func TestComposeGoOverlaysResolvesRelativePathsFromBaseDir(t *testing.T) {
 		t.Fatalf("composed mapping = %#v, want %q -> %q", got.Replace, wantSource, wantTarget)
 	}
 
-	resolved := ResolveGoOverlayPaths(caller, opts)
+	if len(caller.Entries) != 1 {
+		t.Fatalf("caller entries = %d, want 1", len(caller.Entries))
+	}
 	wantRawSource := AbsFile(filepath.ToSlash(filepath.Join(baseDir, "subject.go")))
-	if resolved.Replace[wantRawSource] != AbsFile(filepath.ToSlash(filepath.Join(baseDir, "replacement/subject.go"))) {
-		t.Fatalf("resolved caller mapping = %#v", resolved.Replace)
+	wantRawTarget := AbsFile(filepath.ToSlash(filepath.Join(baseDir, "replacement/subject.go")))
+	if caller.Entries[0].SourceResolved != wantRawSource {
+		t.Fatalf("SourceResolved = %q, want %q", caller.Entries[0].SourceResolved, wantRawSource)
+	}
+	if caller.Entries[0].TargetResolved != wantRawTarget {
+		t.Fatalf("TargetResolved = %q, want %q", caller.Entries[0].TargetResolved, wantRawTarget)
+	}
+}
+
+func TestProjectOntoCallerSources(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	for _, name := range []string{"subject.go", "replacement/subject.go", "gen/subject.go"} {
+		path := filepath.Join(baseDir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	opts := PathOptions{BaseDir: baseDir}
+	caller := ParseGoOverlay(&GoOverlay{Replace: Replace{"subject.go": "replacement/subject.go"}}, opts)
+	genTarget := CanonicalizeAbsFile("gen/subject.go", opts)
+	composed := &GoOverlay{Replace: Replace{
+		caller.Entries[0].SourceCanonical: genTarget,
+	}}
+
+	caller.ProjectOntoCallerSources(composed)
+	if composed.Replace[caller.Entries[0].SourceResolved] != genTarget {
+		t.Fatalf("projected mapping = %#v, want resolved source -> %q", composed.Replace, genTarget)
+	}
+}
+
+func TestApplyFileRedirectsRegistersBothSpellings(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	realDir := filepath.Join(dir, "real")
+	if err := os.Mkdir(realDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	linkDir := filepath.Join(dir, "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"source.go", "target.go"} {
+		if err := os.WriteFile(filepath.Join(realDir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srcLink := AbsFile(filepath.Join(linkDir, "source.go"))
+	tgtLink := AbsFile(filepath.Join(linkDir, "target.go"))
+	parsed := ParseGoOverlay(&GoOverlay{Replace: Replace{srcLink: tgtLink}}, PathOptions{})
+	if len(parsed.Entries) != 1 {
+		t.Fatalf("entries = %d", len(parsed.Entries))
+	}
+	e := parsed.Entries[0]
+	fs := MakeOverlay()
+	parsed.ApplyFileRedirects(fs)
+	if fs.Get(e.SourceResolved) == nil {
+		t.Fatalf("missing resolved key %q", e.SourceResolved)
+	}
+	if e.SourceCanonical != e.SourceResolved && fs.Get(e.SourceCanonical) == nil {
+		t.Fatalf("missing canonical key %q", e.SourceCanonical)
 	}
 }
 
