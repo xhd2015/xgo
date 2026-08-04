@@ -1,0 +1,3 @@
+# MECE: strace prep on main package; overlay only on a sibling file.
+# Both prep (main) and overlay (helper) must remain effective.
+flags: -overlay=caller-overlay.json --strace --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"} -timeout=120s

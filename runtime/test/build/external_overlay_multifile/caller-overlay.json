@@ -1,0 +1,6 @@
+{
+  "Replace": {
+    "a.go": "replacement/a.go",
+    "b.go": "replacement/b.go"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "Replace": {
+    "helper.go": "replacement/helper.go"
+  }
+}

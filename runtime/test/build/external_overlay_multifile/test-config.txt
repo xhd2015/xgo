@@ -1,0 +1,2 @@
+# MECE: instrument_only / multi-file overlay — both mapped sources must compose + mock.
+flags: -overlay=caller-overlay.json --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"} -timeout=120s

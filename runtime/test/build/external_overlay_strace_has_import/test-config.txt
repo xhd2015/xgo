@@ -1,0 +1,2 @@
+# MECE: replacement already imports runtime/trace; --strace must not break the body.
+flags: -overlay=caller-overlay.json --strace --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"} -timeout=120s

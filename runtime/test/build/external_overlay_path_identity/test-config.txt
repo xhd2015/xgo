@@ -1,0 +1,2 @@
+# Nested xgo invocations (absolute overlay keys + symlink project-dir).
+flags: -timeout=180s
