@@ -709,6 +709,40 @@ func addBlankImport(content string) (string, bool) {
 	return content[:base] + q + content[base:], true
 }
 
+// applyBlankImportThroughOverlay injects import _ "…/runtime/trace" into the
+// effective content of each prep source. Content is read via overlayFS so a
+// prior caller -overlay file redirect is honored: the blank import is applied
+// to the replacement body instead of overwriting it with a copy of the original.
+//
+// When overlay read fails, falls back to the prep-generated file (OverrideFile).
+func applyBlankImportThroughOverlay(overlayFS overlay.Overlay, fileReplace map[overlay.AbsFile]overlay.AbsFile) error {
+	if len(fileReplace) == 0 {
+		return nil
+	}
+	for src, prepTarget := range fileReplace {
+		_, content, err := overlayFS.Read(src)
+		if err != nil {
+			if prepTarget == "" {
+				return fmt.Errorf("read source for blank import %s: %w", src, err)
+			}
+			// Prep already wrote an injected copy of the original; use it as a
+			// file redirect when the effective source is not readable.
+			overlayFS.OverrideFile(src, prepTarget)
+			continue
+		}
+		if strings.Contains(content, constants.RUNTIME_TRACE_PKG) {
+			// Replacement or original already pulls in the trace package.
+			continue
+		}
+		newContent, ok := addBlankImport(content)
+		if !ok {
+			continue
+		}
+		overlayFS.OverrideContent(src, newContent)
+	}
+	return nil
+}
+
 func createGoModPlaceholder(file string, modPath string, goVersion string) error {
 	dir := filepath.Dir(file)
 	err := os.MkdirAll(dir, 0755)

@@ -750,9 +750,12 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 				if impResult.modfile != "" {
 					modfile = impResult.modfile
 				}
-				// override go files, which has auto import _ "github.com/xhd2015/xgo/runtime/trace"
-				for src, target := range impResult.fileReplace {
-					overlayFS.OverrideFile(src, target)
+				// Inject import _ "…/runtime/trace" into the *effective* source
+				// text (after any caller -overlay redirect), so --strace prep
+				// and user overlays compose instead of overwriting each other.
+				err = applyBlankImportThroughOverlay(overlayFS, impResult.fileReplace)
+				if err != nil {
+					return err
 				}
 				// after we have replaced modules, and use -mod=mod
 				// go will try to read target modules's go.mod even
@@ -764,14 +767,6 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 				}
 				xgoRuntimeModuleDir = impResult.runtimeModuleDir
 			}
-		}
-		// Runtime preparation may create source replacements (for example, to
-		// add its trace import). Caller overlays describe the source the user
-		// asked xgo to build, so restore them before package loading and
-		// instrumentation. The final overlay composition below retains xgo's
-		// instrumentation of those replacements.
-		if callerOverlay != nil {
-			callerOverlay.ApplyFileRedirects(overlayFS)
 		}
 
 		var opts FileOptions

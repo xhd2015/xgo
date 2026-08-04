@@ -1,0 +1,4 @@
+# Multi-version regression: compose caller A→B with instrumented B→C.
+# Unlike external_overlay_composition, this fixture has no broken import and
+# is not gated on Go 1.24 vet overlay behavior.
+flags: -overlay=caller-overlay.json --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"} -timeout=120s

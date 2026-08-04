@@ -1,6 +1,6 @@
-module github.com/xhd2015/xgo/runtime/test/build/external_overlay_composition
+module github.com/xhd2015/xgo/runtime/test/build/external_overlay_strace
 
-go 1.19
+go 1.18
 
 require github.com/xhd2015/xgo/runtime v0.0.0
 

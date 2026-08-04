@@ -1,0 +1,3 @@
+# Caller -overlay on the main package file must keep replacement content while
+# --strace still injects the runtime/trace blank import into that content.
+flags: -overlay=caller-overlay.json --strace --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"} -timeout=120s
