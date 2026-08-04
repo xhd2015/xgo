@@ -83,17 +83,16 @@ func ParseGoOverlay(input *GoOverlay, opts PathOptions) *ParsedOverlay {
 }
 
 // ApplyFileRedirects registers file redirects into overlayFS.
-// When resolved and canonical source spellings differ (e.g. /var vs
-// /private/var on macOS), both keys are registered so either lookup hits.
+// Overlay normalizes keys to a single filesystem identity (native path +
+// EvalSymlinks), so only one registration per mapping is needed; load and
+// instrument lookups with any spelling of the same path hit the same entry.
 func (p *ParsedOverlay) ApplyFileRedirects(fs Overlay) {
 	if p == nil {
 		return
 	}
 	for _, e := range p.Entries {
-		fs.OverrideFile(e.SourceResolved, e.TargetResolved)
-		if e.SourceCanonical != e.SourceResolved {
-			fs.OverrideFile(e.SourceCanonical, e.TargetCanonical)
-		}
+		// Canonical source/target; OverrideFile re-keys via absFileKey.
+		fs.OverrideFile(e.SourceCanonical, e.TargetCanonical)
 	}
 }
 

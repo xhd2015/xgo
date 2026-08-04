@@ -215,7 +215,7 @@ func TestProjectOntoCallerSources(t *testing.T) {
 	}
 }
 
-func TestApplyFileRedirectsRegistersBothSpellings(t *testing.T) {
+func TestApplyFileRedirectsSingleIdentity(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -225,7 +225,7 @@ func TestApplyFileRedirectsRegistersBothSpellings(t *testing.T) {
 	}
 	linkDir := filepath.Join(dir, "link")
 	if err := os.Symlink(realDir, linkDir); err != nil {
-		t.Fatal(err)
+		t.Skipf("symlink: %v", err)
 	}
 	for _, name := range []string{"source.go", "target.go"} {
 		if err := os.WriteFile(filepath.Join(realDir, name), nil, 0o644); err != nil {
@@ -234,18 +234,22 @@ func TestApplyFileRedirectsRegistersBothSpellings(t *testing.T) {
 	}
 	srcLink := AbsFile(filepath.Join(linkDir, "source.go"))
 	tgtLink := AbsFile(filepath.Join(linkDir, "target.go"))
+	srcReal := AbsFile(filepath.Join(realDir, "source.go"))
 	parsed := ParseGoOverlay(&GoOverlay{Replace: Replace{srcLink: tgtLink}}, PathOptions{})
 	if len(parsed.Entries) != 1 {
 		t.Fatalf("entries = %d", len(parsed.Entries))
 	}
-	e := parsed.Entries[0]
 	fs := MakeOverlay()
 	parsed.ApplyFileRedirects(fs)
-	if fs.Get(e.SourceResolved) == nil {
-		t.Fatalf("missing resolved key %q", e.SourceResolved)
+	// One FS entry; both spellings resolve via absFileKey.
+	if len(fs) != 1 {
+		t.Fatalf("overlay entries = %d, want 1", len(fs))
 	}
-	if e.SourceCanonical != e.SourceResolved && fs.Get(e.SourceCanonical) == nil {
-		t.Fatalf("missing canonical key %q", e.SourceCanonical)
+	if fs.Get(srcLink) == nil {
+		t.Fatalf("Get(link spelling) miss")
+	}
+	if fs.Get(srcReal) == nil {
+		t.Fatalf("Get(real spelling) miss")
 	}
 }
 

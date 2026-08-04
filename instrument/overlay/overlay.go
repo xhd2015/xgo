@@ -25,21 +25,37 @@ func MakeOverlay() Overlay {
 	return make(Overlay)
 }
 
+// absFileKey is the single identity used inside Overlay.
+// Paths are kept in native filepath form (no ToSlash) so lookups match
+// package-load AbsPaths on Windows, and EvalSymlinks so /var and
+// /private/var on macOS share one entry. Callers may pass either spelling;
+// Get/Override always store and look up under this key.
+func absFileKey(file AbsFile) AbsFile {
+	path := filepath.FromSlash(string(file))
+	path = filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	return AbsFile(path)
+}
+
 func (o Overlay) OverrideFile(absFile AbsFile, targetFile AbsFile) {
-	o[absFile] = &FileOverlay{
-		AbsFile: targetFile,
+	o[absFileKey(absFile)] = &FileOverlay{
+		AbsFile: absFileKey(targetFile),
 	}
 }
 
 func (o Overlay) OverrideContent(absFile AbsFile, content string) {
-	o[absFile] = &FileOverlay{
+	// Replaces any prior file redirect for the same identity, so a later
+	// instrumented content mapping cannot leave an uninstrumented alias behind.
+	o[absFileKey(absFile)] = &FileOverlay{
 		Content:              content,
 		hasOverriddenContent: true,
 	}
 }
 
 func (o Overlay) Get(absFile AbsFile) *FileOverlay {
-	return o[absFile]
+	return o[absFileKey(absFile)]
 }
 
 func (o Overlay) Size(absFile AbsFile) (size int64, err error) {

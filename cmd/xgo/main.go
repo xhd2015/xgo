@@ -694,8 +694,8 @@ func handleBuild(cmd string, args []string) error {
 			if err != nil {
 				return err
 			}
-			// One pass: resolve + canonicalize each mapping. Dual path spellings
-			// (/var vs /private/var) are applied via ApplyFileRedirects.
+			// One pass: resolve + canonicalize each mapping. overlayFS uses a
+			// single path identity per file (see overlay.absFileKey).
 			callerOverlay = overlay.ParseGoOverlay(goOverlay, overlayPathOpts)
 			callerOverlay.ApplyFileRedirects(overlayFS)
 		}
