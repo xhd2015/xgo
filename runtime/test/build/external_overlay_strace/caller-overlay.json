@@ -1,0 +1,5 @@
+{
+  "Replace": {
+    "main.go": "replacement/main.go"
+  }
+}
