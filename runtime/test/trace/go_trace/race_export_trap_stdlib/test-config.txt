@@ -1,0 +1,4 @@
+# Green canary: concurrent go-trace export vs child Push under -race --trap-stdlib.
+# Stdlib-only trap pressure on time methods used during export.
+# WITHOUT --xgo-race-safe. Expected PASS.
+flags: -race --trap-stdlib

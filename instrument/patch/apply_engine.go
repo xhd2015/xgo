@@ -514,6 +514,12 @@ func (s *applyState) findNodeAt(node ast.Node, pos token.Pos) ast.Node {
 }
 
 // evalMatch finds text within the current scope and returns a cursor.
+//
+// When forReplace is true and the cursor already sits past the start of the
+// current scope (e.g. after `match racegostart(`), prefer the last occurrence
+// of searchText before the cursor. That lets patches anchor on a unique
+// following marker and replace the preceding line without matching an earlier
+// decoy in the same function (see xgo_proc_defer_racegostart).
 func evalMatch(state *applyState, searchText string, forReplace bool) (cursor, error) {
 	// Determine search scope
 	scopeStart := 0
@@ -523,6 +529,18 @@ func evalMatch(state *applyState, searchText string, forReplace bool) (cursor, e
 	if node != nil && node != state.astFile {
 		scopeStart = state.fset.Position(node.Pos()).Offset
 		scopeEnd = state.fset.Position(node.End()).Offset
+	}
+
+	if forReplace && state.cursor.offset > scopeStart && state.cursor.offset <= scopeEnd {
+		before := state.original[scopeStart:state.cursor.offset]
+		if idx := strings.LastIndex(before, searchText); idx >= 0 {
+			offset := scopeStart + idx
+			return cursor{
+				offset:    offset,
+				endOffset: offset + len(searchText),
+				isReplace: true,
+			}, nil
+		}
 	}
 
 	searchIn := state.original[scopeStart:scopeEnd]

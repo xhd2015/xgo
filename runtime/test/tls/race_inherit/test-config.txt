@@ -1,0 +1,5 @@
+# Green canary: TLS inherit + g freelist reuse of __xgo_g under -race.
+# WITHOUT --xgo-race-safe so inheritance stays enabled.
+# Expected PASS. If DATA RACE appears, review exit/create racerelease/raceacquire
+# (and clear vs release order) on __xgo_g — see race_inherit_test.go comments.
+flags: -race

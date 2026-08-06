@@ -255,12 +255,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 	//
 	//
 	// === tracing records ===
-	file, line := runtimeFuncInfo.FileLine(pc)
-	cur := stk.NewEntry(begin, name)
-	oldTop := stk.Push(cur)
-	cur.File = file
-	cur.Line = line
-	cur.FuncInfo = funcInfo
+	callFile, callLine := runtimeFuncInfo.FileLine(pc)
 
 	if isStartTracing && !isTesting {
 		var onFinish func(stack stack_model.IStack)
@@ -281,9 +276,8 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 			if rvalue.IsValid() && rvalue.Kind() == reflect.Struct {
 				outputFileField := rvalue.FieldByName("OutputFile")
 				if outputFileField.IsValid() {
-					file, ok := outputFileField.Interface().(string)
-					if ok {
-						outputFile = file
+					if f, ok := outputFileField.Interface().(string); ok {
+						outputFile = f
 					}
 				}
 				onFinishField := rvalue.FieldByName("OnFinish")
@@ -325,8 +319,15 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		copy(marshalNames[1:], argNamesNoCtx)
 		copy(marshalArgs[1:], argsNoCtx)
 	}
-	cur.Args = json.RawMessage(xgo_runtime.MarshalNoError(newStructValue(marshalNames, marshalArgs)))
-	stk.Depth++
+	argsJSON := json.RawMessage(xgo_runtime.MarshalNoError(newStructValue(marshalNames, marshalArgs)))
+
+	// Push under stack mutex so Export cannot observe a half-built entry.
+	cur, oldTop := stk.PushNew(begin, name, func(cur *stack.Entry) {
+		cur.File = callFile
+		cur.Line = callLine
+		cur.FuncInfo = funcInfo
+		cur.Args = argsJSON
+	})
 
 	var hitMock bool
 	post := func() {
@@ -343,16 +344,15 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 		// see https://github.com/xhd2015/xgo/issues/307
 		// so we add a standalone flag `Finished`
 		end := xgo_runtime.XgoRealTimeNow()
-		if isStartTracing {
-			stk.End = end
-		}
-		cur.EndNs = end.UnixNano() - stk.Begin.UnixNano()
-		cur.Finished = true
-		cur.HitMock = hitMock
+
+		// Compute post fields outside the lock when possible; panic line needs
+		// runtime.Callers which must not run while holding stack.mu if export
+		// also takes locks in other orders (export only locks stacks).
 		var hasPanic bool
+		var panicLine int
+		var errStr string
 		if pe, retpc := xgo_runtime.XgoPeekPanic(); pe != nil {
 			hasPanic = true
-			cur.Panic = true
 			// frame:
 			//   0: trap.trap
 			//   1: runtime.gopanic
@@ -389,21 +389,35 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 				entryPC := runtime.FuncForPC(pc).Entry()
 				if entryPC == retEntryPC {
 					frame, _ := runtime.CallersFrames([]uintptr{pc}).Next()
-					cur.PanicLine = frame.Line
+					panicLine = frame.Line
 					break
 				}
 			}
-			cur.Error = fmt.Sprint(pe)
+			errStr = fmt.Sprint(pe)
 		}
 
 		resultNamesNoErr, resultsNoErr, resErr := trySplitLastError(resultNames, results)
-		cur.Results = json.RawMessage(xgo_runtime.MarshalNoError(newStructValue(resultNamesNoErr, resultsNoErr)))
+		resultsJSON := json.RawMessage(xgo_runtime.MarshalNoError(newStructValue(resultNamesNoErr, resultsNoErr)))
 		if !hasPanic && resErr != nil {
-			cur.Error = resErr.Error()
+			errStr = resErr.Error()
 		}
 
-		stk.Top = oldTop
-		stk.Depth--
+		// Relative end time outside lock (time methods may trap / deadlock).
+		endNs := end.UnixNano() - stk.Begin.UnixNano()
+		// finish under lock: entry fields + Top/Depth for race-free export
+		stk.Finish(cur, oldTop, end, isStartTracing, func(cur *stack.Entry) {
+			cur.EndNs = endNs
+			cur.Finished = true
+			cur.HitMock = hitMock
+			if hasPanic {
+				cur.Panic = true
+				cur.PanicLine = panicLine
+			}
+			cur.Results = resultsJSON
+			if errStr != "" {
+				cur.Error = errStr
+			}
+		})
 		if isStartTracing {
 			exportedStack := stack.Export(stk, 0)
 			if isTesting {

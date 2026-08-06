@@ -398,6 +398,76 @@ replace time.runtimeSleep
 	}
 }
 
+// TestApplyPatch_DeferRacegostartAnchorsOnRacegostart mirrors
+// xgo_proc_defer_racegostart: match racegostart first, then replace the
+// preceding if raceenabled — not an earlier decoy if raceenabled in newproc1.
+func TestApplyPatch_DeferRacegostartAnchorsOnRacegostart(t *testing.T) {
+	source := `package runtime
+
+func newproc1(fn *funcval, callergp *g, callerpc uintptr) *g {
+	if raceenabled {
+		// decoy: unrelated earlier raceenabled block (must stay enabled)
+		racereadpc(nil, 0, 0)
+	}
+	// Set up race context.
+	if raceenabled {
+		newg.racectx = racegostart(callerpc)
+		newg.raceignore = 0
+	}
+	return newg
+}
+`
+
+	patch := `<patch xgo_proc_defer_racegostart>
+goto func newproc1
+match racegostart(
+find_for_replace if raceenabled {
+replace if false { // xgo: race setup moved after create callback (#341)
+</patch>`
+
+	result, err := ApplyXgoPatchContent(source, patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Decoy block must remain raceenabled.
+	if !strings.Contains(result, "if raceenabled {\n\t\t// decoy") {
+		t.Fatalf("expected decoy if raceenabled preserved:\n%s", result)
+	}
+	// Race-context block must be disabled.
+	if !strings.Contains(result, "if false { // xgo: race setup moved after create callback (#341)") {
+		t.Fatalf("expected race-context if disabled:\n%s", result)
+	}
+	// Only one if false replacement.
+	if strings.Count(result, "if false { // xgo:") != 1 {
+		t.Fatalf("expected exactly one if false replacement:\n%s", result)
+	}
+}
+
+func TestApplyPatch_DeferRacegostartRequiresRacegostart(t *testing.T) {
+	source := `package runtime
+
+func newproc1() *g {
+	if raceenabled {
+		racereadpc(nil, 0, 0)
+	}
+	return nil
+}
+`
+
+	patch := `<patch xgo_proc_defer_racegostart>
+goto func newproc1
+match racegostart(
+find_for_replace if raceenabled {
+replace if false { // xgo
+</patch>`
+
+	_, err := ApplyXgoPatchContent(source, patch)
+	if err == nil {
+		t.Fatal("expected error when racegostart is missing from newproc1")
+	}
+}
+
 func TestApplyPatch_ReplaceWithoutFindError(t *testing.T) {
 	source := "package p"
 

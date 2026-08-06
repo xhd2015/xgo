@@ -17,14 +17,12 @@ func init() {
 	})
 	runtime.XgoOnExitG(func() {
 		g := stack.GetG()
-		stack := g.GetStack()
-		if stack == nil {
+		stk := g.GetStack()
+		if stk == nil {
 			return
 		}
-		if stack.End.IsZero() {
-			// fill end
-			stack.End = runtime.XgoRealTimeNow()
-		}
+		// fill end under stack mutex (export may snapshot concurrently)
+		stk.SetEndIfZero(runtime.XgoRealTimeNow())
 	})
 }
 
@@ -64,17 +62,10 @@ func inerhitStack(curG stack.G, newG stack.G) {
 		newStackData.hasStartedTracing = true
 		newStackData.filterTrace = stackData.filterTrace
 
-		if curStack.Top != nil {
-			child := &stack.Entry{
-				BeginNs:  newStack.Begin.Sub(curStack.Begin).Nanoseconds(),
-				Go:       true,
-				FuncName: "go",
-				GetStack: func() *stack.Stack {
-					return newStack
-				},
-			}
-			curStack.Top.Children = append(curStack.Top.Children, child)
-		}
+		// Append under parent stack mutex so Export cannot race with Push/Top.
+		curStack.AppendGoChild(newStack.Begin.Sub(curStack.Begin).Nanoseconds(), func() *stack.Stack {
+			return newStack
+		})
 	}
 }
 

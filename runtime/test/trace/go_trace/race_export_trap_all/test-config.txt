@@ -1,0 +1,5 @@
+# Green canary: concurrent go-trace export vs child Push under -race --trap-all.
+# Covers re-entrancy of instrumentable time methods (Format/UnixNano) and
+# Stack.mu lock discipline under full trap (see stack/export.go comments).
+# WITHOUT --xgo-race-safe. Expected PASS.
+flags: -race --trap-all

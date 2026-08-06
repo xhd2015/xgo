@@ -13,10 +13,13 @@ func Export(stack *Stack, offsetNS int64) *stack_model.Stack {
 	if stack == nil {
 		return nil
 	}
+	// Snapshot under the stack mutex so concurrent Push/Finish cannot race
+	// with the export walk (Phase 1 race fix).
+	begin, _, roots := stack.Snapshot()
 	return &stack_model.Stack{
 		Format:   "stack",
-		Begin:    stack.Begin.Format(time.RFC3339),
-		Children: ExportStackEntries(stack.Roots, stack.Begin, offsetNS),
+		Begin:    begin.Format(time.RFC3339),
+		Children: ExportStackEntries(roots, begin, offsetNS),
 	}
 }
 
@@ -39,23 +42,26 @@ func ExportStackEntry(entry *Entry, rootBegin time.Time, offsetNS int64) *stack_
 	var isRunning bool
 	children := ExportStackEntries(entry.Children, rootBegin, offsetNS)
 	beginNs := entry.BeginNs + offsetNS
-	// stackEndNs := entry.EndNs
 	endNs := entry.EndNs + offsetNS
 	fnInfo := ExportFuncInfo(entry)
 	if entry.Go && entry.GetStack != nil {
 		if !flags.XGO_RACE_SAFE {
-			// handle async stack
-			stack := entry.GetStack()
-			if stack != nil {
-				// NOTE: this might be unsafe since the
-				// child goroutine might be running
-				exportedStack := Export(stack, beginNs)
-				children = append(children, exportedStack.Children...)
-				if stack.End.IsZero() {
+			// Child stack is snapshotted under its own mutex inside Export /
+			// Snapshot — safe if the child is still running.
+			childStack := entry.GetStack()
+			if childStack != nil {
+				childBegin, childEnd, childRoots := childStack.Snapshot()
+				exportedChildren := ExportStackEntries(childRoots, childBegin, beginNs)
+				children = append(children, exportedChildren...)
+				// Prefer zero-value compare over IsZero(): time.Time methods can
+				// be instrumented under --trap-stdlib / --trap-all and re-enter
+				// trap/export (see SetEndIfZero). Safe outside mu, but keep
+				// export free of instrumentable time methods.
+				if childEnd == (time.Time{}) {
 					isRunning = true
-					endNs = runtime.XgoRealTimeNow().UnixNano() - stack.Begin.UnixNano() + beginNs
+					endNs = runtime.XgoRealTimeNow().UnixNano() - childBegin.UnixNano() + beginNs
 				} else {
-					endNs = stack.End.UnixNano() - stack.Begin.UnixNano() + beginNs
+					endNs = childEnd.UnixNano() - childBegin.UnixNano() + beginNs
 				}
 			}
 		} else {

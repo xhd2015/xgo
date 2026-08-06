@@ -1,0 +1,3 @@
+# Green canary: mock inherit + freelist reuse under -race --trap-all (#341).
+# WITHOUT --xgo-race-safe. Expected PASS.
+flags: -race --trap-all

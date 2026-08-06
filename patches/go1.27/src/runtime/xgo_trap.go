@@ -238,15 +238,30 @@ func __xgo_callback_on_exit_g() {
 	for _, callback := range __xgo_on_exit_g_callbacks {
 		callback()
 	}
+	// Publish happens-before for __xgo_g before this g is freelisted and
+	// reused. Custom fields on g are not covered by the runtime freelist's
+	// race annotations; without release/acquire, exit vs reuse races (#341).
+	curg := getg().m.curg
+	if curg == nil {
+		return
+	}
+	// Clear residual state before release so the zero write is published
+	// to the create-side raceacquire (freelist reuse under -race; #341).
+	curg.__xgo_g = __xgo_g{}
+	if raceenabled {
+		racerelease(unsafe.Pointer(&curg.__xgo_g))
+	}
 }
 
 func __xgo_callback_on_create_g(curg *g, newg *g) {
 	if newg == nil {
 		return
 	}
-	// newg might be reused from an already exited goroutine
-	// so here we need to explicitly clear the __xgo_g
-	// clear
+	// Acquire happens-before from the previous owner of this g slot (see
+	// __xgo_callback_on_exit_g), then clear residual state from freelist reuse.
+	if raceenabled {
+		raceacquire(unsafe.Pointer(&newg.__xgo_g))
+	}
 	newg.__xgo_g = __xgo_g{}
 	if len(__xgo_on_create_g_callbacks) == 0 {
 		return

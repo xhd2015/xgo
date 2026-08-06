@@ -1,0 +1,232 @@
+# Best-effort race bug capture on light/midweight open-source Go projects.
+#
+# Modes (parallel jobs):
+#   A) xgo test -race -count=1
+#   B) xgo test -race --trap-all -count=1
+#
+# Gate: RED only when the race detector reports DATA RACE with xgo frames
+# (github.com/xhd2015/xgo, __xgo_*, runtime/internal/{trap,stack,runtime}).
+# Third-party-only races, flakes, timeouts, and build failures are recorded
+# but do not fail the check.
+#
+# Projects: gin, chi, echo, cobra (no k8s/docker-class repos).
+name: Race Canary
+
+on:
+  schedule:
+    # Weekly Monday 03:17 UTC
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      dummy:
+        description: unused
+        default: nothing
+        required: false
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  race-canary:
+    name: race (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: default
+            extra_flags: ""
+          - mode: trap-all
+            extra_flags: "--trap-all"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: xgo
+
+      - name: Set up Go (latest stable release)
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install xgo
+        run: |
+          cd xgo
+          go install ./cmd/xgo
+          xgo exec --reset-instrument --log-debug go version
+          xgo revision
+          go version
+
+      - name: Prepare race-canary helpers
+        run: |
+          mkdir -p results logs
+          # Heredoc body must be unindented so the script is valid bash.
+          cat > run-project.sh <<'EOF'
+          #!/usr/bin/env bash
+          # Usage: bash run-project.sh <name> <dir>
+          # Optional env EXTRA_FLAGS (e.g. --trap-all).
+          # Records results/<name>.{status,exit}; tees logs/<name>.log
+          # status: ok | race | race-external | fail | build
+          set -u
+          name="$1"
+          dir="$2"
+          # shellcheck disable=SC2206
+          extra_flags=( ${EXTRA_FLAGS:-} )
+          log="logs/${name}.log"
+          status_file="results/${name}.status"
+          exit_file="results/${name}.exit"
+
+          mkdir -p logs results
+          echo "=== race-canary: ${name} ===" | tee "$log"
+          echo "dir=${dir} flags=-race -count=1 ${extra_flags[*]:-}" | tee -a "$log"
+
+          set +e
+          (
+            cd "$dir" || exit 99
+            xgo test -race -count=1 "${extra_flags[@]}" ./...
+          ) 2>&1 | tee -a "$log"
+          exit_code=${PIPESTATUS[0]}
+          set -e
+
+          echo "$exit_code" > "$exit_file"
+
+          if grep -qE 'WARNING: DATA RACE|Found [0-9]+ data race' "$log"; then
+            # Hard-fail only races that involve xgo frames (runtime/trap/stack or
+            # __xgo_ symbols). Third-party-only races are recorded as warnings so
+            # canary noise from gin/chi/echo/cobra does not red the job when xgo
+            # did not participate in the race stacks.
+            if grep -qE 'github\.com/xhd2015/xgo|/runtime/internal/(trap|stack|runtime)|__xgo_|xgo_trap' "$log"; then
+              echo race > "$status_file"
+              echo "::error title=DATA RACE xgo (${name})::Race detector reported DATA RACE with xgo frames in ${name}"
+            else
+              echo race-external > "$status_file"
+              echo "::warning title=DATA RACE external (${name})::Race detector reported DATA RACE without xgo frames in ${name} (non-gating)"
+            fi
+          elif grep -qiE 'build failed|error:.*instrument' "$log" && [[ "$exit_code" -ne 0 ]]; then
+            # Best-effort build/instrument classification; still non-gating.
+            echo build > "$status_file"
+            echo "::warning title=build/instrument (${name})::non-zero exit with build-like log (exit ${exit_code})"
+          elif [[ "$exit_code" -ne 0 ]]; then
+            echo fail > "$status_file"
+            echo "::warning title=test fail (${name})::exit ${exit_code} (no DATA RACE)"
+          else
+            echo ok > "$status_file"
+          fi
+
+          echo "status=$(cat "$status_file") exit=$(cat "$exit_file")" | tee -a "$log"
+          # Never fail here — gate is applied in "Fail if DATA RACE" step.
+          exit 0
+          EOF
+          # Strip YAML-style leading indent from the generated script (8 spaces).
+          sed -i 's/^          //' run-project.sh
+          chmod +x run-project.sh
+          head -3 run-project.sh
+
+      # --- projects (serial; race is memory-heavy) ---
+
+      - uses: actions/checkout@v4
+        with:
+          repository: gin-gonic/gin
+          path: gin-gonic/gin
+
+      - name: Test gin-gonic/gin
+        env:
+          EXTRA_FLAGS: ${{ matrix.extra_flags }}
+        run: bash run-project.sh gin gin-gonic/gin
+
+      - uses: actions/checkout@v4
+        with:
+          repository: go-chi/chi
+          path: go-chi/chi
+
+      - name: Test go-chi/chi
+        env:
+          EXTRA_FLAGS: ${{ matrix.extra_flags }}
+        run: bash run-project.sh chi go-chi/chi
+
+      - uses: actions/checkout@v4
+        with:
+          repository: labstack/echo
+          path: labstack/echo
+
+      - name: Test labstack/echo
+        env:
+          EXTRA_FLAGS: ${{ matrix.extra_flags }}
+        run: bash run-project.sh echo labstack/echo
+
+      - uses: actions/checkout@v4
+        with:
+          repository: spf13/cobra
+          path: spf13/cobra
+
+      - name: Test spf13/cobra
+        env:
+          EXTRA_FLAGS: ${{ matrix.extra_flags }}
+        run: bash run-project.sh cobra spf13/cobra
+
+      - name: Summary
+        if: always()
+        run: |
+          mode="${{ matrix.mode }}"
+          {
+            echo "## Race canary — mode=\`${mode}\`"
+            echo ""
+            echo "| Project | Status | Exit |"
+            echo "|---------|--------|------|"
+            for name in gin chi echo cobra; do
+              st="missing"
+              ex="?"
+              [[ -f "results/${name}.status" ]] && st=$(cat "results/${name}.status")
+              [[ -f "results/${name}.exit" ]] && ex=$(cat "results/${name}.exit")
+              echo "| ${name} | ${st} | ${ex} |"
+            done
+            echo ""
+            echo "Gate: workflow fails only when status is \`race\` (DATA RACE with xgo frames)."
+            echo "\`race-external\` = third-party-only race (warning, non-blocking)."
+            echo "Other non-zero exits are best-effort (recorded, non-blocking)."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "---- results ----"
+          ls -la results logs || true
+          for name in gin chi echo cobra; do
+            echo -n "${name}: "
+            cat "results/${name}.status" 2>/dev/null || echo missing
+          done
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: race-canary-${{ matrix.mode }}
+          path: |
+            logs/
+            results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail if DATA RACE (xgo frames)
+        if: always()
+        run: |
+          race_found=0
+          external_found=0
+          for f in results/*.status; do
+            [[ -f "$f" ]] || continue
+            st=$(cat "$f")
+            if [[ "$st" == "race" ]]; then
+              echo "DATA RACE (xgo) marker: $f"
+              race_found=1
+            elif [[ "$st" == "race-external" ]]; then
+              echo "DATA RACE (external, non-gating) marker: $f"
+              external_found=1
+            fi
+          done
+          if [[ "$race_found" -eq 1 ]]; then
+            echo "Failing job: at least one project reported DATA RACE with xgo frames under mode=${{ matrix.mode }}"
+            exit 1
+          fi
+          if [[ "$external_found" -eq 1 ]]; then
+            echo "External-only DATA RACE present; job stays green (non-gating)."
+          fi
+          echo "No xgo DATA RACE markers; job green (best-effort for other failures)."
+          exit 0

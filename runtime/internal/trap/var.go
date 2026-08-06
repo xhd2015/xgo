@@ -148,12 +148,18 @@ func doTrapVar(funcInfo *core.FuncInfo, stk *stack.Stack, begin time.Time, traci
 		return
 	}
 	_, file, line, _ := runtime.Caller(SKIP + 2)
-	cur := stk.NewEntry(begin, funcInfo.Name)
-	cur.File = file
-	cur.Line = line
-	cur.FuncInfo = funcInfo
-	cur.Results = json.RawMessage(xgo_runtime.MarshalNoError(res))
-	stk.Top = stk.Push(cur)
-	cur.EndNs = xgo_runtime.XgoRealTimeNow().UnixNano() - stk.Begin.UnixNano()
-	cur.Finished = true
+	end := xgo_runtime.XgoRealTimeNow()
+	endNs := end.UnixNano() - stk.Begin.UnixNano()
+	resultsJSON := json.RawMessage(xgo_runtime.MarshalNoError(res))
+	// Single locked push+finish so export cannot race with var trap records.
+	cur, oldTop := stk.PushNew(begin, funcInfo.Name, func(cur *stack.Entry) {
+		cur.File = file
+		cur.Line = line
+		cur.FuncInfo = funcInfo
+		cur.Results = resultsJSON
+	})
+	stk.Finish(cur, oldTop, end, false, func(cur *stack.Entry) {
+		cur.EndNs = endNs
+		cur.Finished = true
+	})
 }

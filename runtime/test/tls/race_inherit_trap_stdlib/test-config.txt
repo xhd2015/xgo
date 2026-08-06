@@ -1,0 +1,3 @@
+# Green canary: TLS inherit + freelist reuse under -race --trap-stdlib.
+# WITHOUT --xgo-race-safe. Expected PASS.
+flags: -race --trap-stdlib

@@ -1,0 +1,4 @@
+# Race R1 regression: concurrent go-trace export vs child stack Push under -race.
+# Intentionally WITHOUT --xgo-race-safe (that mode hides async go export).
+# Phase 1: stack mutex + Snapshot export — must stay GREEN.
+flags: -race
