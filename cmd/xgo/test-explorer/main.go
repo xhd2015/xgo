@@ -334,19 +334,6 @@ var indexHTML string
 
 const apiPlaceholder = "http://localhost:8080"
 
-func compareGoVersion(a *goinfo.GoVersion, b *goinfo.GoVersion, ignorePatch bool) int {
-	if a.Major != b.Major {
-		return a.Major - b.Major
-	}
-	if a.Minor != b.Minor {
-		return a.Minor - b.Minor
-	}
-	if ignorePatch {
-		return 0
-	}
-	return a.Patch - b.Patch
-}
-
 func handle(opts *Options, args []string) error {
 	if opts == nil {
 		opts = &Options{}
