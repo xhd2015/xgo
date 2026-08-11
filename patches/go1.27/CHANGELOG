@@ -26,8 +26,18 @@ Seeded from `patches/go1.26`. Compared anchors against `go-release/go1.27rc2`.
 - `src/cmd/compile/internal/{gc/main.go,noder/noder.go}`
 - `src/cmd/go/main.go`, `src/cmd/go/internal/work/exec.go`, `src/cmd/go/internal/load/test.go`
 - `src/cmd/cover/*`, `src/cmd/internal/test2json/*`
-- `src/encoding/json/encode.go` (still present under `//go:build !goexperiment.jsonv2`;
-  default builds use json v2 — loose-JSON patch may need a follow-up for the v2 path)
+- `src/encoding/json/encode.go` (kept for `//go:build !goexperiment.jsonv2` /
+  `GOEXPERIMENT=nojsonv2`; classic `unsupportedTypeEncoder` Path-A hook)
+
+### Loose JSON (json v2 baseline)
+
+go1.27 defaults `GOEXPERIMENT=jsonv2` on, so `encoding/json.Marshal` no longer hits
+classic `unsupportedTypeEncoder`. Path-A for unsupported types under
+`XgoIsLooseJsonMarshaling` lives on the v2 invalid arshaler:
+
+- **Added** `src/encoding/json/v2/arshal_default.go.xgo.patch`:
+  import `runtime` + at start of `makeInvalidArshaler` marshal func write
+  `{"Type":"?"}` via `jsontext.Encoder.WriteValue` when loose mode is on.
 
 ### Other repo updates
 

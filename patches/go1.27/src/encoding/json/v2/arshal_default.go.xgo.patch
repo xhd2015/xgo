@@ -1,0 +1,18 @@
+<patch xgo_encoding_json_v2_import>
+# Description: Add runtime import to encoding/json/v2 for loose JSON marshaling.
+# Needed by the makeInvalidArshaler hook below. go1.27 defaults to
+# GOEXPERIMENT=jsonv2, so encoding/json.Marshal uses this package (not classic encode.go).
+match package json
+insert_after ;import __xgo_runtime "runtime"
+</patch>
+
+<patch xgo_encoding_json_v2_invalid_arshaler>
+# Description: Path-A loose JSON for unsupported types under json v2.
+# When XgoIsLooseJsonMarshaling, write {"Type":"?"} instead of erroring so
+# MarshalNoError / trace can keep sibling fields (parity with classic
+# unsupportedTypeEncoder patch on encode.go).
+# Inserted at the top of: fncs.marshal = func(...) error {
+goto func makeInvalidArshaler
+match fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+insert_after if __xgo_runtime.XgoIsLooseJsonMarshaling() { return enc.WriteValue(jsontext.Value(fmt.Sprintf("{%q:%q}", t.String(), "?"))) }
+</patch>

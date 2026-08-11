@@ -3,8 +3,8 @@
 // runtime.MarshalNoError, not soft-fail into {"error":"…unsupported…"}.
 //
 // Expected behavior with an instrumented GOROOT:
-//   - go1.26 and earlier (classic encoding/json + unsupportedTypeEncoder patch): PASS
-//   - go1.27 default (json v2 / makeInvalidArshaler, patch not yet applied): FAIL
+//   - go1.26 and earlier: classic encoding/json + unsupportedTypeEncoder Path-A patch
+//   - go1.27 default (json v2): makeInvalidArshaler Path-A patch in encoding/json/v2
 //
 // Run via:
 //
@@ -59,16 +59,16 @@ func assertLoosePlaceholder(t *testing.T, body func() (interface{}, error), type
 	data := captureTraceJSON(t, body)
 
 	// MarshalNoError soft-fail form when the stdlib encoder rejects the value
-	// (go1.27 default today: json v2 path, no loose hook on makeInvalidArshaler).
+	// (regression: missing Path-A hook on classic unsupportedTypeEncoder or
+	// go1.27+ makeInvalidArshaler under json v2).
 	if strings.Contains(data, `"error"`) && strings.Contains(strings.ToLower(data), "unsupported") {
 		t.Fatalf("loose JSON marshaling did not engage: got soft-fail error form %q\n"+
-			"hint: on go1.27+ default (json v2), encoding/json/encode.go patch is inactive; "+
-			"need a makeInvalidArshaler (or equivalent) hook", data)
+			"hint: classic path uses unsupportedTypeEncoder; go1.27+ default json v2 uses "+
+			"makeInvalidArshaler — both need XgoIsLooseJsonMarshaling Path-A hooks", data)
 	}
 
-	// Path-A placeholder from patched unsupportedTypeEncoder:
-	//   e.WriteString(fmt.Sprintf("{%q:%q}", v.Type().String(), "?"))
-	// e.g. {"func()":"?"} or {"chan int":"?"}
+	// Path-A placeholder (classic unsupportedTypeEncoder or v2 makeInvalidArshaler):
+	//   {"func()":"?"} / {"chan int":"?"}
 	if !strings.Contains(data, `"?`) && !strings.Contains(data, `":"?"`) && !strings.Contains(data, `": "?"`) {
 		t.Fatalf("expect loose placeholder containing \"?\", got %q", data)
 	}
