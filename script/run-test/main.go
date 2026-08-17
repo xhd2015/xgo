@@ -48,12 +48,7 @@ import (
 //   -tags dev : cache is off by default, so revision is not significant
 //   otherwise, revision is used as cache key
 
-// Per go-test invocation. Windows CI needs a longer budget: go test's
-// implicit default is 10m, and as_unit_test_run sets -timeout=600s; both
-// time out on windows-latest. Short intentional timeouts (e.g. 0.2s) stay.
 var globalFlags = []string{"-timeout=60s"}
-
-const windowsTestTimeout = "-timeout=15m"
 
 type TestConfig struct {
 	Dir            string
@@ -845,58 +840,6 @@ func addGoFlags(args []string, cover bool, coverPkgs []string, coverprofile stri
 	return args
 }
 
-// applyWindowsTestTimeout extends the 10m go-test default (and the
-// as_unit_test_run -timeout=600s override) to 15m on Windows. Intentional
-// short timeouts such as -timeout=0.2s are left alone.
-func applyWindowsTestTimeout(args []string) []string {
-	if runtime.GOOS != "windows" {
-		return args
-	}
-	return extendDefaultTimeouts(args, windowsTestTimeout)
-}
-
-func extendDefaultTimeouts(args []string, winTimeout string) []string {
-	out := make([]string, 0, len(args)+1)
-	sawTimeout := false
-	for _, a := range args {
-		name, val, ok := splitTimeoutFlag(a)
-		if !ok {
-			out = append(out, a)
-			continue
-		}
-		sawTimeout = true
-		if isExtendableTimeout(val) {
-			out = append(out, name+"="+strings.TrimPrefix(winTimeout, "-timeout="))
-			continue
-		}
-		out = append(out, a)
-	}
-	if !sawTimeout {
-		out = append(out, winTimeout)
-	}
-	return out
-}
-
-func splitTimeoutFlag(arg string) (name, val string, ok bool) {
-	for _, prefix := range []string{"-timeout=", "-test.timeout="} {
-		if strings.HasPrefix(arg, prefix) {
-			return strings.TrimSuffix(prefix, "="), strings.TrimPrefix(arg, prefix), true
-		}
-	}
-	return "", "", false
-}
-
-// isExtendableTimeout reports timeouts that are the go-test 10m default
-// or the as_unit_test_run 600s budget — not short intentional limits.
-func isExtendableTimeout(val string) bool {
-	switch strings.ToLower(val) {
-	case "10m", "10m0s", "600s", "10m0s0ms":
-		return true
-	default:
-		return false
-	}
-}
-
 func hasSubDir(dir string, subDir string) bool {
 	subDirPath := filepath.Join(dir, subDir)
 	_, err := os.Stat(subDirPath)
@@ -1075,7 +1018,6 @@ func doRunTest(goroot string, usePlainGo bool, dir string, args []string, tests 
 	testArgs = append(testArgs, globalFlags...)
 	testArgs = append(testArgs, args...)
 	testArgs = append(testArgs, tests...)
-	testArgs = applyWindowsTestTimeout(testArgs)
 
 	// remove extra xgo flags
 	if usePlainGo {

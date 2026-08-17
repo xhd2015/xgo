@@ -128,28 +128,3 @@ func TestBuildReproduceCmdMinimal(t *testing.T) {
 	}
 }
 
-func TestExtendDefaultTimeouts(t *testing.T) {
-	const win = "-timeout=15m"
-	tests := []struct {
-		name string
-		in   []string
-		want []string
-	}{
-		{name: "no timeout adds 15m", in: []string{"-v", "./..."}, want: []string{"-v", "./...", "-timeout=15m"}},
-		{name: "600s becomes 15m", in: []string{"-timeout=60s", "-timeout=600s"}, want: []string{"-timeout=60s", "-timeout=15m"}},
-		{name: "10m becomes 15m", in: []string{"-timeout=10m"}, want: []string{"-timeout=15m"}},
-		{name: "10m0s becomes 15m", in: []string{"-timeout=10m0s"}, want: []string{"-timeout=15m"}},
-		{name: "short timeout kept", in: []string{"-timeout=0.2s"}, want: []string{"-timeout=0.2s"}},
-		{name: "120s kept", in: []string{"-timeout=120s"}, want: []string{"-timeout=120s"}},
-		{name: "test.timeout 600s", in: []string{"-test.timeout=600s"}, want: []string{"-test.timeout=15m"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := extendDefaultTimeouts(tt.in, win)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("got %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
