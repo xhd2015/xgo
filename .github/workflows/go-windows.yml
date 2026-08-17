@@ -17,7 +17,6 @@ jobs:
         os: [ windows-latest ]
         go: [ '1.26' ]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
     steps:
     - uses: actions/checkout@v4
 
@@ -27,4 +26,4 @@ jobs:
         go-version: '${{ matrix.go }}'
 
     - name: Test
-      run: go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v
+      run: go run ./script/run-test --install-xgo --with-setup --reset-instrument --log-debug -v -timeout=15m
