@@ -17,6 +17,7 @@ jobs:
         os: [ windows-latest ]
         go: [ '1.26' ]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
 
