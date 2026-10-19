@@ -10,6 +10,10 @@ import (
 
 func init() {
 	runtime.XgoSetTrap(trap)
+	if !flags.COLLECT_TEST_TRACE {
+		// collecting test traces needs every call to detect tests
+		initTrapSkip()
+	}
 	runtime.XgoSetVarTrap(trapVar)
 	runtime.XgoSetVarPtrTrap(trapVarPtr)
 	runtime.XgoOnCreateG(func(g unsafe.Pointer, childG unsafe.Pointer) {
@@ -35,11 +39,17 @@ func inerhitStack(curG stack.G, newG stack.G) {
 	if curStack == nil {
 		return
 	}
+	stackData := getStackDataOf(curStack)
+	if stackData == nil {
+		// nothing to inherit. Attaching empty data would also turn the trap
+		// on for every instrumented call (see enableTrap): during init all
+		// goroutines share InitGStack, so the first goroutine started by any
+		// init function would do so.
+		return
+	}
 
 	newStack := newG.GetOrAttachStack()
 	newStackData := getOrAttachStackDataOf(newStack)
-
-	stackData := getStackDataOf(curStack)
 
 	newInterceptors := &newStackData.interceptors
 	existingInterceptors := &stackData.interceptors

@@ -57,7 +57,7 @@ func RunCommandInResolvedRootDir(name string, args ...string) error {
 }
 
 func goMinorVersion() (string, error) {
-	v := runtime.Version()
+	v := strings.TrimPrefix(runtime.Version(), "devel ")
 	v = strings.TrimPrefix(v, "go")
 	parts := strings.Split(v, ".")
 	if len(parts) < 2 {

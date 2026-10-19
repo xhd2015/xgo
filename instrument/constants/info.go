@@ -7,6 +7,7 @@ import (
 const (
 	LINK_REGISTER     = "__xgo_register_"
 	LINK_TRAP_FUNC    = "__xgo_trap_"
+	LINK_TRAP_ON      = "__xgo_trap_on_"
 	LINK_TRAP_VAR     = "__xgo_trap_var_"
 	LINK_TRAP_VAR_PTR = "__xgo_trap_varptr_"
 )
@@ -71,6 +72,10 @@ func Register(fileIndex int) string {
 
 func Trap(fileIndex int) string {
 	return LINK_TRAP_FUNC + strconv.Itoa(fileIndex)
+}
+
+func TrapOn(fileIndex int) string {
+	return LINK_TRAP_ON + strconv.Itoa(fileIndex)
 }
 
 func TrapVar(fileIndex int) string {

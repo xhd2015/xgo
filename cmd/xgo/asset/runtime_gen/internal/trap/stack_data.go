@@ -1,7 +1,12 @@
 package trap
 
 import (
+	"sync"
+	"sync/atomic"
+
 	"github.com/xhd2015/xgo/runtime/core"
+	"github.com/xhd2015/xgo/runtime/functab"
+	"github.com/xhd2015/xgo/runtime/internal/runtime"
 	"github.com/xhd2015/xgo/runtime/internal/stack"
 	"github.com/xhd2015/xgo/runtime/trace/stack_model"
 )
@@ -11,6 +16,85 @@ type dataKeyType struct{}
 var dataKey = dataKeyType{}
 
 var globalInterceptorHolder interceptorHolders
+
+// globalInterceptorHolderUsed is 1 once anything is registered into
+// globalInterceptorHolder. That only happens during init, but goroutines
+// started by init functions may already run instrumented code, so it is
+// accessed atomically.
+var globalInterceptorHolderUsed int32
+
+// markGlobalInterceptorHolderUsed is called after enabling the trap for
+// what was registered: a caller that sees the holder used must also find
+// the trap enabled. Variables need nothing enabled: XgoTrapVar and
+// XgoTrapVarPtr are called on every access and ignore the skip.
+func markGlobalInterceptorHolderUsed() {
+	atomic.StoreInt32(&globalInterceptorHolderUsed, 1)
+}
+
+func isGlobalInterceptorHolderUsed() bool {
+	return atomic.LoadInt32(&globalInterceptorHolderUsed) != 0
+}
+
+// trapEnabled is 1 once enableTrap was called. Registrations can race, so
+// it is accessed atomically; trapSkipMu orders the first enableTrap with
+// init, which sets the skip only if no registration happened before it.
+var trapEnabled int32
+var trapSkipMu sync.Mutex
+
+// enableTrap makes instrumented functions call trap again. Until then they
+// skip it, which is only valid while nothing has been registered and no
+// trace or inspection was started, i.e. trap would return immediately.
+// Once enabled it stays enabled.
+func enableTrap() {
+	if atomic.LoadInt32(&trapEnabled) != 0 {
+		return
+	}
+	trapSkipMu.Lock()
+	defer trapSkipMu.Unlock()
+	// clear the skip before publishing the flag: a caller that sees the
+	// flag and returns early must find the skip already cleared
+	runtime.XgoSetTrapSkip(false)
+	atomic.StoreInt32(&trapEnabled, 1)
+}
+
+// enableTrapFor makes the function of funcInfo call trap again, so that
+// registering a mock for one function does not slow down every other
+// instrumented call:
+//   - functions guarded by xgo carry their own flag (as FuncInfo.Var, which
+//     only variables use otherwise), and only that flag is set
+//   - functions without a flag are not guarded (dependencies instrumented by
+//     the compiler, the trace package) and always call trap: only the
+//     guard reads the skip, XgoTrap itself does not
+//   - variables are trapped on every access, see markGlobalInterceptorHolderUsed
+//   - when the function is unknown (nil, e.g. a generic instantiation not
+//     registered by PC), every instrumented function is enabled
+func enableTrapFor(funcInfo *core.FuncInfo) {
+	if funcInfo == nil {
+		enableTrap()
+		return
+	}
+	if funcInfo.Kind != core.Kind_Func {
+		return
+	}
+	if flag, ok := funcInfo.Var.(*uint32); ok && flag != nil {
+		atomic.StoreUint32(flag, 1)
+	}
+}
+
+// enableTrapForPC is enableTrapFor the function registered at pc.
+func enableTrapForPC(pc uintptr) {
+	enableTrapFor(functab.InfoPC(pc))
+}
+
+// initTrapSkip lets instrumented functions skip the trap until the first
+// registration, unless one already happened.
+func initTrapSkip() {
+	trapSkipMu.Lock()
+	defer trapSkipMu.Unlock()
+	if atomic.LoadInt32(&trapEnabled) == 0 {
+		runtime.XgoSetTrapSkip(true)
+	}
+}
 
 type StackData struct {
 	hasStartedTracing bool

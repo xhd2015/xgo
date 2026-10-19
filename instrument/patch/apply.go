@@ -90,6 +90,9 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 			dstPath = "." + string(filepath.Separator)
 		}
 		dstPath = filepath.Join(goroot, dstPath)
+		if err := filecopy.UnshareTree(dstPath); err != nil {
+			return fmt.Errorf("unshare %s: %w", dstPath, err)
+		}
 		opts := filecopy.NewOptions()
 		if config.IS_DEV {
 			err = opts.UseLink().CopyReplaceDir(srcPath, dstPath)
@@ -111,25 +114,58 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 		return fmt.Errorf("apply patch files: %w", err)
 	}
 
+	// Setup builds share one private build cache: unlike -a it lets
+	// rebuild-compiler reuse what rebuild-go already compiled, and it is
+	// removed afterwards because instrumented builds never read it (they use
+	// their own GOCACHE). Previously these builds landed in the user's
+	// default GOCACHE, leaving ~0.5GB behind per instrumented GOROOT.
+	setupCache, err := os.MkdirTemp("", "xgo-setup-cache-*")
+	if err != nil {
+		return fmt.Errorf("create setup build cache: %w", err)
+	}
+	defer os.RemoveAll(setupCache)
+
 	for _, gen := range cfg.Generate {
 		if shouldSkipKind(gen.Kind, skipKinds) {
 			continue
+		}
+		// the entry's own env overrides extraEnv, as for its command
+		genEnv := make(map[string]string, len(extraEnv)+len(gen.Env))
+		for k, v := range extraEnv {
+			genEnv[k] = v
+		}
+		for k, v := range gen.Env {
+			genEnv[k] = v
+		}
+		if gen.Kind == "rebuild-stdlib" {
+			has, err := hasPrecompiledStdlib(goroot, genEnv)
+			if err != nil {
+				return fmt.Errorf("generate kind %q: %w", gen.Kind, err)
+			}
+			if !has {
+				// since go1.20 the standard library is built and cached like
+				// any other package; `go install std` only fills a build cache.
+				continue
+			}
+		}
+		if err := unshareOutputs(goroot, gen.Outputs, genEnv); err != nil {
+			return fmt.Errorf("generate kind %q: %w", gen.Kind, err)
 		}
 		if gen.Kind != "" && len(gen.Cmd) == 0 && len(gen.CmdWindows) == 0 {
 			if generateHandler == nil {
 				return fmt.Errorf("generate kind %q requires a GenerateHandler", gen.Kind)
 			}
-			if err := generateHandler(gen.Kind, extraEnv); err != nil {
+			if err := generateHandler(gen.Kind, genEnv); err != nil {
 				return fmt.Errorf("generate kind %q: %w", gen.Kind, err)
 			}
 			continue
 		}
 		args := gen.EffectiveCmd()
-		args = substituteEnvSlice(args, extraEnv)
+		args = substituteEnvSlice(args, genEnv)
 		if len(args) == 0 {
 			continue
 		}
-		cmdDir := resolveCwd(gen.Cwd, goroot, extraEnv)
+		cmdDir := resolveCwd(gen.Cwd, goroot, genEnv)
 		execCmd := exec.Command(args[0], args[1:]...)
 		execCmd.Dir = cmdDir
 		newEnv := make([]string, 0, len(os.Environ())+4)
@@ -139,7 +175,7 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 			}
 			newEnv = append(newEnv, e)
 		}
-		newEnv = append(newEnv, "GOROOT="+goroot, "GOTOOLCHAIN=local", "GOOS=", "GOARCH=", "GOPATH=", "GOCACHE=")
+		newEnv = append(newEnv, "GOROOT="+goroot, "GOTOOLCHAIN=local", "GOOS=", "GOARCH=", "GOPATH=", "GOCACHE="+setupCache)
 		for k, v := range gen.Env {
 			newEnv = append(newEnv, k+"="+v)
 		}
@@ -152,6 +188,55 @@ func ApplyPatches(patchDir, goroot, xgoRepoRoot string, extraEnv map[string]stri
 	}
 
 	return nil
+}
+
+// unshareOutputs gives every existing file a generate step declares as an
+// output its own storage before the step rewrites it. The instrumented
+// GOROOT may hard-link the original one, and tools like `go build -o` or
+// os.WriteFile write in place.
+func unshareOutputs(goroot string, outputs []string, extraEnv map[string]string) error {
+	for _, output := range substituteEnvSlice(outputs, extraEnv) {
+		pattern := filepath.Join(goroot, filepath.FromSlash(output))
+		// outputs omit the .exe suffix that Windows commands produce
+		for _, p := range []string{pattern, pattern + ".exe"} {
+			matches, err := filepath.Glob(p)
+			if err != nil {
+				return err
+			}
+			for _, match := range matches {
+				if err := filecopy.Unshare(match); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// hasPrecompiledStdlib reports whether goroot ships pre-compiled standard
+// library archives in pkg/$GOOS_$GOARCH, which must be rebuilt from the
+// patched sources.
+func hasPrecompiledStdlib(goroot string, env map[string]string) (bool, error) {
+	goos, goarch := env["GOOS"], env["GOARCH"]
+	if goos == "" {
+		goos = runtime.GOOS
+	}
+	if goarch == "" {
+		goarch = runtime.GOARCH
+	}
+	entries, err := os.ReadDir(filepath.Join(goroot, "pkg", goos+"_"+goarch))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".a") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func applyPatchFiles(patchDir string, goroot string) error {
@@ -174,10 +259,16 @@ func applyPatchFiles(patchDir string, goroot string) error {
 		if strings.HasSuffix(relPath, ".xgo.patch") {
 			targetRel := strings.TrimSuffix(relPath, ".xgo.patch")
 			targetPath := filepath.Join(goroot, targetRel)
+			if err := filecopy.Unshare(targetPath); err != nil {
+				return err
+			}
 			return ApplyXgoPatchFile(path, targetPath)
 		}
 
 		targetPath := filepath.Join(goroot, relPath)
+		if err := filecopy.Unshare(targetPath); err != nil {
+			return err
+		}
 		dir := filepath.Dir(targetPath)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err

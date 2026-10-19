@@ -4,8 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/xhd2015/xgo/instrument/patch"
 )
 
 func TestAbsFileKeyUnifiesSlashAndNative(t *testing.T) {
@@ -152,5 +155,47 @@ func TestAbsFileKeyUnifiesWindowsStyleSeparators(t *testing.T) {
 	got := fs.Get(AbsFile(file)) // native backslashes
 	if got == nil || got.Content != "instrumented" {
 		t.Fatalf("windows native Get after slash OverrideContent: got %#v", got)
+	}
+}
+
+func TestMakeGoOverlayWritesEveryFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	fs := MakeOverlay()
+	want := make(map[string]string)
+	for i := 0; i < 100; i++ {
+		src := filepath.Join(dir, "src", "pkg"+strconv.Itoa(i%7), "f"+strconv.Itoa(i)+".go")
+		content := "package p\n\nvar X = " + strconv.Itoa(i) + "\n"
+		fs.OverrideContent(AbsFile(src), content)
+		want[src] = content
+	}
+	redirectSrc := filepath.Join(dir, "src", "redirect.go")
+	redirectTgt := filepath.Join(dir, "other", "target.go")
+	fs.OverrideFile(AbsFile(redirectSrc), AbsFile(redirectTgt))
+
+	genDir := filepath.Join(dir, "gen")
+	goOverlay, err := fs.MakeGoOverlay(genDir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(goOverlay.Replace) != len(want)+1 {
+		t.Fatalf("got %d mappings, want %d", len(goOverlay.Replace), len(want)+1)
+	}
+	if got := goOverlay.Replace[AbsFile(filepath.ToSlash(redirectSrc))]; got != AbsFile(filepath.ToSlash(redirectTgt)) {
+		t.Errorf("redirect: %q", got)
+	}
+	for src, content := range want {
+		target := goOverlay.Replace[AbsFile(filepath.ToSlash(src))]
+		if target == "" {
+			t.Fatalf("%s: no mapping", src)
+		}
+		data, err := os.ReadFile(filepath.FromSlash(string(target)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if wantData := patch.FmtLineDirective(src, 1) + "\n" + content; string(data) != wantData {
+			t.Fatalf("%s: wrote %q, want %q", target, data, wantData)
+		}
 	}
 }

@@ -108,8 +108,16 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 				if config.DEBUG {
 					config_debug.OnResolvePackageDeclareInfo(c.Package.PkgPath(), c.File.File.File.Name, expr)
 				}
+				// resolve the declaration at the top level of the file
+				// declaring it: its imports can differ from those of the
+				// referring file, and the locals of the referring function
+				// can shadow names it uses
+				declScope := c
+				if decl.File != nil {
+					declScope = c.newFileScope(c.Package.Package, decl.File)
+				}
 				if decl.Kind == edit.DeclKindType {
-					typ := c.resolveType(decl.Type)
+					typ := declScope.resolveType(decl.Type)
 					if types.IsUnknown(typ) {
 						return types.Unknown{}
 					}
@@ -124,9 +132,9 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 				} else if decl.Kind == edit.DeclKindVar || decl.Kind == edit.DeclKindConst {
 					var varType types.Type
 					if decl.Type != nil {
-						varType = c.resolveType(decl.Type)
+						varType = declScope.resolveType(decl.Type)
 					} else if decl.Value != nil {
-						valInfo := c.resolveInfo(decl.Value)
+						valInfo := declScope.resolveInfo(decl.Value)
 						if obj, ok := valInfo.(types.Object); ok {
 							varType = obj.Type()
 						}
@@ -147,7 +155,7 @@ func (c *Scope) doResolveInfo(expr ast.Expr) types.Info {
 				} else if decl.Kind == edit.DeclKindFunc {
 					var signature types.Signature
 					if decl.FuncDecl != nil && decl.FuncDecl.Syntax != nil && decl.FuncDecl.Syntax.Type != nil {
-						typ := c.resolveType(decl.FuncDecl.Syntax.Type)
+						typ := declScope.resolveType(decl.FuncDecl.Syntax.Type)
 						if typ, ok := typ.(types.Signature); ok {
 							signature = typ
 						}

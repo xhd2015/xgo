@@ -59,7 +59,7 @@ func LogDebug(format string, args ...interface{}) {
 	if logDebugFile == nil {
 		return
 	}
-	fmt.Fprint(logDebugFile, time.Now().Format("2006-01-02 15:04:05"), " ")
+	fmt.Fprint(logDebugFile, time.Now().Format("2006-01-02 15:04:05.000"), " ")
 	fmt.Fprintf(logDebugFile, format, args...)
 	if !strings.HasSuffix(format, "\n") {
 		fmt.Fprintln(logDebugFile)

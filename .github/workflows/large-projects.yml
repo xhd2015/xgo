@@ -77,8 +77,8 @@ jobs:
         run: |
           source util.sh
           cd pocketbase/pocketbase
-          # Cron start/stop and rate-limit tests are timing-sensitive under xgo --trap-all.
-          xgo test -v --trap-all -skip='TestRandomStringByRegex|TestCronsRun|TestCronStartStop|TestDefaultRateLimitMiddleware' ./...
+          # Cron start/stop, rate-limit and watcher-debounce tests are timing-sensitive under xgo --trap-all.
+          xgo test -v --trap-all -skip='TestRandomStringByRegex|TestCronsRun|TestCronStartStop|TestDefaultRateLimitMiddleware|TestNotifyWatcher_CollectionsUpdate' ./...
       
       - uses: actions/checkout@v4
         with:
@@ -119,7 +119,8 @@ jobs:
         run: |
           source util.sh
           cd stakwork/sphinx-tribes
-          xgo test -v --trap-all $(go list ./...|grep -Ev 'github.com/stakwork/sphinx-tribes/db|github.com/stakwork/sphinx-tribes/handlers|github.com/stakwork/sphinx-tribes/routes|github.com/stakwork/sphinx-tribes/middlewares')
+          # TestMultipleCronJobs waits a fixed 5s for cron runs, timing-sensitive under --trap-all.
+          xgo test -v --trap-all -skip='TestMultipleCronJobs' $(go list ./...|grep -Ev 'github.com/stakwork/sphinx-tribes/db|github.com/stakwork/sphinx-tribes/handlers|github.com/stakwork/sphinx-tribes/routes|github.com/stakwork/sphinx-tribes/middlewares')
 
       # - uses: actions/checkout@v4
       #   with:

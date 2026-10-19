@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/xhd2015/xgo/support/goinfo"
 )
 
 func TestAddBlankImport(t *testing.T) {
@@ -61,5 +63,25 @@ func TestAddBlankImport(t *testing.T) {
 				t.Errorf("got  %q\nwant %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFormatGoDirectiveVersion(t *testing.T) {
+	version := formatGoDirectiveVersion(&goinfo.GoVersion{Major: 1, Minor: 26, Patch: 0})
+	if version != "1.26.0" {
+		t.Fatalf("formatGoDirectiveVersion() = %q, want %q", version, "1.26.0")
+	}
+	for _, text := range []string{"go1.28rc1", "go1.28beta1"} {
+		v, err := goinfo.ParseGoVersion("go version " + text + " linux/amd64")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := formatGoDirectiveVersion(v); "go"+got != text {
+			t.Fatalf("prerelease formatGoDirectiveVersion() = %q, want %q", got, text[2:])
+		}
+	}
+	version = formatGoDirectiveVersion(&goinfo.GoVersion{Major: 1, Minor: 28, Development: true})
+	if version != "1.28" {
+		t.Fatalf("development formatGoDirectiveVersion() = %q, want %q", version, "1.28")
 	}
 }

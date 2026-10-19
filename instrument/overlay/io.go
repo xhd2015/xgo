@@ -40,6 +40,16 @@ type ParsedOverlay struct {
 	Entries []OverlayEntry
 }
 
+// WriteContent writes the overlay as an overlay.json in a content
+// directory under overlayDir, see WriteContentFile, and returns its path.
+func (c *GoOverlay) WriteContent(overlayDir string) (string, error) {
+	overlayData, err := json.Marshal(c)
+	if err != nil {
+		return "", err
+	}
+	return WriteContentFile(overlayDir, "overlay.json", overlayData)
+}
+
 func (c *GoOverlay) Write(file string) error {
 	overlayData, err := json.Marshal(c)
 	if err != nil {
@@ -147,7 +157,7 @@ func CanonicalizeAbsFile(file AbsFile, opts PathOptions) AbsFile {
 
 func evalSymlinksAbs(file AbsFile) AbsFile {
 	path := filepath.FromSlash(string(file))
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+	if resolved, err := evalSymlinks(path); err == nil {
 		path = resolved
 	}
 	return AbsFile(filepath.ToSlash(filepath.Clean(path)))

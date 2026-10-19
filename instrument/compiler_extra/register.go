@@ -9,8 +9,11 @@ import (
 )
 
 type PkgNames struct {
-	REGISTER     string
-	TRAP_FUNC    string
+	REGISTER  string
+	TRAP_FUNC string
+	// TRAP_ON is optional, only set for files instrumented with
+	// guarded traps
+	TRAP_ON      string
 	TRAP_VAR     string
 	TRAP_VAR_PTR string
 
@@ -107,6 +110,11 @@ func DefineFuncLiteral(funcInfo *FuncInfo, stdlib bool, fileVar string, names Pk
 		extra = append(extra, fmt.Sprintf("ResNames:[]string{%s}", JoinQuoteNames(funcInfo.Results.Names(), ",")))
 	}
 
+	if funcInfo.TrapOnVar != "" {
+		// the runtime sets it when something is registered for the function
+		extra = append(extra, "Var:&"+funcInfo.TrapOnVar)
+	}
+
 	literal := makeLiteral(FUNC_INFO_TYPE, PKG_VAR, FILE_VAR, constants.InfoKind_Func, funcInfo.Name, identityName, funcInfo.LineNum, stdlib, extra)
 	return defineLiteral(REGISTER, funcInfo.InfoVar, literal, delayInitProp, delayInitValue)
 }
@@ -190,37 +198,58 @@ func JoinQuoteNames(names []string, sep string) string {
 }
 
 func DeclarePkgStubs(pkgPath string, names PkgNames) []string {
-	return []string{
+	stubs := []string{
 		fmt.Sprintf("type %s struct{%s}", names.FUNC_INFO_TYPE, strings.Join(constants.FUNC_INFO_FIELDS, ";")),
 		fmt.Sprintf("var %s = %s", names.REGISTER, constants.REGISTER_SIGNATURE),
 		fmt.Sprintf("var %s = %s", names.TRAP_FUNC, constants.TRAP_FUNC_SIGNATURE),
 		fmt.Sprintf("var %s = %s", names.TRAP_VAR, constants.TRAP_VAR_SIGNATURE),
 		fmt.Sprintf("var %s = %s", names.TRAP_VAR_PTR, constants.TRAP_VAR_PTR_SIGNATURE),
-		fmt.Sprintf("var %s=%q", names.PKG_VAR, pkgPath),
+		// a constant: the compiler copies a string variable into the info
+		// literals at init time instead of statically, see DeclareFileStub
+		fmt.Sprintf("const %s=%q", names.PKG_VAR, pkgPath),
 	}
+	if names.TRAP_ON != "" {
+		// a named function rather than a func literal: a literal would take
+		// a closure slot and rename the package's own top-level closures
+		stubs = append(stubs,
+			fmt.Sprintf("func %s_default(flag *uint32) bool {return true;}", names.TRAP_ON),
+			fmt.Sprintf("var %s = %s_default", names.TRAP_ON, names.TRAP_ON),
+		)
+	}
+	return stubs
 }
 
+// The file and package stubs are constants so that every info literal is
+// initialized statically. The compiler never copies a string variable
+// statically (cmd/link -X may overwrite it), so with variables each literal
+// cost init code and write barriers at every program start: 290KB of init
+// text in a package of 2600 functions.
 func DeclareFileStub(fileIndex int, absFile string) string {
-	return fmt.Sprintf("var %s=%q", constants.FileVar(fileIndex), absFile)
+	return fmt.Sprintf("const %s=%q", constants.FileVar(fileIndex), absFile)
 }
 
 func DeclareFileStubForVar(fileIndex int, absFile string) string {
-	return fmt.Sprintf("var %s=%q", constants.FileVarForVar(fileIndex), absFile)
+	return fmt.Sprintf("const %s=%q", constants.FileVarForVar(fileIndex), absFile)
 }
 
 func DeclareFileStubGc(fileIndex int, absFile string) string {
-	return fmt.Sprintf("var %s=%q", constants.FileVarGc(fileIndex), absFile)
+	return fmt.Sprintf("const %s=%q", constants.FileVarGc(fileIndex), absFile)
 }
 
 // make IR not inline
 // check patch/link/link_ir.go
 func DeclareInitFunc(names PkgNames) string {
-	return fmt.Sprintf("//go:noinline\nfunc %s(){%s=%s;%s=%s;%s=%s;%s=%s;}", names.XGO_INIT,
+	var trapOn string
+	if names.TRAP_ON != "" {
+		trapOn = fmt.Sprintf("%s=%s;", names.TRAP_ON, names.TRAP_ON)
+	}
+	return fmt.Sprintf("//go:noinline\nfunc %s(){%s=%s;%s=%s;%s=%s;%s=%s;%s}", names.XGO_INIT,
 		// self assign
 		names.REGISTER, names.REGISTER,
 		names.TRAP_FUNC, names.TRAP_FUNC,
 		names.TRAP_VAR, names.TRAP_VAR,
 		names.TRAP_VAR_PTR, names.TRAP_VAR_PTR,
+		trapOn,
 	)
 }
 

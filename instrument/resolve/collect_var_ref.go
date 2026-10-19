@@ -3,6 +3,7 @@ package resolve
 import (
 	"go/ast"
 	"go/token"
+	"sync"
 
 	"github.com/xhd2015/xgo/instrument/config"
 	"github.com/xhd2015/xgo/instrument/config/config_debug"
@@ -15,6 +16,11 @@ func (c *Scope) collectIdent(addr *ast.UnaryExpr, idt *ast.Ident) bool {
 	if isBlankName(idt.Name) || c.Has(idt.Name) {
 		return false
 	}
+	// only a variable (or constant) of the package resolves to a
+	// PkgVariable: skip resolving functions, types, imports and builtins
+	if decl := c.Package.Decls[idt.Name]; decl == nil || (decl.Kind != edit.DeclKindVar && decl.Kind != edit.DeclKindConst) {
+		return false
+	}
 	if config.DEBUG {
 		config_debug.OnCollectVarRef(c.File.File.File.Name, idt.Name)
 	}
@@ -23,6 +29,9 @@ func (c *Scope) collectIdent(addr *ast.UnaryExpr, idt *ast.Ident) bool {
 
 // if is &pkg.VarName, return &pkg.VarName_xgo_get_addr()
 func (c *Scope) collectSelector(addr *ast.UnaryExpr, sel *ast.SelectorExpr) bool {
+	if !c.mayReferPkgVar(sel) {
+		return false
+	}
 	// parse the whole A.B to determine A's type
 	selInfo := c.resolveInfo(sel)
 	if types.IsUnknown(selInfo) {
@@ -78,7 +87,7 @@ func (c *Scope) collectVarRef(addr *ast.UnaryExpr, expr ast.Expr, originalSel *a
 	if decl == nil {
 		return false
 	}
-	if !c.tryResolveDeclType(decl) {
+	if !c.tryResolveDeclType(pkgPath, decl) {
 		return false
 	}
 
@@ -118,7 +127,7 @@ func (c *Scope) collectVarRef(addr *ast.UnaryExpr, expr ast.Expr, originalSel *a
 	} else {
 		nameStart = expr.Pos()
 	}
-	decl.VarRefs = append(decl.VarRefs, &edit.VarRef{
+	c.Global.addVarRef(decl, &edit.VarRef{
 		File:        c.File.File,
 		Addr:        addr,
 		NeedPtr:     needPtr,
@@ -129,7 +138,11 @@ func (c *Scope) collectVarRef(addr *ast.UnaryExpr, expr ast.Expr, originalSel *a
 	return true
 }
 
-func (c *Scope) tryResolveDeclType(decl *edit.Decl) bool {
+// declTypeMu guards Decl.ResolvedValueType, which the files traversed in
+// parallel share.
+var declTypeMu sync.Mutex
+
+func (c *Scope) tryResolveDeclType(pkgPath string, decl *edit.Decl) bool {
 	if decl.Type != nil {
 		return true
 	}
@@ -141,25 +154,89 @@ func (c *Scope) tryResolveDeclType(decl *edit.Decl) bool {
 	if _, ok := decl.Value.(*ast.FuncLit); ok {
 		return true
 	}
-	if decl.ResolvedValueType != nil {
-		return !types.IsUnknown(decl.ResolvedValueType)
+	declTypeMu.Lock()
+	resolved := decl.ResolvedValueType
+	declTypeMu.Unlock()
+	if resolved == nil {
+		// workers racing here compute the same type, see
+		// resolveDeclValueType; keep the first one
+		resolved = c.resolveDeclValueType(pkgPath, decl)
+		declTypeMu.Lock()
+		if decl.ResolvedValueType == nil {
+			decl.ResolvedValueType = resolved
+		}
+		resolved = decl.ResolvedValueType
+		declTypeMu.Unlock()
 	}
-	info := c.resolveInfo(decl.Value)
-	if types.IsUnknown(info) {
-		decl.ResolvedValueType = types.Unknown{}
-		return false
-	}
-	obj, ok := info.(types.Object)
-	if !ok {
-		decl.ResolvedValueType = types.Unknown{}
-		return false
-	}
-	objType := obj.Type()
-	if types.IsUnknown(objType) {
-		decl.ResolvedValueType = types.Unknown{}
-		return false
-	}
+	return !types.IsUnknown(resolved)
+}
 
-	decl.ResolvedValueType = objType
-	return true
+// resolveDeclValueType resolves the type of the value of decl within the
+// file declaring it, whose imports, package and scopes differ from those of
+// the referring function in general. The result is cached on decl for every
+// file referring to it, so it must not depend on the referring file: the
+// value is resolved in a scope of its own, with caches of its own (those of
+// the referring file can hold resolutions in progress).
+func (c *Scope) resolveDeclValueType(pkgPath string, decl *edit.Decl) types.Type {
+	if decl.File == nil {
+		return types.Unknown{}
+	}
+	pkg := c.Global.Packages.GetPackage(pkgPath)
+	if pkg == nil {
+		return types.Unknown{}
+	}
+	global := &GlobalScope{
+		Packages: c.Global.Packages,
+		// resolving records nothing, but must not touch what the
+		// referring file records either
+		Recorder: &Recorder{},
+		effects:  &fileEffects{},
+	}
+	declScope := newFileScope(global, pkg, decl.File, c.PkgDepth+1)
+	obj, ok := declScope.resolveInfo(decl.Value).(types.Object)
+	if !ok {
+		return types.Unknown{}
+	}
+	if objType := obj.Type(); objType != nil && !types.IsUnknown(objType) {
+		return objType
+	}
+	return types.Unknown{}
+}
+
+// mayReferPkgVar reports whether resolving sel can find a package variable
+// to rewrite, judging from the root of its selector chain: a package var or
+// const v (v.F, v.F.G...) or an instrumented import pkg (pkg.Var,
+// pkg.Var.F...). Resolving a chain is also what finds that a pointer method
+// is called on a field of a variable (v.F.Lock()), so a chain is resolved
+// whole whenever its root may be a variable. Selectors on anything else,
+// like locals or packages that are not instrumented (fmt.Sprintf), cannot
+// refer to one: they are most of a program and were most of the traversal.
+func (c *Scope) mayReferPkgVar(sel *ast.SelectorExpr) bool {
+	root := deparen(sel.X)
+	for {
+		x, ok := root.(*ast.SelectorExpr)
+		if !ok {
+			break
+		}
+		root = deparen(x.X)
+	}
+	idt, ok := root.(*ast.Ident)
+	if !ok || c.Has(idt.Name) {
+		return false
+	}
+	if decl := c.Package.Decls[idt.Name]; decl != nil {
+		return decl.Kind == edit.DeclKindVar || decl.Kind == edit.DeclKindConst
+	}
+	return c.isInstrumentedImport(idt)
+}
+
+// isInstrumentedImport reports whether idt, not declared in the package
+// or a local scope, names an import of an instrumented package.
+func (c *Scope) isInstrumentedImport(idt *ast.Ident) bool {
+	pkgPath, ok := c.File.Imports[idt.Name]
+	if !ok {
+		return false
+	}
+	_, allow := config.CheckInstrument(pkgPath)
+	return allow
 }

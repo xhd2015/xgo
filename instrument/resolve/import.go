@@ -20,11 +20,10 @@ func getFileImports(registry PackageRegistry, file *ast.File) Imports {
 		if impDecl.Name != nil {
 			localName = impDecl.Name.Name
 		} else {
-			var loadName string
-			pkg := registry.GetPackage(pkgPath)
-			if pkg != nil {
-				loadName = pkg.LoadPackage.GoPackage.Name
-			}
+			// listed packages are named even before they are parsed:
+			// guessing from the path depended on whether an earlier
+			// file had happened to load the package
+			loadName := registry.PackageName(pkgPath)
 			if loadName == "" {
 				name, idx := getLastPartAsName(pkgPath)
 				if idx >= 0 && isVersion(name) {

@@ -77,7 +77,8 @@ func Inspect(f interface{}) (recvPtr interface{}, funcInfo *core.FuncInfo, funcP
 		}
 	}
 
-	// retrieve receive ptr
+	// retrieve receive ptr: the call must reach trap
+	enableTrapFor(funcInfo)
 	callFn := func() {
 		stack := getOrAttachStackData()
 		stack.inspecting = func(pc uintptr, f *core.FuncInfo, actRecvPtr interface{}, args []interface{}, results []interface{}) {

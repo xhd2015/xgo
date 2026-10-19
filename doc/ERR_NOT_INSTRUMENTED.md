@@ -1,3 +1,38 @@
+# Binary built without xgo
+
+`mock.Patch`, `mock.Mock`, their by-name/method variants, and trap/recorder
+registration require xgo runtime linkage. With plain `go test`, these calls
+panic immediately with an actionable message telling you to run
+`go tool xgo test ...` or `xgo test ...` instead. Importing the runtime alone
+does not panic.
+
+`core.Instrumented()` reports whether the binary has xgo runtime linkage. It is
+safe during package initialization, including in excluded packages. It does not
+say whether a particular target function can be patched.
+
+For tests that should skip gracefully in editors:
+
+```go
+import "github.com/xhd2015/xgo/runtime/xgotest"
+
+func TestPatch(t *testing.T) {
+    xgotest.Require(t) // before any patching
+    // ...
+}
+```
+
+Set `XGO_REQUIRE=skip` for plain-Go editor runs. The default and
+`XGO_REQUIRE=fail` fail the test with the build instructions. Invalid values also
+fail with a diagnostic. In an xgo-built binary, `Require` always returns normally.
+This helper does not suppress patching errors or skip patches made in `init()`;
+there is no silent-no-op mode for patching.
+
+# Target not instrumented in an xgo-built binary
+
+The following is a different error: the binary has xgo runtime linkage, but the
+target function or variable has no trap point. Building with xgo alone does not
+make every third-party or explicitly excluded function patchable.
+
 # Cause of `error not instrumented by xgo`
 When mock setup fails:
 ```go

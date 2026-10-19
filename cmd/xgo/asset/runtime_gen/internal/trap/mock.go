@@ -40,22 +40,27 @@ type varMockHolder struct {
 }
 
 func PushMockInterceptor(fn interface{}, interceptor Interceptor) func() {
+	runtime.RequireInstrumented()
 	return pushMockInterceptor(fn, interceptor)
 }
 
 func PushMockReplacer(fn interface{}, replacer interface{}) func() {
+	runtime.RequireInstrumented()
 	return pushMockReplacer(fn, replacer)
 }
 
 func PushMockReplacerByName(pkgPath string, funcName string, replacer interface{}) func() {
+	runtime.RequireInstrumented()
 	return pushMockReplacerByName(pkgPath, funcName, replacer)
 }
 
 func PushMockReplacerMethodByName(instance interface{}, method string, replacer interface{}) func() {
+	runtime.RequireInstrumented()
 	return pushMockReplacerMethodByName(instance, method, replacer)
 }
 
 func PushMockByName(pkgPath string, funcName string, interceptor Interceptor) func() {
+	runtime.RequireInstrumented()
 	recvPtr, funcInfo, _, trappingPC := getFuncByName(pkgPath, funcName)
 	if funcInfo.Kind == core.Kind_Var || funcInfo.Kind == core.Kind_VarPtr || funcInfo.Kind == core.Kind_Const {
 		if strings.HasPrefix(funcName, "*") {
@@ -79,6 +84,7 @@ func PushMockByName(pkgPath string, funcName string, interceptor Interceptor) fu
 }
 
 func PushMockMethodByName(instance interface{}, method string, interceptor Interceptor) func() {
+	runtime.RequireInstrumented()
 	recvPtr, _, _, trappingPC := getMethodByName(instance, method)
 	handler := buildMockFromInterceptor(recvPtr, interceptor)
 	return pushMockHandler(trappingPC, recvPtr, handler)
@@ -168,10 +174,13 @@ func pushMockReplacer(fn interface{}, replacer interface{}) func() {
 // the caller returned.
 // `mock` returns `false` if the original function should be called.
 func pushMockHandler(pc uintptr, recvPtr interface{}, handler func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool) func() {
+	enableTrapForPC(pc)
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stackData := getOrAttachStackData()
 		holder = &stackData.interceptors
+	} else {
+		markGlobalInterceptorHolderUsed()
 	}
 	if holder.mock == nil {
 		holder.mock = map[uintptr][]*mockHolder{}
@@ -204,6 +213,8 @@ func pushVarMockHandler(varAddr uintptr, mock func(fnInfo *core.FuncInfo, res in
 	if runtime.XgoInitFinished() {
 		stackData := getOrAttachStackData()
 		holder = &stackData.interceptors
+	} else {
+		markGlobalInterceptorHolderUsed()
 	}
 	if holder.varMock == nil {
 		holder.varMock = map[uintptr][]*varMockHolder{}
@@ -236,6 +247,8 @@ func pushVarPtrMockHandler(varAddr uintptr, mock func(fnInfo *core.FuncInfo, res
 	if runtime.XgoInitFinished() {
 		stackData := getOrAttachStackData()
 		holder = &stackData.interceptors
+	} else {
+		markGlobalInterceptorHolderUsed()
 	}
 	if holder.varPtrMock == nil {
 		holder.varPtrMock = map[uintptr][]*varMockHolder{}

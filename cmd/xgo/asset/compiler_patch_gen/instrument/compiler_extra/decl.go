@@ -14,6 +14,9 @@ type FuncInfo struct {
 	HasGenericParams bool
 	LineNum          int
 	InfoVar          string
+	// TrapOnVar is the uint32 flag of a function guarded by __xgo_trap_on_,
+	// empty if the function is not guarded
+	TrapOnVar string
 
 	RecvPtr      bool
 	RecvGeneric  bool

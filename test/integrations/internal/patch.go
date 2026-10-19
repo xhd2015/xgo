@@ -12,7 +12,7 @@ import (
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
-func ApplyFileBased(rootDir, goroot string, goVersion *goinfo.GoVersion) error {
+func ApplyFileBased(rootDir, origGoroot, goroot string, goVersion *goinfo.GoVersion) error {
 	srcDir := filepath.Join(rootDir, "patches", fmt.Sprintf("go%d.%d", goVersion.Major, goVersion.Minor))
 	tmpPatchDir, err := os.MkdirTemp("", "xgo-patch-test-*")
 	if err != nil {
@@ -40,12 +40,12 @@ func ApplyFileBased(rootDir, goroot string, goVersion *goinfo.GoVersion) error {
 	os.WriteFile(filepath.Join(patchDir, "__config__.json"), configBytes, 0644)
 
 	extraEnv := map[string]string{
-		"XGO_SRC":            rootDir,
-		"INSTRUMENT_GOROOT":  goroot,
-		"ORIG_GOROOT":        goroot,
-		"GO_VERSION":         fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch),
-		"GOOS":               runtime.GOOS,
-		"GOARCH":             runtime.GOARCH,
+		"XGO_SRC":           rootDir,
+		"INSTRUMENT_GOROOT": goroot,
+		"ORIG_GOROOT":       origGoroot,
+		"GO_VERSION":        fmt.Sprintf("go%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch),
+		"GOOS":              runtime.GOOS,
+		"GOARCH":            runtime.GOARCH,
 	}
 	skipKinds := skipNonMkbuiltinKinds(JsonGenerateKinds(srcDir))
 	return patches.ApplyPatches(patchDir, goroot, rootDir, extraEnv, skipKinds, generateHandler)

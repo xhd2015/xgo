@@ -6,6 +6,16 @@ import (
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
+func TestReleaseXgoHomeIsNotForwardedToTestBinary(t *testing.T) {
+	opts, err := parseOptions("test", []string{"--xgo-home", "/tmp/isolated-xgo", "./..."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.xgoHome != "/tmp/isolated-xgo" || len(opts.remainArgs) != 1 || opts.remainArgs[0] != "./..." {
+		t.Fatalf("xgo-home must be consumed by xgo: %+v", opts)
+	}
+}
+
 func TestParseUseFilePatches(t *testing.T) {
 	pbTrue := ptrBool(true)
 	pbFalse := ptrBool(false)

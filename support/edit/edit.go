@@ -77,7 +77,17 @@ func (b *Buffer) Bytes() []byte {
 	// to be applied before a replacement of the text at [x, y).
 	sort.Stable(b.q)
 
-	var new []byte
+	// size the result upfront: appending grew it about log(n) times,
+	// copying it each time
+	size := len(b.old)
+	for _, e := range b.q {
+		size += len(e.new) - (e.end - e.start)
+	}
+	if size < 0 {
+		// overlapping edits, reported below
+		size = 0
+	}
+	new := make([]byte, 0, size)
 	offset := 0
 	for i, e := range b.q {
 		if e.start < offset {

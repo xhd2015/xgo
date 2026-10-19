@@ -1,0 +1,4 @@
+# Race instrumentation includes time.sendTime, which runs on g0 for expired channels.
+go: 1.23
+flags: -race
+args: ./

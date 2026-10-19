@@ -31,6 +31,18 @@ type importResult struct {
 	//   /project/go.sum => /project/.xgo/gen/overlay/project/go.sum
 	modReplace  map[overlay.AbsFile]overlay.AbsFile
 	fileReplace map[overlay.AbsFile]overlay.AbsFile
+
+	// traceImportsDeferred: the import of runtime/trace was not added to
+	// the packages of the command, instrumentUserCode adds it to the ones
+	// it loads, or addBlankImports must still run (with overlayDir)
+	traceImportsDeferred bool
+	// pristineTrace is the content of the extracted runtime's trace.go,
+	// whose instrumented version replaces it on disk: instrumentation reads
+	// this instead of resetting the file, which concurrent runs may be
+	// compiling
+	pristineTraceFile string
+	pristineTrace     []byte
+	overlayDir        string
 }
 
 func getProjectRoot(projectDir string, modRootRel []string) string {
@@ -65,7 +77,7 @@ func getVendorDir(projectRoot string) (string, error) {
 // by employing this technique with -modfile=replacedModFile, we can instruct go
 // to build with different modules.
 // TODO: may apply tags
-func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, projectRoot string, localXgoGenDir string, mainModule string, mod string, forceCopyRuntime bool, forceLoad bool, args []string) (*importResult, error) {
+func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVersion *goinfo.GoVersion, absModFile string, xgoSrc string, projectDir string, projectRoot string, localXgoGenDir string, mainModule string, mod string, forceCopyRuntime bool, forceLoad bool, args []string, deferTraceImports bool) (*importResult, error) {
 	if mainModule == "" {
 		// only work with module
 		return nil, nil
@@ -111,7 +123,15 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 	if err != nil {
 		return nil, err
 	}
-	suffix := ""
+	// the runtime is extracted per runtime version: xgo always uses the one
+	// it embeds, and binaries of different versions can run in the same
+	// project (e.g. `go tool xgo` pinned per branch). Sharing a directory
+	// left an older xgo with a newer runtime whose links it lacks.
+	runtimeNumber, err := embeddedRuntimeNumber()
+	if err != nil {
+		return nil, err
+	}
+	suffix := "_" + strconv.Itoa(runtimeNumber)
 	if isDevelopment {
 		suffix = "_dev"
 	}
@@ -125,7 +145,7 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 			return nil, err
 		}
 
-			overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, mainModule, vendorDir, overlayDir, runtimeModuleDir, forceCopyRuntime)
+		overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, mainModule, vendorDir, overlayDir, runtimeModuleDir, forceCopyRuntime)
 		if err != nil {
 			return nil, err
 		}
@@ -135,6 +155,8 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 			res.mod = overlayInfo.mod
 			res.modfile = overlayInfo.modfile
 			res.runtimeModuleDir = runtimeModuleDir
+			res.pristineTraceFile = overlayInfo.pristineTraceFile
+			res.pristineTrace = overlayInfo.pristineTrace
 		}
 	}
 
@@ -145,9 +167,15 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 		// The runtime module already compiles all its packages; injecting
 		// import _ "runtime/trace" creates a cycle: core → trace → internal/trap → core.
 		// See patches/go1.25/issues/RUNTIME_LIB_SELF_REQUIRE.md
-		fileReplace, err = addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, overlayDir)
-		if err != nil {
-			return nil, err
+		if deferTraceImports {
+			// saves listing the packages here: instrumentation loads them
+			res.traceImportsDeferred = true
+			res.overlayDir = overlayDir
+		} else {
+			fileReplace, err = addBlankImports(goroot, goBinary, projectDir, pkgArgs, test, overlayDir)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -227,9 +255,14 @@ type dependencyInfo struct {
 	mod string
 	// the -modfile flag
 	modfile string // alternative go.mod
+
+	pristineTraceFile string
+	pristineTrace     []byte
 }
 
 func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion, modfileOption string, xgoSrc string, projectRoot string, mainModule string, vendorDir string, tmpOverlayDir string, tmpRuntime string, forceCopyRuntime bool) (*dependencyInfo, error) {
+	var pristineTraceFile string
+	var pristineTrace []byte
 	if isDevelopment {
 		err := filecopy.NewOptions().Ignore(".xgo", "test").CopyReplaceDir(filepath.Join(xgoSrc, "runtime"), tmpRuntime)
 		if err != nil {
@@ -262,26 +295,35 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			// always copy trace.go because it will be instrumented
-			logDebug("extracting runtime/trace/trace.go from xgo to %s", tmpRuntime)
-			content, err := asset.RuntimeGenFS.ReadFile(asset.RuntimeGen + "/trace/trace.go")
-			if err != nil {
-				return nil, err
-			}
-			err = os.WriteFile(filepath.Join(tmpRuntime, "trace", "trace.go"), content, 0755)
-			if err != nil {
-				return nil, err
-			}
 		}
+		// trace.go is instrumented from its pristine content every time
+		content, err := asset.RuntimeGenFS.ReadFile(asset.RuntimeGen + "/trace/trace.go")
+		if err != nil {
+			return nil, err
+		}
+		pristineTraceFile, err = filepath.Abs(filepath.Join(tmpRuntime, "trace", "trace.go"))
+		if err != nil {
+			return nil, err
+		}
+		pristineTrace = content
 	}
 
 	goMod := modfileOption
 	if modfileOption == "" {
 		goMod = filepath.Join(projectRoot, "go.mod")
 	}
-	tmpGoMod := fileutil.RebasePath(tmpOverlayDir, goMod)
-	err := filecopy.CopyFileAll(goMod, tmpGoMod)
+	// edit a private copy: other runs in the project may be using the
+	// published one, see publishGoMod
+	if err := os.MkdirAll(tmpOverlayDir, 0755); err != nil {
+		return nil, err
+	}
+	editDir, err := os.MkdirTemp(tmpOverlayDir, ".tmp-gomod-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(editDir)
+	tmpGoMod := filepath.Join(editDir, "go.mod")
+	err = filecopy.CopyFileAll(goMod, tmpGoMod)
 	if err != nil {
 		return nil, err
 	}
@@ -396,10 +438,11 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			fmt.Sprintf("-require=%s@v%s", constants.RUNTIME_MODULE, VERSION),
 			fmt.Sprintf("-replace=%s=%s", constants.RUNTIME_MODULE, tmpRuntime),
 		}
-		// In Go 1.26+, 'go mod tidy' is required when using old go directives (e.g. go 1.14)
-		// with require/replace. Bump the go directive to at least 1.18 to avoid this.
+		// In Go 1.26+, the generated modfile must match the complete running Go
+		// version. Dropping the patch component makes 1.26 older than dependencies
+		// which declare 1.26.0 and leaves the generated modfile untidy.
 		if goVersion.Minor >= 26 {
-			modEditArgs = append(modEditArgs, fmt.Sprintf("-go=%d.%d", goVersion.Major, goVersion.Minor))
+			modEditArgs = append(modEditArgs, "-go="+formatGoDirectiveVersion(goVersion))
 		}
 		modEditArgs = append(modEditArgs, tmpGoMod)
 		err = cmd.Env([]string{
@@ -409,14 +452,21 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			return nil, err
 		}
 	}
-	if modfile == "" {
-		goModReplace[overlay.AbsFile(goMod)] = overlay.AbsFile(tmpGoMod)
+	publishedGoMod, err := publishGoMod(filepath.Dir(fileutil.RebasePath(tmpOverlayDir, goMod)), tmpGoMod, tmpGoSum)
+	if err != nil {
+		return nil, err
 	}
-
+	if modfile == "" {
+		goModReplace[overlay.AbsFile(goMod)] = overlay.AbsFile(publishedGoMod)
+	} else if modfile == tmpGoMod {
+		modfile = publishedGoMod
+	}
 	return &dependencyInfo{
-		modReplace: goModReplace,
-		mod:        mod,
-		modfile:    modfile,
+		modReplace:        goModReplace,
+		mod:               mod,
+		modfile:           modfile,
+		pristineTraceFile: pristineTraceFile,
+		pristineTrace:     pristineTrace,
 	}, nil
 }
 
@@ -443,20 +493,9 @@ func needCopyRuntimeFromXgo(targetRuntimeDir string) (bool, error) {
 	if len(fsVersion) == 0 {
 		return true, nil
 	}
-	// you need to run `go run ./script/generate` to sync runtime and cmd/xgo/runtime_gen
-	embedPath := concatEmbedPath(asset.RuntimeGen, joinEmbedPath(versionFilePath))
-	emebedVersion, err := asset.RuntimeGenFS.ReadFile(embedPath)
-	if err != nil {
-		return false, err
-	}
-
 	fsConstants, fsErr := goparse.ExtractConstants(fsVersionFile, string(fsVersion))
 	if fsErr != nil {
 		return true, nil
-	}
-	embedConstants, err := goparse.ExtractConstants(embedPath, string(emebedVersion))
-	if err != nil {
-		return false, err
 	}
 
 	fsNumber, ok := fsConstants["NUMBER"]
@@ -467,13 +506,9 @@ func needCopyRuntimeFromXgo(targetRuntimeDir string) (bool, error) {
 	if fsNumberInt <= 0 {
 		return true, nil
 	}
-	embedNumber, ok := embedConstants["NUMBER"]
-	if !ok {
-		return true, nil
-	}
-	embedNumberInt, _ := strconv.Atoi(embedNumber)
-	if embedNumberInt <= 0 {
-		return true, nil
+	embedNumberInt, err := embeddedRuntimeNumber()
+	if err != nil {
+		return false, err
 	}
 	if fsNumberInt < embedNumberInt {
 		logDebug("fs version number: %d < embed version number: %d, need extracting from xgo", fsNumberInt, embedNumberInt)
@@ -618,14 +653,10 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 	mapping := make(map[string]string, len(files))
 	for _, file := range files {
 		srcFile := filepath.Join(srcDir, file)
-		dstFile := fileutil.RebasePath(dstDir, srcFile)
-		err := filecopy.CopyFileAll(srcFile, dstFile)
-		if err != nil {
-			return nil, err
-		}
+		rebased := fileutil.RebasePath(dstDir, srcFile)
 		// add blank import
 		// NOTE: go allows duplicate blank imports
-		content, err := os.ReadFile(dstFile)
+		content, err := os.ReadFile(srcFile)
 		if err != nil {
 			return nil, err
 		}
@@ -633,7 +664,8 @@ func addBlankImportForPackage(srcDir string, dstDir string, imports []string, fi
 		if !ok {
 			return nil, nil
 		}
-		err = os.WriteFile(dstFile, []byte(newContent), 0755)
+		// by content: concurrent runs may read it, see overlay.MakeGoOverlay
+		dstFile, err := overlay.WriteContentFile(filepath.Dir(rebased), filepath.Base(rebased), []byte(newContent))
 		if err != nil {
 			return nil, err
 		}
@@ -750,9 +782,64 @@ func createGoModPlaceholder(file string, modPath string, goVersion string) error
 		return err
 	}
 	content := fmt.Sprintf("module %s\ngo %s\n", modPath, goVersion)
-	err = os.WriteFile(file, []byte(content), 0755)
+	err = overlay.WriteFileIfChanged(file, []byte(content))
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+// formatGoDirectiveVersion renders a go directive that includes the patch
+// component (1.26.0, not 1.26) so the generated modfile is never older than
+// dependencies that declare a full version.
+func formatGoDirectiveVersion(goVersion *goinfo.GoVersion) string {
+	// Tip identifies itself as 1.N, which is older than 1.N.0. Requiring
+	// the future stable release makes its own go command reject the module.
+	if goVersion.Development {
+		return fmt.Sprintf("%d.%d", goVersion.Major, goVersion.Minor)
+	}
+	if goVersion.Prerelease != "" {
+		return fmt.Sprintf("%d.%d%s", goVersion.Major, goVersion.Minor, goVersion.Prerelease)
+	}
+	return fmt.Sprintf("%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch)
+}
+
+// embeddedRuntimeNumber returns the NUMBER of the runtime xgo embeds.
+func embeddedRuntimeNumber() (int, error) {
+	// you need to run `go run ./script/generate` to sync runtime and cmd/xgo/runtime_gen
+	embedPath := concatEmbedPath(asset.RuntimeGen, joinEmbedPath([]string{"core", "version.go"}))
+	embedVersion, err := asset.RuntimeGenFS.ReadFile(embedPath)
+	if err != nil {
+		return 0, err
+	}
+	embedConstants, err := goparse.ExtractConstants(embedPath, string(embedVersion))
+	if err != nil {
+		return 0, err
+	}
+	number, err := strconv.Atoi(embedConstants["NUMBER"])
+	if err != nil || number <= 0 {
+		return 0, fmt.Errorf("invalid NUMBER in embedded %s: %q", embedPath, embedConstants["NUMBER"])
+	}
+	return number, nil
+}
+
+// publishGoMod copies the edited go.mod, and its go.sum, into a directory
+// under dir named after their contents and returns the new go.mod: the go
+// command of a run reads them (and may add to go.sum) while other runs in
+// the project prepare theirs.
+func publishGoMod(dir string, goMod string, goSum string) (string, error) {
+	files := make(map[string][]byte, 2)
+	content, err := os.ReadFile(goMod)
+	if err != nil {
+		return "", err
+	}
+	files["go.mod"] = content
+	if content, err := os.ReadFile(goSum); err == nil {
+		files["go.sum"] = content
+	}
+	contentDir, err := overlay.WriteContentFiles(dir, files)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(contentDir, "go.mod"), nil
 }

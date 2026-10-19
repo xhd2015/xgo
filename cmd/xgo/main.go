@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	runtimedebug "runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +47,12 @@ var closeDebug func()
 const V1_0_0 = false
 
 func main() {
+	// instrumenting keeps the syntax of every main module package alive
+	// while it allocates: collecting less often saves several percent of
+	// the setup time for about a tenth more peak memory
+	if os.Getenv("GOGC") == "" {
+		runtimedebug.SetGCPercent(400)
+	}
 	args := os.Args[1:]
 
 	var cmd string
@@ -169,6 +177,7 @@ func handleBuild(cmd string, args []string) error {
 	remainArgs := opts.remainArgs
 	testArgs := opts.testArgs
 	buildFlags := opts.buildFlags
+	trimpath := buildTrimpath(remainArgs, buildFlags, os.Getenv("GOFLAGS"))
 	progFlags := opts.progFlags
 	flagA := opts.flagA
 	projectDir := opts.projectDir
@@ -394,7 +403,11 @@ func handleBuild(cmd string, args []string) error {
 			return err
 		}
 		// ~/.xgo/go-instrument/go1.21.0
-		instrumentDir = filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName)
+		instrumentDir = filepath.Join(xgoDir, "go-instrument"+instrumentSuffix, mappedGorootName+"_"+instrumentRevisionKey(getCoreRevision(), *opts.useFilePatches))
+		if opts.skipRebuildCompilerAndGo {
+			// Source-only setup must never be mistaken for a runnable toolchain.
+			instrumentDir += "_src-only"
+		}
 	}
 
 	// cache maps to instrument dir
@@ -413,14 +426,16 @@ func handleBuild(cmd string, args []string) error {
 
 	logDebug("instrument dir: %s", instrumentDir)
 	if cmdSetup && deleteFlag {
-		logDebug("delete instrument dir: %s", instrumentDir)
-		err := os.RemoveAll(instrumentDir)
-		if err != nil {
-			return err
-		}
-		err = os.RemoveAll(instrumentCacheDir)
-		if err != nil {
-			return err
+		for _, dir := range []string{instrumentDir, instrumentCacheDir} {
+			lease, err := lockCache(dir, true, true)
+			if err != nil {
+				return err
+			}
+			err = os.RemoveAll(dir)
+			lease.close()
+			if err != nil {
+				return err
+			}
 		}
 		if flagV {
 			fmt.Fprintf(os.Stdout, "rm -rf %s\n", instrumentDir)
@@ -439,13 +454,6 @@ func handleBuild(cmd string, args []string) error {
 	}
 	packageDataDir := filepath.Join(instrumentDir, "pkgdata")
 
-	// also ensure GOROOT itself exists
-	gstat, gstatErr := os.Stat(instrumentGoroot)
-	instrumentedGorootNeedRecreate := true
-	if gstatErr == nil && gstat.IsDir() {
-		instrumentedGorootNeedRecreate = false
-	}
-
 	includeAsMainModules := parseModuleList(opts.mockRuleIncludeAsMainModule)
 	optionsFromFile, optionsFromFileContent, err := mergeOptionFiles(sessionTmpDir, opts.optionsFromFile, opts.mockRules, includeAsMainModules)
 	if err != nil {
@@ -463,14 +471,8 @@ func handleBuild(cmd string, args []string) error {
 	//  - https://github.com/xhd2015/xgo/issues/311
 	// we no longer need separate build cache
 	// but we need to separate it from normal GOCACHE
-	buildCacheDir := filepath.Join(instrumentCacheDir, "build-cache")
+	buildCacheDir := resolveBuildCacheDir(instrumentCacheDir, os.Getenv(XGO_BUILD_CACHE_DIR), sharedBuildCacheNamespace(goVersionName, instrumentSuffix))
 	revisionFile := filepath.Join(instrumentDir, INSTRUMENT_XGO_REVISION_FILE)
-	fullSyncRecord := filepath.Join(instrumentDir, "full-sync-record.txt")
-
-	err = os.MkdirAll(buildCacheDir, 0755)
-	if err != nil {
-		return err
-	}
 
 	var realXgoSrc string
 	if isDevelopment {
@@ -500,80 +502,96 @@ func handleBuild(cmd string, args []string) error {
 	}()
 
 	var coreRevisionChanged bool
-	if !noInstrument && !noSetup {
-		err = ensureDirs(binDir, logDir, instrumentDir, packageDataDir)
-		if err != nil {
-			return err
-		}
-		coreRevision := getCoreRevision()
-		var err error
-		coreRevisionChanged, err = checkRevisionChanged(revisionFile, coreRevision)
-		if err != nil {
-			return err
-		}
-
-		if resetInstrument {
-			if !instrumented {
-				logDebug("reset instrument %s", instrumentDir)
-				err := os.RemoveAll(instrumentDir)
+	if !noInstrument {
+		// Lock order is target GOROOT, source (cold setup only), default cache,
+		// then override cache. In-place writers hold only their GOROOT lease. GC only
+		// tries locks without waiting, so it cannot invert this order.
+		var sourceLease *cacheLock
+		defer func() { sourceLease.close() }()
+		var instrumentLease *cacheLock
+		if !noSetup && !instrumented && !opts.patchGorootInPlace && !isDevelopment {
+			instrumentLease, err = prepareInstrumentDir(instrumentDir, instrumentSetupRecord(getCoreRevision(), goVersionName, *opts.useFilePatches), resetInstrument || buildCompiler, func(stage string) error {
+				// Only cold setup reads the original tree. Keep its lease
+				// through the invocation so in-place patchers cannot race it.
+				if sourceLease == nil {
+					sourceDir, sourceErr := sourceGorootLeaseDir(xgoDir, goroot)
+					if sourceErr != nil {
+						return sourceErr
+					}
+					sourceLease, err = lockCache(sourceDir, false, true)
+					if err != nil {
+						return err
+					}
+				}
+				stageGoroot := filepath.Join(stage, goVersionName)
+				if err := syncGoroot(goroot, stageGoroot, filepath.Join(stage, "full-sync-record.txt"), *opts.useFilePatches && runtime.GOOS != "windows"); err != nil {
+					return err
+				}
+				if err := patchRuntime(goroot, stageGoroot, realXgoSrc, goVersion, true, true, false, *opts.useFilePatches, opts.skipRebuildCompilerAndGo); err != nil {
+					return err
+				}
+				if err := os.MkdirAll(filepath.Join(stage, "pkgdata"), 0755); err != nil {
+					return err
+				}
+				return os.WriteFile(filepath.Join(stage, INSTRUMENT_XGO_REVISION_FILE), []byte(getCoreRevision()), 0644)
+			})
+		} else {
+			// Development and in-place patching mutate their tree directly;
+			// serialize them for the entire invocation, including consumers.
+			leaseDir := instrumentLeaseDir(instrumentDir, goroot, instrumented, opts.patchGorootInPlace)
+			if opts.patchGorootInPlace && !instrumented {
+				leaseDir, err = sourceGorootLeaseDir(xgoDir, goroot)
 				if err != nil {
 					return err
 				}
 			}
+			instrumentLease, err = lockCache(leaseDir, !noSetup && (!instrumented || isDevelopment || opts.patchGorootInPlace), true)
 		}
+		if err != nil {
+			return err
+		}
+		defer instrumentLease.close()
 
-		// clear cache for new xgo
-		if resetInstrument || coreRevisionChanged {
-			err = os.RemoveAll(instrumentCacheDir)
+		if !noSetup && (!instrumented && isDevelopment || opts.patchGorootInPlace) {
+			if err := ensureDirs(binDir, logDir, instrumentDir, packageDataDir); err != nil {
+				return err
+			}
+			coreRevisionChanged, err = checkRevisionChanged(revisionFile, getCoreRevision())
 			if err != nil {
 				return err
 			}
-		}
-
-		if !cmdSetup && (resetInstrument || flagA) {
-			logDebug("reset overlay %s", localXgoGenDir)
-			err := os.RemoveAll(localXgoGenDir)
-			if err != nil {
-				return err
-			}
-			// re init
-			err = setupLocalXgoGenDir(localXgoGenDir)
-			if err != nil {
-				return err
-			}
-		}
-
-		resetOrRevisionChanged := resetInstrument || buildCompiler || coreRevisionChanged || instrumentedGorootNeedRecreate
-		if opts.patchGorootInPlace || isDevelopment || resetOrRevisionChanged {
-			if !opts.patchGorootInPlace && (instrumentedGorootNeedRecreate || !instrumented) {
-				if cmdSetup && flagV {
-					fmt.Fprintf(os.Stderr, "sync GOROOT %s -> %s\n", goroot, instrumentGoroot)
-				}
-				logDebug("sync goroot %s -> %s", goroot, instrumentGoroot)
-				err = syncGoroot(goroot, instrumentGoroot, fullSyncRecord)
-				if err != nil {
+			_, gorootErr := os.Stat(instrumentGoroot)
+			if !opts.patchGorootInPlace && !instrumented {
+				if err := syncGoroot(goroot, instrumentGoroot, filepath.Join(instrumentDir, "full-sync-record.txt"), false); err != nil {
 					return err
 				}
 			}
-			// patch go runtime and compiler
-			if cmdSetup && flagV {
-				fmt.Fprintf(os.Stderr, "patch GOROOT\n")
+			if err := patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, isDevelopment || syncWithLink || setupDev || buildCompiler, resetInstrument || buildCompiler || coreRevisionChanged || gorootErr != nil || opts.patchGorootInPlace, isDevelopment, *opts.useFilePatches, opts.skipRebuildCompilerAndGo); err != nil {
+				return err
 			}
-
-			logDebug("patch runtime at: %s", instrumentGoroot)
-			err = patchRuntime(goroot, instrumentGoroot, realXgoSrc, goVersion, isDevelopment || syncWithLink || setupDev || buildCompiler, resetOrRevisionChanged || opts.patchGorootInPlace, isDevelopment, *opts.useFilePatches, opts.skipRebuildCompilerAndGo)
-			if err != nil {
+			if err := os.WriteFile(revisionFile, []byte(getCoreRevision()), 0644); err != nil {
 				return err
 			}
 		}
 
-		if resetOrRevisionChanged || opts.patchGorootInPlace {
-			logDebug("revision %s write to %s", coreRevision, revisionFile)
-			err := os.WriteFile(revisionFile, []byte(coreRevision), 0755)
+		cacheLease, err := lockCache(instrumentCacheDir, false, true)
+		if err != nil {
+			return err
+		}
+		defer cacheLease.close()
+		if os.Getenv(XGO_BUILD_CACHE_DIR) != "" {
+			buildLease, err := lockCache(buildCacheDir, false, true)
 			if err != nil {
 				return err
 			}
+			defer buildLease.close()
 		}
+		// Go's cache is content addressed and safe to share. Never clear it
+		// on reset/revision changes: a linker may still be reading it.
+		if err := os.MkdirAll(buildCacheDir, 0755); err != nil {
+			return err
+		}
+		gcStaleCaches(cacheGCUnits(instrumentDir, instrumentCacheDir, buildCacheDir, os.Getenv(XGO_BUILD_CACHE_DIR), !instrumented), time.Now())
 	}
 
 	if isDevelopment && setupDev {
@@ -700,7 +718,7 @@ func handleBuild(cmd string, args []string) error {
 			callerOverlay.ApplyFileRedirects(overlayFS)
 		}
 		// TODO: remove this check once most clients are updated
-		needUpgrade, coreVersion, err := instrument_xgo_runtime.CheckRuntimeLegacyVersion(projectDir, overlayFS, mod, modfile, overlayFile)
+		needUpgrade, coreVersion, err := instrument_xgo_runtime.CheckRuntimeLegacyVersion(instrumentGoroot, projectDir, overlayFS, mod, modfile, overlayFile, goVersion)
 		if err != nil {
 			return fmt.Errorf("checking version %s: %w", constants.RUNTIME_CORE_PKG, err)
 		}
@@ -727,9 +745,13 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		// Always load runtime into a local dir so xgo writes modifications
 		// there instead of creating GOMODCACHE overlays.
 		needLocalRuntime := goVersion.Minor >= 25
+		pkgPatterns := targetPatterns(cmd, remainArgs)
+		// set when instrumentUserCode should add import _ "…/runtime/trace"
+		// to the packages of the command
+		var traceImports *importResult
 		if enableStackTrace || needUpgrade || needLocalRuntime {
 			// check if xgo/runtime ready
-			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, needUpgrade || needLocalRuntime, remainArgs)
+			impResult, impRuntimeErr := importRuntimeDepGenOverlay(cmdTest, instrumentGoroot, instrumentGo, goVersion, modfile, realXgoSrc, projectDir, projectRoot, localXgoGenDir, mainModule, mod, resetInstrument || flagA, needUpgrade || needLocalRuntime, remainArgs, pkgPatterns != nil)
 			if impRuntimeErr != nil {
 				// can be silently ignored
 				if enableStackTrace {
@@ -757,6 +779,9 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 				if err != nil {
 					return err
 				}
+				if impResult.traceImportsDeferred {
+					traceImports = impResult
+				}
 				// after we have replaced modules, and use -mod=mod
 				// go will try to read target modules's go.mod even
 				// they don't exist.
@@ -766,6 +791,10 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 					overlayFS.OverrideFile(mod, target)
 				}
 				xgoRuntimeModuleDir = impResult.runtimeModuleDir
+				if impResult.pristineTraceFile != "" {
+					// instrumented from this, see overrideXgoContent
+					overlayFS.OverrideContent(overlay.AbsFile(impResult.pristineTraceFile), string(impResult.pristineTrace))
+				}
 			}
 		}
 
@@ -800,9 +829,24 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		if len(instrumentIncludeAsMain) == 0 {
 			instrumentIncludeAsMain = opts.MockRuleIncludeAsMainModule
 		}
-		instrumentUserCodeResult, err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, instrumentIncludeAsMain, xgoRuntimeModuleDir, mayHaveCover, overlayFS, overlayFile, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, xgoRaceSafe, goFlag, needUpgrade)
+		instrumentUserCodeResult, err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, instrumentIncludeAsMain, xgoRuntimeModuleDir, mayHaveCover, overlayFS, overlayFile, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, xgoRaceSafe, goFlag, needUpgrade, trimpath, pkgPatterns, traceImports != nil)
 		if err != nil {
 			return err
+		}
+		if traceImports != nil && (instrumentUserCodeResult == nil || !instrumentUserCodeResult.traceImportsAdded) {
+			// instrumentation stopped before adding them
+			fileReplace, err := addBlankImports(instrumentGoroot, instrumentGo, projectDir, getPkgArgs(remainArgs), cmdTest, traceImports.overlayDir)
+			if err != nil {
+				return err
+			}
+			absFileReplace := make(map[overlay.AbsFile]overlay.AbsFile, len(fileReplace))
+			for k, v := range fileReplace {
+				absFileReplace[overlay.AbsFile(k)] = overlay.AbsFile(v)
+			}
+			err = applyBlankImportThroughOverlay(overlayFS, absFileReplace)
+			if err != nil {
+				return err
+			}
 		}
 
 		// write compiler extra file
@@ -811,9 +855,7 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 			if err != nil {
 				return fmt.Errorf("make compiler extra file absolute: %w", err)
 			}
-			compilerExtraFile := filepath.Join(absLocalGen, "compiler_extra.json")
-			compilerExtraSumFile := filepath.Join(absLocalGen, "compiler_extra.sum.json")
-			err = writeCompilerExtra(instrumentUserCodeResult.compilerExtra, compilerExtraFile, compilerExtraSumFile)
+			compilerExtraFile, compilerExtraSumFile, err := writeCompilerExtra(instrumentUserCodeResult.compilerExtra, filepath.Join(absLocalGen, "overlay"))
 			if err != nil {
 				return err
 			}
@@ -823,7 +865,12 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		}
 
 		if len(overlayFS) > 0 {
-			generatedGoOverlay, err := overlayFS.MakeGoOverlay(filepath.Join(localXgoGenDir, "overlay"), overlay.Options{
+			// generated files are kept by content, see MakeGoOverlay
+			genOverlayDir := filepath.Join(localXgoGenDir, "overlay")
+			if err := overlay.MaybeCleanGoOverlay(genOverlayDir, 24*time.Hour, 7*24*time.Hour); err != nil {
+				logDebug("clean overlay: %v", err)
+			}
+			generatedGoOverlay, err := overlayFS.MakeGoOverlay(genOverlayDir, overlay.Options{
 				NoLineDirective: noLineDirective,
 				PathMappings:    getPathMappings(instrumentGoroot, projectRoot),
 			})
@@ -840,12 +887,12 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 				callerOverlay.ProjectOntoCallerSources(goOverlay)
 			}
 			if len(goOverlay.Replace) > 0 {
-				overlayFile = filepath.Join(localXgoGenDir, "overlay.json")
-				logDebug("write overlay file: %s", overlayFile)
-				err = goOverlay.Write(overlayFile)
+				// other runs in the project can use other overlays
+				overlayFile, err = goOverlay.WriteContent(genOverlayDir)
 				if err != nil {
 					return err
 				}
+				logDebug("write overlay file: %s", overlayFile)
 				if projectDir != "" {
 					overlayFile, err = filepath.Abs(overlayFile)
 					if err != nil {
@@ -867,7 +914,11 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		if toolExecFlag != "" {
 			buildCmdArgs = append(buildCmdArgs, toolExecFlag)
 		}
-		if flagA || compilerChanged || coreRevisionChanged {
+		// A fresh core revision already has an isolated build-cache namespace.
+		// Forcing -a on its first test run prevents Go from saving the pre-link
+		// test-cache key. Later runs then relink every cached test indefinitely.
+		// Keep explicit -a and the legacy compiler-change rebuild behavior.
+		if flagA || compilerChanged || (coreRevisionChanged && !cmdTest) {
 			buildCmdArgs = append(buildCmdArgs, "-a")
 		}
 		if flagV {
@@ -1085,6 +1136,10 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 	if logCmdExec != nil {
 		logCmdExec()
 	}
+	// loading and instrumenting a large project leaves gigabytes of heap
+	// that nothing references anymore; hand it back to the OS instead of
+	// holding it next to the compilers and tests for the whole command
+	runtimedebug.FreeOSMemory()
 	err = execCmd.Run()
 	if err != nil {
 		return err
@@ -1191,8 +1246,8 @@ func checkGoVersion(goroot string, needCheckVersion bool) (*goinfo.GoVersion, er
 	}
 	if needCheckVersion {
 		minor := goVersion.Minor
-		if goVersion.Major != 1 || (minor < 17 || minor > 27) {
-			return nil, fmt.Errorf("xgo only support go1.17 ~ go1.27, current: %s", goVersionStr)
+		if goVersion.Major != 1 || (minor < 17 || minor > 28) {
+			return nil, fmt.Errorf("xgo only support go1.17 ~ go1.28, current: %s", goVersionStr)
 		}
 	}
 	return goVersion, nil
@@ -1200,6 +1255,29 @@ func checkGoVersion(goroot string, needCheckVersion bool) (*goinfo.GoVersion, er
 
 // getOrMakeAbsXgoHome returns absolute path to xgo homoe
 func getOrMakeAbsXgoHome(xgoHome string) (string, error) {
+	dir, err := getOrMakeAbsXgoHomeUnresolved(xgoHome)
+	if err != nil {
+		return "", err
+	}
+	return canonicalXgoHome(dir), nil
+}
+
+// canonicalXgoHome resolves symlinks in the xgo home path. Several accounts
+// (CI runner slots) commonly share one instrumented toolchain through a
+// ~/.xgo symlink; without resolving it each account would see the same
+// toolchain under a different path string, and that string leaks into the
+// compiler's -trimpath rewrite rules and the instrumented stdlib stubs, so
+// identical builds produced different objects per account and never shared
+// a build cache. A path that does not exist yet is returned unchanged.
+func canonicalXgoHome(dir string) string {
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return dir
+	}
+	return resolved
+}
+
+func getOrMakeAbsXgoHomeUnresolved(xgoHome string) (string, error) {
 	if xgoHome == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -1392,4 +1470,82 @@ func (c __DEBUG_CMD_ARGS) String() string {
 		list = append(list, arg[:idxEq+1]+strconv.Quote(arg[idxEq+1:]))
 	}
 	return strings.Join(list, " ")
+}
+
+// buildTrimpath reports whether the underlying go command will build with
+// -trimpath: either passed on the xgo command line (it is forwarded verbatim)
+// or set through GOFLAGS, which the go command honours implicitly.
+func buildTrimpath(remainArgs []string, buildFlags []string, goflags string) bool {
+	isTrimpath := func(arg string) bool {
+		return arg == "-trimpath" || arg == "--trimpath" || arg == "-trimpath=true" || arg == "--trimpath=true"
+	}
+	for _, arg := range remainArgs {
+		if isTrimpath(arg) {
+			return true
+		}
+	}
+	for _, arg := range buildFlags {
+		if isTrimpath(arg) {
+			return true
+		}
+	}
+	for _, arg := range strings.Fields(goflags) {
+		if isTrimpath(arg) {
+			return true
+		}
+	}
+	return false
+}
+
+// XGO_BUILD_CACHE_DIR overrides where xgo keeps the GOCACHE used for
+// instrumented builds. By default that cache lives under the temp directory
+// so it is cleaned periodically; on CI hosts whose TMPDIR is per job or per
+// runner slot this makes every slot rebuild and retest from scratch. Point it
+// at a persistent, shared location (for example "$(go env GOCACHE)/xgo") to
+// share compiled packages and cached test results across checkouts. Objects
+// from the instrumented toolchain never collide with plain go builds because
+// Go keys cache entries on the compiler binary's own build ID.
+const XGO_BUILD_CACHE_DIR = "XGO_BUILD_CACHE_DIR"
+
+// resolveBuildCacheDir returns the GOCACHE for instrumented builds. The
+// override is namespaced so different Go versions or xgo revisions never
+// share one cache directory.
+func resolveBuildCacheDir(instrumentCacheDir string, override string, namespace string) string {
+	if override == "" {
+		return filepath.Join(instrumentCacheDir, "build-cache")
+	}
+	return filepath.Join(override, namespace)
+}
+
+// sharedBuildCacheNamespace identifies the instrumented toolchain by content,
+// not by location: Go version, xgo version and xgo revision. The default
+// per-machine cache is keyed on the instrumented GOROOT's path instead, which
+// differs per HOME, and the whole point of XGO_BUILD_CACHE_DIR is to let
+// several homes (CI runner slots) that built identical toolchains share one
+// cache.
+func sharedBuildCacheNamespace(goVersionName string, instrumentSuffix string) string {
+	rev := REVISION
+	if i := strings.IndexByte(rev, '+'); i >= 0 {
+		rev = rev[:i]
+	}
+	if len(rev) > 12 {
+		rev = rev[:12]
+	}
+	return buildCacheNamespace(goVersionName, VERSION, rev, getCoreRevision(), instrumentSuffix)
+}
+
+func buildCacheNamespace(goVersion, version, revision, coreRevision, suffix string) string {
+	// Include the full core identity, including its +N development suffix.
+	// A durable override must not reuse pre-instrumentation-change artifacts.
+	epoch := sha256.Sum256([]byte(coreRevision))
+	return fmt.Sprintf("%s_xgo%s_%s_core%x%s", goVersion, version, revision, epoch[:8], suffix)
+}
+
+// Managed readers and in-place writers must use the same lease namespace.
+// Unmanaged in-place roots have no wrapper, so coordinate on GOROOT itself.
+func instrumentLeaseDir(instrumentDir, goroot string, instrumented, inPlace bool) string {
+	if inPlace && !instrumented {
+		return goroot
+	}
+	return instrumentDir
 }

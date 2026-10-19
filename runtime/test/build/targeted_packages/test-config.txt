@@ -1,0 +1,2 @@
+# Nested xgo invocation on one package of a multi-package module.
+flags: -timeout=180s

@@ -57,9 +57,14 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 		// xgo runtime is replaced in a separate module
 		// so we need to load packages from the separate module
 		opts = load.LoadOptions{
-			Dir:         xgoRuntimeModuleDir,
+			Dir: xgoRuntimeModuleDir,
+			// files are instrumented from the contents overlayFS gives
+			// them, e.g. the pristine trace.go
+			Overlay:     overlayFS,
 			Fset:        fset,
 			OverlayFile: linkOpts.OverlayFile,
+			Goroot:      goroot,
+			GoVersion:   goVersion,
 		}
 	} else {
 		opts = load.LoadOptions{
@@ -69,6 +74,8 @@ func LinkXgoRuntime(goroot string, projectDir string, xgoRuntimeModuleDir string
 			ModFile:     modfile,
 			Fset:        fset,
 			OverlayFile: linkOpts.OverlayFile,
+			Goroot:      goroot,
+			GoVersion:   goVersion,
 		}
 	}
 	packages, err := load.LoadPackages([]string{

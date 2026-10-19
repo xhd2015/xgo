@@ -14,6 +14,7 @@ import (
 
 type Options struct {
 	useLink        bool
+	hardLink       bool
 	concurrent     int
 	ignoreSubPaths []string
 	ignoreSuffix   []string
@@ -153,6 +154,25 @@ func copyReplaceDir(srcDir string, targetDir string, opts *Options) error {
 		return LinkFiles(srcDir, targetAbsDir)
 	}
 	const BUF_SIZE = 4 * 1024 * 1024 // 4M
+	if opts.hardLink {
+		var buf []byte
+		return copyDirHandle(srcDir, targetAbsDir, copyOpts, func(srcFile, dstFile string) error {
+			if os.Link(srcFile, dstFile) == nil {
+				return nil
+			}
+			info, err := os.Stat(srcFile)
+			if err != nil {
+				return err
+			}
+			if buf == nil {
+				buf = make([]byte, BUF_SIZE)
+			}
+			if err := copyFile(srcFile, dstFile, false, buf); err != nil {
+				return err
+			}
+			return os.Chmod(dstFile, info.Mode().Perm())
+		})
+	}
 	numGo := opts.concurrent
 	if numGo <= 1 {
 		buf := make([]byte, BUF_SIZE)
@@ -399,4 +419,79 @@ func LinkDirToTmp(srcDir string, tmpDir string) (dstTmpDir string, err error) {
 		return "", err
 	}
 	return subTmp, nil
+}
+
+// LinkReplaceDir replaces targetDir with a tree mirroring srcDir in which
+// every regular file is a hard link to its source, falling back to a copy
+// when linking fails (e.g. across devices). Symlinks are recreated.
+//
+// The resulting files share storage with srcDir: anything that writes them
+// in place writes srcDir too. Call Unshare on a path before modifying it.
+// Unshare cannot replace a read-only file on Windows.
+func LinkReplaceDir(srcDir string, targetDir string) error {
+	return copyReplaceDir(srcDir, targetDir, &Options{hardLink: true})
+}
+
+// Unshare gives path its own storage if it is a regular file, so a later
+// in-place write cannot reach other hard links of the same file. A symlink
+// is followed, as writes through it would be. It is a no-op when path does
+// not exist.
+func Unshare(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		return Unshare(target)
+	}
+	if !info.Mode().IsRegular() {
+		return nil
+	}
+	tmpFile, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".xgo-unshare-*")
+	if err != nil {
+		return err
+	}
+	tmp := tmpFile.Name()
+	tmpFile.Close()
+	if err := copyFile(path, tmp, false, nil); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	// keep the mode but make it writable: the caller is about to modify it,
+	// and GOROOTs like the module cache's golang.org/toolchain are read-only
+	if err := os.Chmod(tmp, info.Mode().Perm()|0200); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// UnshareTree calls Unshare on every regular file under dir.
+func UnshareTree(dir string) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) && path == dir {
+				return nil
+			}
+			return err
+		}
+		if d.Type().IsRegular() {
+			return Unshare(path)
+		}
+		return nil
+	})
 }

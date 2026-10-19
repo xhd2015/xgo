@@ -6,7 +6,7 @@ import (
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
-// TestDualPatchPolicy documents the go1.24–go1.27 patch routing policy:
+// TestDualPatchPolicy documents the go1.24–go1.28 patch routing policy:
 //   - go1.24–go1.25: legacy instrument_go or file-based (explicit choice)
 //   - go1.26: dual-path — file-based by default, legacy via --use-file-patches=false
 //   - go1.27+: file-based only
@@ -19,6 +19,7 @@ func TestDualPatchPolicy(t *testing.T) {
 		{"go1.25", &goinfo.GoVersion{Major: 1, Minor: 25}},
 		{"go1.26", &goinfo.GoVersion{Major: 1, Minor: 26}},
 		{"go1.27", &goinfo.GoVersion{Major: 1, Minor: 27}},
+		{"go1.28", &goinfo.GoVersion{Major: 1, Minor: 28}},
 	}
 
 	type want struct {
@@ -32,6 +33,7 @@ func TestDualPatchPolicy(t *testing.T) {
 		"go1.25": {value: true},
 		"go1.26": {value: true},
 		"go1.27": {value: true},
+		"go1.28": {value: true},
 	}
 
 	// explicit true → file-based where supported (go1.24+)
@@ -40,6 +42,7 @@ func TestDualPatchPolicy(t *testing.T) {
 		"go1.25": {value: true},
 		"go1.26": {value: true},
 		"go1.27": {value: true},
+		"go1.28": {value: true},
 	}
 
 	// explicit false → legacy where allowed; go1.27+ rejects
@@ -48,10 +51,11 @@ func TestDualPatchPolicy(t *testing.T) {
 		"go1.25": {value: false},
 		"go1.26": {value: false},
 		"go1.27": {err: true},
+		"go1.28": {err: true},
 	}
 
 	for _, mode := range []struct {
-		name    string
+		name     string
 		explicit func(bool) *bool
 		wants    map[string]want
 	}{
