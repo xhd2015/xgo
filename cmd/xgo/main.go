@@ -169,6 +169,7 @@ func handleBuild(cmd string, args []string) error {
 	remainArgs := opts.remainArgs
 	testArgs := opts.testArgs
 	buildFlags := opts.buildFlags
+	trimpath := buildTrimpath(remainArgs, buildFlags, os.Getenv("GOFLAGS"))
 	progFlags := opts.progFlags
 	flagA := opts.flagA
 	projectDir := opts.projectDir
@@ -463,7 +464,7 @@ func handleBuild(cmd string, args []string) error {
 	//  - https://github.com/xhd2015/xgo/issues/311
 	// we no longer need separate build cache
 	// but we need to separate it from normal GOCACHE
-	buildCacheDir := filepath.Join(instrumentCacheDir, "build-cache")
+	buildCacheDir := resolveBuildCacheDir(instrumentCacheDir, os.Getenv(XGO_BUILD_CACHE_DIR), sharedBuildCacheNamespace(goVersionName, instrumentSuffix))
 	revisionFile := filepath.Join(instrumentDir, INSTRUMENT_XGO_REVISION_FILE)
 	fullSyncRecord := filepath.Join(instrumentDir, "full-sync-record.txt")
 
@@ -800,7 +801,7 @@ xgo will try best to compile with newer xgo/runtime v%s, it's recommended to upg
 		if len(instrumentIncludeAsMain) == 0 {
 			instrumentIncludeAsMain = opts.MockRuleIncludeAsMainModule
 		}
-		instrumentUserCodeResult, err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, instrumentIncludeAsMain, xgoRuntimeModuleDir, mayHaveCover, overlayFS, overlayFile, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, xgoRaceSafe, goFlag, needUpgrade)
+		instrumentUserCodeResult, err = instrumentUserCode(instrumentGoroot, projectDir, projectRoot, goVersion, realXgoSrc, modForLoad, modfileForLoad, mainModule, instrumentIncludeAsMain, xgoRuntimeModuleDir, mayHaveCover, overlayFS, overlayFile, cmdTest, opts.FilterRules, trapPkgs, trapAll, collectTestTrace, collectTestTraceDir, xgoRaceSafe, goFlag, needUpgrade, trimpath)
 		if err != nil {
 			return err
 		}
@@ -1200,6 +1201,29 @@ func checkGoVersion(goroot string, needCheckVersion bool) (*goinfo.GoVersion, er
 
 // getOrMakeAbsXgoHome returns absolute path to xgo homoe
 func getOrMakeAbsXgoHome(xgoHome string) (string, error) {
+	dir, err := getOrMakeAbsXgoHomeUnresolved(xgoHome)
+	if err != nil {
+		return "", err
+	}
+	return canonicalXgoHome(dir), nil
+}
+
+// canonicalXgoHome resolves symlinks in the xgo home path. Several accounts
+// (CI runner slots) commonly share one instrumented toolchain through a
+// ~/.xgo symlink; without resolving it each account would see the same
+// toolchain under a different path string, and that string leaks into the
+// compiler's -trimpath rewrite rules and the instrumented stdlib stubs, so
+// identical builds produced different objects per account and never shared
+// a build cache. A path that does not exist yet is returned unchanged.
+func canonicalXgoHome(dir string) string {
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return dir
+	}
+	return resolved
+}
+
+func getOrMakeAbsXgoHomeUnresolved(xgoHome string) (string, error) {
 	if xgoHome == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -1392,4 +1416,71 @@ func (c __DEBUG_CMD_ARGS) String() string {
 		list = append(list, arg[:idxEq+1]+strconv.Quote(arg[idxEq+1:]))
 	}
 	return strings.Join(list, " ")
+}
+
+// buildTrimpath reports whether the underlying go command will build with
+// -trimpath: either passed on the xgo command line (it is forwarded verbatim)
+// or set through GOFLAGS, which the go command honours implicitly.
+func buildTrimpath(remainArgs []string, buildFlags []string, goflags string) bool {
+	var trimpath bool
+	apply := func(args []string) {
+		for _, arg := range args {
+			if arg == "--" {
+				break
+			}
+			if strings.HasPrefix(arg, "--") {
+				arg = arg[1:]
+			}
+			if arg == "-trimpath" {
+				trimpath = true
+			} else if strings.HasPrefix(arg, "-trimpath=") {
+				if value, err := strconv.ParseBool(strings.TrimPrefix(arg, "-trimpath=")); err == nil {
+					trimpath = value
+				}
+			}
+		}
+	}
+	// GOFLAGS is applied first; explicit flags override it. buildFlags precede
+	// remainArgs in the command passed to Go.
+	apply(strings.Fields(goflags))
+	apply(buildFlags)
+	apply(remainArgs)
+	return trimpath
+}
+
+// XGO_BUILD_CACHE_DIR overrides where xgo keeps the GOCACHE used for
+// instrumented builds. By default that cache lives under the temp directory
+// so it is cleaned periodically; on CI hosts whose TMPDIR is per job or per
+// runner slot this makes every slot rebuild and retest from scratch. Point it
+// at a persistent, shared location (for example "$(go env GOCACHE)/xgo") to
+// share compiled packages and cached test results across checkouts. Objects
+// from the instrumented toolchain never collide with plain go builds because
+// Go keys cache entries on the compiler binary's own build ID.
+const XGO_BUILD_CACHE_DIR = "XGO_BUILD_CACHE_DIR"
+
+// resolveBuildCacheDir returns the GOCACHE for instrumented builds. The
+// override is namespaced so different Go versions or xgo revisions never
+// share one cache directory.
+func resolveBuildCacheDir(instrumentCacheDir string, override string, namespace string) string {
+	if override == "" {
+		return filepath.Join(instrumentCacheDir, "build-cache")
+	}
+	return filepath.Join(override, namespace)
+}
+
+// sharedBuildCacheNamespace identifies the instrumented toolchain by content,
+// not by location: Go version, xgo version and xgo revision. The default
+// per-machine cache is keyed on the instrumented GOROOT's path instead, which
+// differs per HOME, and the whole point of XGO_BUILD_CACHE_DIR is to let
+// several homes (CI runner slots) that built identical toolchains share one
+// cache.
+func sharedBuildCacheNamespace(goVersionName string, instrumentSuffix string) string {
+	rev := REVISION
+	if i := strings.IndexByte(rev, '+'); i >= 0 {
+		rev = rev[:i]
+	}
+	if len(rev) > 12 {
+		rev = rev[:12]
+	}
+	return goVersionName + "_xgo" + VERSION + "_" + rev + instrumentSuffix
 }

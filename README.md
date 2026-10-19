@@ -561,6 +561,18 @@ You can also use `xgo exec <cmd>` to run commands under the `xgo`'s environment:
 xgo exec go test -v ./
 ```
 
+# Persistent build cache
+
+Set `XGO_BUILD_CACHE_DIR` to keep instrumented Go build and test cache entries in a persistent location, for example on CI hosts:
+
+```sh
+XGO_BUILD_CACHE_DIR="$(go env GOCACHE)/xgo" xgo test -trimpath ./...
+```
+
+xgo creates a subdirectory keyed by the Go patch version, xgo version/revision, and instrumentation mode. The namespace does not depend on the runner's HOME or toolchain path. Without the variable, xgo keeps its existing temporary-cache layout.
+
+For reuse across runner accounts, their `.xgo` directories can be symlinks to the same toolchain directory; xgo resolves existing symlinks before setup. With `-trimpath` (including via `GOFLAGS`), generated function-table file names use import paths instead of absolute checkout paths. Without `-trimpath`, absolute file names are preserved.
+
 # Concurrent safety
 I know you guys from other monkey patching library suffer from the unsafety implied by these frameworks.
 

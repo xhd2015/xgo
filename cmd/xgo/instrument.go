@@ -50,7 +50,7 @@ type instrumentResult struct {
 // goroot is critical for stdlib
 // includeAsMainModules: extra module paths treated as main for mock/trap (option B:
 // reclassify packages already on the load graph; do not bulk-load module/...).
-func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, includeAsMainModules []string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, overlayFile string, includeTest bool, rules []Rule, trapPkgs []string, trapAll string, collectTestTrace bool, collectTestTraceDir string, xgoRaceSafe bool, goFlag bool, triedUpgrade bool) (*instrumentResult, error) {
+func instrumentUserCode(goroot string, projectDir string, projectRoot string, goVersion *goinfo.GoVersion, xgoSrc string, mod string, modfile string, mainModule string, includeAsMainModules []string, xgoRuntimeModuleDir string, mayHaveCover bool, overlayFS overlay.Overlay, overlayFile string, includeTest bool, rules []Rule, trapPkgs []string, trapAll string, collectTestTrace bool, collectTestTraceDir string, xgoRaceSafe bool, goFlag bool, triedUpgrade bool, trimpath bool) (*instrumentResult, error) {
 	logDebug("instrumentUserSpace: mod=%s, modfile=%s, xgoRuntimeModuleDir=%s, includeTest=%v, collectTestTrace=%v, includeAsMainModules=%v, overlayFile=%s", mod, modfile, xgoRuntimeModuleDir, includeTest, collectTestTrace, includeAsMainModules, overlayFile)
 	if mod == "" {
 		// check vendor dir
@@ -338,7 +338,7 @@ func instrumentUserCode(goroot string, projectDir string, projectRoot string, go
 	logDebug("extraPkgs: %d", len(extraPkgs))
 
 	logDebug("generate functab register")
-	registerFuncTab(pkgs)
+	registerFuncTab(pkgs, trimpath)
 
 	logDebug("collect edits")
 	updatedFiles, err := applyInstrumentWithEditNotes(overlayFS, pkgs, mayHaveCover, overrideXgoContent)
@@ -378,13 +378,13 @@ func md5sumTraps(files []*compiler_extra.File, hasVarTrap bool) string {
 	return hex.EncodeToString(md5[:])
 }
 
-func registerFuncTab(packages *edit.Packages) {
+func registerFuncTab(packages *edit.Packages, trimpath bool) {
 	fset := packages.Fset
 	for _, pkg := range packages.Packages {
 		pkgPath := pkg.LoadPackage.GoPackage.ImportPath
 		stdlib := pkg.LoadPackage.GoPackage.Standard
 		for _, file := range pkg.Files {
-			instrument_reg.RegisterFuncTab(fset, file, pkgPath, stdlib)
+			instrument_reg.RegisterFuncTab(fset, file, pkgPath, stdlib, trimpath)
 		}
 	}
 }

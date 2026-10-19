@@ -2,6 +2,7 @@ package instrument_reg
 
 import (
 	"go/token"
+	"path/filepath"
 
 	astutil "github.com/xhd2015/xgo/instrument/ast"
 	"github.com/xhd2015/xgo/instrument/compiler_extra"
@@ -10,7 +11,7 @@ import (
 	"github.com/xhd2015/xgo/instrument/patch"
 )
 
-func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdlib bool) {
+func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdlib bool, trimpath bool) {
 	fileIndex := file.Index
 	perFilePkgNames := compiler_extra.PkgNames{
 		REGISTER:     constants.Register(fileIndex),
@@ -25,7 +26,7 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 	}
 	FILE_VAR := constants.FileVar(fileIndex)
 	FILE_VAR_FOR_VAR := constants.FileVarForVar(fileIndex)
-	absFile := file.File.AbsPath
+	absFile := recordedFileName(pkgPath, file.File.AbsPath, trimpath)
 	fileDecls := buildCompilerExtra(fset, file)
 
 	res := compiler_extra.GetFileRegStmts(fileDecls, stdlib, FILE_VAR, FILE_VAR_FOR_VAR, perFilePkgNames)
@@ -114,4 +115,20 @@ func buildCompilerExtra(fset *token.FileSet, file *edit.File) *compiler_extra.Fi
 		})
 	}
 	return decls
+}
+
+// recordedFileName is the file name baked into the generated func table stubs.
+//
+// Without -trimpath it is the absolute source path, matching what
+// runtime.Caller reports. With -trimpath, record "importPath/file.go",
+// matching Go's main-module file names. Embedding the
+// absolute path would otherwise make the instrumented binary differ between
+// two checkouts of the same tree, which defeats the Go build and test caches
+// for anyone building the same commit from different directories (CI runner
+// slots, worktrees).
+func recordedFileName(pkgPath string, absFile string, trimpath bool) string {
+	if !trimpath {
+		return absFile
+	}
+	return pkgPath + "/" + filepath.Base(absFile)
 }

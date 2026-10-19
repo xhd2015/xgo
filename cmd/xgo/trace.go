@@ -125,7 +125,7 @@ func importRuntimeDepGenOverlay(test bool, goroot string, goBinary string, goVer
 			return nil, err
 		}
 
-			overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, mainModule, vendorDir, overlayDir, runtimeModuleDir, forceCopyRuntime)
+		overlayInfo, err := loadDependency(goroot, goBinary, goVersion, absModFile, xgoSrc, projectRoot, mainModule, vendorDir, overlayDir, runtimeModuleDir, forceCopyRuntime)
 		if err != nil {
 			return nil, err
 		}
@@ -396,10 +396,11 @@ func loadDependency(goroot string, goBinary string, goVersion *goinfo.GoVersion,
 			fmt.Sprintf("-require=%s@v%s", constants.RUNTIME_MODULE, VERSION),
 			fmt.Sprintf("-replace=%s=%s", constants.RUNTIME_MODULE, tmpRuntime),
 		}
-		// In Go 1.26+, 'go mod tidy' is required when using old go directives (e.g. go 1.14)
-		// with require/replace. Bump the go directive to at least 1.18 to avoid this.
+		// In Go 1.26+, the generated modfile must match the complete running Go
+		// version. Dropping the patch component makes 1.26 older than dependencies
+		// which declare 1.26.0 and leaves the generated modfile untidy.
 		if goVersion.Minor >= 26 {
-			modEditArgs = append(modEditArgs, fmt.Sprintf("-go=%d.%d", goVersion.Major, goVersion.Minor))
+			modEditArgs = append(modEditArgs, "-go="+formatGoDirectiveVersion(goVersion))
 		}
 		modEditArgs = append(modEditArgs, tmpGoMod)
 		err = cmd.Env([]string{
@@ -755,4 +756,11 @@ func createGoModPlaceholder(file string, modPath string, goVersion string) error
 		return err
 	}
 	return nil
+}
+
+// formatGoDirectiveVersion renders a go directive that includes the patch
+// component (1.26.0, not 1.26) so the generated modfile is never older than
+// dependencies that declare a full version.
+func formatGoDirectiveVersion(goVersion *goinfo.GoVersion) string {
+	return fmt.Sprintf("%d.%d.%d", goVersion.Major, goVersion.Minor, goVersion.Patch)
 }
