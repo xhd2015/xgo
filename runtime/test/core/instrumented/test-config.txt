@@ -1,0 +1,1 @@
+flags: --trap-all=false --mock-rule {"main_module":true,"kind":"func","action":"include"} --mock-rule {"any":true,"action":"exclude"}

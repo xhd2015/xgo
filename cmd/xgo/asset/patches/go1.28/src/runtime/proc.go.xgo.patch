@@ -1,0 +1,58 @@
+<patch xgo_proc_newproc>
+# Description: Capture current goroutine and declare new goroutine pointer
+# before systemstack call in newproc. Used to pass goroutine info to callback.
+# Inserted before: systemstack(func() {
+# After: __xgo_curg := gp.m.curg\nvar __xgo_newg *g\nsystemstack(func() {
+goto func newproc
+match systemstack(func() {
+insert_before __xgo_curg := gp.m.curg
+newline
+insert_before var __xgo_newg *g
+newline
+</patch>
+
+<patch xgo_proc_newproc_callback>
+# Description: Add __xgo_callback_on_create_g after newproc1, then set up race
+# context, then continue scheduling. Race setup must run AFTER the create
+# callback so parent writes to child __xgo_g happen-before racegostart
+# (issues #341 / #330). Callback stays off systemstack.
+# Wraps: newg := newproc1(fn, gp, pc, false, waitReasonZero)
+goto func newproc
+	match waitReasonZero)
+	insert_after ;__xgo_newg=newg});__xgo_callback_on_create_g(__xgo_curg,__xgo_newg);systemstack(func(){newg:=__xgo_newg;if raceenabled { newg.racectx = racegostart(pc); newg.raceignore = 0; if newg.labels != nil { racereleasemergeg(newg, unsafe.Pointer(&labelSync)) }; };
+</patch>
+
+<patch xgo_proc_defer_racegostart>
+# Description: Skip racegostart inside newproc1; it is re-run in newproc after
+# the xgo create callback so inherit writes are ordered before the race
+# detector's go happens-before edge.
+# Anchor on racegostart, then replace the last preceding if raceenabled
+# (decoy-safe). Stronger than the legacy live SequenceOffset path in
+# instrument_runtime/proc.go.
+goto func newproc1
+match racegostart(
+find_for_replace if raceenabled {
+replace if false { // xgo: race setup moved after create callback (#341)
+</patch>
+
+<patch xgo_proc_goexit1>
+# Description: Add __xgo_callback_on_exit_g call at the start of goexit1,
+# which is called for every exiting goroutine.
+# Inserted after: func goexit1() {
+# After: func goexit1() {\n\t__xgo_callback_on_exit_g()
+goto func goexit1
+goto opening {
+insert_after __xgo_callback_on_exit_g()
+newline
+</patch>
+
+<patch xgo_proc_init_finished>
+# Description: Signal that runtime initialization is complete.
+# Calls __xgo_callback_on_init_finished() just before close(mainInitDoneChan) in main().
+# In go1.27, main_init_done was renamed to mainInitDoneChan (plus mainInitDone atomic.Bool).
+# Inserted before: close(mainInitDoneChan)
+goto func main
+match close(mainInitDoneChan)
+insert_before __xgo_callback_on_init_finished()
+newline
+</patch>

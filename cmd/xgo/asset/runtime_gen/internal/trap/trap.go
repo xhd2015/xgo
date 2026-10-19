@@ -39,12 +39,6 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 
 	var begin time.Time
 
-	var pcs [1]uintptr
-	runtime.Callers(SKIP+1, pcs[:])
-	pc := pcs[0]
-	runtimeFuncInfo := runtime.FuncForPC(pc)
-	fnPC := runtimeFuncInfo.Entry()
-
 	pkg := funcInfo.Pkg
 	name := funcInfo.IdentityName
 
@@ -59,10 +53,23 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 	if stk == stack.NilGStack {
 		return nil, false
 	}
+	stackData := getStackDataOf(stk)
+	if stackData == nil && !isGlobalInterceptorHolderUsed() && !mayStartTracing(funcInfo, recvPtr, args, results) {
+		// fast path: nothing is registered that could apply to this call.
+		// Unwinding the caller below costs far more than the function
+		// itself for most instrumented calls.
+		return nil, false
+	}
+
+	var pcs [1]uintptr
+	runtime.Callers(SKIP+1, pcs[:])
+	pc := pcs[0]
+	runtimeFuncInfo := runtime.FuncForPC(pc)
+	fnPC := runtimeFuncInfo.Entry()
+
 	depth := xgo_runtime.GetG().IncTrappingDepth()
 	defer xgo_runtime.GetG().DecTrappingDepth()
 
-	stackData := getStackDataOf(stk)
 	// === end init ===
 	//
 	//
@@ -114,6 +121,7 @@ func trap(infoPtr unsafe.Pointer, recvPtr interface{}, args []interface{}, resul
 					// this should never happen
 					panic("stackData is nil while stk is not nil!")
 				}
+				enableTrap()
 				stackData = &StackData{
 					hasStartedTracing: true,
 				}
@@ -474,4 +482,19 @@ func (c *StackDataExportImpl) JSON() ([]byte, error) {
 	c.json = xgo_runtime.MarshalNoError(c.data)
 	atomic.StoreInt32(&c.jsonCached, 1)
 	return c.json, nil
+}
+
+// mayStartTracing reports whether a call can start tracing on a goroutine
+// that has no stack data: either the trace entry point itself or, with
+// COLLECT_TEST_TRACE, a func(*testing.T) that may be a test called by the
+// testing runner (confirmed later by unwinding).
+func mayStartTracing(funcInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) bool {
+	if funcInfo.Pkg == constants.TRACE_PKG && funcInfo.IdentityName == constants.TRACE_FUNC {
+		return true
+	}
+	if !flags.COLLECT_TEST_TRACE || recvPtr != nil || len(args) != 1 || len(results) != 0 {
+		return false
+	}
+	_, ok := args[0].(**testing.T)
+	return ok
 }

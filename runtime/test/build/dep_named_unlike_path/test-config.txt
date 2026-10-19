@@ -1,0 +1,3 @@
+# Nested xgo invocation on a module depending on a module whose package name
+# differs from its import path.
+flags: -timeout=180s

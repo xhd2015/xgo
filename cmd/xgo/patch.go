@@ -186,7 +186,11 @@ func readOrEmpty(file string) (string, error) {
 
 // syncGoroot copies goroot to instrumentGoroot
 // NOTE: flagA never cause goroot to reset
-func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile string) error {
+// syncGoroot mirrors goroot into instrumentGoroot. With link set, files are
+// hard links to goroot instead of copies, which saves the size of a whole
+// GOROOT per instrumented toolchain. Only use it when every later write into
+// instrumentGoroot first unshares its target, as patch.ApplyPatches does.
+func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile string, link bool) error {
 	// check if src goroot has src/runtime
 	srcRuntimeDir := filepath.Join(goroot, "src", "runtime")
 	err := assertDir(srcRuntimeDir)
@@ -223,8 +227,15 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 	}
 	if onlyCopySrc {
 		// do partial copy
+		// keeps bin/ and pkg/tool, which may hold rebuilt tools that
+		// --skip-rebuild-compiler-and-go would not rebuild again
 		logDebug("partial copy $GOROOT/src")
-		err := copyGorootSrc(goroot, instrumentGoroot)
+		var err error
+		if link {
+			err = filecopy.LinkReplaceDir(filepath.Join(goroot, "src"), filepath.Join(instrumentGoroot, "src"))
+		} else {
+			err = copyGorootSrc(goroot, instrumentGoroot)
+		}
 		if err != nil {
 			return err
 		}
@@ -239,9 +250,13 @@ func syncGoroot(goroot string, instrumentGoroot string, fullSyncRecordFile strin
 
 		// need copy, delete target dst dir first
 		// TODO: use git worktree add if .git exists
-		err = filecopy.NewOptions().
-			Concurrent(1). // 10 is too much
-			CopyReplaceDir(goroot, instrumentGoroot)
+		if link {
+			err = filecopy.LinkReplaceDir(goroot, instrumentGoroot)
+		} else {
+			err = filecopy.NewOptions().
+				Concurrent(1). // 10 is too much
+				CopyReplaceDir(goroot, instrumentGoroot)
+		}
 		if err != nil {
 			return err
 		}

@@ -9,9 +9,11 @@ import (
 )
 
 type GoVersion struct {
-	Major int // 1
-	Minor int // 17
-	Patch int // 5
+	Development bool
+	Prerelease  string
+	Major       int // 1
+	Minor       int // 17
+	Patch       int // 5
 
 	OS   string
 	Arch string
@@ -45,6 +47,10 @@ func ParseGoVersion(s string) (*GoVersion, error) {
 		return nil, fmt.Errorf("unrecognized version, expect prefix '%s': %s", goVersionPrefix, s)
 	}
 	s = s[len(goVersionPrefix):]
+	// Development toolchains may include a revision and build date between
+	// the Go version and the final OS/architecture pair.
+	development := strings.HasPrefix(s, "devel ")
+	s = strings.TrimPrefix(s, "devel ")
 	if !strings.HasPrefix(s, "go") {
 		return nil, fmt.Errorf("unrecognized version, expect pattern 'go1.x.y': %s", s)
 	}
@@ -55,7 +61,13 @@ func ParseGoVersion(s string) (*GoVersion, error) {
 		return nil, fmt.Errorf("unrecognized version, expect space after 'go1.x.y': %s", s)
 	}
 	version := s[:spaceIdx]
-	osArch := s[spaceIdx+1:]
+	// The revision in go1.28-devel_<hash> (or go1.28-<hash>) is not
+	// part of the numeric version. Release/RC versions are unchanged.
+	if idx := strings.IndexAny(version, "-_"); idx >= 0 {
+		development = true
+		version = version[:idx]
+	}
+	osArch := s[strings.LastIndex(s, " ")+1:]
 
 	res, err := ParseGoVersionNumber(version)
 	if err != nil {
@@ -66,6 +78,7 @@ func ParseGoVersion(s string) (*GoVersion, error) {
 	if slashIdx < 0 {
 		return nil, fmt.Errorf("unrecognized version, expect os/arch: %s", osArch)
 	}
+	res.Development = development
 	res.OS = osArch[:slashIdx]
 	res.Arch = osArch[slashIdx+1:]
 	return res, nil
@@ -85,6 +98,7 @@ func ParseGoVersionNumber(version string) (*GoVersion, error) {
 					return r < '0' || r > '9'
 				})
 				if idx > 0 {
+					res.Prerelease = num[idx:]
 					num = num[:idx]
 				}
 			}

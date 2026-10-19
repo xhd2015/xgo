@@ -3,7 +3,9 @@ package overlay
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/xhd2015/xgo/instrument/patch"
 	"github.com/xhd2015/xgo/support/fileutil"
@@ -33,7 +35,7 @@ func MakeOverlay() Overlay {
 func absFileKey(file AbsFile) AbsFile {
 	path := filepath.FromSlash(string(file))
 	path = filepath.Clean(path)
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+	if resolved, err := evalSymlinks(path); err == nil {
 		path = resolved
 	}
 	return AbsFile(path)
@@ -147,6 +149,13 @@ func getPathMapping(path string, mappings []PathMapping) string {
 	return path
 }
 
+// MakeGoOverlay writes the overridden contents under overlayDir, each at
+// its rebased path below a directory named after its content: xgo runs in
+// the same project, e.g. for different packages, generate different
+// contents for a file, and must not overwrite the one another run's go
+// command is reading. A file is written only when no run wrote that
+// content before, through a rename so that it is never seen partially
+// written, and touched otherwise so that CleanGoOverlay keeps it.
 func (o Overlay) MakeGoOverlay(overlayDir string, opts Options) (*GoOverlay, error) {
 	noLineDirective := opts.NoLineDirective
 	pathMappings := opts.PathMappings
@@ -156,29 +165,68 @@ func (o Overlay) MakeGoOverlay(overlayDir string, opts Options) (*GoOverlay, err
 		return nil, err
 	}
 	replace := make(Replace, len(o))
+	type writeJob struct {
+		rebased string
+		absFile AbsFile
+		content string
+		file    string // set by write
+	}
+	var jobs []*writeJob
 	for absFile, fileOverlay := range o {
 		if fileOverlay.hasOverriddenContent {
 			absFilePath := getPathMapping(string(absFile), pathMappings)
-			writeFile := fileutil.RebaseAbsPath(absOverlayDir, absFilePath)
-			err := os.MkdirAll(filepath.Dir(writeFile), 0755)
-			if err != nil {
-				return nil, err
-			}
-			content := fileOverlay.Content
-			if !noLineDirective {
-				content = patch.FmtLineDirective(string(absFile), 1) + "\n" + content
-			}
-			err = os.WriteFile(writeFile, []byte(content), 0644)
-			if err != nil {
-				return nil, err
-			}
-			replace[AbsFile(filepath.ToSlash(string(absFile)))] = AbsFile(filepath.ToSlash(writeFile))
+			jobs = append(jobs, &writeJob{
+				rebased: fileutil.RebaseAbsPath(absOverlayDir, absFilePath),
+				absFile: absFile,
+				content: fileOverlay.Content,
+			})
 			continue
 		}
 		if fileOverlay.AbsFile == "" {
 			continue
 		}
 		replace[AbsFile(filepath.ToSlash(string(absFile)))] = AbsFile(filepath.ToSlash(string(fileOverlay.AbsFile)))
+	}
+	// a large module has thousands of instrumented files: write them in
+	// parallel
+	write := func(job *writeJob) error {
+		var prefix string
+		if !noLineDirective {
+			prefix = patch.FmtLineDirective(string(job.absFile), 1) + "\n"
+		}
+		data := make([]byte, 0, len(prefix)+len(job.content))
+		data = append(data, prefix...)
+		data = append(data, job.content...)
+		var err error
+		job.file, err = WriteContentFile(filepath.Dir(job.rebased), filepath.Base(job.rebased), data)
+		return err
+	}
+	workers := runtime.GOMAXPROCS(0)
+	if workers > len(jobs) {
+		workers = len(jobs)
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, workers)
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := w; i < len(jobs); i += workers {
+				if err := write(jobs[i]); err != nil {
+					errs[w] = err
+					return
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, job := range jobs {
+		replace[AbsFile(filepath.ToSlash(string(job.absFile)))] = AbsFile(filepath.ToSlash(job.file))
 	}
 	return &GoOverlay{Replace: replace}, nil
 }

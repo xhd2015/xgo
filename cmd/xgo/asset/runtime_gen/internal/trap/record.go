@@ -11,6 +11,7 @@ import (
 )
 
 func PushRecorder(fn interface{}, pre interface{}, post interface{}) func() {
+	runtime.RequireInstrumented()
 	return pushRecorder(fn, pre, post)
 }
 
@@ -138,10 +139,14 @@ func pushRecorderInterceptor(fn interface{}, preInterceptor PreInterceptor, post
 }
 
 func PushRecordHandler(pc uintptr, recvPtr interface{}, pre func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}) (interface{}, bool), post func(fnInfo *core.FuncInfo, recvPtr interface{}, args []interface{}, results []interface{}, data interface{})) func() {
+	runtime.RequireInstrumented()
+	enableTrapForPC(pc)
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stack := getOrAttachStackData()
 		holder = &stack.interceptors
+	} else {
+		markGlobalInterceptorHolderUsed()
 	}
 	if holder.recorder == nil {
 		holder.recorder = map[uintptr][]*recorderHolder{}
@@ -170,10 +175,13 @@ func PushRecordHandler(pc uintptr, recvPtr interface{}, pre func(fnInfo *core.Fu
 }
 
 func PushVarRecordHandler(varAddr uintptr, pre func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool), post func(fnInfo *core.FuncInfo, res interface{}, data interface{})) func() {
+	runtime.RequireInstrumented()
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stack := getOrAttachStackData()
 		holder = &stack.interceptors
+	} else {
+		markGlobalInterceptorHolderUsed()
 	}
 	if holder.varRecorder == nil {
 		holder.varRecorder = map[uintptr][]*varRecordHolder{}
@@ -202,10 +210,13 @@ func PushVarRecordHandler(varAddr uintptr, pre func(fnInfo *core.FuncInfo, res i
 }
 
 func PushVarPtrRecordHandler(varAddr uintptr, pre func(fnInfo *core.FuncInfo, res interface{}) (interface{}, bool), post func(fnInfo *core.FuncInfo, res interface{}, data interface{})) func() {
+	runtime.RequireInstrumented()
 	holder := &globalInterceptorHolder
 	if runtime.XgoInitFinished() {
 		stack := getOrAttachStackData()
 		holder = &stack.interceptors
+	} else {
+		markGlobalInterceptorHolderUsed()
 	}
 	if holder.varPtrRecorder == nil {
 		holder.varPtrRecorder = map[uintptr][]*varRecordHolder{}

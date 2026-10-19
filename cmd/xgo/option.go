@@ -335,12 +335,12 @@ func parseOptions(cmd string, args []string) (*options, error) {
 		},
 	}
 
-	if isDevelopment {
-		flagValues = append(flagValues, FlagValue{
-			Flags: []string{"--xgo-home"},
-			Value: &xgoHome,
-		})
-	}
+	// Allow isolated toolchain installs for release-binary cache regression tests
+	// and callers that share a persistent cache across worker homes.
+	flagValues = append(flagValues, FlagValue{
+		Flags: []string{"--xgo-home"},
+		Value: &xgoHome,
+	})
 	if cmd == "setup" {
 		flagValues = append(flagValues, FlagValue{
 			Flags:  []string{"--delete"},
@@ -648,16 +648,16 @@ func parseOptions(cmd string, args []string) (*options, error) {
 
 		unified: unified,
 
-		remainArgs:      remainArgs,
-		testArgs:        testArgs,
-		buildFlags:      buildFlags,
-		progFlags:       progFlags,
-		noLineDirective: noLineDirective,
-		deleteFlag:      deleteFlag,
-		goFlag:          goFlag,
-		xgoRaceSafe:     xgoRaceSafe,
-		useFilePatches:      useFilePatches,
-		patchGorootInPlace:  patchGorootInPlace,
+		remainArgs:               remainArgs,
+		testArgs:                 testArgs,
+		buildFlags:               buildFlags,
+		progFlags:                progFlags,
+		noLineDirective:          noLineDirective,
+		deleteFlag:               deleteFlag,
+		goFlag:                   goFlag,
+		xgoRaceSafe:              xgoRaceSafe,
+		useFilePatches:           useFilePatches,
+		patchGorootInPlace:       patchGorootInPlace,
 		skipRebuildCompilerAndGo: skipRebuildCompilerAndGo,
 	}, nil
 }
@@ -824,4 +824,67 @@ func getPkgArgs(args []string) []string {
 		}
 	}
 	return newArgs
+}
+
+// flags of go build, go test and test binaries, to tell package arguments
+// from flag values
+var goBoolFlags = map[string]bool{
+	"a": true, "n": true, "race": true, "msan": true, "asan": true, "cover": true, "v": true,
+	"work": true, "x": true, "linkshared": true, "buildvcs": true, "trimpath": true,
+	"modcacherw": true, "json": true, "c": true, "i": true, "failfast": true, "short": true,
+	"benchmem": true, "fullpath": true,
+}
+
+var goValueFlags = map[string]bool{
+	"C": true, "o": true, "p": true, "asmflags": true, "buildmode": true, "compiler": true,
+	"gccgoflags": true, "gcflags": true, "installsuffix": true, "ldflags": true, "mod": true,
+	"modfile": true, "overlay": true, "pgo": true, "pkgdir": true, "tags": true, "toolexec": true,
+	"covermode": true, "coverpkg": true, "exec": true, "vet": true, "bench": true,
+	"benchtime": true, "blockprofile": true, "blockprofilerate": true, "count": true,
+	"coverprofile": true, "cpu": true, "cpuprofile": true, "fuzz": true, "fuzzminimizetime": true,
+	"fuzztime": true, "list": true, "memprofile": true, "memprofilerate": true,
+	"mutexprofile": true, "mutexprofilefraction": true, "outputdir": true, "parallel": true,
+	"run": true, "skip": true, "shuffle": true, "timeout": true, "trace": true,
+}
+
+// targetPatterns returns the package patterns that the go command line of
+// cmd builds, "." if it names none, or nil if they cannot be told apart
+// from flag values with certainty, or are .go files: the caller then
+// instruments the whole main module.
+func targetPatterns(cmd string, args []string) []string {
+	var patterns []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "-args" || arg == "--args" {
+			// the rest is for the test binary
+			break
+		}
+		if !strings.HasPrefix(arg, "-") {
+			if strings.HasSuffix(arg, ".go") {
+				return nil
+			}
+			patterns = append(patterns, arg)
+			if cmd == "run" {
+				// the rest is for the program
+				break
+			}
+			continue
+		}
+		name := strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-")
+		if strings.Contains(name, "=") {
+			continue
+		}
+		name = strings.TrimPrefix(name, "test.")
+		switch {
+		case goBoolFlags[name]:
+		case goValueFlags[name]:
+			i++
+		default:
+			return nil
+		}
+	}
+	if len(patterns) == 0 {
+		return []string{"."}
+	}
+	return patterns
 }

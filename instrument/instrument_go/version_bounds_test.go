@@ -7,10 +7,12 @@ import (
 	"github.com/xhd2015/xgo/support/goinfo"
 )
 
-func TestInstrumentExecRejectsGo127(t *testing.T) {
-	err := instrumentExec(t.TempDir(), &goinfo.GoVersion{Major: 1, Minor: 27})
-	if err == nil || !strings.Contains(err.Error(), "unsupported version") {
-		t.Fatalf("go1.27 must be rejected (legacy capped at go1.26), got: %v", err)
+func TestInstrumentExecRejectsGo127AndLater(t *testing.T) {
+	for _, minor := range []int{27, 28} {
+		err := instrumentExec(t.TempDir(), &goinfo.GoVersion{Major: 1, Minor: minor})
+		if err == nil || !strings.Contains(err.Error(), "unsupported version") {
+			t.Fatalf("go1.%d must be rejected (legacy capped at go1.26), got: %v", minor, err)
+		}
 	}
 }
 

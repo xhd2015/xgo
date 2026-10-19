@@ -1,8 +1,10 @@
 package instrument_func
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	"strconv"
 	"strings"
@@ -207,18 +209,37 @@ func TrapFuncs(editor *goedit.Edit, pkgPath string, file *ast.File, fileIndex in
 		//     }
 		// trap: func(recvName string, recvPtr interface{}, argNames []string, args []interface{}, resultNames []string, results []interface{}) (func(), bool)
 		funcInfo := fmt.Sprintf("%s_%d_%d", constants.FUNC_INFO, fileIndex, len(funcInfos))
-		editor.Insert(pos, fmt.Sprintf(trapTemplate,
-			line, line,
-			fileIndex,
-			funcInfo,
-			receiverAddr,
-			strings.Join(paramAddrs, ","),
-			strings.Join(resultAddrs, ","),
-			line, line, line,
-		))
+		var trapOn string
+		if pkgPath == constants.RUNTIME_TRACE_PKG {
+			// starting a trace is detected inside the trap, so the trace
+			// entry must reach it even while the trap is skipped
+			editor.Insert(pos, fmt.Sprintf(trapTemplate,
+				line, line,
+				fileIndex,
+				funcInfo,
+				receiverAddr,
+				strings.Join(paramAddrs, ","),
+				strings.Join(resultAddrs, ","),
+				line, line, line,
+			))
+		} else {
+			if recv, params, results, ok := guardVars(fset, funcDecl, recvGeneric, receiver, paramFields, resultFields); ok {
+				helper := fmt.Sprintf("__xgo_sync_%d_%d", fileIndex, len(funcInfos))
+				stmt, helperDecl := guardedTrap(line, fileIndex, helper, funcInfo, recv, params, results)
+				editor.Insert(pos, stmt)
+				if helperDecl != "" {
+					editor.Insert(funcDecl.End(), helperDecl)
+				}
+			} else {
+				editor.Insert(pos, guardedDirectTrap(line, fileIndex, funcInfo, receiverAddr, paramAddrs, resultAddrs))
+			}
+			trapOn = trapOnVar(funcInfo)
+			editor.Insert(funcDecl.End(), ";var "+trapOn+" uint32")
+		}
 
 		funcInfos = append(funcInfos, &edit.FuncInfo{
 			InfoVar:      funcInfo,
+			TrapOnVar:    trapOn,
 			FuncDecl:     funcDecl,
 			IdentityName: identityName,
 			RecvPtr:      recvPtr,
@@ -254,6 +275,50 @@ func toNameAddr(name *edit.Field) (string, string) {
 		return `""`, "nil"
 	}
 	return strconv.Quote(name.Name), "&" + name.Name
+}
+
+// guardVars returns the receiver, parameters and results with their types
+// spelled for a declaration outside of funcDecl, or false if a type cannot
+// be: type parameters are only in scope inside funcDecl, and a type printed
+// over several lines would shift the line numbers of the file.
+func guardVars(fset *token.FileSet, funcDecl *ast.FuncDecl, recvGeneric bool, receiver *edit.Field, params []*edit.Field, results []*edit.Field) (recv *guardVar, paramVars []*guardVar, resultVars []*guardVar, ok bool) {
+	if recvGeneric || astutil.IsGenericFunc(funcDecl) {
+		return nil, nil, nil, false
+	}
+	toVar := func(f *edit.Field) *guardVar {
+		typ := f.Type
+		var prefix string
+		if ellipsis, isEllipsis := typ.(*ast.Ellipsis); isEllipsis {
+			prefix = "[]"
+			typ = ellipsis.Elt
+		}
+		var buf bytes.Buffer
+		if err := printer.Fprint(&buf, fset, typ); err != nil || strings.ContainsAny(buf.String(), "\n\r") {
+			return nil
+		}
+		return &guardVar{name: f.Name, typ: prefix + buf.String()}
+	}
+	toVars := func(fields []*edit.Field) ([]*guardVar, bool) {
+		vars := make([]*guardVar, len(fields))
+		for i, f := range fields {
+			if vars[i] = toVar(f); vars[i] == nil {
+				return nil, false
+			}
+		}
+		return vars, true
+	}
+	if receiver != nil {
+		if recv = toVar(receiver); recv == nil {
+			return nil, nil, nil, false
+		}
+	}
+	if paramVars, ok = toVars(params); !ok {
+		return nil, nil, nil, false
+	}
+	if resultVars, ok = toVars(results); !ok {
+		return nil, nil, nil, false
+	}
+	return recv, paramVars, resultVars, true
 }
 
 func toNameAddrs(names []*edit.Field) ([]string, []string) {

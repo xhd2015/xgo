@@ -1,0 +1,2 @@
+# Concurrent nested xgo invocations in one project.
+flags: -timeout=300s

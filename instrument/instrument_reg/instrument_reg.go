@@ -2,6 +2,7 @@ package instrument_reg
 
 import (
 	"go/token"
+	"path/filepath"
 
 	astutil "github.com/xhd2015/xgo/instrument/ast"
 	"github.com/xhd2015/xgo/instrument/compiler_extra"
@@ -10,11 +11,12 @@ import (
 	"github.com/xhd2015/xgo/instrument/patch"
 )
 
-func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdlib bool) {
+func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdlib bool, trimpath bool) {
 	fileIndex := file.Index
 	perFilePkgNames := compiler_extra.PkgNames{
 		REGISTER:     constants.Register(fileIndex),
 		TRAP_FUNC:    constants.Trap(fileIndex),
+		TRAP_ON:      constants.TrapOn(fileIndex),
 		TRAP_VAR:     constants.TrapVar(fileIndex),
 		TRAP_VAR_PTR: constants.TrapVarPtr(fileIndex),
 
@@ -25,7 +27,7 @@ func RegisterFuncTab(fset *token.FileSet, file *edit.File, pkgPath string, stdli
 	}
 	FILE_VAR := constants.FileVar(fileIndex)
 	FILE_VAR_FOR_VAR := constants.FileVarForVar(fileIndex)
-	absFile := file.File.AbsPath
+	absFile := recordedFileName(pkgPath, file.File.AbsPath, trimpath)
 	fileDecls := buildCompilerExtra(fset, file)
 
 	res := compiler_extra.GetFileRegStmts(fileDecls, stdlib, FILE_VAR, FILE_VAR_FOR_VAR, perFilePkgNames)
@@ -84,7 +86,8 @@ func buildCompilerExtra(fset *token.FileSet, file *edit.File) *compiler_extra.Fi
 			HasGenericParams: astutil.IsGenericFunc(funcInfo.FuncDecl),
 			LineNum:          lineNum,
 
-			InfoVar: funcInfo.InfoVar,
+			InfoVar:   funcInfo.InfoVar,
+			TrapOnVar: funcInfo.TrapOnVar,
 
 			RecvPtr:      funcInfo.RecvPtr,
 			RecvGeneric:  funcInfo.RecvGeneric,
@@ -114,4 +117,21 @@ func buildCompilerExtra(fset *token.FileSet, file *edit.File) *compiler_extra.Fi
 		})
 	}
 	return decls
+}
+
+// recordedFileName is the file name baked into the generated func table stubs.
+//
+// Without -trimpath it is the absolute source path, matching what
+// runtime.Caller reports. With -trimpath, Go itself rewrites the package
+// directory to the import path (module@version for versioned dependencies), so
+// runtime.Caller reports "importPath/file.go"; mirror that here. Embedding the
+// absolute path would otherwise make the instrumented binary differ between
+// two checkouts of the same tree, which defeats the Go build and test caches
+// for anyone building the same commit from different directories (CI runner
+// slots, worktrees).
+func recordedFileName(pkgPath string, absFile string, trimpath bool) string {
+	if !trimpath {
+		return absFile
+	}
+	return pkgPath + "/" + filepath.Base(absFile)
 }

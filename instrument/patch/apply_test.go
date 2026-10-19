@@ -946,6 +946,27 @@ func TestApplyPatches_GenerateVariableSubstitution(t *testing.T) {
 	}
 }
 
+func TestApplyPatches_GenerateHandlerGetsEntryEnv(t *testing.T) {
+	tmpDir := t.TempDir()
+	goroot := t.TempDir()
+	xgoSrc := t.TempDir()
+
+	configJSON := `{"version": "test", "generate": [{"kind": "custom", "env": {"NAME": "entry", "ONLY": "x"}}]}`
+	writeTestFile(t, filepath.Join(tmpDir, "__config__.json"), configJSON)
+
+	var got map[string]string
+	err := ApplyPatches(tmpDir, goroot, xgoSrc, map[string]string{"NAME": "global"}, nil, func(kind string, env map[string]string) error {
+		got = env
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["NAME"] != "entry" || got["ONLY"] != "x" {
+		t.Errorf("handler env = %v, want the entry's env to override the global one", got)
+	}
+}
+
 func writeTestFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {

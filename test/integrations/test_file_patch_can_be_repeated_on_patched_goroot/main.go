@@ -46,7 +46,7 @@ func main() {
 	_ = initialCommit
 
 	internal.Logf("applying patches (pass 1)...")
-	if err := internal.ApplyFileBased(rootDir, workGoroot, goVersion); err != nil {
+	if err := internal.ApplyFileBased(rootDir, goroot, workGoroot, goVersion); err != nil {
 		internal.Fatalf("pass 1: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func main() {
 	internal.Logf("pass 1 commit: %s", commit1)
 
 	internal.Logf("applying patches (pass 2)...")
-	if err := internal.ApplyFileBased(rootDir, workGoroot, goVersion); err != nil {
+	if err := internal.ApplyFileBased(rootDir, goroot, workGoroot, goVersion); err != nil {
 		internal.Fatalf("pass 2: %v", err)
 	}
 

@@ -21,6 +21,10 @@ func XgoSetTrap(trap func(info unsafe.Pointer, recvPtr interface{}, args []inter
 	runtime.XgoSetTrap(trap)
 }
 
+func XgoSetTrapSkip(skip bool) {
+	runtime.XgoSetTrapSkip(skip)
+}
+
 func XgoSetVarTrap(trap func(info unsafe.Pointer, varAddr interface{}, res interface{})) {
 	runtime.XgoSetVarTrap(trap)
 }
@@ -69,4 +73,9 @@ func XgoOnInitFinished(callback func()) {
 func XgoInitFinished() bool {
 	//
 	return runtime.XgoInitFinished()
+}
+
+// Instrumented reports whether xgo replaced the runtime link stubs at build time.
+func Instrumented() bool {
+	return true
 }

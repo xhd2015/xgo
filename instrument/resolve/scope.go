@@ -24,6 +24,29 @@ type Recorder struct {
 	Pkgs                  map[string]*PkgRecorder
 }
 
+// merge adds what other recorded to c.
+func (c *Recorder) merge(other *Recorder) {
+	if other.HasTrapInterceptorRef {
+		c.HasTrapInterceptorRef = true
+	}
+	for pkgPath, otherPkg := range other.Pkgs {
+		pkg := c.GetOrInit(pkgPath)
+		pkg.NumVars += otherPkg.NumVars
+		for name, otherName := range otherPkg.Names {
+			rec := pkg.GetOrInit(name)
+			if otherName.HasVarTrap {
+				rec.HasVarTrap = true
+			}
+			if otherName.HasMockRef {
+				rec.HasMockRef = true
+			}
+			for mockName := range otherName.NamesHavingMock {
+				rec.AddMockName(mockName)
+			}
+		}
+	}
+}
+
 func (c *Recorder) GetOrInit(pkgPath string) *PkgRecorder {
 	if c.Pkgs == nil {
 		c.Pkgs = make(map[string]*PkgRecorder, 1)
@@ -77,6 +100,8 @@ type PackageRegistry interface {
 	Fset() *token.FileSet
 	LoadPackage(pkgPath string) (*edit.Package, bool, error)
 	GetPackage(pkgPath string) *edit.Package
+	// PackageName is the name of a listed package, parsed or not, or ""
+	PackageName(pkgPath string) string
 }
 
 type GlobalScope struct {
@@ -92,6 +117,19 @@ type GlobalScope struct {
 	NamedTypeToDecl map[PkgName]*edit.Decl
 
 	cachedFileScopes map[*edit.File]*Scope
+
+	// effects buffers the changes outside of the file being traversed,
+	// see Traverse
+	effects *fileEffects
+}
+
+// addVarRef records ref on decl, which may be declared in another file.
+func (c *GlobalScope) addVarRef(decl *edit.Decl, ref *edit.VarRef) {
+	if c.effects == nil {
+		decl.VarRefs = append(decl.VarRefs, ref)
+		return
+	}
+	c.effects.varRefs = append(c.effects.varRefs, declVarRef{decl: decl, ref: ref})
 }
 
 type PackageScope struct {

@@ -24,6 +24,11 @@ var links = []*Link{
 		To:   "XgoTrapVarPtr",
 	},
 	{
+		// must precede "trap_"
+		From: "trap_on_",
+		To:   "XgoTrapOn",
+	},
+	{
 		From: "trap_",
 		To:   "XgoTrap",
 	},

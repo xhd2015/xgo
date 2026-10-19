@@ -4,6 +4,8 @@
 
 package runtime
 
+import __xgo_atomic "internal/runtime/atomic"
+
 import (
 	"unsafe"
 )
@@ -291,4 +293,26 @@ func (f *Func) __xgo_no_print_name() string {
 		return fi.name
 	}
 	return funcname(f.funcInfo())
+}
+
+// __xgo_trap_skip is 1 while instrumented functions can skip calling
+// XgoTrap, and building its arguments, because nothing could intercept the
+// call. Only an xgo/runtime that turns it off again on first registration
+// sets it. It is read on every instrumented call while registrations may
+// run concurrently, hence atomic.
+var __xgo_trap_skip uint32
+
+// XgoTrapOn reports whether an instrumented function should call XgoTrap:
+// when nothing makes every function skip it, or when something was
+// registered for that function, which sets its flag.
+func XgoTrapOn(flag *uint32) bool {
+	return __xgo_atomic.Load(&__xgo_trap_skip) == 0 || __xgo_atomic.Load(flag) != 0
+}
+
+func XgoSetTrapSkip(skip bool) {
+	var v uint32
+	if skip {
+		v = 1
+	}
+	__xgo_atomic.Store(&__xgo_trap_skip, v)
 }

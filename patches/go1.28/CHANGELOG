@@ -1,0 +1,51 @@
+# go1.28 Patch CHANGELOG
+
+## Status
+
+Development target: **go1.28-devel_dfc6f7db** (Go commit
+`dfc6f7db9bd75868ffb5cbc9501a2f4899122d2f`, 2026-10-16), built with
+`golang.org/dl/gotip` on 2026-10-19. No go1.28 prerelease appears in
+https://go.dev/dl/?mode=json&include=all as of the audit. File-based patches only;
+legacy `instrument_go` remains capped at go1.26, as required by the go1.27+
+routing policy. Workflows remain disabled.
+
+Seeded from `patches/go1.27`. This is snapshot compatibility, not a guarantee
+for the future rc1 or final release; repeat the audit when those are available.
+
+## Changes from go1.27
+
+- Compiler `gc.Main`: `ssagen.InitConfig()` now takes
+  `ssacompile.NewConfig(ssagen.Arch.SoftFloat)`. Keep the xgo hook immediately
+  after that call, before coverage fixups and compiler optimization passes.
+- JSON v2 splits `makeInvalidArshaler` into `makeInvalidMarshaler` and
+  `makeInvalidUnmarshaler`; the marshal closure is now `fnc.fnc`. Retarget the
+  loose JSON hook to the marshal-only closure. Classic `unsupportedTypeEncoder`
+  remains unchanged for `GOEXPERIMENT=nojsonv2`.
+- Parse development version output (including revision/date) and preserve a
+  development marker so generated go.mod files use `go 1.28`, not `go 1.28.0`.
+  Tip rejects a requirement for the future stable release.
+- Add `GO_VERSION_28`, widen the CLI and compiler-noder bounds, and extend the
+  shared compiler adapter through go1.28 while retaining older build tags.
+- Repeatability tests can use the running development GOROOT; mkbuiltin uses
+  its original binary, not a source-only git worktree's nonexistent bin/go.
+
+## Audited unchanged on dfc6f7db
+
+- `runtime.FuncForPC(pc).Name()` still wraps both inlined and non-inlined names
+  in `funcNameForPrint`. The unwrapped template remains valid; next audit is 1.29.
+- `runtime.g` insertion point and `_panic.{arg,retpc,goexit,recovered}` fields.
+- `newproc`, `newproc1(fn, callergp, callerpc, parked, waitreason)`, deferred race
+  setup, goroutine exit/freelist hooks, and `close(mainInitDoneChan)` init hook.
+- `timeSleep(int64)`, time.Sleep linkname, time.Now and testing lifecycle hooks.
+- Unified-test loader uses `*modload.Loader`, `moduleLoader`, and
+  `load.PackagesAndErrors(ld, ctx, opts, patterns)` as in go1.27.
+- Compiler noder/syntax hooks; cmd/go load/work, cover and test2json patches.
+- The legacy runtime/time/json/testing and instrument_go/unifiedtest <=1.26
+  gates are intentionally NOT widened: they cannot be selected on 1.27+.
+
+## Remaining release work (Refs #7)
+
+Revalidate against rc1/final, run the backend suite on debby, publish a release
+before go1.28.0 and open an upstream PR. CI enablement is deliberately outside
+this fork's policy; local validation is used instead. Go 1.17-1.26 code paths
+are retained, but this change's toolchain executions target 1.27.2 and 1.28 tip.

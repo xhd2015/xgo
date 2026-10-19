@@ -4,6 +4,7 @@ package as_unit_test_run
 
 import (
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -20,7 +21,13 @@ func TestFilePatchCanBeRepeatedOnPatchedGoroot(t *testing.T) {
 		return
 	}
 
-	err = RunCommandInResolvedRootDir("go", "run", "./test/integrations/test_file_patch_can_be_repeated_on_patched_goroot", "--go-version", goVersion)
+	args := []string{"run", "./test/integrations/test_file_patch_can_be_repeated_on_patched_goroot", "--go-version", goVersion}
+	if strings.Contains(runtime.Version(), "devel") {
+		// There is no downloadable release for a development toolchain yet.
+		// Test the actual source snapshot instead of resolving its minor version.
+		args = append(args, "--goroot", runtime.GOROOT())
+	}
+	err = RunCommandInResolvedRootDir("go", args...)
 	if err != nil {
 		t.Fatal(err)
 	}
